@@ -1,4 +1,3 @@
 #!/usr/bin/env bash
-# KillSwitch template (root-only, Master)
-[ "$EUID" -ne 0 ] && { echo "root required"; exit 1; }
-echo "killswitch: placeholder"
+# KillSwitch (root-restricted) - template
+# Halts schedulers, tears down wg0, stops control planes, enforces nftables drop

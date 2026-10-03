@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "protected_paths": [
+    "/etc/wireguard/wg0.conf",
+    "/etc/netplan/00-sparknet-interfaces.yaml",
+    "/etc/netplan/02-sparknet-wifi-backup.yaml",
+    "/etc/systemd/system/sparknet-wifi-guard.service",
+    "/etc/systemd/system/sparknet-guard.service",
+    "/etc/sparknet/security-policies.json",
+    "/etc/sparknet/node-template-manifest.json",
+    "/etc/sparknet/user-env-manifest.json",
+    "/etc/sparknet/critical-manifest.json"
+  ],
+  "notes": "Critical paths locked via chattr +i; mutations require Master-signed approval (Plan–Permission–Execute)."
+}

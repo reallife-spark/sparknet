@@ -1,0 +1,8 @@
+[Unit]
+Description=Sparknet vault sync (user-space)
+Wants=sparknet-sync.timer
+
+[Service]
+Type=oneshot
+Environment=SPARKNET_VAULT_ROOT=/mnt/knowledge/sparknet
+ExecStart=/mnt/knowledge/sparknet/scripts/sparknet-sync.sh

@@ -1,35 +1,73 @@
 #!/usr/bin/env bash
-# Identity capture (non-secret only)
+# Capture local user system identity and privilege context
 set -euo pipefail
-OUT="/etc/sparknet/user-env-manifest.json"
-mkdir -p /etc/sparknet
-cat > "$OUT.tmp" <<JSON
-{
-  "schema_version": "1.0",
-  "generated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "host": {
-    "hostname": "$(hostname -f 2>/dev/null || hostname)",
-    "os": "$(grep -E '^PRETTY_NAME' /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"')",
-    "kernel": "$(uname -r)",
-    "arch": "$(uname -m)"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/sparknet-env.sh"
+
+MANIFEST_OUT="${SPARKNET_VAULT_ROOT}/manifests/user-env-manifest.json"
+
+mkdir -p "$(dirname "$MANIFEST_OUT")"
+
+python3 -c "
+import os, json, pwd, grp, platform, subprocess
+from pathlib import Path
+
+def get_user():
+    try:
+        uid = os.geteuid()
+        return pwd.getpwuid(uid)
+    except Exception:
+        return None
+
+pw = get_user()
+uid = pw.pw_uid if pw else os.geteuid()
+gid = pw.pw_gid if pw else os.getegid()
+username = pw.pw_name if pw else os.environ.get('USER','unknown')
+home = pw.pw_dir if pw else os.path.expanduser('~')
+
+groups = []
+try:
+    for g in grp.getgrall():
+        if username in g.gr_mem:
+            groups.append(g.gr_name)
+    if not any(gname for gname in groups):
+        pass
+except Exception:
+    pass
+
+manifest = {
+  'timestamp': subprocess.check_output(['date','-u','+%Y-%m-%dT%H:%M:%SZ']).decode().strip(),
+  'user': {
+    'uid': uid,
+    'euid': os.geteuid(),
+    'gid': gid,
+    'egid': os.getegid(),
+    'username': username,
+    'home': home,
+    'shell': pw.pw_shell if pw else os.environ.get('SHELL',''),
+    'groups': sorted(set(groups))
   },
-  "user": {
-    "uid": $(id -u),
-    "gid": $(id -g),
-    "username": "$(id -un)",
-    "home": "$HOME",
-    "shell": "$(getent passwd $(id -un) 2>/dev/null | cut -d: -f7)",
-    "groups": $(id -Gn | jq -R 'split(" ")' 2>/dev/null || echo '[]')
+  'environment': {
+    'xdg_config_home': os.environ.get('XDG_CONFIG_HOME', ''),
+    'xdg_data_home': os.environ.get('XDG_DATA_HOME', ''),
+    'xdg_state_home': os.environ.get('XDG_STATE_HOME', ''),
+    'path': os.environ.get('PATH','')
   },
-  "paths": {
-    "knowledge_base": "/mnt/knowledge",
-    "sparknet_home": "/mnt/knowledge/.sparknet"
+  'system': {
+    'hostname': platform.node(),
+    'os': platform.system(),
+    'platform': platform.platform(),
+    'release': platform.release(),
+    'machine': platform.machine()
   },
-  "constraints": {
-    "require_plan_permission_execute": true,
-    "deny_root_escalation_attempts": true,
-    "unattended_mutations_allowed": false
+  'privilege_boundaries': {
+    'is_root': os.geteuid() == 0,
+    'note': 'All agentic operations default to user context; root-only actions require explicit gated approvals'
   }
 }
-JSON
-mv "$OUT.tmp" "$OUT"
+
+Path('$MANIFEST_OUT').write_text(json.dumps(manifest, indent=2))
+print('Wrote', '$MANIFEST_OUT')
+"
+echo 'ok'

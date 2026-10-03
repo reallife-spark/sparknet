@@ -1,0 +1,11 @@
+[Unit]
+Description=Sparknet WLAN Emergency Lockdown
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sparknet-wlan-guard.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
