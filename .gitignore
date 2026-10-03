@@ -1,0 +1,17 @@
+# Local vault config (paths only, but keep it out of history)
+.env
+
+# Review queue for LLM-written pages (WIKI_STAGED_WRITES=true)
+_staging/
+
+# Obsidian workspace state (machine-local)
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+
+# Tooling noise
+__pycache__/
+*.pyc
+.venv/
+.trash/
+.DS_Store

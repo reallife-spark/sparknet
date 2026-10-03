@@ -1,0 +1,46 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md"],
+  "references": {
+    "knowledge": {
+      "path": ".",
+      "description": "sparknet — active knowledge base for this vault (sparknet knowledge vault.)"
+    }
+  },
+  "permission": {
+    "edit": {
+      "*": "allow",
+      "/boot/**": "deny",
+      "/etc/**": "deny",
+      "/proc/**": "deny",
+      "/sys/**": "deny",
+      "/dev/**": "deny",
+      "/root/**": "deny"
+    },
+    "bash": {
+      "*": "allow",
+      "rm -rf /": "deny",
+      "rm -rf /*": "deny",
+      "rm -rf /boot*": "deny",
+      "rm -rf /etc*": "deny",
+      "sudo rm -rf /": "deny",
+      "sudo rm -rf /*": "deny",
+      "mkfs*": "deny",
+      "dd if=* of=/dev/*": "deny",
+      "chmod -R 777 /": "deny"
+    },
+    "external_directory": {
+      "/boot/**": "deny",
+      "/etc/**": "deny",
+      "/proc/**": "deny",
+      "/sys/**": "deny",
+      "/dev/**": "deny",
+      "/root/**": "deny"
+    }
+  },
+  "compaction": {
+    "auto": true,
+    "prune": false,
+    "reserved": 10000
+  }
+}
