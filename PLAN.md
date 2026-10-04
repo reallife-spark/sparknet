@@ -81,9 +81,18 @@ current: 4
         immediately before the commit; (3) `make lint` green; (4) pushed to the
         private remote with a message that explains the split; (5) the
         pre-split history is still reachable from the pre-split tip.
-      - **Status**: pending.
-      - **Note**: pre-split tip to keep reachable:
-        `ad1cc396f3ee23685816418a50d7e8fcbf75cd60`.
+      - **Status**: 4 of 5 DoD items met. Items 1–3 and 5 verified: nothing
+        secret is staged, `make test-all` and `make lint` were green immediately
+        before the commit, the commit is `215ae14` on `main`, and the pre-split
+        tip `ad1cc396f3ee23685816418a50d7e8fcbf75cd60` is still an ancestor.
+        Item 4 — the push — is **blocked on credentials**: there is no credential
+        helper, no credential store and no token in the environment, so git
+        cannot authenticate non-interactively. The earlier push of `ad1cc39`
+        succeeded from a session that had one, and it is not present now.
+      - **DoD: confirm: user** — the push needs a credential from you. It was
+        deliberately not sourced from shell history or any other leftover, since
+        the token that leaked in this session has to be revoked rather than
+        reused.
 
 ## Next
 

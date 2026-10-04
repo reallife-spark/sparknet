@@ -15,3 +15,5 @@ file, not here.
 - [2026-10-04] PLAN root `PLAN.md` Steps 1–3 complete (split, vendoring, bundles); cursor → 4 (commit and push)
 - [2026-10-04] TEST added `tests/test_contracts.py` (cross-role conformance), `tests/test_layout.py` (phantom dirs, dangling links, hard-coded paths), `tests/test_shell.py` (the `]]` bug `bash -n` cannot catch)
 - [2026-10-04] FIX `worker` → `peer` in live surfaces; removed 8 phantom dirs and a stale `services/`; corrected pre-split absolute links
+- [2026-10-04] COMMIT `215ae14` split the fabric (229 files); pre-split `ad1cc39` still an ancestor
+- [2026-10-04] BLOCKED push — no git credential available (no helper, no store, no token in env); awaiting a credential
