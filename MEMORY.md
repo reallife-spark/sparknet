@@ -49,6 +49,10 @@ Updated: 2026-10-04
 - **`bash -n` is not a shell test.** It accepts `if [ -n "$x" ]]; then` — bash
   reads `]]` as an argument — so the failure only appears at runtime, on a branch
   nothing exercises. `tests/test_shell.py` checks for it textually.
+- **`make test-all` dirties the tree.** The suite exercises `env-init`, which
+  refreshes `peer-node/manifests/user-env-manifest.json` and rewrites its
+  `timestamp`. Expected, not corruption — `git checkout` it rather than
+  committing the churn.
 - **Relocate before declaring anything path-independent.** Four bugs only appeared
   when the tree ran from a different directory: a `.env` recomputed against an
   empty variable, a fabric root detected by its directory name, and a stale
