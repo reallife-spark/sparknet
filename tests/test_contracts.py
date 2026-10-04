@@ -455,3 +455,126 @@ def test_shared_readme_says_never_copy_the_implementation():
                      text, re.I), (
         "shared/README.md must tell a reader not to copy sparknet-authz.py into a role"
     )
+
+# --- golden vectors -----------------------------------------------------------
+#
+# Everything above checks that the contract and the code agree on *which fields*
+# participate. That still passes if both are changed together: someone could add
+# a field to identity_fields, serialise it the same careless way in both places,
+# and ship a change that alters every node's fingerprint with nothing red. Only a
+# pinned expected value catches that, so the exact bytes are fixed here.
+#
+# These cover the keyless deterministic outputs. Signing itself needs a keypair,
+# and pinning a private key in a repo is the one thing this file must never do.
+
+#: An identity with deliberate operational noise mixed in.
+GOLDEN_IDENTITY = {
+    "node_id": "peer-fixture-01",
+    "role": "peer",
+    "wireguard_public_key_b64": "ZmFrZS13Z2lwdW5pY21hcHViaWMta2V5LWZvci10ZXN0cw==",
+    "overlay_ipv4": "10.77.0.11/32",
+    "requested_capabilities": ["dispatch-bridge", "guard-verify"],
+    # Metadata a node's operator might set. None of it may reach the fingerprint,
+    # or two otherwise-identical nodes would stop matching.
+    "agent_endpoint": "https://peer-fixture-01.invalid:8443",
+    "last_seen": "2026-10-04T00:00:00Z",
+}
+
+GOLDEN_CANONICAL_BYTES = (
+    b'{"node_id":"peer-fixture-01","overlay_ipv4":"10.77.0.11/32",'
+    b'"requested_capabilities":["dispatch-bridge","guard-verify"],"role":"peer",'
+    b'"wireguard_public_key_b64":"ZmFrZS13Z2lwdW5pY21hcHViaWMta2V5LWZvci10ZXN0cw=="}'
+)
+
+GOLDEN_FINGERPRINT = "140e0dc554e18b883922bd5164f576eee0c1d6d08ebf5f7d3c052948257c36c7"
+
+GOLDEN_AUTHORIZATION_MESSAGE = (
+    b'{"capabilities":["dispatch-bridge","guard-verify"],'
+    b'"expires_at":1893456000,'
+    b'"fingerprint":"140e0dc554e18b883922bd5164f576eee0c1d6d08ebf5f7d3c052948257c36c7",'
+    b'"identity":{"node_id":"peer-fixture-01","overlay_ipv4":"10.77.0.11/32",'
+    b'"requested_capabilities":["dispatch-bridge","guard-verify"],"role":"peer",'
+    b'"wireguard_public_key_b64":"ZmFrZS13Z2lwdW5pY21hcHViaWMta2V5LWZvci10ZXN0cw=="},'
+    b'"issued_at":1760000000,"overlay_ipv4":"10.77.0.11","revoked":false}'
+)
+
+
+def test_golden_canonical_bytes(authz: ModuleType):
+    """Fields sorted, tight separators, UTF-8 — exactly as the schema declares."""
+    assert authz.canonical_bytes(GOLDEN_IDENTITY) == GOLDEN_CANONICAL_BYTES, (
+        "canonical identity bytes changed. Every node fingerprint changes with "
+        "them. If this is intentional it is a contract break, not a refactor: "
+        "bump identity-schema.json's schema_version and re-issue the registry."
+    )
+
+
+def test_golden_fingerprint(authz: ModuleType):
+    assert authz.fingerprint(GOLDEN_IDENTITY) == GOLDEN_FINGERPRINT, (
+        "fingerprint of the golden identity changed — see the canonical-bytes "
+        "vector for why this is not a small change"
+    )
+
+
+def test_golden_authorization_message(authz: ModuleType):
+    """The signature scope, pinned.
+
+    This is what the Master actually signs, so a field added or dropped here
+    changes what an existing signature covers. Silently reordering the envelope
+    would be a break even though every signature still verifies locally.
+    """
+    entry = {
+        "fingerprint": GOLDEN_FINGERPRINT,
+        "identity": GOLDEN_IDENTITY,
+        "capabilities": ["guard-verify", "dispatch-bridge"],
+        "overlay_ipv4": "10.77.0.11",
+        "issued_at": 1760000000,
+        "expires_at": 1893456000,
+        "revoked": False,
+    }
+    assert authz.authorization_message(entry) == GOLDEN_AUTHORIZATION_MESSAGE, (
+        "the bytes the Master signs changed shape — see above"
+    )
+
+
+def test_projection_drops_operational_metadata(authz: ModuleType):
+    projected = authz.canonical_identity(GOLDEN_IDENTITY)
+    for noise in ("agent_endpoint", "last_seen"):
+        assert noise not in projected, (
+            f"{noise} leaked into the identity projection, so an operator could "
+            f"change a node's fingerprint by editing metadata"
+        )
+    assert set(projected) == set(load("identity-schema.json")["identity_fields"])
+
+
+def test_capability_order_asymmetry_is_intentional(authz: ModuleType):
+    """Two orderings that behave differently, on purpose.
+
+    `requested_capabilities` (inside the identity) is NOT sorted, so reordering
+    it yields a different fingerprint. Granted `capabilities` (inside the signed
+    envelope) IS sorted, so reordering it does not. That looks like an oversight
+    and is not:
+
+    - the fingerprint must cover what the node *asked for*, or a node could
+      re-order its own request to change its identity;
+    - the granted set is a set, so the signature should not depend on the order
+      the registry happened to be written in.
+
+    The failure mode if someone "tidies" the unsorted list: every existing node
+    fingerprint changes, every registry entry stops matching, and no local test
+    fails. This test is the guard for that edit.
+    """
+    reordered = dict(GOLDEN_IDENTITY,
+                     requested_capabilities=["guard-verify", "dispatch-bridge"])
+    assert authz.fingerprint(reordered) != GOLDEN_FINGERPRINT, (
+        "requested_capabilities became order-insensitive. If that was intended, "
+        "it invalidates every issued fingerprint and is a contract break."
+    )
+
+    base = {"fingerprint": GOLDEN_FINGERPRINT, "identity": GOLDEN_IDENTITY,
+            "issued_at": 1760000000, "expires_at": 1893456000}
+    a = dict(base, capabilities=["dispatch-bridge", "guard-verify"])
+    b = dict(base, capabilities=["guard-verify", "dispatch-bridge"])
+    assert authz.authorization_message(a) == authz.authorization_message(b), (
+        "granted capabilities became order-sensitive, so rewriting the registry "
+        "with the same set in a different order invalidates the Master's signature"
+    )
