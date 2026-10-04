@@ -16,7 +16,7 @@ Updated: 2026-10-04
   `make env-init`); staged writes: false.
 - **Blockers**: one, and it is not a code problem. `PLAN.md` Step 4 cannot finish
   because git has no credential on this machine — no helper, no store, no token in
-  the environment — so the split is committed locally (`215ae14`) but **not
+  the environment — so the split is committed locally but **not
   pushed**. Needs a credential from the user.
 - **Standing gaps, both deliberate**: the Master holds no usable signing key, and
   live network behaviour is unverified.
