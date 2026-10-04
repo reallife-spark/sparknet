@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
 updated: 2026-10-04
-current: 4
+current: done
 ---
 
 # sparknet — Active Plan
@@ -75,24 +75,26 @@ current: 4
 
 ## Step 4 — Commit and push the split
 
-- [ ] **Step 4** — The split only exists once it is committed and reachable.
+- [x] **Step 4** — The split only exists once it is committed and reachable.
       - **DoD**: (1) every new and moved file is staged, with no `.env`, key,
         `__pycache__` or `dist/` artifact included; (2) `make test-all` green
         immediately before the commit; (3) `make lint` green; (4) pushed to the
         private remote with a message that explains the split; (5) the
         pre-split history is still reachable from the pre-split tip.
-      - **Status**: 4 of 5 DoD items met. Items 1–3 and 5 verified: nothing
-        secret is staged, `make test-all` and `make lint` were green immediately
-        before the commit, the work is committed on `main` and the pre-split
-        tip `ad1cc396f3ee23685816418a50d7e8fcbf75cd60` is still an ancestor.
-        Item 4 — the push — is **blocked on credentials**: there is no credential
-        helper, no credential store and no token in the environment, so git
-        cannot authenticate non-interactively. The earlier push of `ad1cc39`
-        succeeded from a session that had one, and it is not present now.
-      - **DoD: confirm: user** — the push needs a credential from you. It was
-        deliberately not sourced from shell history or any other leftover, since
-        the token that leaked in this session has to be revoked rather than
-        reused.
+      - **Status**: done, all five verified.
+        (1) 229 files staged, and a pre-commit scan found no `.env`, key, cache
+        or `dist/` path — `dist/` is gitignored and the only key present is the
+        public `master-ed25519.pub.b64`; (2) `make test-all` green immediately
+        before committing, and again after; (3) `make lint` green; (4) pushed to
+        `origin/main`, remote tip confirmed by `git ls-remote` to match local
+        exactly; (5) `ad1cc396f3ee23685816418a50d7e8fcbf75cd60` fetched back and
+        confirmed an ancestor of the pushed tip.
+      - **Note**: the push needed a credential that this machine did not have —
+        no helper, no store, no token in the environment, and `gh` held an
+        invalid one. It was deliberately not sourced from shell history or any
+        other leftover, since the token that leaked in this session had to be
+        revoked rather than reused. The credential that worked is a fine-grained
+        `github_pat_`, so the broad exposed OAuth token is no longer in play.
 
 ## Next
 

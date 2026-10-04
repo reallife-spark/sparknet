@@ -18,3 +18,5 @@ file, not here.
 - [2026-10-04] COMMIT split the fabric (229 files) as `sparknet <sparknet@local>`; pre-split `ad1cc39` still an ancestor
 - [2026-10-04] BLOCKED push — no git credential available (no helper, no store, no token in env); awaiting a credential
 - [2026-10-04] REWROTE the three unpushed split commits to author `sparknet <sparknet@local>`, matching `ad1cc39`; tree hash unchanged
+- [2026-10-04] PUSHED `78f1602..c6960f1` to `origin/main`; remote tip verified equal to local, `ad1cc39` still an ancestor
+- [2026-10-04] DONE root PLAN Step 4 (all 5 DoD verified); cursor `current: done`
