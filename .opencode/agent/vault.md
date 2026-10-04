@@ -18,7 +18,7 @@ this vault operates under.
 3. Read `PLAN.md` and work the step the `current:` cursor points at. Verify its
    DoD before marking it done, then write `PLAN.md` back immediately and append
    one line to `log.md`.
-4. Resolve the vault from `.env` (`OBSIDIAN_VAULT_PATH`) — never hard-code it.
+4. Resolve the vault from `.env` (`VAULT_PATH`) — never hard-code it.
 
 ## Core loop
 

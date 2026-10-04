@@ -1,0 +1,44 @@
+# sparknet — node services and tooling.
+#
+# This project is intentionally NOT packaged or installed. It is run directly
+# from the vault (`make test`, `make validate`, the scripts/ wrappers), so there
+# is no build-system section and nothing to `pip install`.
+#
+# `dependencies` is deliberately minimal: the only third-party package is
+# `cryptography`, needed because Ed25519 verification is not in the Python
+# standard library. Everything else is stdlib. tests/test_services.py asserts
+# that this list is not quietly extended.
+
+[project]
+name = "sparknet"
+version = "0.1.0"
+description = "Self-contained DGX Spark node setup and development environment"
+requires-python = ">=3.10"
+dependencies = ["cryptography>=42"]
+
+[project.optional-dependencies]
+# Opt-in via `make devtools`. The suite runs on a system pytest without this.
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+# The suite must never touch the real blockchain/ledger.json; tests that need a
+# ledger copy it into tmp_path themselves.
+norecursedirs = [".venv", ".state", ".cache", "references", "node_modules"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+# The services are standalone scripts run directly from the vault.
+exclude = [".venv", ".state", ".cache", "references"]
+# `ruff format` is a Python-only gate. Without this it also rewrites fenced
+# code blocks inside Markdown, which produces documentation churn unrelated to
+# any code change.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

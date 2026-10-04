@@ -4,5 +4,4 @@ Wants=sparknet-sync.timer
 
 [Service]
 Type=oneshot
-Environment=SPARKNET_VAULT_ROOT=/mnt/knowledge/sparknet
-ExecStart=/mnt/knowledge/sparknet/scripts/sparknet-sync.sh
+ExecStart=%h/.local/bin/sparknet-sync

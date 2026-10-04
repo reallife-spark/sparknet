@@ -1,0 +1,37 @@
+# Master-side peer stanza template.
+#
+# The Master runs `wg0` with this stanza per authorized node. This file is
+# documentation + a template for the Master's own configuration; it is NOT
+# installed on worker nodes and contains no secrets.
+#
+# Prerequisite: the node must hold a signed entry in
+# manifests/node-authorizations.json. An unsigned peer is not a peer.
+
+[Peer]
+# Identity and overlay address from the signed authorization entry
+# (see services/sparknet-authz.py `sign`).
+# PublicKey = ${NODE_PUBLIC_KEY}
+# AllowedIPs = ${NODE_ADDRESS}
+
+# --- Revocation -------------------------------------------------------------
+# Removing this stanza and reloading is how the Master revokes a node:
+#
+#     wg set wg0 peer ${NODE_PUBLIC_KEY} remove
+#     systemctl reload wg-quick@wg0
+#
+# Revocation is a Master-side action on the Master's own wg0. The worker's
+# local wg0.conf is untouched and stays chattr +i, so the worker cannot
+# self-reinstate and the Master cannot corrupt the worker's config.
+#
+# Note the operational consequence, documented in docs/wireguard.md:
+# configs/nftables restricts wlan0 egress to the Master Anchor only, so a
+# revoked node has no remaining WAN path by design (EU AI Act data-sovereignty
+# posture). Revocation is therefore isolation, not a warning.
+
+# --- Connectivity -----------------------------------------------------------
+# 10.100.0.1/32 is the Master. A node's AllowedIPs on the Master side must
+# cover only its own overlay address, so a node cannot source-spoof a sibling.
+#
+# For telemetry and instant pushes the Master may additionally listen on
+# 10.100.0.1:8090 (instant-push webhooks) and the guard listens on each worker's
+# 10.100.0.x:9090 (signed approval payloads). Both are overlay-only.

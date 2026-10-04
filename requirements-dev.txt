@@ -1,0 +1,4 @@
+# Development-only tooling. Installed by `make devtools` into .venv.
+# Mirrors [project.optional-dependencies].dev in pyproject.toml.
+pytest>=8.0
+ruff>=0.6

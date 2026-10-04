@@ -28,7 +28,7 @@ cluster charter, Aegis context and its Plan Protocol do **not** apply here.
 | `_archives/` | vault snapshots for rebuild/restore (`/wiki-rebuild`) |
 
 Wiki skills read the vault location from `.env` in this directory
-(`OBSIDIAN_VAULT_PATH`) — never hard-code the path in a page.
+(`VAULT_PATH`) — never hard-code the path in a page.
 
 ## Memory Protocol
 

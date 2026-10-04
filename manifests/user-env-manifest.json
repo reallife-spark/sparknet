@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-04T04:44:17Z",
+  "timestamp": "2026-10-04T09:55:50Z",
   "user": {
     "uid": 1000,
     "euid": 1000,
@@ -21,7 +21,7 @@
   "environment": {
     "xdg_config_home": "/mnt/knowledge/.config",
     "xdg_data_home": "/mnt/knowledge/.local/share",
-    "xdg_state_home": "/mnt/knowledge/.local/state",
+    "xdg_state_home": "/mnt/knowledge/sparknet/.state",
     "path": "/home/raxxar/.bun/bin:/home/raxxar/.opencode/bin:/mnt/knowledge/local/bin:/mnt/knowledge/obsidian:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games"
   },
   "system": {

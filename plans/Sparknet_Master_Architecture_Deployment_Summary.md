@@ -140,7 +140,7 @@ Background agents run under standard user permissions, surviving logouts and ope
 An OpenAI-compatible proxy gateway running on port 4096. It inspects incoming JSON payloads from Open WebUI, dynamically routes prompts to the correct domain agent port (4097, 4098), and streams tokens back in real time.
 5. Vault Logging & Nocturnal Automation
 5.1 Atomic Markdown Vault Logger
-Agents append task executions, summaries, and operational logs into isolated domain vaults (/mnt/knowledge/<domain>/01_domain_context/background_activity.md) using exclusive OS file locking (fcntl) to prevent race conditions with Markdown editors like Obsidian.
+Agents append task executions, summaries, and operational logs into isolated domain vaults (/mnt/knowledge/<domain>/01_domain_context/background_activity.md) using exclusive OS file locking (fcntl) to prevent race conditions with Markdown editors.
 5.2 Idle State Detection & Nocturnal Batch Scheduler
  * Idle Watcher: Monitors SSH sessions, WireGuard data transfer deltas, and GPU utilization (nvidia-smi). When all vectors remain quiescent for 15 minutes, the node transitions to IDLE.
  * Master Scheduler: When all nodes report IDLE, the Master establishes the ConnectX-7 NCCL ring, pools 512 GB+ of GPU RAM, executes queued batch workloads, and commits artifacts back to vaults before 06:00 AM.

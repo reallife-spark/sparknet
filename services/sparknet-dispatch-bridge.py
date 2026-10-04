@@ -9,14 +9,17 @@ from pathlib import Path
 
 STATES = ["PLAN", "PERMISSION_PENDING", "PERMITTED", "EXECUTING", "COMPLETE", "DENIED", "ERROR"]
 
+
 def log(level, msg):
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     print(f"[{ts}] [{level}] {msg}")
+
 
 def compute_block_hash(prev_hash, index, timestamp, payload):
     m = hashlib.sha256()
     m.update((str(prev_hash) + str(index) + str(timestamp) + json.dumps(payload, sort_keys=True)).encode())
     return m.hexdigest()
+
 
 def load_ledger(path):
     try:
@@ -25,6 +28,7 @@ def load_ledger(path):
     except Exception as e:
         log("ERROR", f"Failed to load ledger {path}: {e}")
         raise
+
 
 def save_ledger(path, ledger):
     try:
@@ -36,6 +40,7 @@ def save_ledger(path, ledger):
         log("ERROR", f"Failed to save ledger {path}: {e}")
         return False
 
+
 def main():
     p = argparse.ArgumentParser(description="Sparknet Dispatch Bridge with PPE (MVI)")
     p.add_argument("--dry-run", action="store_true")
@@ -43,7 +48,8 @@ def main():
     p.add_argument("--test-approval", action="store_true", help="Append test approval block")
     args = p.parse_args()
 
-    vault_root = Path(os.environ.get("SPARKNET_VAULT_ROOT", "/mnt/knowledge/sparknet"))
+    script_dir = Path(__file__).resolve().parent
+    vault_root = Path(os.environ.get("SPARKNET_VAULT_ROOT") or script_dir.parent)
     ledger_path = vault_root / "blockchain" / "ledger.json"
 
     log("INFO", "sparknet-dispatch-bridge starting")
@@ -98,6 +104,7 @@ def main():
 
     log("INFO", "sparknet-dispatch-bridge completed (template mode)")
     return
+
 
 if __name__ == "__main__":
     main()

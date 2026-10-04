@@ -1,0 +1,9 @@
+# Runtime dependency for the Sparknet services.
+#
+# The vault is a template tree, not a Python package, so these are installed by
+# name rather than resolved from a build backend. Only one is needed:
+# Ed25519 signature verification is not in the Python standard library.
+#
+# Mirrors [project].dependencies in pyproject.toml. tests/test_services.py
+# asserts the two lists stay in agreement.
+cryptography>=42
