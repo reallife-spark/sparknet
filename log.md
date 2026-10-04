@@ -9,3 +9,9 @@ transition (plan advances, ingests, rebuilds) — detail belongs in the session
 file, not here.
 
 - [2026-10-03] INIT vault scaffolded at `/mnt/knowledge/sparknet` via `opencode.new` — categories: concepts, entities, skills, references, synthesis, journal; git initialised; staged_writes=false
+- [2026-10-04] SPLIT fabric became two roles: `contracts/` + `shared/` + `peer-node/` (implemented) + `master-node/` (specified, not built)
+- [2026-10-04] VENDOR 31 wiki skills into `.opencode/skills/` (MIT, upstream ec2b6bc); no global skill farm dependency
+- [2026-10-04] BUNDLE `make bundle ROLE=<role>` + `bundle-verify` — both roles extract and run standalone
+- [2026-10-04] PLAN root `PLAN.md` Steps 1–3 complete (split, vendoring, bundles); cursor → 4 (commit and push)
+- [2026-10-04] TEST added `tests/test_contracts.py` (cross-role conformance), `tests/test_layout.py` (phantom dirs, dangling links, hard-coded paths), `tests/test_shell.py` (the `]]` bug `bash -n` cannot catch)
+- [2026-10-04] FIX `worker` → `peer` in live surfaces; removed 8 phantom dirs and a stale `services/`; corrected pre-split absolute links

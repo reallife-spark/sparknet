@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "contract": "identity-schema",
+  "description": "How a node's identity becomes a fingerprint, and what the Master signs. Both roles must agree on this byte-for-byte or they will not validate each other. The reference implementation is shared/sparknet-authz.py; this file is the normative statement of the same rules.",
+  "identity_fields": ["node_id", "role", "wireguard_public_key_b64", "overlay_ipv4", "requested_capabilities"],
+  "identity_fields_note": "Deliberately excludes hostname, vault path and timestamps: those change without changing identity, and including them would force a re-sign after a routine rename.",
+  "roles": ["master", "peer"],
+  "role_note": "'peer' is the working-node role. Both roles use the same identity schema; only the Master holds the signing key.",
+  "canonicalisation": {
+    "projection": "Keep only identity_fields, sorted by key.",
+    "serialisation": "JSON, sort_keys=true, separators=(',', ':'), UTF-8.",
+    "rationale": "The bytes must not depend on dict insertion order or Python formatting differences, or the same identity would fingerprint differently on the two nodes."
+  },
+  "fingerprint": {
+    "algorithm": "sha256",
+    "input": "canonical bytes of the projected identity",
+    "encoding": "hex",
+    "correction": "WireGuard has no SHA-256 in its protocol. SHA-256 here is the authorization fingerprint; Ed25519 is what signs it. Describing this as 'SHA-256 WireGuard authentication' is wrong."
+  },
+  "signed_envelope_fields": ["fingerprint", "identity", "capabilities", "overlay_ipv4", "issued_at", "expires_at", "revoked"],
+  "signed_envelope_note": "Signing only the identity would leave capabilities and overlay_ipv4 mutable by anyone who can edit the registry file, escalating a node to guard-apply without the Master approving it. revoked is inside the envelope so only the Master can flip it.",
+  "registry": {
+    "path": "manifests/node-authorizations.json",
+    "author": "master",
+    "reader": "peer",
+    "distribution": "UNSPECIFIED — the channel by which a signed registry reaches peers is not yet built. Peers currently read a local copy.",
+    "empty_by_default": true,
+    "empty_by_default_rationale": "No node gets privileges by default. The shipped registry has no entries on purpose, so a fresh deployment is fail-closed."
+  },
+  "master_public_key": {
+    "path": "manifests/keys/master-ed25519.pub.b64",
+    "format": "base64 of a 32-byte Ed25519 public key",
+    "tracked": true,
+    "tracked_rationale": "A public key is safe to track and must be, since peers need it to verify.",
+    "shipped_value_status": "BOOTSTRAP ONLY — generated for structure; the private key was discarded, so it cannot sign anything. Real provisioning must generate a Master keypair and replace this value."
+  },
+  "master_private_key": {
+    "held_by": "master",
+    "path_never_committed": true,
+    "note": "Never leaves the Master. Its absence on a peer is the whole trust boundary; verify this with `make authz-verify`, which must pass using the public key alone."
+  }
+}

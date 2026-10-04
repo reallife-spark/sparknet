@@ -1,0 +1,32 @@
+--- a/daily-update/SKILL.md
++++ b/daily-update/SKILL.md
+@@ -56,16 +56,23 @@
+ 
+ **Step 4b: Housekeep health check**
+ 
+-Run the placement-policy checker (Linux cluster only; skip if the script is absent):
++The placement-policy checker is optional and host-specific. Look for it at the
++path the vault records; skip this step cleanly if it is absent:
+ 
+ ```bash
+-/usr/bin/python3 /mnt/knowledge/raxxar/06_knowledge/scripts/housekeep.py --report-only \
+-  | grep -E 'broken symlinks|junk files'
++HOUSEKEEP="${SPARKNET_HOUSEKEEP:-$HOME/.local/bin/housekeep.py}"
++if [ -f "$HOUSEKEEP" ]; then
++  python3 "$HOUSEKEEP" --report-only | grep -E 'broken symlinks|junk files'
++else
++  echo "housekeep not installed — skipping placement check"
++fi
+ ```
+ 
+-Both counts must be `0`. Any nonzero count is a placement violation — report it in
+-the user summary and fix the offender to its canonical location (see
+-`raxxar-cluster.md` → Canonical File Placement Policy), don't just re-tidy.
++When the checker exists, both counts must be `0`. Any nonzero count is a
++placement violation — report it in the user summary and fix the offender to its
++canonical location (see this vault's `AGENTS.md` → Canonical placement), don't
++just re-tidy. Never hard-code a host path here: the same skill runs on a node
++where that path does not exist.
+ 
+ **Step 5: Spawn impl-validator**
+ 

@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "contract": "capabilities",
+  "description": "The complete, closed capability vocabulary. The Master grants these by signing; a peer holds only what the Master signed. Anything not listed here is rejected by both roles. Adding a capability is a contract change and must land here first.",
+  "known_capabilities": ["telemetry", "p2p-sync", "push-receive", "guard-apply"],
+  "definitions": {
+    "telemetry": {
+      "grants": "Push metrics and node status to the Master.",
+      "holder": "peer",
+      "sensitive": false
+    },
+    "p2p-sync": {
+      "grants": "Accept and serve user-space vault sync from other nodes over the overlay.",
+      "holder": "peer",
+      "sensitive": false
+    },
+    "push-receive": {
+      "grants": "Accept pushed artifacts from the Master or a sibling peer.",
+      "holder": "peer",
+      "sensitive": false
+    },
+    "guard-apply": {
+      "grants": "Apply Master-approved changes to protected files on this node: lift chattr +i, write, re-pin.",
+      "holder": "peer",
+      "sensitive": true,
+      "note": "The sensitive one. Without it the guard verifies and audits but refuses to apply, regardless of how valid the signature is. This is the capability that turns a signed request into a filesystem mutation, so the Master must grant it deliberately and per node."
+    }
+  },
+  "master_capabilities": {
+    "note": "The Master's authority is not expressed as a granted capability — it is possession of the Ed25519 private key, which never leaves the Master. A peer holding this vocabulary but not that key can verify but cannot grant, revoke, or escalate anything.",
+    "implied_by_private_key": ["sign-authorization", "revoke-node", "distribute-registry"]
+  },
+  "escalation_note": "capabilities and overlay_ipv4 are inside the signed envelope (see contracts/identity-schema.json), so editing them in the registry file invalidates the signature. A node with registry write access can revoke (a safe denial) but cannot escalate to guard-apply."
+}

@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0",
+  "contract": "ports",
+  "description": "Every port either role listens on or dials. Overlay-only ports are unreachable from the WAN by design. A port that appears here but has no listener is declared-but-unimplemented; see plans/MASTER_BUILD_PLAN.md.",
+  "ports": {
+    "51820": {
+      "service": "wireguard",
+      "protocol": "udp",
+      "bound_by": "both",
+      "overlay_only": false,
+      "note": "Carries the overlay itself. Reachable over the WAN because the Master must be dialled from behind NAT; peers behind NAT rely on PersistentKeepalive to keep the mapping open.",
+      "implemented": true
+    },
+    "9090": {
+      "service": "guard",
+      "protocol": "tcp/http",
+      "bound_by": "peer",
+      "overlay_only": true,
+      "binds_to": "the peer's own overlay address only",
+      "note": "The guard binds 10.100.0.x, never 0.0.0.0. That is why a legitimate Master request arrives from 10.100.0.1 and off-overlay clients are rejected.",
+      "implemented": true
+    },
+    "8090": {
+      "service": "master-instant-push",
+      "protocol": "tcp/http",
+      "bound_by": "master",
+      "overlay_only": true,
+      "binds_to": "10.100.0.1",
+      "note": "Master ACL changes POST here to force immediate routing adjustment on peers.",
+      "implemented": false,
+      "status": "SPEC ONLY — no listener exists. Tracked in MASTER_BUILD_PLAN.md."
+    },
+    "4096": {
+      "service": "dispatch-bridge",
+      "protocol": "tcp/http",
+      "bound_by": "peer",
+      "overlay_only": false,
+      "note": "OpenAI-compatible local proxy routing to domain agent ports. Local-only by design: it injects the user environment profile, so it must not be exposed.",
+      "implemented": true
+    },
+    "4097": {
+      "service": "agent-engineering",
+      "protocol": "tcp/http",
+      "bound_by": "peer",
+      "overlay_only": false,
+      "implemented": true
+    },
+    "4098": {
+      "service": "agent-cyber",
+      "protocol": "tcp/http",
+      "bound_by": "peer",
+      "overlay_only": false,
+      "implemented": true
+    },
+    "4100": {
+      "service": "agent-vault-curator",
+      "protocol": "tcp/http",
+      "bound_by": "peer",
+      "overlay_only": false,
+      "implemented": true
+    }
+  },
+  "invariants": [
+    "No role binds a wildcard address for an overlay-only port.",
+    "Peer-side listeners that inject local identity or accept mutations stay off the overlay.",
+    "The Master binds 9090 nowhere; it dials peers on 9090."
+  ]
+}

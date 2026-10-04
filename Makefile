@@ -1,106 +1,138 @@
-# sparknet developer entry points.
+# sparknet — fabric-level entry points.
 #
-# The vault is the package. Run everything through `make` so the pytest
-# interpreter and optional tooling are picked up consistently.
+# This repository is three things at once:
+#
+#   contracts/ + shared/   the cross-role contract and its single implementation
+#   peer-node/             a working node — the only role that is implemented
+#   master-node/           the signing role — specified and planned, NOT built
+#   .opencode/skills/      the wiki skill suite, vendored so a node needs no
+#                          global skill farm
+#
+# So this Makefile is a router, not an implementation. Anything that touches a
+# role lives in that role's Makefile; `make help-role` lists those.
+#
+# A role subvault alone is NOT a deployment. `make bundle` assembles what a node
+# actually needs and can prove it runs.
 
 SHELL := /usr/bin/env bash
 .DEFAULT_GOAL := help
-VAULT_ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 
-# Prefer the optional .venv when it exists, otherwise the system interpreter.
+VAULT_ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 VENV_PY := $(VAULT_ROOT)/.venv/bin/python
 PY := $(if $(wildcard $(VENV_PY)),$(VENV_PY),python3)
+ROLE ?= peer
 
-.PHONY: help validate test lint devtools provision dist install-units install-config \
-        keys wg-render authz-verify anchor guard-status clean
+.PHONY: help help-role layout validate test test-all test-peer test-master \
+        contract-test lint devtools env-init wiki-sync wiki-verify \
+        wiki-preflight bundle bundle-verify status-plan clean dist
 
 help: ## Show this help
+	@echo "sparknet — fabric root"
+	@echo
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+	@echo
+	@echo "  Role subvaults have their own targets:"
+	@echo "    make -C peer-node help"
+	@echo "    make -C master-node help"
 
-validate: ## Env contract + manifest checks
-	@./scripts/sparknet-validate.sh
+help-role: ## What each role is, and whether it runs
+	@printf '  %-14s %s\n' "peer-node"   "IMPLEMENTED — guard, anchor, dispatch, wiki vault"
+	@printf '  %-14s %s\n' "master-node" "SPECIFIED ONLY — plans/MASTER_BUILD_PLAN.md, no code"
+	@printf '  %-14s %s\n' "contracts/"  "the overlay, capability, identity, port and guard contracts"
+	@printf '  %-14s %s\n' "shared/"     "the one canonical signed-authorization implementation"
 
-test: ## Run the pytest suite
-	@$(PY) -m pytest
+layout: ## Show the repository layout
+	@printf '%s\n' \
+	  "sparknet/" \
+	  "├── contracts/          cross-role contract (single source of truth)" \
+	  "├── shared/              sparknet-authz.py — signed canonical form" \
+	  "├── peer-node/           the working node role        [IMPLEMENTED]" \
+	  "├── master-node/         the signing role             [SPECIFIED ONLY]" \
+	  "├── scripts/             fabric-level tooling" \
+	  "├── tests/               fabric + vendored-skill tests" \
+	  "└── .opencode/skills/    vendored wiki suite (31 skills)"
 
-devtools: ## Create .venv with cryptography + pytest + ruff (opt-in)
-	@if [ -x "$(VENV_PY)" ]; then \
-		echo "$(VENV_PY) already exists; refreshing deps"; \
-	else \
-		echo "Creating $(VAULT_ROOT)/.venv"; \
-		python3 -m venv "$(VAULT_ROOT)/.venv"; \
-	fi
+validate: ## Validate every role that has an implementation
+	@$(MAKE) --no-print-directory -C peer-node validate
+	@$(MAKE) --no-print-directory -C master-node validate
+
+test: test-all ## Alias for test-all
+
+# Every suite in the repo, in the order a failure would matter: the contract
+# first (both roles depend on it), then the peer implementation, then the
+# master's spec boundary, then the vendored skills.
+test-all: ## Run every suite in the repository
+	@echo "=== contract ==="
+	@$(PY) -m pytest tests/test_contracts.py -q
+	@echo
+	@echo "=== fabric + vendored wiki skills ==="
+	@$(PY) -m pytest tests/ -q
+	@echo
+	@echo "=== peer-node ==="
+	@$(MAKE) --no-print-directory -C peer-node test
+	@echo
+	@echo "=== master-node (spec boundary) ==="
+	@$(MAKE) --no-print-directory -C master-node test
+
+test-peer: ## Run only the peer suite
+	@$(MAKE) --no-print-directory -C peer-node test
+
+test-master: ## Run only the master's spec-boundary suite
+	@$(MAKE) --no-print-directory -C master-node test
+
+contract-test: ## Prove the peer role still matches contracts/
+	@$(MAKE) --no-print-directory -C peer-node guard-contract
+
+lint: ## Lint everything that is linted
+	@$(PY) -m ruff check shared scripts tests
+	@$(MAKE) --no-print-directory -C peer-node lint
+
+devtools: ## Create .venv with cryptography, pytest and ruff (opt-in)
+	@if [ ! -x "$(VENV_PY)" ]; then python3 -m venv "$(VENV_PY)"; fi
 	@"$(VENV_PY)" -m pip install --quiet --upgrade pip
-	@# This vault is not a distributable package, so install dependencies by
-	@# name instead of `pip install -e .` (which would need a build backend and
-	@# would try to package the vault itself).
 	@"$(VENV_PY)" -m pip install --quiet -r "$(VAULT_ROOT)/requirements.txt"
 	@"$(VENV_PY)" -m pip install --quiet -r "$(VAULT_ROOT)/requirements-dev.txt"
-	@"$(VENV_PY)" -m pytest --version
-	@"$(VENV_PY)" -m ruff --version
-	@echo "Dev tools ready. make lint and make test will now use .venv."
+	@"$(VENV_PY)" -m pytest --version && "$(VENV_PY)" -m ruff --version
+	@echo "Dev tools ready."
 
-lint: ## Ruff if available; otherwise explains how to get it
-	@if command -v ruff >/dev/null 2>&1; then \
-		ruff check . && ruff format --check . ; \
-	elif [ -x "$(VAULT_ROOT)/.venv/bin/ruff" ]; then \
-		"$(VAULT_ROOT)/.venv/bin/ruff" check . && "$(VAULT_ROOT)/.venv/bin/ruff" format --check . ; \
-	else \
-		echo "ruff not installed — skipping lint."; \
-		echo "Run 'make devtools' to install it into .venv."; \
-		echo "(ruff is optional; the suite runs without it.)"; \
-	fi
+env-init: ## Write every vault's .env + wiki dirs from its .env.example
+	@./scripts/sparknet-env-init.sh "$(VAULT_ROOT)"
+	@./scripts/sparknet-env-init.sh "$(VAULT_ROOT)/peer-node"
+	@./scripts/sparknet-env-init.sh "$(VAULT_ROOT)/master-node"
 
-provision: ## Identity capture, then validate
-	@./scripts/sparknet-identity-capture.sh
-	@./scripts/sparknet-validate.sh
+# --- vendored wiki skill suite -------------------------------------------------
 
-# Archive the committed tree. A dirty working tree is reported, because
-# `git archive` reads a commit and would silently omit uncommitted work.
-# Override with: make dist DIST_TREE=<ref>
-DIST_TREE ?= HEAD
-dist: ## Build dist/sparknet-<tree>.tar.gz from the committed tree
-	@if [ -n "$$(git status --porcelain)" ]; then \
-		echo "WARNING: working tree is dirty. '$(DIST_TREE)' omits uncommitted changes."; \
-		git status --short; \
-		echo; \
-	fi
-	@mkdir -p "$(VAULT_ROOT)/dist"
-	@git archive --format=tar --prefix=sparknet/ "$(DIST_TREE)" \
-		| gzip > "$(VAULT_ROOT)/dist/sparknet-$(DIST_TREE).tar.gz"
-	@echo "Wrote dist/sparknet-$(DIST_TREE).tar.gz"
+wiki-sync: ## Re-vendor .opencode/skills from the farm, applying local patches
+	@$(PY) scripts/sync-wiki-skills.py --apply
+	@echo
+	@$(MAKE) --no-print-directory wiki-verify
 
-install-units: ## Generate shims + install systemd units (dry-run; pass APPLY=1 to write)
-	@./scripts/sparknet-install-units.sh $(if $(APPLY),--apply,)
+wiki-verify: ## Fail if the vendored suite drifted from its pinned source
+	@$(PY) scripts/sync-wiki-skills.py --check
 
-install-config: ## Show the /etc config diff. Never writes, by design.
-	@./scripts/sparknet-install-config.sh
+wiki-preflight: ## Prove the vendored skills resolve the vault you are standing in
+	@source "$(VAULT_ROOT)/scripts/sparknet-wiki-env.sh"
 
-# --- Master-anchored node operations ----------------------------------------
+# --- standalone node bundles ---------------------------------------------------
 
-NODE_ROLE ?= node
-KEY_OUT ?= $(VAULT_ROOT)/.state/keys
+bundle: ## Build a standalone bundle for ROLE=peer|master into dist/
+	@./scripts/sparknet-bundle.sh "$(ROLE)"
 
-keys: ## Generate WireGuard + Ed25519 keypairs into $(KEY_OUT) (secrets, never committed)
-	@./scripts/sparknet-keygen.sh --role "$(NODE_ROLE)" --out "$(KEY_OUT)"
+bundle-verify: ## Extract the newest bundle and prove it runs standalone
+	@./scripts/sparknet-bundle.sh --verify \
+		$$(ls -t "$(VAULT_ROOT)"/dist/sparknet-$(ROLE)-*.tar.gz 2>/dev/null | head -1)
 
-wg-render: ## Render wg0.conf from the template. Dry-run; pass APPLY=1 to write at 0600
-	@./scripts/sparknet-wireguard-render.sh $(if $(APPLY),--apply,)
+status-plan: ## Show each role's plan cursor
+	@printf 'peer-node:\n'
+	@grep -m1 '^current:' "$(VAULT_ROOT)/peer-node/PLAN.md" || echo "  (no PLAN.md cursor)"
+	@printf 'master-node:\n'
+	@grep -m1 '^current:' "$(VAULT_ROOT)/master-node/plans/MASTER_BUILD_PLAN.md" \
+	  || echo "  (no build plan cursor)"
 
-authz-verify: ## Verify an identity against the registry. IDENTITY=<node-identity.json>
-	@./scripts/sparknet-run python3 ./services/sparknet-authz.py verify \
-		"$(if $(IDENTITY),$(IDENTITY),manifests/node-identity.json)" \
-		--registry "$(if $(REGISTRY),$(REGISTRY),manifests/node-authorizations.json)" \
-		--master-pubkey "$(if $(MASTER_PUBKEY),$(MASTER_PUBKEY),manifests/keys/master-ed25519.pub.b64)"
-
-anchor: ## Bring up the WireGuard Master Anchor (root; render + wg-quick up + chattr +i)
-	@./scripts/sparknet-wireguard-anchor.sh
-
-guard-status: ## Report the guard's manifest state and authorization posture
-	@./scripts/sparknet-run python3 ./services/sparknet-guard-d.py --check-manifest
-
-clean: ## Remove caches and build output
+clean: ## Remove caches and dist artifacts
 	@find "$(VAULT_ROOT)" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
-	@rm -rf "$(VAULT_ROOT)/.pytest_cache" "$(VAULT_ROOT)/dist"
+	@rm -rf "$(VAULT_ROOT)/.pytest_cache" "$(VAULT_ROOT)/.ruff_cache" "$(VAULT_ROOT)/dist"
+	@$(MAKE) --no-print-directory -C peer-node clean
+	@$(MAKE) --no-print-directory -C master-node clean
 	@echo "Cleaned caches and dist/ (left .venv, .state and .cache alone)."

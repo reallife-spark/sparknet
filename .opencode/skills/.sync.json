@@ -1,0 +1,143 @@
+{
+  "excluded": {
+    "memory-bridge": "reads per-tool agent histories (~/.codex, ~/.claude, ...); a node running opencode has none of those sources",
+    "rlspark-sourcewatch": "raxxar-local (not upstream); hard-codes /mnt/knowledge/raxxar and drives the RLSpark dossier workflow, which is this cluster's project",
+    "wiki-agent": "targeted search over per-tool agent histories; same missing sources as memory-bridge",
+    "wiki-history-ingest": "ingests per-tool agent histories; same missing sources as memory-bridge"
+  },
+  "license": "MIT",
+  "patches": {
+    "daily-update": [
+      "scripts/wiki-skill-patches/daily-update.patch"
+    ]
+  },
+  "skills": {
+    "cross-linker": {
+      "sha256": "da837931c14ba8c2f9edc039548d0220a2d6ac3cf77e5f428f2f7fff3b574b0c",
+      "source": "/mnt/nvme/skills/wiki/cross-linker"
+    },
+    "daily-update": {
+      "sha256": "4d19f30f77905a9e15bedbd4dc92b13c89616bfcf6aabf4fd877ca7be28f37a4",
+      "source": "/mnt/nvme/skills/wiki/daily-update"
+    },
+    "defuddle": {
+      "sha256": "283815b08645d44a3f0edde31ba0ce85c2ab896ad6449cc91422e50eabc7ce4c",
+      "source": "/mnt/nvme/skills/wiki/defuddle"
+    },
+    "graph-colorize": {
+      "sha256": "1eda68b817364e841b40a05cc6a7cf950b2e7e1e7024349c142797b177b6ff38",
+      "source": "/mnt/nvme/skills/wiki/graph-colorize"
+    },
+    "impl-validator": {
+      "sha256": "483565422d89db33b81e2263f78e6b3a5053816066ef8912685dde5996e87ac9",
+      "source": "/mnt/nvme/skills/wiki/impl-validator"
+    },
+    "json-canvas": {
+      "sha256": "9a19a27116b4fbd153d923443d54a3532eee35ec15c66c7365c32ff334207a82",
+      "source": "/mnt/nvme/skills/wiki/json-canvas"
+    },
+    "llm-wiki": {
+      "sha256": "296894e9aa118a27ecc64ec64217d8166e1ac18f9dd924d7005f7a46baaf5917",
+      "source": "/mnt/nvme/skills/wiki/llm-wiki"
+    },
+    "obsidian-bases": {
+      "sha256": "7f758d4056dcf1e5e2592ca8acd7d62638f9c01dd7b5e7149753506b8c5ba984",
+      "source": "/mnt/nvme/skills/wiki/obsidian-bases"
+    },
+    "obsidian-cli": {
+      "sha256": "5270cea782a24748f4d512df1047f4c7eeb0fc85f56a2938627ef32c49e7b1bf",
+      "source": "/mnt/nvme/skills/wiki/obsidian-cli"
+    },
+    "obsidian-markdown": {
+      "sha256": "c6e0b7efb948bcdd5712e922204451db1c2634964c502e24b9433a6c6e98acf9",
+      "source": "/mnt/nvme/skills/wiki/obsidian-markdown"
+    },
+    "skill-creator": {
+      "sha256": "c8dc8d041b48fca472f7ad41911078513a5b356f5f117ac472b59b7b04cdd1e5",
+      "source": "/mnt/nvme/github/obsidian-wiki/.skills/skill-creator"
+    },
+    "tag-taxonomy": {
+      "sha256": "037effb91c26ab563efdef583c115243bb9eb99462f233745e935b5b2bc90660",
+      "source": "/mnt/nvme/skills/wiki/tag-taxonomy"
+    },
+    "vault-skill-factory": {
+      "sha256": "371aba102b155d0f5216b7ae284ba7f29345fbbf2e599f4fe7d59090e0982c34",
+      "source": "/mnt/nvme/skills/wiki/vault-skill-factory"
+    },
+    "wiki-capture": {
+      "sha256": "740138cf78e207b35fbe310ff36efb556155bf2d9d5fb50d50e0eb67edd6f6d6",
+      "source": "/mnt/nvme/skills/wiki/wiki-capture"
+    },
+    "wiki-context-pack": {
+      "sha256": "b9c8a8c80180b3843ea2be0e900cd65e2d0916705f8afc829730789407e5f0de",
+      "source": "/mnt/nvme/skills/wiki/wiki-context-pack"
+    },
+    "wiki-dashboard": {
+      "sha256": "73ed8738352cd25beb3367082dab976136bd10d30ef7a89fcb391493110a4d87",
+      "source": "/mnt/nvme/skills/wiki/wiki-dashboard"
+    },
+    "wiki-dedup": {
+      "sha256": "50c7cc5fc11a7b0a94ff0ee7151263e78044390be09bac1c435f2892948509da",
+      "source": "/mnt/nvme/skills/wiki/wiki-dedup"
+    },
+    "wiki-digest": {
+      "sha256": "375766186ca3f362a306e1d92b6ccfb3ba08625e9a5a5b7a1b0a57f6153ce5e6",
+      "source": "/mnt/nvme/skills/wiki/wiki-digest"
+    },
+    "wiki-export": {
+      "sha256": "74bbc360e48e123d5c9717783e3497d77253bbfb315d3bd06c057bca445bbd9c",
+      "source": "/mnt/nvme/skills/wiki/wiki-export"
+    },
+    "wiki-import": {
+      "sha256": "c8d711222f425e83c59fbe291f58864f39d38bcce6c8c3fbd70a24dbb1eebff5",
+      "source": "/mnt/nvme/skills/wiki/wiki-import"
+    },
+    "wiki-ingest": {
+      "sha256": "1d571ed0f011c6d6bfbab6c1f3049ddd3234921f840fee8a7018ec4a4f2f9089",
+      "source": "/mnt/nvme/skills/wiki/wiki-ingest"
+    },
+    "wiki-lint": {
+      "sha256": "09b1ec38f184be601f93c0973183855157c42466a96fa14232552fb082711981",
+      "source": "/mnt/nvme/skills/wiki/wiki-lint"
+    },
+    "wiki-query": {
+      "sha256": "e5306e75c0aaec0e50f47fbae8f872de848b1cd155cf3fc35027c4ac6bc5b665",
+      "source": "/mnt/nvme/skills/wiki/wiki-query"
+    },
+    "wiki-rebuild": {
+      "sha256": "92e0492fd75854b4d5cb2ba7f3f58d249666ac25aabe49d521e30226938d60c7",
+      "source": "/mnt/nvme/skills/wiki/wiki-rebuild"
+    },
+    "wiki-research": {
+      "sha256": "beb061b7276588a4a81714a957cad8409e7d43ef4f69b467c82c00421523cee4",
+      "source": "/mnt/nvme/skills/wiki/wiki-research"
+    },
+    "wiki-setup": {
+      "sha256": "2618fd6ce299cf3e293497fed7341b1c2a892df3226c3954b2accc4514787ccf",
+      "source": "/mnt/nvme/skills/wiki/wiki-setup"
+    },
+    "wiki-stage-commit": {
+      "sha256": "15e4ce8bee3f4b1004aa0da35e75e84a654d913621f404316e16840f43435d9e",
+      "source": "/mnt/nvme/skills/wiki/wiki-stage-commit"
+    },
+    "wiki-status": {
+      "sha256": "006fe9bab1db5cdf2827a7769b165199453e65e0428b0cb60aacca6d4542e250",
+      "source": "/mnt/nvme/skills/wiki/wiki-status"
+    },
+    "wiki-switch": {
+      "sha256": "985de09af6f0316e1a1dbf7db9afdc72f16fbceed016863cae02c54cb62c2ad7",
+      "source": "/mnt/nvme/skills/wiki/wiki-switch"
+    },
+    "wiki-synthesize": {
+      "sha256": "910196c9d899269e8e00840f3574c2fa3076636064b7298871bb27c635b042bf",
+      "source": "/mnt/nvme/skills/wiki/wiki-synthesize"
+    },
+    "wiki-update": {
+      "sha256": "ec5f606f6ff64650fffd4e4311671f74424b6beff05ea298a97feec3c9e4d157",
+      "source": "/mnt/nvme/skills/wiki/wiki-update"
+    }
+  },
+  "source": "/mnt/nvme/skills/wiki",
+  "upstream": "https://github.com/Ar9av/obsidian-wiki",
+  "upstream_commit": "ec2b6bc"
+}

@@ -1,0 +1,107 @@
+# Guard protocol — the contract between Master and peer
+
+Both roles implement this conversation. The peer side exists
+(`peer-node/services/sparknet-guard-d.py`); the Master side that *produces*
+these payloads does not exist yet and is specced in
+`master-node/plans/MASTER_BUILD_PLAN.md`.
+
+The normative machine-readable policy is `contracts/capabilities.json` and
+`contracts/identity-schema.json`. This page is the narrative contract.
+
+## The asymmetry
+
+A peer can **verify** an approval but never **produce** one. Production
+requires the Master Ed25519 private key, which never leaves the Master. A
+compromised peer can therefore lie about its own state, but it cannot authorise
+a change to itself — which is the entire point of the arrangement.
+
+## Request lifecycle
+
+```
+peer agent wants to change a protected file
+        │
+        ▼
+PLAN        the agent drafts a read-only proposal; no mutation occurs
+        │
+        ▼
+PERMISSION  the request is offered to the operator / Master for approval
+        │
+        ▼
+EXECUTE     only a signed payload with a live capability reaches the guard
+```
+
+The guard never learns about an unapproved request. It is not a policy engine
+that can be talked into approving something; it either receives a valid
+signature or it refuses.
+
+## Approval payload
+
+A payload the Master signs to authorise one mutation:
+
+| Field | Purpose |
+|---|---|
+| `fingerprint` | SHA-256 of the peer's canonical identity (`contracts/identity-schema.json`) |
+| `capabilities` | must include `guard-apply`, or the guard refuses |
+| `target_path` | must appear in the peer's `critical-manifest.json` `protected_paths` |
+| `content` | the new file content |
+| `nonce` | single-use value; replay refused |
+| `request_id` | correlates plan → permission → execute |
+| `issued_at` / `expires_at` | validity window |
+
+`content` is **inside** the signed message (`content_in_signature: true`).
+Signing only a request id would let anyone replay it against different content.
+
+## What the guard checks, in order
+
+Verification is ordered so that the cheapest disqualifying check happens first,
+and every failure is fail-closed:
+
+1. **Source address** — loopback, or the Master's overlay IP
+   (`contracts/overlay.json → master_anchor_ipv4`). The guard binds its *own*
+   overlay address, so a legitimate Master request arrives from `10.100.0.1`.
+   The node's own overlay address and neighbouring clients are rejected.
+2. **Master signature** — Ed25519 over the canonical payload.
+3. **Not revoked** — checked *before* signature validity, so a tampered
+   registry fails closed: clearing `revoked` by hand breaks the signature.
+4. **Not expired / not replayed** — nonce unused, within the TTL.
+5. **`guard-apply` capability** — present in the signed envelope.
+6. **Target is protected** — the path is in this node's manifest. An unprotected
+   path is refused even with a perfect signature.
+7. **`euid 0`** — the apply path requires root.
+8. **`--apply-enabled`** — off by default in the shipped unit. Arming the guard
+   to mutate is an explicit operator decision, not a default.
+
+## Apply sequence
+
+When all of the above pass:
+
+1. `chattr -i` the target (lift the immutable bit)
+2. write atomically — temp file in the same directory, then rename
+3. restore ownership and mode
+4. `chattr +i` re-pin
+5. append to the audit ledger, hash-chained to its predecessor
+
+If the write fails midway the ledger records the failure; a half-applied
+protected file is the worst state and must be visible in the audit trail.
+
+## Standalone degradation
+
+With no overlay the guard **refuses to bind** and refuses to apply. The vault
+still works — an unanchored node loses the ability to mutate protected files,
+not the ability to read or serve its own knowledge.
+
+That asymmetry is deliberate: a node that has lost its Master has lost its
+authority, and the correct response is to keep it useful but inert, not to let
+it carry on with stale permissions.
+
+## Master side (not yet built)
+
+The Master must be able to:
+
+- render this payload for a specific peer, signed with its private key
+- POST it to that peer's `10.100.0.x:9090`
+- track issued nonces so it never signs the same one twice
+- revoke: sign `revoked: true` and redistribute the registry
+
+Until that exists, `guard-apply` cannot be granted to any peer in practice. The
+capability is defined and enforced, but nothing can issue it.

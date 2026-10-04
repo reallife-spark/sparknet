@@ -1,90 +1,127 @@
 # Sparknet
 
-Master template for NVIDIA DGX Spark node setup as part of the Sparknet architecture.
+A two-role WireGuard fabric for DGX Spark nodes, with one signed-authorization
+scheme and a knowledge vault per node.
 
-## What this provides
-- EU AI Act Article 14 compliant (Plan → Permission → Execute) workflow
-- Vault/path/venv-agnostic service design with explicit env and absolute paths
-- User local system identity capture with privilege boundary enforcement
-- Security scaffolding: KillSwitch, immutable guard, signed approvals, permissioned ledger
-- Hardware-aware networking (ConnectX-7 RoCEv2, MTU 9000, WLAN emergency routing)
-- User-space P2P sync, hidden vault (.sparknet) patterns
-- Template for provisioning standalone or cluster DGX Spark nodes
+The Master holds the signing key and decides what each node may do. Every other
+node is a peer: it verifies the Master's decisions and cannot authorise anything
+for itself. Authority comes from **key possession**, not from a capability
+grant — a peer holding the full capability vocabulary without that key can never
+grant, revoke or escalate.
 
-## Quick Start
-The vault root **is** the node template — it is self-contained and relocatable.
-```bash
-make validate      # env contract + manifest checks
-make test          # pytest suite
-make provision     # identity capture + validate
-```
+## What this repository is
 
-Optional, opt-in tooling:
-```bash
-make devtools      # create .venv with cryptography + pytest + ruff
-make lint          # ruff if available, otherwise prints how to install it
-```
+Not one node — a fabric with two node roles and a shared contract:
 
-## Master-anchored node
+| Path | Role | State |
+|---|---|---|
+| `contracts/` | both | overlay, capabilities, identity, ports, guard protocol — the single source of truth |
+| `shared/` | both | `sparknet-authz.py`, the one canonical signing implementation |
+| `peer-node/` | peer | **implemented** — guard, anchor, dispatch, its own vault |
+| `master-node/` | master | **specified, not built** — see its `plans/MASTER_BUILD_PLAN.md` |
+| `scripts/` | both | fabric tooling: skill vendoring, env init, bundling |
+| `.opencode/skills/` | both | the vendored wiki skill suite (31 skills, MIT) |
 
-A node is either anchored to the Master over WireGuard or running standalone.
-The vault works either way; the difference is that without the anchor the guard
-refuses to bind and refuses to apply anything.
+**A role subvault alone is not a deployment.** A peer cannot verify a signature
+without `contracts/` and `shared/`, so a bare `peer-node/` copy deliberately
+fails validation instead of pretending to work. `make bundle` assembles what a
+node actually needs.
 
-```bash
-make keys           # WireGuard + Ed25519 keypairs into .state/keys (0700, never committed)
-make wg-render      # preview wg0.conf (dry-run); APPLY=1 writes it at 0600
-make anchor         # root: render + wg-quick up + chattr +i
-make authz-verify   # check this node's identity against the signed registry
-make guard-status   # manifest state and authorization posture
-```
+The two roles are not symmetric, and their charters differ in substance. Read the
+role's own `AGENTS.md` before working inside it.
 
-See [docs/wireguard.md](docs/wireguard.md) and
-[docs/node-authorization.md](docs/node-authorization.md). The short version: the
-Master signs what each node may do (`guard-apply` being the sensitive one), and
-WireGuard itself has no SHA-256 — the SHA-256 is the authorization fingerprint.
-
-Every path resolves from the script's own location, so the vault can be cloned
-anywhere and still run.
-
-Writing outside the vault is always explicit:
-
-| Command | Writes outside the vault? |
-|---|---|
-| `make install-config` | **Never.** Permanently dry-run; prints diffs only. |
-| `make install-units` | Only with `APPLY=1`. Default is a dry-run report. |
-| `make provision` | No. Identity capture + validation only. |
-| `make wg-render` | Only with `APPLY=1`, into the git-ignored state dir. |
-| `make anchor` | Yes — root; renders, brings up `wg0`, applies `chattr +i`. |
-
-## Development
+## Quick start
 
 ```bash
-make help          # list targets
-make validate      # env contract + manifest checks
-make test          # pytest suite
-make lint          # ruff, or a note on how to install it
-make devtools      # opt-in: create .venv with pytest + ruff
+make help          # what the fabric can do
+make layout        # what exists, and what is merely specified
+make devtools      # optional: .venv with cryptography, pytest, ruff
+make env-init      # write each vault's .env and category skeleton
+make test-all      # every suite: contract, fabric, peer, master
+make validate      # both roles' charters, plans and manifests
 ```
 
-The services need exactly one third-party package: `cryptography>=42`, because
-Ed25519 verification is not in the standard library
-(`requirements.txt` / `pyproject.toml`, and `tests/test_services.py` enforces
-that the allow-list does not silently grow). `ruff` is optional — `make lint`
-degrades to a message rather than failing when it is absent.
+Then pick a role and work inside it:
 
-Configuration in `/etc` is *derived* from this vault. `make install-config`
-shows the diff and cannot write it — applying a malformed netplan on a remote
-node can drop your SSH session, so that stays a human decision. See
-`manifests/critical-manifest.json` for which vault file generates which
-`/etc` path.
+```bash
+make -C peer-node help
+make -C master-node help
+```
 
-Run `make dist` to build a release tarball from the committed tree; it warns
-first if your working tree is dirty.
+## Standalone node bundles
 
-## Documentation
-See docs/ directory for architecture, compliance, user identity, scenarios/BOMs.
+The real deliverable: a directory that can be extracted onto a fresh machine and
+run there.
+
+```bash
+make bundle ROLE=peer           # -> dist/sparknet-peer-<tree>.tar.gz
+make bundle-verify ROLE=peer    # extract elsewhere and prove it runs
+make bundle ROLE=master         # vault + spec; the control plane is not built
+```
+
+A bundle carries the role, `contracts/`, `shared/`, `scripts/`, the vendored
+wiki suite and `opencode.json`. Verification runs `env-init`, the wiki preflight,
+role validation and that role's test suite **from the extracted copy**, at a
+different path — which is what makes "self-contained" a checked claim rather
+than a description.
+
+`.env` is never bundled: it records machine-local paths, so deployment runs
+`scripts/sparknet-env-init.sh` as its first step.
+
+## Security posture
+
+- **EU AI Act Article 14** — Plan → Permission → Execute. The guard never sees an
+  unapproved request; it verifies a signature or refuses.
+- **Capability-gated mutation.** `guard-apply` is the only capability that turns
+  a valid signature into a filesystem write, and applying additionally requires
+  `euid 0`, a protected target path, and `--apply-enabled` (off by default).
+- **Immutable config.** Protected files are pinned with `chattr +i`; the guard
+  lifts the bit, writes atomically, re-pins, and hash-chains an audit entry.
+- **Fail-closed by default.** The shipped registry is **empty**, so a fresh
+  deployment grants nothing. Without the overlay the guard refuses to bind —
+  losing authority, not the ability to read and serve knowledge.
+- **Containment.** A revoked peer loses its anchor and has no remaining WAN path.
+  Revocation is isolation, not a warning.
+
+Details in `peer-node/docs/`, starting with `wireguard.md` and
+`node-authorization.md`.
+
+> **Nothing above is live-verified.** WireGuard handshakes, `nftables`,
+> `chattr +i` enforcement, systemd units and guard-apply have not been exercised
+> on a development host. Treat them as designed, not demonstrated. The Master
+> holds no usable key yet, so no approval can be issued at all.
+
+## Configuration in `/etc`
+
+Derived from the vault, never the other way round. `make install-config` prints
+the diff and cannot write it — applying a malformed netplan on a remote node can
+drop your SSH session, so that stays a human decision. `make install-units` is a
+dry-run report unless you pass `APPLY=1`.
+
+## Wiki skill suite
+
+Vendored at `.opencode/skills/`, so a bare clone or an extracted bundle can run
+it with no global skill farm. Re-vendor with `make wiki-sync`, prove no drift
+with `make wiki-verify`.
+
+Skills resolve their vault from the **nearest** `.env`, which is what keeps a
+role subvault honest. Run `make wiki-preflight` before using one, and never work
+around a failure: the skills would silently resolve a different vault and every
+page would land there instead, with nothing to tell you.
+
+## Dependencies
+
+Exactly one third-party package, `cryptography>=42`, because Ed25519 is not in
+the standard library. `pytest` and `ruff` are optional development tools and the
+suite runs without them. Some wiki skills shell out to optional external tools
+(`defuddle`, the Obsidian CLI, Dataview); their absence degrades that skill, not
+the suite.
 
 ## GitHub
-Repository target: https://github.com/realllife-spark/sparknet (private)
-Note: Push currently blocked by GitHub auth requirements (see plans/GITHUB_PUSH_BLOCKER.md)
+
+Private remote: `https://github.com/realllife-spark/SparkNet-Node.git`
+
+The pre-split history is reachable at `ad1cc39`. Note that GitHub's REST API
+reports the repository as missing while git fetch/push/clone succeed against it —
+use git, and treat the REST 404 as a client-side visibility problem rather than
+evidence that the push did not land.

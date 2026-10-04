@@ -1,15 +1,67 @@
 ---
 title: sparknet Charter
-updated: 2026-10-03
+updated: 2026-10-04
 ---
 
 # sparknet — agent charter
 
-sparknet knowledge vault.
+sparknet knowledge vault — and the fabric root.
 
 This vault is the **active knowledge base** for sessions started with
 `opencode sparknet`. It is standalone and self-managing: the raxxar
 cluster charter, Aegis context and its Plan Protocol do **not** apply here.
+
+## The fabric: two roles and one contract
+
+This repository is not one node. It is a **fabric** with two node roles and a
+shared contract, and most confusion here comes from reading a page that belongs
+to one role as though it described the whole system.
+
+| Path | Role | State |
+|---|---|---|
+| `contracts/` | both | the cross-role contract: overlay, capabilities, identity, ports, guard protocol. **Single source of truth.** |
+| `shared/` | both | `sparknet-authz.py` — the one signed-authorization implementation |
+| `peer-node/` | peer | a working node: guard, anchor, dispatch, its own wiki vault |
+| `master-node/` | master | the signing role — **specified, not built** (see its `plans/MASTER_BUILD_PLAN.md`) |
+| `scripts/` | both | fabric-level tooling: vendoring, env, bundling |
+| `.opencode/skills/` | both | the vendored wiki suite |
+
+Three consequences worth holding onto:
+
+1. **A role subvault alone is not a deployment.** A peer cannot verify a
+   signature without `contracts/` and `shared/`, so a bare `peer-node/` copy
+   deliberately fails validation rather than pretending to work. `make bundle`
+   assembles what a node actually needs.
+2. **Authority comes from key possession, not a capability grant.** The Master
+   signs; a peer verifies. A peer with the full capability vocabulary but without
+   the private key can never grant, revoke or escalate.
+3. **Cross-role changes are atomic.** Editing anything a peer depends on means
+   editing `contracts/` *and* both roles in the same commit, then running
+   `make contract-test`. `tests/test_contracts.py` exists to fail when one role's
+   copy of the contract drifts from the other's.
+
+Read the role's own `AGENTS.md` before working inside it. The peer and master
+charters differ in substance, and the peers are not a subset of the masters.
+
+## Commands
+
+Run everything through `make`; it picks the venv interpreter and the optional
+tooling consistently.
+
+| Command | Use |
+|---|---|
+| `make help` / `make -C peer-node help` | what the fabric and each role can do |
+| `make layout` / `make help-role` | what exists, and what is merely specified |
+| `make validate` | both roles' charters, plans and manifests |
+| `make test-all` | **every** suite: contract, fabric, peer, master |
+| `make contract-test` | the peer still matches `contracts/` |
+| `make wiki-sync` / `make wiki-verify` | re-vendor the wiki suite / prove no drift |
+| `make wiki-preflight` | prove the skills resolve *this* vault |
+| `make bundle ROLE=peer\|master` | build a standalone node bundle in `dist/` |
+| `make bundle-verify ROLE=…` | extract it elsewhere and prove it runs |
+
+Bare `pytest` at the root runs only `tests/` (fabric level). Use `make test-all`
+when you mean the whole repository.
 
 ## Layout (wiki category layout)
 
@@ -63,8 +115,18 @@ Wiki skills read the vault location from `.env` in this directory
 
 ## Wiki skill suite
 
-Available from the global skill farm (`/mnt/nvme/skills/wiki`); run
-`/wiki-status` first to see the ingest delta, then:
+**Vendored in this repository** at `.opencode/skills/` (31 skills, MIT, pinned
+upstream) — there is no global skill farm dependency, so a bare clone or an
+extracted node bundle can run the whole suite. Re-vendor with
+`make wiki-sync`, verify with `make wiki-verify`.
+
+Skills resolve the vault from the **nearest** `.env`, which is what keeps a role
+subvault honest. Run `make wiki-preflight` before using one; if it fails, run
+`./scripts/sparknet-env-init.sh <role-dir>` once. Never work around the failure:
+the skills would silently resolve a different vault and every page you write would
+land there instead, with nothing to tell you.
+
+Run `/wiki-status` first to see the ingest delta, then:
 
 | Command | Use |
 |---|---|
@@ -80,8 +142,9 @@ Available from the global skill farm (`/mnt/nvme/skills/wiki`); run
 
 ## Boundaries
 
-- **Scope discipline.** This vault holds sparknet knowledge vault. Nothing unrelated
-  belongs here; a page that serves another domain goes in that domain's vault.
+- **Scope discipline.** This vault holds cross-role sparknet knowledge. Nothing
+  unrelated belongs here; a page that serves another domain goes in that domain's
+  vault, and a page that serves exactly one role belongs in that role's subvault.
 - **No secrets.** Never commit tokens, keys or `.env` contents. Reference the
   secret *path* only.
 - **Offensive security is out of scope** for a general/default agent session.

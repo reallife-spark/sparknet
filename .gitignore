@@ -28,3 +28,8 @@ __pycache__/
 
 # Distribution archives
 dist/
+
+# Tool caches that self-ignore via an inner .gitignore, but only in recent
+# versions. Declared here so a cache can never be committed by an older tool.
+.ruff_cache/
+.pytest_cache/
