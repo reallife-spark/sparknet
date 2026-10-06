@@ -18,7 +18,7 @@ Not one node — a fabric with two node roles and a shared contract:
 | `contracts/` | both | overlay, capabilities, identity, ports, guard protocol — the single source of truth |
 | `shared/` | both | `sparknet-authz.py`, the one canonical signing implementation |
 | `peer-node/` | peer | **implemented** — guard, anchor, dispatch, its own vault |
-| `master-node/` | master | **specified, not built** — see its `plans/MASTER_BUILD_PLAN.md` |
+| `master-node/` | master | **built** (Steps 15–16) — runs the peer's services by path, signs nothing yet |
 | `scripts/` | both | fabric tooling: skill vendoring, env init, bundling |
 | `.opencode/skills/` | both | the vendored wiki skill suite (31 skills, MIT) |
 
@@ -56,7 +56,7 @@ run there.
 ```bash
 make bundle ROLE=peer           # -> dist/sparknet-peer-<tree>.tar.gz
 make bundle-verify ROLE=peer    # extract elsewhere and prove it runs
-make bundle ROLE=master         # vault + spec; the control plane is not built
+make bundle ROLE=master         # vault + peer parity; ships peer-node/ because parity needs it
 ```
 
 A bundle carries the role, `contracts/`, `shared/`, `scripts/`, the vendored

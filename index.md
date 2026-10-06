@@ -17,7 +17,7 @@ This repository is a fabric. Each vault has its own categories and its own
 |---|---|---|
 | `.` (fabric root) | cross-role knowledge, contracts, tooling | [[PLAN]] |
 | `peer-node/` | the implemented node role | `peer-node/PLAN.md` |
-| `master-node/` | the signing role — **specified, not built** | `master-node/plans/MASTER_BUILD_PLAN.md` |
+| `master-node/` | the elected signing role — **built**; runs the peer's services by path | `master-node/plans/MASTER_BUILD_PLAN.md` |
 
 ## Start here
 
@@ -40,14 +40,18 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/identity-schema.json` | canonical form, fingerprint, signed envelope |
 | `contracts/ports.json` | which role listens where |
 | `contracts/guard-protocol.md` | the approval conversation |
+| `contracts/share-protocol.md` | the cross-node sharing regime |
+| `contracts/consensus-protocol.md` | master election and the cluster trust root |
 | `shared/sparknet-authz.py` | the one signing implementation — never copied |
 
 ## The two roles
 
 - **`peer-node/`** — implemented: guard, anchor, dispatch bridge, agent ports,
   containment. [`peer-node/AGENTS.md`](peer-node/AGENTS.md)
-- **`master-node/`** — contracts, templates, specifications and a prioritized
-  build plan. No `scripts/`, no `services/`, nothing runs.
+- **`master-node/`** — built (build plan Steps 15–16): `scripts/`, `services/`,
+  `systemd/`, `manifests/`, `blockchain/`, `security/`. It runs the peer's
+  services **by path** rather than copying them, and keeps its own hash-chained
+  ledger. It signs nothing yet — the isolated signer is Step 17.
   [`master-node/AGENTS.md`](master-node/AGENTS.md)
 
 Authority comes from **key possession**, not a capability grant: a peer with the

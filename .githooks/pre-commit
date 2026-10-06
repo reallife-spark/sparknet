@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Pre-commit gate: refuse to commit key material.
+#
+# Wire it up once per clone with `make hooks` (sets core.hooksPath=.githooks).
+# Git never installs hooks automatically, so this file existing is not the same
+# as it running — `make hooks` is the activation step, and
+# `git config core.hooksPath` is how you prove it happened.
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+
+echo "pre-commit: keys-check"
+exec ./scripts/sparknet-keys-check.sh

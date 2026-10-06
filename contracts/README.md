@@ -12,8 +12,12 @@ the tests then prove both roles still agree.
 | `overlay.json` | addressing, MTU, keepalive, AllowedIPs discipline |
 | `capabilities.json` | the closed capability vocabulary and who may hold each |
 | `identity-schema.json` | canonical identity, fingerprinting, signed envelope |
-| `ports.json` | every listener and dial target, with implemented/spec-only status |
+| `ports.json` | every listener and dial target, with `implementation_state` (code) kept separate from `runtime` (observed on a given host) |
 | `guard-protocol.md` | the Master↔peer approval conversation |
+| `share-protocol.md` | the peer↔peer sharing regime: offers, share types, the four clocks, trust levels, isolation, evidence |
+| `consensus-protocol.md` | how three nodes agree on who holds the signing key: election, the cluster trust root, re-formation |
+| `tracking-schema.json` | the numbered vault layout, the per-note tracking block and its signature, the user record, the approval record, the secret index |
+| `provenance-protocol.md` | the narrative behind that schema: the accountability chain, stale-vs-invalid, ledger-only approvals, inbox dispatch policy, secret custody |
 
 ## Why this directory exists
 
@@ -41,5 +45,8 @@ role should change too. That question is the entire value of this directory.
 Nothing executable. The reference implementation of the signed canonical form is
 `shared/sparknet-authz.py`, deliberately singular — two copies of signing or
 canonicalisation code is a security bug waiting to happen, because they can
-drift and then silently stop validating each other. Contracts state rules;
-`shared/` binds them to code; each role wraps that code in its own CLI.
+drift and then silently stop validating each other. Note signing, ledger
+appending and provenance verification are the same story one layer up:
+`shared/sparknet-provenance.py` loads authz *by path* and adds no crypto of its
+own. Contracts state rules; `shared/` binds them to code; each role wraps that
+code in its own CLI.

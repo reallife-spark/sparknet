@@ -123,15 +123,67 @@ fi
 # The skills expect these to exist. `wiki-setup` creates them for a brand-new
 # vault, but a subvault already has content, so it will not be run.
 created=0
-for dir in concepts entities skills references synthesis journal projects \
-           _raw _staging _archives sessions; do
-  if [ ! -d "$target/$dir" ]; then
-    mkdir -p "$target/$dir"
+
+# Keep empty dirs in git so a fresh clone is already a valid vault.
+_ensure_dir() {
+  if [ ! -d "$target/$1" ]; then
+    mkdir -p "$target/$1"
     created=$((created + 1))
   fi
-  # Keep empty dirs in git so a fresh clone is already a valid vault.
-  [ -f "$target/$dir/.gitkeep" ] || : > "$target/$dir/.gitkeep"
-done
+  [ -f "$target/$1/.gitkeep" ] || : > "$target/$1/.gitkeep"
+}
+
+# Role vaults carry the numbered PARA layout; the wiki skills and the old
+# charter still name the category dirs, so each category name is a symlink to
+# its numbered home. A symlink already there is a no-op. A *real* file or dir
+# under a category name is pre-restructure content — rewriting it as a symlink
+# would hide it, so it is left alone and reported for a manual migration.
+_ensure_shim() {
+  if [ -L "$target/$1" ]; then
+    return 0
+  fi
+  if [ -e "$target/$1" ]; then
+    printf 'sparknet-env-init: %s is a real path, not a shim — left as is; move it to %s yourself\n' \
+      "$1" "$2" >&2
+    return 0
+  fi
+  ln -s "$2" "$target/$1"
+  created=$((created + 1))
+}
+
+if [ "$is_fabric_root" -eq 1 ]; then
+  # The fabric root keeps the wiki category layout as-is.
+  for dir in concepts entities skills references synthesis journal projects \
+             _raw _staging _archives sessions; do
+    _ensure_dir "$dir"
+  done
+else
+  # Role subvaults: the numbered layout, plus shims for every legacy name.
+  for dir in 00_System 01_Inbox 02_Daily 03_Sources 04_Evergreen \
+             05_Knowledge 05_Knowledge/concepts 05_Knowledge/entities \
+             05_Knowledge/skills 05_Knowledge/synthesis 06_Projects \
+             07_Archives _staging; do
+    _ensure_dir "$dir"
+  done
+  _ensure_shim concepts 05_Knowledge/concepts
+  _ensure_shim entities 05_Knowledge/entities
+  _ensure_shim skills 05_Knowledge/skills
+  _ensure_shim synthesis 05_Knowledge/synthesis
+  _ensure_shim journal 02_Daily
+  _ensure_shim sessions 02_Daily
+  _ensure_shim references 03_Sources
+  _ensure_shim _raw 03_Sources
+  _ensure_shim projects 06_Projects
+  _ensure_shim _archives 07_Archives
+  # index.md and log.md move into 00_System/ only when there is content to
+  # move; until then there is nothing to shim.
+  if [ -f "$target/00_System/index.md" ]; then
+    _ensure_shim index.md 00_System/index.md
+  fi
+  if [ -f "$target/00_System/log.md" ]; then
+    _ensure_shim log.md 00_System/log.md
+  fi
+fi
 printf 'sparknet-env-init: wiki dirs ready (%d created)\n' "$created"
 
 # --- prove the skills will resolve to this vault ------------------------------

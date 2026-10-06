@@ -8,12 +8,32 @@ these payloads does not exist yet and is specced in
 The normative machine-readable policy is `contracts/capabilities.json` and
 `contracts/identity-schema.json`. This page is the narrative contract.
 
-## The asymmetry
+## The asymmetry is a role state, not a structure
 
-A peer can **verify** an approval but never **produce** one. Production
-requires the Master Ed25519 private key, which never leaves the Master. A
-compromised peer can therefore lie about its own state, but it cannot authorise
-a change to itself — which is the entire point of the arrangement.
+This page previously stated, as a timeless fact, that a peer can **verify** an
+approval but never **produce** one. That is no longer structurally true, and
+keeping the sentence would mislead exactly the reader it was meant to protect.
+
+A peer today contains the signing code. What stops a peer from signing is not its
+implementation — it never was, and under the election model it certainly is not. A
+peer lacks the **operational key**, and the operational key exists only inside a
+cluster trust root that all three members co-signed. A node outside the root, or a
+node the root does not name as master, has nothing to sign with.
+
+So the authority asymmetry is preserved but relocated: from *"the peer cannot
+sign"* to *"only a node named by a valid cluster trust root may use the operational
+key."* That is a weaker guarantee than the old sentence implied, because it
+depends on state rather than on code, and it is stated as one.
+
+Who may hold that key is decided by unanimous agreement of three members, specified in
+`contracts/consensus-protocol.md` and carried as `cluster_trust_root` in
+`contracts/identity-schema.json`.
+
+The property that actually matters is unchanged: a node cannot authorise a change
+to itself. It cannot grant itself `guard-apply`, install itself as master, or
+extend its own overlay address, because each of those requires a signature under a
+key it does not hold, from a root it did not unilaterally agree to.
+
 
 ## Request lifecycle
 

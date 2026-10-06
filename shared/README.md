@@ -26,6 +26,34 @@ Neither role re-implements the algorithm. Neither role may edit this file to
 serve a local need; a change belongs in `contracts/` first, with both roles
 updated in the same commit.
 
+## `sparknet-consensus.py`
+
+How three nodes agree on who holds the signing key: master election, the
+3-of-3 unanimity rule, canonical cluster trust roots, and re-formation when the
+Master changes. The narrative contract is `contracts/consensus-protocol.md`.
+
+**Why it is here and not in the Master.** All three members run this, including
+the two that are only peers. The Master does not decide who the Master is — the
+three nodes do. Putting the decision in `master-node/services/` would hand the
+decision to the party the decision is about, which is the thing the election
+exists to prevent.
+
+**Why there is exactly one copy.** Two nodes computing different canonical bytes
+for the same agreement would each conclude the other had not agreed, and the
+cluster would deadlock with no visible cause. The bytes must not depend on dict
+ordering or member listing order, so `root_bytes` sorts both.
+
+**It does not reimplement Ed25519.** Every signing and verification operation
+calls into `sparknet-authz.py`, loaded by path from this directory. Two crypto
+implementations that must agree byte-for-byte would be a second trust boundary;
+`tests/test_consensus.py::test_consensus_does_not_reimplement_ed25519` fails the
+build if this module starts doing its own. When the shared file cannot be found,
+this module raises rather than falling back to a local implementation.
+
+**Every deadline is injected.** No code path here reads the wall clock, so the
+agreement rules are testable in seconds instead of hours, and a missed window
+cannot hide behind a test nobody waits for.
+
 ## Adding to this directory
 
 Only if **both** roles need the same code and any divergence would be a

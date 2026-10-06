@@ -22,7 +22,7 @@ to one role as though it described the whole system.
 | `contracts/` | both | the cross-role contract: overlay, capabilities, identity, ports, guard protocol. **Single source of truth.** |
 | `shared/` | both | `sparknet-authz.py` — the one signed-authorization implementation |
 | `peer-node/` | peer | a working node: guard, anchor, dispatch, its own wiki vault |
-| `master-node/` | master | the signing role — **specified, not built** (see its `plans/MASTER_BUILD_PLAN.md`) |
+| `master-node/` | master | the elected signing role — **built** (Steps 15–18); it runs the peer's services by path, holds an isolated signer, and declares an admin surface. **Election is still unbuilt (Step 14)**, so no node is Master and the signer has never been deployed |
 | `scripts/` | both | fabric-level tooling: vendoring, env, bundling |
 | `.opencode/skills/` | both | the vendored wiki suite |
 
@@ -59,9 +59,18 @@ tooling consistently.
 | `make wiki-preflight` | prove the skills resolve *this* vault |
 | `make bundle ROLE=peer\|master` | build a standalone node bundle in `dist/` |
 | `make bundle-verify ROLE=…` | extract it elsewhere and prove it runs |
+| `make keys-check` | no key-shaped names or PEM blocks tracked; `.state/` keys 0600 |
+| `make shims-check` | every legacy name in `peer-node/` and `master-node/` is still a symlink |
+| `make hooks` | point this clone at `.githooks/` so commits run `keys-check` |
+| `make -C peer-node provenance-verify` | signed notes, ledger chain and approvals |
+| `make -C peer-node precommit` | keys-check + secret scan + strict verify before you commit |
 
 Bare `pytest` at the root runs only `tests/` (fabric level). Use `make test-all`
 when you mean the whole repository.
+
+A node's signed vault requires running `make -C peer-node user-init` once
+(generates the key into `.state/keys/`, fills `00_System/user.md`). The private
+half never leaves the node; `keys-check` proves nothing about it is committable.
 
 ## Layout (wiki category layout)
 
@@ -78,6 +87,11 @@ when you mean the whole repository.
 | `_raw/` | unprocessed captures — **nothing is deleted from here**, ingest moves it |
 | `_staging/` | LLM-written pages awaiting review (only used when `WIKI_STAGED_WRITES=true`) |
 | `_archives/` | vault snapshots for rebuild/restore (`/wiki-rebuild`) |
+
+Role subvaults may store these same categories under a numbered layout:
+`peer-node/` keeps them in `00_System/`–`07_Archives/` and leaves every legacy
+name here as a symlink to its numbered home, so both spellings name one file.
+Read the role's own `AGENTS.md` before writing inside a role subvault.
 
 Wiki skills read the vault location from `.env` in this directory
 (`VAULT_PATH`) — never hard-code the path in a page.

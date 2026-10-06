@@ -55,7 +55,9 @@ except ImportError as exc:  # pragma: no cover - environment guard
 SCHEMA_VERSION = "1.0"
 
 #: Capability a node may hold. Anything not listed here is rejected.
-KNOWN_CAPABILITIES = frozenset({"telemetry", "p2p-sync", "push-receive", "guard-apply"})
+KNOWN_CAPABILITIES = frozenset(
+    {"telemetry", "p2p-sync", "push-receive", "guard-apply", "cluster-vote"}
+)
 
 # Identity fields that participate in the fingerprint. Deliberately excludes
 # hostname, vault path and timestamps: those change without changing identity,
@@ -147,6 +149,83 @@ def public_key_b64(public_key: Ed25519PublicKey) -> str:
 
     raw = public_key.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     return base64.b64encode(raw).decode("ascii")
+
+
+def public_key_from_b64(raw_b64: str) -> Ed25519PublicKey:
+    """Build a public key from a base64 string rather than a file.
+
+    Lives here rather than in the caller so that key parsing is part of the one
+    crypto implementation. A module that loaded keys its own way would be a second
+    place for a length or encoding mistake to hide.
+    """
+    try:
+        raw = base64.b64decode(raw_b64, validate=True)
+    except Exception as exc:
+        raise AuthzError("public key is not valid base64") from exc
+    if len(raw) != 32:
+        raise AuthzError(f"Ed25519 public key must be 32 bytes, got {len(raw)}")
+    return Ed25519PublicKey.from_public_bytes(raw)
+
+
+def private_key_from_b64(raw_b64: str) -> Ed25519PrivateKey:
+    """Build a private key from a base64 string rather than a file.
+
+    The counterpart to `public_key_from_b64`, added because `sparknet-consensus.py`
+    needs one and was reaching for `cryptography` directly to get it. That was a
+    second place for key parsing to go wrong, in the one module whose entire job
+    is to be trusted about keys — and it showed up as an unused `authz` import,
+    the lint failure being the only thing that noticed.
+
+    Deliberately *not* tolerant the way `load_private_key` is: a path can be raw,
+    base64 or hex because a human typed it, but a value that reached this function
+    has already been through a machine-readable channel. One encoding, one
+    interpretation, one place to be wrong.
+    """
+    try:
+        raw = base64.b64decode(raw_b64, validate=True)
+    except Exception as exc:
+        raise AuthzError("private key is not valid base64") from exc
+    if len(raw) != 32:
+        raise AuthzError(f"Ed25519 private key must be 32 bytes, got {len(raw)}")
+    return Ed25519PrivateKey.from_private_bytes(raw)
+
+
+def sign_bytes(private_key: Ed25519PrivateKey, message: bytes) -> str:
+    """Sign a message and return base64.
+
+    The signing counterpart to `verify_signature`. Both the registry authorizer and
+    the consensus signer need "sign these canonical bytes, base64 the result", and
+    that phrasing should be defined once.
+    """
+    return base64.b64encode(private_key.sign(message)).decode("ascii")
+
+
+def generate_keypair() -> tuple[str, str]:
+    """Generate an Ed25519 keypair as (private_b64, public_b64).
+
+    Lives here so that "how does a node get a key" has one answer in the fabric.
+    `peer-node/scripts/sparknet-keygen.sh` and `master-node/scripts/` both need
+    it, and a per-role script that reached for `cryptography` itself would be the
+    second place a length or encoding mistake could hide.
+
+    Returns base64 text rather than objects because every consumer is a shell
+    script writing a `.b64` file.
+    """
+    from cryptography.hazmat.primitives import serialization
+
+    key = Ed25519PrivateKey.generate()
+    private_raw = key.private_bytes(
+        serialization.Encoding.Raw,
+        serialization.PrivateFormat.Raw,
+        serialization.NoEncryption(),
+    )
+    public_raw = key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    return (
+        base64.b64encode(private_raw).decode("ascii"),
+        base64.b64encode(public_raw).decode("ascii"),
+    )
 
 
 def load_public_key(path: Path) -> Ed25519PublicKey:
@@ -353,6 +432,19 @@ def _main(argv: list[str] | None = None) -> int:
     fp = sub.add_parser("fingerprint", help="Print the SHA-256 fingerprint of an identity file")
     fp.add_argument("identity", type=Path)
 
+    # No local binding: nothing is added to this parser after creation, and an
+    # unused variable here is a lint error that would eventually get someone to
+    # delete the call by accident.
+    sub.add_parser(
+        "generate-keypair",
+        help=(
+            "Generate one Ed25519 keypair; prints private_b64 then public_b64 on "
+            "two lines. Both halves come from a single invocation: an earlier "
+            "version had a --field flag, and calling it twice produced two "
+            "different keypairs whose public half did not match the private one"
+        ),
+    )
+
     ver = sub.add_parser("verify", help="Verify this node against a registry and master public key")
     ver.add_argument("identity", type=Path)
     ver.add_argument("--registry", type=Path, required=True)
@@ -371,6 +463,12 @@ def _main(argv: list[str] | None = None) -> int:
     sgn.add_argument("--out", type=Path, required=True)
 
     args = parser.parse_args(argv)
+
+    if args.cmd == "generate-keypair":
+        private_b64, public_b64 = generate_keypair()
+        print(private_b64)
+        print(public_b64)
+        return 0
 
     if args.cmd == "fingerprint":
         identity = json.loads(args.identity.read_text())

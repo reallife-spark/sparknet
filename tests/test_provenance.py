@@ -1,0 +1,622 @@
+"""The provenance tool, end to end: sign, verify, attest, refuse.
+
+`shared/sparknet-provenance.py` is the implementation half of
+`contracts/tracking-schema.json`. These tests build a throwaway vault, run the
+real CLI against it and assert the contract's state machine — valid,
+stale:metadata, stale:content, invalid, pending — including the exit codes
+`make provenance-verify` and `make precommit` depend on.
+
+Everything here is offline and reads no key material from the repository: the
+vault is generated per test, so a passing run proves nothing about any real
+node's keys and cannot leak one.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import re
+import sys
+from pathlib import Path
+from types import ModuleType
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+PROVENANCE_PATH = REPO_ROOT / "shared" / "sparknet-provenance.py"
+CONTRACT = json.loads((REPO_ROOT / "contracts" / "tracking-schema.json").read_text())
+
+OWNER_ID = "U-10421"
+
+
+@pytest.fixture(scope="module")
+def provenance() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("sparknet_provenance_under_test", PROVENANCE_PATH)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.modules.pop(spec.name, None)
+    return module
+
+
+def write(path: Path, text: str | bytes) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if isinstance(text, bytes):
+        path.write_bytes(text)
+    else:
+        path.write_text(text)
+    return path
+
+
+def set_field(path: Path, key: str, value: str) -> None:
+    """Rewrite one top-level frontmatter field, the way a compiler would."""
+    text, count = re.subn(rf"^{key}:.*$", f"{key}: {value}", path.read_text(), count=1, flags=re.M)
+    assert count == 1, f"{key} not found in {path.name}"
+    path.write_text(text)
+
+
+def corrupt_signature(text: str) -> str:
+    """Flip one base64 character inside the envelope's signature."""
+    match = re.search(r'sig: "?([A-Za-z0-9+/=]{24,})"?', text)
+    assert match, "no signature found to corrupt"
+    sig = match.group(1)
+    flipped = "A" if sig[5] != "A" else "B"
+    corrupted = sig[:5] + flipped + sig[6:]
+    return text[: match.start(1)] + corrupted + text[match.end(1):]
+
+
+def user_record_template() -> str:
+    return (
+        "---\n"
+        "type: user-record\n"
+        "schema: sparknet-user/1\n"
+        "status: unfilled\n"
+        'owner_id: ""\n'
+        'owner_node: ""\n'
+        "role: owner\n"
+        "immutable: true\n"
+        "key:\n"
+        "  alg: ed25519\n"
+        '  public_key_b64: ""\n'
+        '  fingerprint: ""\n'
+        '  key_ref: "$SPARKNET_STATE_DIR/keys/user.ed25519"\n'
+        '  created: ""\n'
+        "---\n\n"
+        "# user record\n"
+    )
+
+
+def note(text: str = "body text", *, title: str = "hello", state: str = "unsigned") -> str:
+    return (
+        "---\n"
+        f"title: {title}\n"
+        "updated: 2026-10-06\n"
+        "tracking:\n"
+        "  schema: sparknet-tracking/1\n"
+        '  owner_id: ""\n'
+        '  owner_node: ""\n'
+        "  owner_ref: 00_System/user.md\n"
+        "  validity:\n"
+        f"    state: {state}\n"
+        "  conversation: []\n"
+        "  shares: []\n"
+        "  agent: tester\n"
+        "  model: none\n"
+        "  approvals: []\n"
+        "---\n\n"
+        f"{text}\n"
+    )
+
+
+@pytest.fixture()
+def vault(tmp_path: Path, provenance: ModuleType, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A filled vault with a real user key at 0600 and a node key to counter with."""
+    root = tmp_path / "vault"
+    (root / "00_System").mkdir(parents=True)
+    (root / "01_Inbox").mkdir()
+    (root / "blockchain").mkdir()
+    write(root / "00_System" / "user.md", user_record_template())
+    state = tmp_path / "state"
+    monkeypatch.setenv("SPARKNET_STATE_DIR", str(state))
+    provenance.user_init(root, owner_id=OWNER_ID)
+
+    authz = provenance._load_authz()
+    private_b64, _ = authz.generate_keypair()
+    node_key = state / "keys" / "ed25519-node.key.b64"
+    node_key.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    node_key.write_text(private_b64 + "\n")
+    node_key.chmod(0o600)
+    return root
+
+
+def sign(provenance, vault: Path, path: Path) -> None:
+    path.write_bytes(provenance.sign_note(path.read_bytes(), vault, agent="tester", model="none"))
+
+
+def verify(provenance, vault: Path, path: Path) -> tuple[str, str]:
+    return provenance.verify_note(path, vault=vault)
+
+
+# --- the user record -----------------------------------------------------------
+
+
+def test_user_init_fills_once_and_then_refuses(vault: Path, provenance: ModuleType):
+    record = provenance.parse_user_record(vault)
+    assert record["owner_id"] == OWNER_ID
+    assert record["status"] == "filled"
+    assert provenance.user_is_filled(record)
+
+    key_path = vault.parent / "state" / "keys" / "user.ed25519"
+    assert oct(key_path.stat().st_mode & 0o777) == "0o600"
+    assert provenance._verify_lock(vault, provenance.user_record_path(vault)) is True
+
+    # A second run is a no-op: the key every signature verifies against stands.
+    fingerprint = record["key"]["fingerprint"]
+    again = provenance.user_init(vault)
+    assert again["key"]["fingerprint"] == fingerprint
+    assert provenance.parse_user_record(vault)["key"]["fingerprint"] == fingerprint
+
+    # ...and with the receipt gone, filling again is refused rather than guessed at.
+    (vault / "00_System" / ".user.lock").unlink()
+    with pytest.raises(provenance.ProvenanceError, match="refusing to re-key"):
+        provenance.user_init(vault)
+
+    # A deliberate re-key is the one case `force` exists for.
+    rekeyed = provenance.user_init(vault, force=True)
+    assert rekeyed["key"]["fingerprint"] != fingerprint
+
+
+def test_a_record_whose_fingerprint_is_not_its_keys_digest_is_not_filled(
+    vault: Path, provenance: ModuleType
+):
+    record = provenance.parse_user_record(vault)
+    record["key"]["fingerprint"] = "sha256:" + "0" * 64
+    assert not provenance.user_is_filled(record)
+
+
+def test_the_record_holds_public_material_only(vault: Path, provenance: ModuleType):
+    """The allowlist is the answer to 'is a private key hiding in here?'."""
+    problems = provenance.check_user_record(vault)
+    assert problems == [], problems
+
+    record = provenance.parse_user_record(vault)
+    record["api_token"] = "hunter2hunter2"
+    write(provenance.user_record_path(vault), provenance.emit_note(record, b"# user record\n"))
+    problems = provenance.check_user_record(vault)
+    assert any("allowlist" in p for p in problems), problems
+
+
+# --- signing and the state machine --------------------------------------------
+
+
+def test_sign_then_verify_is_valid_and_the_envelope_matches_the_contract(
+    vault: Path, provenance: ModuleType
+):
+    path = write(vault / "01_Inbox" / "hello.md", note())
+    sign(provenance, vault, path)
+
+    outcome, detail = verify(provenance, vault, path)
+    assert outcome == "valid", detail
+
+    frontmatter, _ = provenance.split_note(path.read_bytes())
+    envelope = frontmatter["tracking"]["signature"]
+    assert set(envelope) == set(CONTRACT["signature"]["envelope"]), (
+        "the envelope the tool writes is not the one the contract describes"
+    )
+    assert envelope["key_id"] == OWNER_ID
+    assert envelope["key_fingerprint"].startswith("sha256:")
+    assert frontmatter["tracking"]["validity"]["state"] == "signed"
+    # signed_meta must hash to its recorded hash, or the envelope is editable.
+    assert (
+        provenance.sha256_hex(provenance.canonical_json(envelope["signed_meta"]))
+        == envelope["signed_meta_sha256"]
+    )
+
+
+def test_a_compiler_bump_is_stale_metadata_not_invalid(
+    vault: Path, provenance: ModuleType
+):
+    path = write(vault / "01_Inbox" / "hello.md", note())
+    sign(provenance, vault, path)
+
+    set_field(path, "updated", "2026-10-07")
+    outcome, detail = verify(provenance, vault, path)
+    assert outcome == "stale:metadata", detail
+    assert "updated" in detail, "the report must name the key that moved"
+    # stale:metadata is never a failure, strict or not — it is the compiler working.
+    assert provenance.verify_vault(vault, strict=True)[0] == 0
+
+    sign(provenance, vault, path)
+    assert verify(provenance, vault, path)[0] == "valid"
+
+
+def test_a_body_edit_is_stale_content(vault: Path, provenance: ModuleType):
+    path = write(vault / "01_Inbox" / "hello.md", note())
+    sign(provenance, vault, path)
+    path.write_text(path.read_text().replace("body text", "body rewritten"))
+
+    outcome, detail = verify(provenance, vault, path)
+    assert outcome == "stale:content", detail
+    code, _ = provenance.verify_vault(vault)
+    assert code == 2, "stale:content is the soft failure: exit 2, not 1"
+    code, _ = provenance.verify_vault(vault, strict=True)
+    assert code == 1, "--strict promotes the soft failure to a hard one"
+
+
+def test_a_metadata_edit_outside_the_allowlist_is_stale_content(
+    vault: Path, provenance: ModuleType
+):
+    path = write(vault / "01_Inbox" / "hello.md", note())
+    sign(provenance, vault, path)
+    set_field(path, "title", "hijacked")
+
+    outcome, detail = verify(provenance, vault, path)
+    assert outcome == "stale:content", detail
+    assert "title" in detail
+
+
+def test_tampering_with_the_envelope_is_invalid(vault: Path, provenance: ModuleType):
+    path = write(vault / "01_Inbox" / "hello.md", note())
+    sign(provenance, vault, path)
+
+    # One character flipped: the file still parses, the signature does not.
+    path.write_text(corrupt_signature(path.read_text()))
+    assert verify(provenance, vault, path)[0] == "invalid"
+
+    # Editing a signed hash inside the envelope, without touching the file body.
+    sign(provenance, vault, path)
+    frontmatter, body = provenance.split_note(path.read_bytes())
+    frontmatter["tracking"]["signature"]["signed_meta"]["title"] = "rewritten"
+    path.write_bytes(provenance.emit_note(frontmatter, body))
+    outcome, detail = verify(provenance, vault, path)
+    assert outcome == "invalid", detail
+    assert "signed_meta" in detail
+
+
+def test_a_note_attributed_to_another_owner_is_refused_at_signing(
+    vault: Path, provenance: ModuleType
+):
+    path = write(vault / "01_Inbox" / "hello.md", note())
+    path.write_text(path.read_text().replace('owner_id: ""', "owner_id: U-99999"))
+    with pytest.raises(provenance.ProvenanceError, match="re-attribute"):
+        provenance.sign_note(path.read_bytes(), vault)
+
+
+def test_an_unsigned_note_outside_the_inbox_is_invalid_but_in_the_inbox_is_pending(
+    vault: Path, provenance: ModuleType
+):
+    inbox = write(vault / "01_Inbox" / "raw.md", note("untouched capture"))
+    system = write(vault / "00_System" / "rules.md", note("must be signed"))
+    assert verify(provenance, vault, inbox) == ("pending", "inbox item awaiting acceptance")
+    assert verify(provenance, vault, system)[0] == "invalid"
+
+
+def test_signing_a_note_without_a_user_key_is_refused(tmp_path: Path, provenance: ModuleType):
+    root = tmp_path / "vault"
+    (root / "00_System").mkdir(parents=True)
+    write(root / "00_System" / "user.md", user_record_template())
+    path = write(root / "note.md", note())
+    with pytest.raises(provenance.ProvenanceError, match="user-init"):
+        provenance.sign_note(path.read_bytes(), root)
+
+
+# --- the ledger ----------------------------------------------------------------
+
+
+def test_an_approval_lands_dual_signed_and_verifies(
+    vault: Path, provenance: ModuleType
+):
+    path = write(vault / "01_Inbox" / "hello.md", note())
+    sign(provenance, vault, path)
+
+    record = provenance.parse_user_record(vault)
+    data = provenance.build_approval_data(
+        vault=vault,
+        question="may this node ingest the 2026-10 capture?",
+        decision="approved",
+        note_refs=["01_Inbox/hello.md"],
+        agent="tester",
+        model="none",
+        record=record,
+    )
+    assert set(data) - {"signatures"} == set(CONTRACT["approval"]["data_fields"]) - {"signatures"}, (
+        "the approval payload no longer matches contracts/tracking-schema.json"
+    )
+    assert data["approval_id"].startswith("APL-")
+    block = provenance.append_block(vault, data)
+
+    assert block["signature"] == data["signatures"]["node"], (
+        "the block-level signature must restate the node countersignature"
+    )
+    ok, detail = provenance.verify_chain(provenance.load_ledger(vault / "blockchain" / "ledger.json"))
+    assert ok, detail
+    assert provenance.verify_approval_blocks(vault) == []
+
+    # The note claims it, and the claim resolves both ways.
+    path.write_text(path.read_text().replace("approvals: []", f"approvals:\n  - {data['approval_id']}"))
+    sign(provenance, vault, path)
+    code, report = provenance.verify_vault(vault)
+    assert code == 0, report
+
+
+def test_a_fabricated_approval_id_is_reported(vault: Path, provenance: ModuleType):
+    path = write(vault / "01_Inbox" / "hello.md", note())
+    sign(provenance, vault, path)
+    path.write_text(path.read_text().replace("approvals: []", "approvals:\n  - APL-1999-01-01-001"))
+    sign(provenance, vault, path)
+
+    code, report = provenance.verify_vault(vault)
+    assert code == 1, report
+    assert "APL-1999-01-01-001" in report
+
+
+def test_editing_a_recorded_approval_breaks_the_chain(
+    vault: Path, provenance: ModuleType
+):
+    record = provenance.parse_user_record(vault)
+    data = provenance.build_approval_data(
+        vault=vault,
+        question="original question",
+        decision="approved",
+        note_refs=[],
+        agent="tester",
+        model="none",
+        record=record,
+    )
+    provenance.append_block(vault, data)
+
+    ledger_path = vault / "blockchain" / "ledger.json"
+    ledger = json.loads(ledger_path.read_text())
+    ledger["blocks"][0]["data"]["decision"] = "rejected"
+    ledger_path.write_text(json.dumps(ledger, indent=2))
+
+    code, report = provenance.verify_vault(vault)
+    assert code == 1, report
+    assert "re-hash" in report or "does not verify" in report
+
+
+def test_approval_ids_are_unique_per_ledger(vault: Path, provenance: ModuleType):
+    record = provenance.parse_user_record(vault)
+    seen = set()
+    for question in ("one?", "two?", "three?"):
+        data = provenance.build_approval_data(
+            vault=vault,
+            question=question,
+            decision="approved",
+            note_refs=[],
+            agent="tester",
+            model="none",
+            record=record,
+        )
+        assert data["approval_id"] not in seen, "approval ids repeat within a ledger"
+        seen.add(data["approval_id"])
+        provenance.append_block(vault, data)
+    assert len(seen) == 3
+
+
+def test_the_vault_verifies_when_its_ledger_is_absent(vault: Path, provenance: ModuleType):
+    """A fresh vault has no approvals yet; that is not a failure."""
+    code, report = provenance.verify_vault(vault)
+    assert code == 0, report
+    assert "ledger: absent" in report
+
+
+# --- secrets -------------------------------------------------------------------
+
+
+def test_the_scanner_finds_a_registered_secret_in_a_tracked_file(
+    vault: Path, provenance: ModuleType, monkeypatch: pytest.MonkeyPatch
+):
+    secret_value = "sk-live-abcdefghijklmnop"
+    secrets = vault.parent / "state" / "secrets"
+    secrets.mkdir(parents=True, exist_ok=True)
+    (secrets / "live-token").write_text(secret_value)
+    (secrets / "live-token").chmod(0o600)
+    write(
+        vault / "00_System" / "secrets-index.json",
+        json.dumps(
+            {
+                "secrets": [
+                    {
+                        "id": "live-token",
+                        "kind": "api_token",
+                        "holder_agent": "tester",
+                        "ref": "live-token",
+                        "fingerprint": "sha256:" + "0" * 64,
+                        "scopes": [],
+                        "created": "2026-10-06",
+                        "last_rotated": "2026-10-06",
+                        "status": "active",
+                        "notes": "",
+                    }
+                ]
+            },
+            indent=2,
+        ),
+    )
+    write(vault / "03_Sources" / "note.md", note("the value is " + secret_value))
+
+    code, report = provenance.scan(vault)
+    assert code == 1, report
+    assert "registered secret" in report
+
+    (vault / "03_Sources" / "note.md").unlink()
+    code, report = provenance.scan(vault)
+    assert code == 0, report
+
+
+def test_the_scanner_finds_key_shaped_literals(vault: Path, provenance: ModuleType):
+    write(vault / "03_Sources" / "oops.md", note("password: 'hunter2hunter2'"))
+    code, report = provenance.scan(vault)
+    assert code == 1, report
+
+
+def test_the_secret_index_schema_has_no_value_field(vault: Path, provenance: ModuleType):
+    assert not (set(CONTRACT["secret_index"]["entry_fields"]) & set(CONTRACT["secret_index"]["forbidden_keys"]))
+    write(
+        vault / "00_System" / "secrets-index.json",
+        json.dumps({"secrets": [{"id": "x", "value": "leaked"}]}),
+    )
+    code, report = provenance.scan(vault)
+    assert code == 1
+    assert "schema" in report
+
+
+# --- the frontmatter subset ----------------------------------------------------
+
+
+def test_the_frontmatter_subset_round_trips(vault: Path, provenance: ModuleType):
+    """What is signed must be what parses — an emitter drift is a stale note."""
+    original = {
+        "title": "a title with: colons and \"quotes\"",
+        "tags": ["alpha", "beta"],
+        "count": 3,
+        "draft": False,
+        "nothing": None,
+        "nested": {"inner": "value", "list": [1, 2]},
+        "tracking": {"schema": "sparknet-tracking/1"},
+    }
+    emitted = provenance.emit_note(original, b"body\n")
+    frontmatter, body = provenance.split_note(emitted)
+    assert frontmatter == original
+    assert body == b"body\n"
+
+
+def test_a_note_without_a_tracking_block_is_unparseable(vault: Path, provenance: ModuleType):
+    path = write(vault / "01_Inbox" / "bare.md", "---\ntitle: bare\n---\n\nbody\n")
+    outcome, detail = verify(provenance, vault, path)
+    assert outcome == "invalid"
+    assert "tracking" in detail
+
+
+def test_block_scalars_parse_as_one_string(provenance: ModuleType):
+    """Real notes use `summary: >-`; rejecting them makes them all invalid.
+
+    The captured source pages in `03_Sources/` ship with folded summaries, so
+    a subset that cannot read a block scalar would report the vault's own
+    immutable captures as tampered with.
+    """
+    text = (
+        "---\n"
+        "title: t\n"
+        "summary: >-\n"
+        "  first line\n"
+        "  second line\n"
+        "\n"
+        "  third paragraph\n"
+        "code: |-\n"
+        "  indented\n"
+        "    deeper\n"
+        "  back\n"
+        "after: plain\n"
+        "---\n"
+        "body\n"
+    )
+    frontmatter, body = provenance.split_note(text.encode())
+    assert frontmatter["summary"] == "first line second line\nthird paragraph"
+    assert frontmatter["code"] == "indented\n  deeper\nback"
+    assert frontmatter["after"] == "plain"
+    assert body == b"body\n"
+
+
+def test_a_hash_inside_a_block_is_content_not_a_comment(provenance: ModuleType):
+    """The line filter drops comments — but only outside a block scalar."""
+    text = "---\ntitle: t\nnote: |-\n  # kept\n  kept\n---\nbody\n"
+    frontmatter, _ = provenance.split_note(text.encode())
+    assert frontmatter["note"] == "# kept\nkept"
+
+
+def test_the_shipped_source_captures_parse(provenance: ModuleType):
+    """The vault's own captures are the regression corpus for the subset."""
+    for rel in (
+        "peer-node/03_Sources/arch_blueprint.md",
+        "peer-node/03_Sources/raxxar_raw/gemini-sparknet-session.md",
+    ):
+        path = REPO_ROOT / rel
+        frontmatter, body = provenance.split_note(path.read_bytes())
+        assert frontmatter["summary"].startswith("Complete verbatim transcript")
+        assert body.lstrip().startswith(b"#")
+
+
+def test_the_signed_message_is_versioned_so_a_future_envelope_cannot_verify_old_signatures(
+    provenance: ModuleType,
+):
+    hashes = {"body": "0" * 64, "meta": "1" * 64, "tracking": "2" * 64}
+    assert provenance.note_message(hashes).startswith(b"sparknet-note/1\n")
+
+
+# --- inbox intake -------------------------------------------------------------
+
+
+def test_ingest_lands_a_pending_item_that_verifies_green(
+    vault: Path, provenance: ModuleType
+):
+    path = provenance.ingest_note(
+        vault, b"# incoming plan\n\nthe body\n", source="master-node", title="Incoming plan"
+    )
+    assert path == vault / "01_Inbox" / "incoming-plan.md"
+    frontmatter, body = provenance.split_note(path.read_bytes())
+    assert frontmatter["type"] == "inbox-item"
+    assert frontmatter["source"] == "master-node"
+    assert frontmatter["tracking"]["validity"]["state"] == "unsigned"
+    assert "signature" not in frontmatter["tracking"]
+    assert body == b"# incoming plan\n\nthe body\n"
+
+    assert verify(provenance, vault, path)[0] == "pending"
+    code, text = provenance.verify_vault(vault)
+    assert code == 0, text
+
+
+def test_ingest_refuses_to_overwrite_an_existing_item(
+    vault: Path, provenance: ModuleType
+):
+    provenance.ingest_note(vault, b"# same title\n", source="peer-node", title="Same")
+    with pytest.raises(provenance.ProvenanceError, match="refusing to overwrite"):
+        provenance.ingest_note(vault, b"# same title\n", source="peer-node", title="Same")
+
+
+def test_email_ingest_fails_closed_until_the_sender_is_authorised(
+    vault: Path, provenance: ModuleType
+):
+    with pytest.raises(provenance.ProvenanceError, match="fails closed"):
+        provenance.ingest_note(
+            vault, b"# from mail\n", source="email", sender="ops@example.org"
+        )
+
+    record = provenance.parse_user_record(vault)
+    record["authorised_senders"] = ["ops@example.org"]
+    write(
+        provenance.user_record_path(vault),
+        provenance.emit_note(record, b"# user record\n"),
+    )
+
+    path = provenance.ingest_note(
+        vault, b"# from mail\n", source="email", sender="ops@example.org"
+    )
+    assert provenance.split_note(path.read_bytes())[0]["sender"] == "ops@example.org"
+    with pytest.raises(provenance.ProvenanceError, match="fails closed"):
+        provenance.ingest_note(
+            vault, b"# from mail\n", source="email", sender="stranger@example.org",
+            title="second",
+        )
+
+
+def test_the_ingest_cli_reads_a_file_and_reports_an_empty_one(
+    vault: Path, provenance: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    item = write(vault.parent / "incoming.md", "# body from a file\n")
+    code = provenance.main(
+        ["--vault", str(vault), "ingest", str(item), "--source", "peer-node"]
+    )
+    assert code == 0
+    assert (vault / "01_Inbox" / "body-from-a-file.md").is_file()
+    capsys.readouterr()
+
+    empty = write(vault.parent / "empty.md", "")
+    assert provenance.main(
+        ["--vault", str(vault), "ingest", str(empty), "--source", "peer-node"]
+    ) == 1
+    assert "empty" in capsys.readouterr().err

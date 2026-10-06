@@ -273,22 +273,107 @@ def test_guard_port_is_overlay_only_and_implemented(ports: dict):
     assert guard["overlay_only"] is True, (
         "the guard must be unreachable from the WAN by design"
     )
-    assert guard["implemented"] is True
+    assert guard["implementation_state"] == "implemented"
     assert "own overlay address" in guard["binds_to"], (
         "the guard must bind its own overlay address, never a wildcard"
     )
 
 
-def test_unimplemented_ports_say_so_instead_of_pretending(ports: dict):
+PORT_STATES = {"implemented", "provisioned", "spec-only"}
+PORT_RUNTIME = {"running", "not-listening", "not-verifiable-here"}
+
+
+def test_every_port_declares_both_axes_with_known_values(ports: dict):
+    """implementation_state and runtime answer different questions.
+
+    Collapsing them into one boolean is what let a 110-line CLI be described as
+    implemented, so both axes are now mandatory and enumerated.
+    """
+    for number, spec in ports["ports"].items():
+        assert spec.get("implementation_state") in PORT_STATES, (
+            f"port {number} ({spec['service']}) has an unknown or missing "
+            f"implementation_state: {spec.get('implementation_state')!r}"
+        )
+        assert spec.get("runtime") in PORT_RUNTIME, (
+            f"port {number} ({spec['service']}) has an unknown or missing "
+            f"runtime: {spec.get('runtime')!r}"
+        )
+
+
+def test_the_conflated_boolean_is_gone(ports: dict):
+    """`implemented: true` is exactly the claim that was false. Do not restore it."""
+    for number, spec in ports["ports"].items():
+        assert "implemented" not in spec, (
+            f"port {number} still uses the boolean 'implemented'; use "
+            f"implementation_state plus runtime"
+        )
+
+
+def test_running_requires_an_observed_listener(ports: dict):
+    """A port may only claim `running` if it actually accepts a connection here.
+
+    This is the test that would have caught 4096, 4097, 4098 and 4100 being
+    called implemented while nothing was listening. It is deliberately narrow:
+    overlay services whose interface is absent here are `not-verifiable-here`
+    and are exempt, because their absence is not evidence of a fault.
+    """
+    import socket
+
+    for number, spec in ports["ports"].items():
+        if spec.get("runtime") != "running":
+            continue
+        sock = socket.socket()
+        sock.settimeout(1.0)
+        try:
+            sock.connect(("127.0.0.1", int(number)))
+        except OSError as exc:
+            pytest.fail(
+                f"port {number} ({spec['service']}) claims runtime=running but "
+                f"nothing accepted a loopback connection: {exc}"
+            )
+        finally:
+            sock.close()
+
+
+def test_a_service_marked_implemented_must_name_a_bind_path(ports: dict):
+    """`implemented` is a claim about a bind, so the evidence must be on record.
+
+    The inverse is the part that bit us: `implemented: true` on a file with no
+    bind code anywhere. Any port asserting `implemented` must therefore either
+    carry runtime evidence or say in runtime_why why it could not be observed.
+    """
+    for number, spec in ports["ports"].items():
+        if spec.get("implementation_state") != "implemented":
+            continue
+        assert spec.get("runtime_why") or spec.get("runtime") == "running", (
+            f"port {number} ({spec['service']}) claims implementation_state="
+            f"implemented with neither a running listener nor a recorded reason "
+            f"it could not be observed"
+        )
+
+
+def test_ports_that_are_not_implemented_say_so_and_point_at_a_real_plan(ports: dict):
     """An unimplemented port must be flagged, not merely absent from code."""
     for number, spec in ports["ports"].items():
-        if spec.get("implemented") is False:
-            assert re.search(r"SPEC ONLY|not implemented|no listener", spec.get("status", ""), re.I), (
-                f"port {number} ({spec['service']}) is not implemented but its "
-                f"status does not say so: {spec.get('status')!r}"
-            )
-            assert "MASTER_BUILD_PLAN" in spec.get("status", ""), (
-                f"port {number} must point at the plan step that will build it"
+        if spec["implementation_state"] == "implemented":
+            continue
+        status = spec.get("status", "")
+        assert re.search(r"SPEC ONLY|provisioned|PROVISIONED|no listener", status, re.I), (
+            f"port {number} ({spec['service']}) is {spec['implementation_state']} "
+            f"but its status does not say so: {status!r}"
+        )
+        referenced = re.findall(
+            r"((?:\.\./)?peer-node/PLAN\.md|master-node/plans/MASTER_BUILD_PLAN\.md|master-node/plans/MASTER_ADMIN_PLAN\.md)",
+            status,
+        )
+        assert referenced, (
+            f"port {number} must point at the plan step that will build it"
+        )
+        for ref in referenced:
+            resolved = (REPO_ROOT / ref).resolve()
+            assert resolved.is_file(), (
+                f"port {number} points at {ref}, which does not resolve to a file "
+                f"from the repo root: {resolved}"
             )
 
 
@@ -323,26 +408,89 @@ def test_contract_declares_exactly_two_roles(identity_schema: dict):
     )
 
 
-@pytest.mark.parametrize(
-    "role_dir,expected_role",
-    [(PEER, "peer"), (MASTER, "master")],
-    ids=["peer-node", "master-node"],
-)
-def test_each_role_declares_its_own_role_value(role_dir: Path, expected_role: str):
-    """The pre-split vocabulary was `worker`, which is what the peer role is not."""
+@pytest.mark.parametrize("role_dir", [PEER, MASTER], ids=["peer-node", "master-node"])
+def test_a_node_declares_itself_peer_until_it_is_elected(role_dir: Path):
+    """No deployment site may assert `role: master`.
+
+    This replaced an assertion that `master-node/` must declare `role: master`,
+    which encoded the pre-election model where the Master was a separate species
+    with its own identity. Under the elected model a Master *is* a peer that won a
+    unanimous election, so the honest manifest for a master-capable node says
+    `peer` and carries no claim to authority.
+
+    The direction matters: a node that claimed `master` because of where it was
+    installed would be a node asserting authority it has not been granted, and
+    the trust root is what grants it. Prose cannot confer it, and neither can the
+    directory a bundle was extracted into.
+    """
     manifests = role_dir / "manifests"
     if not manifests.is_dir():
-        pytest.skip(f"{role_dir.name}/manifests does not exist yet")
+        pytest.skip(f"{role_dir.name}/manifests does not exist")
     checked = 0
-    for path in sorted((role_dir / "manifests").glob("*.json")):
+    for path in sorted(manifests.glob("*.json")):
         data = json.loads(path.read_text())
         if "role" in data:
-            assert data["role"] == expected_role, f"{path.name}: {data['role']!r}"
-            checked += 1
-        if "roles" in data:
-            assert expected_role in data["roles"], f"{path.name}: {data['roles']}"
+            assert data["role"] == "peer", (
+                f"{role_dir.name}/{path.name} claims {data['role']!r}. Authority "
+                f"comes from a signed cluster trust root, not from deployment."
+            )
             checked += 1
     assert checked, f"{role_dir.name}/manifests holds no role declaration to check"
+
+
+def test_a_master_capable_node_is_eligible_and_claims_no_key():
+    """The pre-election state must be explicit, not merely implied by the role.
+
+    Fail-closed is the whole property: until three distinct members have signed a
+    trust root, this node must be recorded as eligible but unkeyed. A manifest
+    that quietly carried an operational key, or omitted the election block, would
+    let a freshly provisioned node be treated as if it already had authority.
+    """
+    path = MASTER / "manifests" / "node-identity.json"
+    assert path.is_file(), "master-node/manifests/node-identity.json is missing"
+    data = json.loads(path.read_text())
+
+    election = data.get("election")
+    assert isinstance(election, dict), "node-identity.json must state its election state"
+    assert election.get("eligible") is True, (
+        "a node deployed from master-node/ is master-eligible by definition"
+    )
+    assert election.get("elects_itself") is False, (
+        "a node may vote for itself but must not be able to install itself"
+    )
+
+    operational = data.get("operational_key")
+    assert isinstance(operational, dict), "node-identity.json must state its key state"
+    assert operational.get("held") is False, (
+        "the template must not claim the operational key; only a signed trust "
+        "root confers it"
+    )
+
+    assert "cluster_pubkey_b64" in data, (
+        "the node's cluster public key is what goes into the trust root and must "
+        "have a slot here, even if unset"
+    )
+
+
+def test_no_role_manifest_asserts_current_master_state():
+    """Nothing in a *template* may claim the node is already Master.
+
+    Master state is runtime — it lives in the registry the operational key signs,
+    not in a file shipped with a bundle.
+    """
+    for role_dir in (PEER, MASTER):
+        manifests = role_dir / "manifests"
+        if not manifests.is_dir():
+            continue
+        for path in sorted(manifests.glob("*.json")):
+            text = path.read_text().lower()
+            assert '"master": true' not in text, (
+                f"{role_dir.name}/{path.name} asserts it is master; that state is "
+                f"runtime and must come from a signed registry entry"
+            )
+            assert '"elected": true' not in text, (
+                f"{role_dir.name}/{path.name} asserts an election it has not run"
+            )
 
 
 # Where the role vocabulary must be current. Provenance is deliberately excluded:
@@ -444,7 +592,9 @@ def test_registry_ships_empty_so_a_fresh_deployment_is_fail_closed(identity_sche
 def test_contracts_readme_names_every_contract_file():
     readme = (CONTRACTS / "README.md").read_text()
     for name in ("overlay.json", "capabilities.json", "identity-schema.json",
-                 "ports.json", "guard-protocol.md"):
+                 "ports.json", "guard-protocol.md", "share-protocol.md",
+                 "consensus-protocol.md", "tracking-schema.json",
+                 "provenance-protocol.md"):
         assert name in readme, f"contracts/README.md does not mention {name}"
 
 
@@ -578,3 +728,547 @@ def test_capability_order_asymmetry_is_intentional(authz: ModuleType):
         "granted capabilities became order-sensitive, so rewriting the registry "
         "with the same set in a different order invalidates the Master's signature"
     )
+
+
+# --- share protocol ------------------------------------------------------------
+
+
+def share_policy() -> dict:
+    return load("capabilities.json")
+
+
+def test_share_protocol_says_nothing_there_is_built(ports: dict):
+    """Same honesty guard as guard-protocol.md: no built side is implied."""
+    text = (CONTRACTS / "share-protocol.md").read_text()
+    assert re.search(r"not built|Nothing here is built|does not exist", text, re.I), (
+        "share-protocol.md must say plainly that no side is implemented yet"
+    )
+
+
+def test_share_protocol_states_every_element_the_regime_needs(ports: dict):
+    text = (CONTRACTS / "share-protocol.md").read_text().lower()
+    for element in ("invite", "accept", "share type", "clock", "trust level",
+                    "isolat", "evidence"):
+        assert element in text, f"share-protocol.md never covers {element!r}"
+
+
+def test_share_protocol_durations_match_the_machine_readable_clocks(ports: dict):
+    """Prose cannot drift from the policy it describes.
+
+    The four deadlines govern expiry, so a change to one in the JSON without a
+    matching edit here — or the reverse — would make the document describe a
+    regime the code does not implement.
+    """
+    text = (CONTRACTS / "share-protocol.md").read_text()
+    clocks = share_policy()["share_clocks"]["clocks"]
+    expected = {
+        "invite_acceptance": ("1 h", "1h"),
+        "idle_close": ("20 min", "20m"),
+        "ratification": ("2 h", "2h"),
+        "share_absolute": ("10 h", "10h"),
+    }
+    for name, spellings in expected.items():
+        duration = clocks[name]["duration"]
+        assert duration in spellings, (
+            f"{name} is {duration!r} in capabilities.json, which is neither "
+            f"spelling share-protocol.md is checked for"
+        )
+        assert any(s in text for s in spellings), (
+            f"share-protocol.md never states the {name} duration {duration!r}"
+        )
+
+
+def test_every_clock_states_what_silence_does(ports: dict):
+    """A deadline with no specified expiry behaviour is not a deadline."""
+    for name, spec in share_policy()["share_clocks"]["clocks"].items():
+        assert spec.get("on_expiry"), f"clock {name} does not say what expiry does"
+        assert spec.get("binds"), f"clock {name} does not say whose clock binds it"
+        assert spec.get("duration"), f"clock {name} has no duration"
+
+
+def test_share_types_are_a_closed_set_and_narrowing_only(ports: dict):
+    types = share_policy()["share_types"]
+    assert types["closed_vocabulary"] is True
+    assert "narrowing_only" in types, (
+        "a receiver must be able to accept less than was offered; that rule is "
+        "the reason share types are safe to hand to a human"
+    )
+    for name, spec in types["types"].items():
+        assert spec.get("conveys"), f"share type {name} does not say what it conveys"
+        assert "copies" in spec, f"share type {name} does not say whether it copies"
+        if name != "full":
+            assert "includes" not in spec, (
+                f"{name} must not include other types; 'full' is the only union, "
+                f"so a future type cannot silently join a broad grant"
+            )
+    assert set(types["types"]["full"]["includes"]) == {
+        n for n in types["types"] if n != "full"
+    }, "full must be exactly the union of the other share types"
+
+
+def test_isolation_keeps_the_evidence_channel_and_the_choice_is_recorded(ports: dict):
+    """The reading is deliberate, so the contract must carry the alternative.
+
+    A severed Master link would leave the required review unsatisfiable. If that
+    reading is ever replaced, the alternative has to still be findable here.
+    """
+    overlay = load("overlay.json")
+    assert overlay["data_plane_stanza"]["is_authority_plane"] is False
+    assert overlay["data_plane_stanza"]["time_boxed"] is True
+    text = (CONTRACTS / "share-protocol.md").read_text().lower()
+    assert "data plane" in text and "evidence" in text
+    assert re.search(r"alternative reading", text), (
+        "share-protocol.md must record the alternative isolation reading so the "
+        "choice stays visible if the chosen one proves wrong"
+    )
+
+
+def test_authority_plane_invariant_survives_the_governance_modes(ports: dict):
+    """Adding governance_mode must not have widened anything it can reach."""
+    overlay = load("overlay.json")
+    rule = overlay["peer_allowed_ips_rule"]
+    assert "exactly one address" in rule, (
+        "the single-address AllowedIPs rule is the authority-plane boundary; a "
+        "governance mode that needed more would be a design change, not a doc edit"
+    )
+    assert overlay["governance_mode"]["authority_consequence"], (
+        "governance_mode must state that it never widens the authority plane"
+    )
+    for name in overlay["governance_mode"]["modes"]:
+        assert overlay["governance_mode"]["modes"][name].get("rule"), (
+            f"governance mode {name} has no rule"
+        )
+
+
+def test_ratified_shares_retain_their_flag(ports: dict):
+    """Approval must not erase the fact that unapproved data crossed nodes."""
+    trust = share_policy()["trust_levels"]
+    assert trust["retained_after_ratification"] is True
+    assert "retained_rationale" in trust
+    text = (CONTRACTS / "share-protocol.md").read_text().lower()
+    assert "retain" in text, (
+        "share-protocol.md must state that the flag survives ratification"
+    )
+    assert "never a permission" in trust["never_a_grant"] or \
+        "never grants authority" in trust["never_a_grant"]
+
+
+def test_a_trust_level_can_never_be_a_grant(ports: dict):
+    trust = share_policy()["trust_levels"]
+    for level, spec in trust["levels"].items():
+        assert spec.get("means"), f"trust level {level} does not define itself"
+        assert "shares_allowed" in spec, (
+            f"trust level {level} does not say whether shares are permitted"
+        )
+    assert trust["never_a_grant"], "trust levels must be declared belief, not permission"
+    assert "registry" in trust["who_moves_them"], (
+        "only the Master may move trust levels, via the signed registry"
+    )
+
+
+def test_grant_checks_reuse_the_guard_check_order(ports: dict):
+    """One verification implementation, or two trust boundaries to get wrong."""
+    grant = load("identity-schema.json")["grant"]
+    assert len(grant["verification_order"]) >= 5
+    assert "guard-protocol" in grant["verification_order_note"], (
+        "grant verification must state that it reuses the guard's check order"
+    )
+    assert grant["fields"]["expires_at"]["local_enforcement"], (
+        "an expired grant must be refused locally, not merely by its issuer"
+    )
+    assert grant["fields"]["nonce"]["retention"], (
+        "a nonce needs a stated retention or the replay window opens silently"
+    )
+    assert grant["fields"]["parent_grant_id"], (
+        "delegation must be representable, since subagents inherit grants"
+    )
+
+
+def test_share_endpoints_are_declared_and_separate(ports: dict):
+    """Passing and sharing need independent grants, so they cannot share a port."""
+    declared = {spec["service"]: int(n) for n, spec in ports["ports"].items()}
+    for service in ("share-intake", "session-transfer", "share-ratification",
+                    "opencode-serve"):
+        assert service in declared, f"{service} is used but not declared in ports.json"
+    assert declared["share-intake"] != declared["session-transfer"], (
+        "share-intake and session-transfer must be distinct ports so granting "
+        "conversation passing does not implicitly grant knowledge sharing"
+    )
+    for service in ("share-intake", "session-transfer"):
+        assert ports["ports"][str(declared[service])]["overlay_only"] is True
+    ratification = ports["ports"][str(declared["share-ratification"])]
+    assert ratification["bound_by"] == "master" and ratification["overlay_only"] is True
+
+
+def test_the_share_plane_grants_no_authority(ports: dict):
+    """Anything unbuilt must say so, in both the schema and the prose."""
+    for number, spec in ports["ports"].items():
+        if spec["service"] in ("share-intake", "session-transfer",
+                               "share-ratification", "opencode-serve"):
+            assert spec["implementation_state"] == "spec-only", (
+                f"port {number} ({spec['service']}) must stay spec-only until built"
+            )
+            assert spec["runtime"] == "not-listening"
+            assert spec.get("status"), f"port {number} must say what is there"
+
+
+# --- consensus protocol --------------------------------------------------------
+
+
+def test_guard_protocol_no_longer_claims_a_peer_can_never_sign_as_a_fact(ports: dict):
+    """A peer contains the signing code; what denies it is state, not structure.
+
+    The old sentence was true when the two roles were different programs. It is
+    false now that a master is a peer that won an election, and a reader trusting
+    it would look for the guarantee in the wrong place.
+    """
+    text = (CONTRACTS / "guard-protocol.md").read_text()
+    assert not re.search(
+        r"A peer can \*\*verify\*\* an approval but never \*\*produce\*\* one", text
+    ), (
+        "guard-protocol.md still states the asymmetry as a structural fact; it is "
+        "a role state under the election model"
+    )
+    assert re.search(r"role state, not a structure", text), (
+        "guard-protocol.md must say where the asymmetry now lives"
+    )
+    assert "consensus-protocol.md" in text, (
+        "guard-protocol.md must point at the protocol that now decides who may sign"
+    )
+
+
+def test_consensus_protocol_states_the_whole_agreement(ports: dict):
+    text = (CONTRACTS / "consensus-protocol.md").read_text().lower()
+    for element in ("membership", "election", "unanim", "trust root", "re-formation",
+                    "cluster key"):
+        assert element in text, f"consensus-protocol.md never covers {element!r}"
+
+
+def test_the_trust_root_replaces_the_single_key_model(ports: dict):
+    schema = load("identity-schema.json")
+    root = schema["cluster_trust_root"]
+    assert "replaces" in root and "master_public_key" in root["replaces"], (
+        "the root must state what it supersedes, or the old single-key model "
+        "stays readable as though it were current"
+    )
+    assert root["members"]["count"] == 3
+    assert root["members"]["fixed_at_three"] is True, (
+        "three is a protocol decision, not a tunable; a fourth member changes the "
+        "threshold and needs its own design"
+    )
+    assert root["unanimity"]["threshold"] == "3 of 3"
+    assert root["not_threshold_crypto"], (
+        "state plainly that this is three signatures, not threshold cryptography, "
+        "so nobody designs a quorum scheme expecting MPC semantics"
+    )
+
+
+def test_two_key_separation_is_recorded(ports: dict):
+    """A member present in the cluster must not thereby be able to sign."""
+    keys = load("identity-schema.json")["cluster_trust_root"]["two_keys"]
+    assert "root" in keys["cluster_key"] and "never" in keys["cluster_key"]
+    assert "registry" in keys["operational_key"]
+    assert keys["cluster_key"] != keys["operational_key"]
+
+
+def test_root_acceptance_requires_distinct_signers_that_the_root_names(ports: dict):
+    """The first two acceptance rules are decorative without the last two."""
+    rules = " ".join(load("identity-schema.json")["cluster_trust_root"]["acceptance_rules"]).lower()
+    assert "distinct" in rules, "a member voting three times must count as one vote"
+    assert "names" in rules or "names it" in rules, (
+        "a root must be signed only by members the root itself names, or it could "
+        "name members and be signed by strangers"
+    )
+    assert "master_pubkey" in rules, (
+        "the registry must be checked against the operational key the root names"
+    )
+
+
+def test_replace_requires_unanimity_but_revoke_does_not(ports: dict):
+    table = load("identity-schema.json")["cluster_trust_root"]["threshold_table"]
+    assert table["replace_master"].startswith("3 of 3"), (
+        "changing who holds authority must not be unilateral"
+    )
+    assert table["revoke_node"].startswith("1"), (
+        "revocation is a safe denial and must stay unilateral, or a dead master "
+        "would brick the fabric"
+    )
+
+
+def test_reformation_is_not_a_bypass(ports: dict):
+    reformation = load("identity-schema.json")["cluster_trust_root"]["reformation"]
+    assert reformation.get("not_a_bypass"), (
+        "re-formation must state it cannot install a master without unanimity "
+        "among the members it names, or it is a back door around the election"
+    )
+    assert "new root" in reformation["on_master_change"], (
+        "a master change must be a new root with a different nonce, so the old "
+        "operational key stops being recognised"
+    )
+
+
+def test_election_vote_is_a_say_not_a_grant(ports: dict):
+    caps = share_policy()
+    assert "cluster-vote" in caps["known_capabilities"]
+    vote = caps["definitions"]["cluster-vote"]
+    assert vote["holder"] == "peer", (
+        "every member holds a vote, because election is what makes a master at all"
+    )
+    assert vote["sensitive"] is False
+    assert "confer nothing" in vote["note"] or "not a grant" in vote["note"]
+    # The Master's authority must remain key possession, not a granted capability.
+    assert "possession" in caps["master_capabilities"]["note"]
+
+
+def test_the_election_port_is_declared_and_carries_no_authority(ports: dict):
+    declared = {s["service"]: int(n) for n, s in ports["ports"].items()}
+    assert "cluster-election" in declared, "the election port is used but undeclared"
+    election = ports["ports"][str(declared["cluster-election"])]
+    assert election["implementation_state"] == "spec-only", (
+        "no election listener exists yet; claiming otherwise would repeat the port "
+        "defect Step 6 just fixed"
+    )
+    assert election["runtime"] == "not-listening"
+    assert election["overlay_only"] is True
+    assert "never a registry entry" in election["note"], (
+        "the election port must be explicit that it does not carry authority, "
+        "since it decides who holds the key"
+    )
+    assert declared["cluster-election"] != declared["share-ratification"], (
+        "electing a master and confirming a share must stay separately gated"
+    )
+
+
+def test_the_operational_key_is_isolated_by_contract(ports: dict):
+    """The prose must state the isolation, because Step 17 implements it."""
+    text = (CONTRACTS / "consensus-protocol.md").read_text().lower()
+    assert "signer" in text, (
+        "consensus-protocol.md must say where the operational key lives, or a "
+        "reader will assume it sits beside the web UI"
+    )
+    assert "structural" in text, (
+        "isolation must be called structural and not a permission rule, since a "
+        "deny rule is a policy the governed LLM surface may later ignore"
+    )
+
+
+# --- provenance: the accountability contract and its one implementation -------
+
+
+@pytest.fixture(scope="module")
+def tracking() -> dict:
+    return load("tracking-schema.json")
+
+
+@pytest.fixture(scope="module")
+def provenance() -> ModuleType:
+    """shared/sparknet-provenance.py, loaded by path for the reason authz is.
+
+    Loading by path is what proves the tool reads `contracts/` rather than
+    carrying a private copy of its rules; an import would let a stale
+    installed copy satisfy the assertions below.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "sparknet_provenance", REPO_ROOT / "shared" / "sparknet-provenance.py"
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.modules.pop(spec.name, None)
+    return module
+
+
+@pytest.fixture(scope="module")
+def master_ledger() -> ModuleType:
+    spec = importlib.util.spec_from_file_location(
+        "sparknet_ledger_master", MASTER / "services" / "sparknet-ledger.py"
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.modules.pop(spec.name, None)
+    return module
+
+
+def test_every_contract_file_is_named_in_the_readme():
+    """A contract no reader can find is a contract nobody checks."""
+    readme = (CONTRACTS / "README.md").read_text()
+    for path in sorted(CONTRACTS.iterdir()):
+        if path.is_file() and path.name != "README.md":
+            assert path.name in readme, f"contracts/README.md does not mention {path.name}"
+
+
+def test_ledger_required_fields_are_pinned_in_both_roles(
+    tracking: dict, provenance: ModuleType, master_ledger: ModuleType
+):
+    """Three copies of the block shape, one source: the contract.
+
+    The shapes already diverged once, which is why the append path exists in
+    shared/ at all. Pinning all three here means the next divergence fails a
+    test instead of a verifier on another node.
+    """
+    required = tracking["ledger_block"]["required"]
+    peer_schema = json.loads((PEER / "blockchain" / "ledger.schema.json").read_text())
+    assert peer_schema["required"] == required, "peer ledger.schema.json drifted from contracts/"
+    assert list(master_ledger.REQUIRED_FIELDS) == required, (
+        "master-node's REQUIRED_FIELDS drifted from contracts/"
+    )
+    assert provenance.contract()["ledger_block"]["required"] == required, (
+        "shared/sparknet-provenance.py read a different contract"
+    )
+
+
+def test_the_event_vocabularies_are_disjoint(tracking: dict, master_ledger: ModuleType):
+    """A peer must not be able to record what only the Master can observe."""
+    peer = set(tracking["approval"]["event_vocabulary"]["peer"])
+    master = set(tracking["approval"]["event_vocabulary"]["master"])
+    assert peer and master, "both vocabularies must be non-empty"
+    assert not (peer & master), f"an event appears in both vocabularies: {sorted(peer & master)}"
+    assert set(master_ledger.MASTER_EVENTS) == master, (
+        "master-node's MASTER_EVENTS drifted from contracts/"
+    )
+    assert "approval" in peer and "share" in peer and "share_ratified" in master
+
+
+def test_the_note_message_is_built_the_way_the_contract_spells_it(tracking: dict, provenance: ModuleType):
+    hashes = {"body": "ab" * 32, "meta": "cd" * 32, "tracking": "ef" * 32}
+    expected = (
+        b"sparknet-note/1\n"
+        + hashes["body"].encode("ascii") + b"\n"
+        + hashes["meta"].encode("ascii") + b"\n"
+        + hashes["tracking"].encode("ascii")
+    )
+    assert provenance.note_message(hashes) == expected
+    message = tracking["signature"]["message"]
+    assert "sparknet-note/1" in message
+    for part in ("body_sha256_hex", "meta_sha256_hex", "tracking_sha256_hex"):
+        assert part in message, f"the contract no longer describes {part} in the signed message"
+
+
+def test_the_compiled_rules_are_read_from_the_contract_at_runtime(provenance: ModuleType, tracking: dict):
+    """The allowlist must not be restated in code — a restated rule goes stale."""
+    source = (REPO_ROOT / "shared" / "sparknet-provenance.py").read_text()
+    for lookup in (
+        'contract()["signature"]["compiler_allowlist"]',
+        'contract()["ledger_block"]["required"]',
+        'contract()["approval"]["event_vocabulary"]["peer"]',
+    ):
+        assert lookup in source, f"shared/sparknet-provenance.py no longer reads {lookup}"
+    assert tracking["signature"]["compiler_allowlist"], "the allowlist may not be empty"
+    assert "updated" in tracking["signature"]["compiler_allowlist"]
+
+
+def test_the_phase_boundary_says_the_transport_does_not_exist(tracking: dict):
+    """Nothing here may imply delivery works; ports.json is what says otherwise."""
+    boundary = tracking["phase_boundary"]
+    assert boundary["state"] == "specified, not built"
+    built = " ".join(boundary["built_here"])
+    not_built = " ".join(boundary["not_built"])
+    assert "email" in not_built and "transport" not in built
+    assert "sign" in built or "layout" in built
+
+
+def test_provenance_protocol_agrees_with_the_schema(tracking: dict):
+    text = (CONTRACTS / "provenance-protocol.md").read_text()
+    for outcome in tracking["signature"]["verify_outcomes"]:
+        assert f"`{outcome}`" in text, f"provenance-protocol.md never states {outcome}"
+    assert "allowlist-based, never percentage-based" in text
+    assert "signed_meta" in text, (
+        "the narrative must mention the metadata half of the envelope, or a reader "
+        "will think only two hashes are signed"
+    )
+    assert "there is no `approvals.md`" in text or "There is no `approvals.md`" in text
+
+
+def test_the_secret_index_has_no_field_a_value_could_hide_in(tracking: dict, provenance: ModuleType):
+    entry_keys = set(tracking["secret_index"]["entry_fields"])
+    forbidden = set(tracking["secret_index"]["forbidden_keys"])
+    assert not (entry_keys & forbidden), "a forbidden key is in the entry schema"
+    assert entry_keys == set(provenance.SECRET_INDEX_ENTRY_KEYS), (
+        "shared/sparknet-provenance.py's entry-key allowlist drifted from contracts/"
+    )
+    assert forbidden == set(provenance.SECRET_INDEX_FORBIDDEN)
+
+
+def test_the_user_record_allowlist_is_the_contract_fields(
+    tracking: dict, provenance: ModuleType
+):
+    """A key that is not in the contract must not be acceptable, and vice versa.
+
+    The allowlist is what answers "is a secret hiding in user.md?"; if the two
+    copies can drift, one of them is answering a different question.
+    """
+    assert set(tracking["user_record"]["fields"]) == set(provenance.USER_RECORD_KEYS)
+    assert set(tracking["user_record"]["fields"]["key"]) == set(provenance.USER_KEY_FIELDS)
+
+
+def test_the_shipped_user_record_is_clean_and_conforming(provenance: ModuleType):
+    """The tracked record is the template until a node fills itself in.
+
+    Step 11 ran `make user-init` on this node, so the shipped record may be
+    either. What must be true on a fresh clone either way: no foreign signed
+    senders, no private material, and a record `check_user_record` is happy
+    with. A filled record additionally has to match the lock written by
+    user-init and carry exactly an ed25519 public key — the private half stays
+    in `.state/keys/` (mode 0600, `keys-check`) and is never shipped.
+    """
+    vault = REPO_ROOT / "peer-node"
+    record = provenance.parse_user_record(vault)
+    assert record["status"] in ("unfilled", "filled")
+    assert record["authorised_senders"] == []
+    assert provenance.check_user_record(vault) == []
+
+    if not provenance.user_is_filled(record):
+        assert record["key"]["public_key_b64"] == ""
+        return
+
+    assert re.fullmatch(r"U-[0-9]{5}", record["owner_id"])
+    assert record["key"]["alg"] == "ed25519"
+    assert record["key"]["public_key_b64"]
+    lock = json.loads((vault / "00_System" / ".user.lock").read_text())
+    assert lock["owner_id"] == record["owner_id"]
+    shipped = (vault / "00_System" / "user.md").read_bytes()
+    assert lock["sha256"] == provenance.sha256_hex(shipped)
+    for label, pattern in provenance._PATTERNS:
+        assert not pattern.search(shipped.decode("utf-8", "replace")), (
+            f"shipped user record: {label}"
+        )
+
+
+def test_the_system_files_point_at_the_contract_instead_of_restating_it(
+    tracking: dict, provenance: ModuleType
+):
+    """`00_System/` holds governance, not a second copy of the schema."""
+    system = REPO_ROOT / "peer-node" / "00_System"
+    schema = provenance.parse_yaml_subset((system / "schema.yaml").read_text())
+    assert schema["source"]["tracking"] == "contracts/tracking-schema.json"
+    assert (REPO_ROOT / schema["source"]["tracking"]).is_file()
+    assert schema["schema_version"] == tracking["schema_version"], (
+        "schema.yaml's version drifted from the contract it defers to"
+    )
+    assert "tracking_block" not in schema, "schema.yaml must not restate field lists"
+
+    index = json.loads((system / "secrets-index.json").read_text())
+    assert index["secrets"] == [], "the shipped index must start with no secrets"
+    for entry in index["secrets"]:
+        assert set(entry) <= set(provenance.SECRET_INDEX_ENTRY_KEYS)
+
+
+def test_the_system_files_carry_no_key_shaped_literals(provenance: ModuleType):
+    """The scan covers tracked files; these ship before the first commit."""
+    system = REPO_ROOT / "peer-node" / "00_System"
+    for path in sorted(system.iterdir()):
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text()
+        except UnicodeDecodeError:
+            continue
+        for label, pattern in provenance._PATTERNS:
+            assert not pattern.search(text), f"{path.name}: {label}"

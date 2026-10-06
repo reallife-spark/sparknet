@@ -7,7 +7,8 @@
 #
 #     <role>-node/     the role subvault
 #     contracts/       overlay, capabilities, identity, ports, guard protocol
-#     shared/          the one canonical authorization implementation
+#     shared/          the canonical implementations: signed authorization
+#                      (sparknet-authz.py) and consensus (sparknet-consensus.py)
 #     .opencode/       the vendored wiki skill suite + role-aware agent
 #     opencode.json    so opencode loads those skills and the agent
 #     requirements.txt cryptography, the only runtime dependency
@@ -29,6 +30,10 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SKILLS_DIR="$REPO_ROOT/.opencode/skills"
+# Plural because that is the path the opencode docs name. opencode 1.18.34 also
+# accepts the singular `agent/`, so this is alignment, not a repair — see Step 5
+# in PLAN.md, where the original "singular means dead agent" claim was retracted.
+AGENTS_DIR="$REPO_ROOT/.opencode/agents"
 
 die() { printf 'sparknet-bundle: %s\n' "$1" >&2; exit 1; }
 
@@ -109,9 +114,12 @@ verify_bundle() {
   py="$root/.venv/bin/python"
   [ -x "$py" ] || py="python3"
 
-  # The peer role has a real implementation suite. The master role has no code,
-  # so its pytest run asserts the spec boundary instead — which is checked
-  # below, because verifying a Master by doing nothing would prove nothing.
+  # Both roles run their own suite. Note what is *not* in a bundle: the fabric-level
+  # `tests/`, so an extracted node cannot run test_contracts.py and therefore cannot
+  # check contract drift for itself. Parity between the roles and contracts/ is
+  # proved at the build host by `make contract-test` before bundling, not in the
+  # bundle. (This comment used to say the Master had no code and its pytest run
+  # asserted the spec boundary — true until Step 15, wrong afterwards.)
   if [ "$vrole" = "peer" ]; then
     step "role validate"
     if (cd "$root/peer-node" && ./scripts/sparknet-validate.sh >/dev/null 2>&1); then
@@ -132,17 +140,46 @@ verify_bundle() {
       fi
     fi
   else
+    # The master role now has code, so it is verified the same way the peer is:
+    # by running it. Verifying a Master by doing nothing proved nothing, which is
+    # why this branch used to assert the absence of an executable surface.
     step "role validate (master)"
-    printf '    – master has no implementation yet; nothing to execute\n'
-    # There is no service to start, but there IS a spec boundary to assert: the
-    # role must still contain no executable surface, still say so in its own
-    # prose, and still not hold a private key. Without this the bundle would
-    # verify a Master by doing nothing at all.
-    step "master spec boundary"
-    if (cd "$root/master-node" && "$py" -m pytest tests -q >/dev/null 2>&1); then
-      ok "spec boundary holds (no code, no key, prose still says so)"
+    if (cd "$root/master-node" && make --no-print-directory validate >/dev/null 2>&1); then
+      ok "validate passed (files, units, no key material, parity, ledger)"
     else
-      bad "master spec tests failed — see 'cd master-node && pytest tests'"
+      bad "validate failed"
+      (cd "$root/master-node" && make --no-print-directory validate 2>&1 \
+        | tail -12 | sed 's/^/      /')
+    fi
+
+    step "role test suite (master)"
+    if (cd "$root/master-node" && "$py" -m pytest tests -q >/dev/null 2>&1); then
+      ok "pytest passed"
+    else
+      bad "master tests failed — see 'cd master-node && pytest tests'"
+    fi
+
+    # The anti-false-green check that the peer's `.env` exclusion already forced
+    # here. Parity resolves the peer's services by path; if it resolved against
+    # the BUILD HOST instead of this extracted tree, a master bundle missing its
+    # peer would still report green. So require the resolved path to be inside
+    # the bundle.
+    step "master parity resolves to the BUNDLED peer, not the build host"
+    parity_out="$(cd "$root/master-node" && "$py" services/sparknet-parity.py 2>&1)"
+    if printf '%s' "$parity_out" | grep -q "\"$root/peer-node/services\""; then
+      ok "peer services resolved inside $root/peer-node/services"
+    else
+      bad "parity did not resolve to the bundled peer — it may be reaching the build host"
+      printf '%s\n' "$parity_out" | tail -6 | sed 's/^/      /'
+    fi
+
+    step "no duplicate peer services inside the master role"
+    dups="$(find "$root/master-node" \( -name 'sparknet-guard-d.py' \
+             -o -name 'sparknet-dispatch-bridge.py' \) 2>/dev/null | grep -c . || true)"
+    if [ "$dups" -eq 0 ]; then
+      ok "none — the peer's files are loaded by path, not copied"
+    else
+      bad "$dups copy/copies of the peer's services inside master-node/ — they would drift"
     fi
   fi
 
@@ -186,6 +223,7 @@ esac
 role_dir="$REPO_ROOT/$role-node"
 [ -d "$role_dir" ] || die "missing role subvault: $role_dir"
 [ -d "$SKILLS_DIR" ] || die "vendored skills missing: $SKILLS_DIR (run make wiki-sync)"
+[ -d "$AGENTS_DIR" ] || die "role agents missing: $AGENTS_DIR (docs name .opencode/agents/, plural)"
 
 # Excluded from the working-tree copy. `.opencode/node_modules` matters most:
 # it is a multi-megabyte dependency tree with nothing to do with the vault.
@@ -215,7 +253,12 @@ mkdir -p "$target"
 
 if [ -n "$from_git" ]; then
   # Release-grade: only committed content, from an explicit ref.
-  for subtree in "$role-node" contracts shared .opencode/skills .opencode/agent scripts; do
+  # A master bundle must carry the peer as well: services/sparknet-parity.py
+  # loads the peer's service files by path, so without them a master bundle
+  # cannot start. This is the one place where "Master = peer" costs bytes, and
+  # it is not optional — see verify_bundle's parity check.
+  for subtree in "$role-node" contracts shared .opencode/skills .opencode/agents scripts; do
+    [ "$role" = "master" ] && [ "$subtree" = master-node ] && subtree=master-node peer-node
     git -C "$REPO_ROOT" rev-parse --verify --quiet "$from_git^{commit}" >/dev/null \
       || die "not a commit: $from_git"
     if git -C "$REPO_ROOT" cat-file -e "$from_git:$subtree" 2>/dev/null; then
@@ -236,14 +279,21 @@ else
   for subtree in "$role-node" contracts shared scripts; do
     rsync -a "${EXCLUDES[@]}" "$REPO_ROOT/$subtree/" "$target/$subtree/"
     printf '  copied   %s\n' "$subtree"
+    # Ships alongside the master so the parity loader can resolve it. One copy of
+    # the peer's services in the bundle, loaded by path — not a master-side copy.
+    if [ "$role" = "master" ] && [ "$subtree" = master-node ]; then
+      rsync -a "${EXCLUDES[@]}" "$REPO_ROOT/peer-node/" "$target/peer-node/"
+      printf '  copied   peer-node (required by master parity)\n'
+    fi
   done
   mkdir -p "$target/.opencode"
   rsync -a "${EXCLUDES[@]}" "$SKILLS_DIR/" "$target/.opencode/skills/"
-  rsync -a "${EXCLUDES[@]}" "$REPO_ROOT/.opencode/agent/" "$target/.opencode/agent/"
+  rsync -a "${EXCLUDES[@]}" "$AGENTS_DIR/" "$target/.opencode/agents/"
   cp "$REPO_ROOT/opencode.json" "$target/opencode.json"
   cp "$REPO_ROOT/requirements.txt" "$target/requirements.txt"
-  printf '  copied   .opencode/skills (%s skills), .opencode/agent\n' \
-    "$(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d | wc -l)"
+  printf '  copied   .opencode/skills (%s skills), .opencode/agents (%s agents)\n' \
+    "$(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d | wc -l)" \
+    "$(find "$AGENTS_DIR" -mindepth 1 -maxdepth 1 -name '*.md' | wc -l)"
 fi
 
 # --- the bundle's own manifest ------------------------------------------------
@@ -258,9 +308,9 @@ fi
 |---|---|
 | `peer-node/` / `master-node/` | the role itself |
 | `contracts/` | the overlay, capability, identity, port and guard contracts this role obeys |
-| `shared/` | the single canonical signed-authorization implementation |
+| `shared/` | the canonical implementations — signed authorization and consensus |
 | `.opencode/skills/` | the vendored wiki skill suite — no global skill farm needed |
-| `.opencode/agent/` | the role-aware vault agent |
+| `.opencode/agents/` | the role-aware agents — `vault`, and the node orchestrator |
 | `opencode.json` | registers the skills and agent with opencode |
 | `requirements.txt` | `cryptography`, the only runtime dependency |
 
@@ -286,8 +336,10 @@ Then start opencode inside `<role>-node/` and use `/wiki-status`, `/wiki-ingest`
 
 ## Deliberately absent
 
-- **Secrets.** No private keys, no tokens. `$SPARKNET_STATE_DIR/keys` is created
-  at provisioning time, and `.state/` is excluded.
+- **Secrets.** No private keys, no tokens. The master's state dir lives outside the
+  vault (`$XDG_STATE_HOME/sparknet/master-node`), so a bundle has nothing to exclude
+  on that account; `.state/` is still excluded as a backstop in case an operator
+  points `SPARKNET_STATE_DIR` at an old in-vault path.
 - **A Master private key**, ever. This bundle can be given to a peer safely; the
   master role signs but its key is provisioned on the master itself.
 - **`__pycache__`, caches, `node_modules`.** Build noise, nothing else.

@@ -4,7 +4,8 @@
 #
 #   contracts/ + shared/   the cross-role contract and its single implementation
 #   peer-node/             a working node — the only role that is implemented
-#   master-node/           the signing role — specified and planned, NOT built
+#   master-node/           the elected signing role — built (Steps 15-16); the
+#                           isolated signer and election land in 17/14
 #   .opencode/skills/      the wiki skill suite, vendored so a node needs no
 #                          global skill farm
 #
@@ -24,7 +25,8 @@ ROLE ?= peer
 
 .PHONY: help help-role layout validate test test-all test-peer test-master \
         contract-test lint devtools env-init wiki-sync wiki-verify \
-        wiki-preflight bundle bundle-verify status-plan clean dist
+        wiki-preflight bundle bundle-verify status-plan clean dist \
+        keys-check shims-check hooks
 
 help: ## Show this help
 	@echo "sparknet — fabric root"
@@ -38,7 +40,7 @@ help: ## Show this help
 
 help-role: ## What each role is, and whether it runs
 	@printf '  %-14s %s\n' "peer-node"   "IMPLEMENTED — guard, anchor, dispatch, wiki vault"
-	@printf '  %-14s %s\n' "master-node" "SPECIFIED ONLY — plans/MASTER_BUILD_PLAN.md, no code"
+	@printf '  %-14s %s\n' "master-node" "BUILT — runs the peer's services by path; plans/MASTER_BUILD_PLAN.md"
 	@printf '  %-14s %s\n' "contracts/"  "the overlay, capability, identity, port and guard contracts"
 	@printf '  %-14s %s\n' "shared/"     "the one canonical signed-authorization implementation"
 
@@ -48,7 +50,7 @@ layout: ## Show the repository layout
 	  "├── contracts/          cross-role contract (single source of truth)" \
 	  "├── shared/              sparknet-authz.py — signed canonical form" \
 	  "├── peer-node/           the working node role        [IMPLEMENTED]" \
-	  "├── master-node/         the signing role             [SPECIFIED ONLY]" \
+	  "├── master-node/         the elected signing role    [BUILT]" \
 	  "├── scripts/             fabric-level tooling" \
 	  "├── tests/               fabric + vendored-skill tests" \
 	  "└── .opencode/skills/    vendored wiki suite (31 skills)"
@@ -61,7 +63,7 @@ test: test-all ## Alias for test-all
 
 # Every suite in the repo, in the order a failure would matter: the contract
 # first (both roles depend on it), then the peer implementation, then the
-# master's spec boundary, then the vendored skills.
+# master's parity and spec boundary, then the vendored skills.
 test-all: ## Run every suite in the repository
 	@echo "=== contract ==="
 	@$(PY) -m pytest tests/test_contracts.py -q
@@ -72,21 +74,35 @@ test-all: ## Run every suite in the repository
 	@echo "=== peer-node ==="
 	@$(MAKE) --no-print-directory -C peer-node test
 	@echo
-	@echo "=== master-node (spec boundary) ==="
+	@echo "=== master-node (parity + spec) ==="
 	@$(MAKE) --no-print-directory -C master-node test
 
 test-peer: ## Run only the peer suite
 	@$(MAKE) --no-print-directory -C peer-node test
 
-test-master: ## Run only the master's spec-boundary suite
+test-master: ## Run only the master's parity + spec suite
 	@$(MAKE) --no-print-directory -C master-node test
 
 contract-test: ## Prove the peer role still matches contracts/
 	@$(MAKE) --no-print-directory -C peer-node guard-contract
 
+# --- provenance gates ---------------------------------------------------------
+
+keys-check: ## No tracked key material; .state/ keys are 0600
+	@./scripts/sparknet-keys-check.sh
+
+shims-check: ## Every legacy name in peer-node/ and master-node/ is still a symlink
+	@$(MAKE) --no-print-directory -C peer-node shims-check
+	@$(MAKE) --no-print-directory -C master-node shims-check
+
+hooks: ## Point this clone at .githooks/ so every commit runs keys-check
+	@git config core.hooksPath .githooks
+	@echo "core.hooksPath = .githooks"
+
 lint: ## Lint everything that is linted
 	@$(PY) -m ruff check shared scripts tests
-	@$(MAKE) --no-print-directory -C peer-node lint
+	@$(PY) -m ruff check peer-node/services peer-node/tests
+	@$(PY) -m ruff check master-node/services master-node/tests
 
 devtools: ## Create .venv with cryptography, pytest and ruff (opt-in)
 	@if [ ! -x "$(VENV_PY)" ]; then python3 -m venv "$(VENV_PY)"; fi

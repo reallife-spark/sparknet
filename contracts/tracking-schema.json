@@ -1,0 +1,235 @@
+{
+  "schema_name": "sparknet-tracking",
+  "schema_version": 1,
+  "description": "Provenance, accountability and approval records for a role vault: the numbered layout, the per-note tracking block, the user record, the approval record, and the secret index. Both roles read it from here; neither restates it.",
+
+  "why": "A note that cannot say who wrote it, for whom, from what conversation and under which approval is a guess dressed as knowledge. This schema makes attribution a property of the bytes: every note in 01_Inbox..07_Archives carries a tracking block signed by the user key, every approval is a hash-chained ledger block, and `make provenance-verify` can prove both offline from a bare clone. Nothing here needs a running service, and nothing here stores a secret.",
+
+  "layout": {
+    "status": "numbered layout replaces the wiki category layout in a role vault",
+    "scope": "role subvaults (peer-node/, master-node/). The fabric root keeps its wiki category layout unchanged.",
+    "dirs": {
+      "00_System": "governance: agent rules (alpha-agent.md), the user record, the note schema, index.md, log.md, the secret index",
+      "01_Inbox": "capture-first staging ground; read-only for agents until an item is accepted",
+      "02_Daily": "dated entries and per-session agent memory",
+      "03_Sources": "immutable external material and raw captures; read-only for agents",
+      "04_Evergreen": "permanent atomic notes refined from sources and daily input",
+      "05_Knowledge": "the compiled wiki layer: concepts/, entities/, skills/, synthesis/",
+      "06_Projects": "per-project knowledge, scoped by the ingest skills",
+      "07_Archives": "vault snapshots for rebuild/restore, and deprecated material"
+    },
+    "legacy_map": {
+      "concepts": "05_Knowledge/concepts",
+      "entities": "05_Knowledge/entities",
+      "skills": "05_Knowledge/skills",
+      "synthesis": "05_Knowledge/synthesis",
+      "journal": "02_Daily",
+      "sessions": "02_Daily",
+      "references": "03_Sources",
+      "_raw": "03_Sources",
+      "projects": "06_Projects",
+      "_archives": "07_Archives",
+      "index.md": "00_System/index.md",
+      "log.md": "00_System/log.md"
+    },
+    "shims_note": "Each legacy name stays at the role root as a symlink to its numbered location, so both spellings resolve to one file. The vendored wiki suite hard-codes the legacy names and must not be edited (`make wiki-verify` pins it); shims are how the two layouts coexist without a second copy of any page.",
+    "shims_are_load_bearing": true,
+    "shim_drift_check": "make shims-check asserts every shim is a symlink whose readlink equals the target above. A shim that has become a real directory is drift, and a filesystem that could not create symlinks would show up here first.",
+    "real_dirs_at_root": {
+      "_staging": "the vendored suite's review queue; skill-internal, gitignored except .gitkeep"
+    },
+    "control_files_stay_at_root": [
+      "AGENTS.md",
+      "MEMORY.md",
+      "PLAN.md",
+      "README.md"
+    ],
+    "index_and_log": "index.md and log.md are real files in 00_System/ and symlinked at the role root, because the vendored suite reads them at the vault root. 05_Knowledge/index.md is the Gemini-session spelling; it resolves through the same file if anything still points there."
+  },
+
+  "tracking_block": {
+    "location": "YAML frontmatter, under the key `tracking`. Frontmatter is chosen over body text so the record never renders in a preview (`.vault-config/app.json` sets showFrontmatter: false).",
+    "applies_to": "every note in 01_Inbox through 07_Archives, including 06_Projects",
+    "schema": "sparknet-tracking/1",
+    "required_fields": {
+      "schema": {"type": "string", "const": "sparknet-tracking/1", "purpose": "so a verifier can refuse a block it does not understand rather than guessing"},
+      "owner_id": {"type": "string", "pattern": "^U-[0-9]{5}$", "purpose": "the human number every record attributes to; assigned once per node by 00_System/user.md"},
+      "owner_node": {"type": "string", "purpose": "which node assigned the number — owner_id + owner_node is unique fabric-wide"},
+      "owner_ref": {"type": "string", "const": "00_System/user.md", "purpose": "the record that defines owner_id, so attribution resolves from the note alone"},
+      "validity": {
+        "type": "object",
+        "fields": ["state", "verified_by", "verified_at", "evidence"],
+        "purpose": "whether this note is currently believed and how it got that way"
+      },
+      "conversation": {
+        "type": "array",
+        "items": {"fields": ["id", "turn", "agent", "model", "at"]},
+        "purpose": "which conversation produced the content, agent by agent and model by model"
+      },
+      "shares": {
+        "type": "array",
+        "items": {"fields": ["share", "with", "type", "state", "authenticated", "ledger"]},
+        "purpose": "which peers received this note and under which share type; `ledger` is the block id that recorded it"
+      },
+      "agent": {"type": "string", "purpose": "the agent that wrote the current body"},
+      "model": {"type": "string", "purpose": "the model that wrote the current body"},
+      "approvals": {"type": "array", "items": "approval_id", "purpose": "ledger block ids; every id here must resolve to a block, or the note claims an approval that does not exist"},
+      "signature": {"type": "object", "purpose": "the user-key signature over this note; see `signature`"}
+    }
+  },
+
+  "validity": {
+    "states": {
+      "unsigned": "captured but not yet signed or verified",
+      "signed": "the signature verifies; the only state that may be set when `signature` is present and valid",
+      "sanitized": "ingressed from an untrusted source and reviewed by a reviewer agent before use",
+      "disputed": "a later source contradicts it; the note is kept and marked, never silently deleted",
+      "expired": "its claim has a window (link, product, version) that has passed"
+    },
+    "closed_vocabulary": true,
+    "rule": "state `signed` may only be set when the note's signature verifies against user.md. Setting it otherwise is exactly the falsification the signature exists to catch."
+  },
+
+  "signature": {
+    "algorithm": "ed25519",
+    "key_scope": "user",
+    "key_role": "the fourth key scope, distinct from cluster, operational and identity; signs notes, never authorises anything",
+    "message": "b\"sparknet-note/1\\n\" + body_sha256_hex + b\"\\n\" + meta_sha256_hex + b\"\\n\" + tracking_sha256_hex — four ASCII-escaped lines, LF-joined: domain, then the three hashes, nothing else",
+    "body": "the note's file bytes after the closing `---` of the frontmatter block, verbatim",
+    "meta": "everything in the frontmatter except the `tracking` key — the compiler's own field zone (title, tags, updated, …), canonicalised the same way",
+    "meta_sha256": "sha256 of the canonical JSON of the meta mapping (sort_keys, separators (\",\", \":\"), UTF-8)",
+    "tracking_sha256": "sha256 of the canonical JSON of the tracking block with the `signature` key removed — the same canonical form shared/sparknet-authz.py uses for identities",
+    "envelope": {
+      "alg": "ed25519",
+      "sig": "base64 signature",
+      "key_id": "the owner_id whose user key signed it",
+      "key_fingerprint": "sha256 hex of the raw 32-byte public key, so a key swap is visible without re-reading user.md",
+      "signed_body_sha256": "the body hash at signing time",
+      "signed_meta_sha256": "the meta hash at signing time",
+      "signed_tracking_sha256": "the tracking hash at signing time",
+      "signed_meta": "the meta mapping itself, verbatim at signing time, so a verifier can name *which* keys changed — an aggregate hash can only say that something did",
+      "signed_at": "ISO8601 UTC"
+    },
+    "envelope_integrity": "signed_meta re-hashes to signed_meta_sha256; a mismatch is `invalid`, because the metadata half of the envelope was edited after signing",
+    "why_both_hashes": "Recording what was signed is what makes 'edited since signing' detectable. Without them a verifier can only say 'this signature does not match this file', which cannot distinguish a routine compiler rewrite from a forgery.",
+    "verify_outcomes": {
+      "valid": {"condition": "current hashes equal the signed_* values and the signature verifies against the user public key in user.md", "exit": 0},
+      "stale:metadata": {"condition": "hashes differ, and the changed keys are confined to `compiler_allowlist` (body unchanged)", "meaning": "an expected LLM-wiki compiler rewrite; the changed keys are read out of `signed_meta` vs the current meta; report it, do not fail", "exit": 0},
+      "stale:content": {"condition": "the body changed, or a tracking field outside the allowlist changed, since signing", "meaning": "the writer did not re-sign; re-sign to clear", "exit": 2},
+      "invalid": {"condition": "the signature does not verify, key_id/key_fingerprint are not the ones in user.md, owner_id mismatches, or a note that requires a signature has none", "meaning": "tamper or forgery", "exit": 1},
+      "pending": {"condition": "an 01_Inbox item awaiting acceptance, before countersignature", "exit": 0}
+    },
+    "exit_codes": {"0": "clean or stale:metadata", "1": "invalid — hard failure", "2": "stale:content — re-sign required"},
+    "strict_mode": "`--strict` promotes exit 2 to failure; `make precommit` uses it",
+    "compiler_allowlist": ["updated", "base_confidence", "lifecycle", "lifecycle_changed", "tier", "summary", "importance"],
+    "delta_reporting": "The report also prints a body-delta percentage for context. Classification is allowlist-based, never percentage-based: a numeric threshold is gameable by an attacker editing a little at a time, while producing a valid signature at all requires the private key.",
+    "re_sign_rule": "Whoever writes a note re-signs it in the same operation and bumps `updated`. alpha-agent.md states this; provenance-verify enforces it.",
+    "unit_of_verification": "one note, one signature. A note whose signature verifies but whose approvals[] is empty is still valid as a note; approvals are verified separately against the ledger."
+  },
+
+  "user_record": {
+    "path": "00_System/user.md",
+    "template_path": "00_System/user.md (ships as the unfilled template, one per node)",
+    "fill": "make user-init generates the keypair through shared/sparknet-authz.py, writes public_key_b64 + fingerprint into the record, writes the private half to $SPARKNET_STATE_DIR/keys/user.ed25519 at mode 0600, then records the file's sha256 in 00_System/.user.lock",
+    "fields": {
+      "type": "user-record",
+      "schema": "sparknet-user/1",
+      "status": "unfilled | filled",
+      "owner_id": "U-#### — the node-scoped user number used in every tracking block",
+      "owner_node": "the node that assigned it",
+      "role": "owner",
+      "immutable": true,
+      "authorised_senders": "list of sender identities (email or node id) allowed to push work onto this node; the inbox policy reads it",
+      "key": {"alg": "ed25519", "public_key_b64": "committed, public", "fingerprint": "sha256 of the public key", "key_ref": "path reference to the private key, never the key", "created": "ISO8601"}
+    },
+    "immutability": "After fill, public_key_b64 and fingerprint never change. Tests fail if .user.lock does not match, if an unfilled record has a real key, or if a filled record's key material differs from the lock.",
+    "allowlist_rule": "The record's frontmatter keys are allowlisted; any other key, any PRIVATE KEY block, and any base64 run outside public_key_b64 fails the suite. It holds public key, fingerprint and identity tags only.",
+    "private_key": {
+      "path": "$SPARKNET_STATE_DIR/keys/user.ed25519",
+      "mode": "0600",
+      "git": "never tracked; .gitignore blocks *.ed25519, *.pem, *.key, privkey*, id_ed25519*, *.seed and make keys-check fails on a tracked match",
+      "bundle": "never bundled; .state/ is excluded by scripts/sparknet-bundle.sh",
+      "authority": "the user key consents and attributes; it grants no capability. Capability comes from the capability contract and key possession per contracts/capabilities.json."
+    }
+  },
+
+  "ledger_block": {
+    "required": ["block_id", "prev_hash", "timestamp", "signature", "data"],
+    "optional": ["hash"],
+    "block_id": "zero-padded index of the block in the chain, f\"{index:08d}\"",
+    "timestamp": "ISO8601 UTC with Z suffix",
+    "prev_hash": "the previous block's `hash`; empty string for the genesis block",
+    "hash": "sha256 of the canonical JSON of the block with `hash` removed (sort_keys, separators (\",\", \":\")); when present it must re-hash exactly, and the chain links on it",
+    "canonical_definition_note": "The same envelope the guard and the isolated signer already write. This contract restates it so tests/test_contracts.py can pin both role copies (peer-node/blockchain/ledger.schema.json and master-node's REQUIRED_FIELDS) against one source instead of against each other.",
+    "append": "only through shared/sparknet-provenance.py (the `append-approval` command and its `make provenance-append` wrapper). No service, script or bridge may build a block: the dispatch bridge once carried its own `--test-approval` builder with a different shape (index/payload/block_hash, a stub signature), which is how the two ledger shapes diverged in the first place. The flag is deleted, and peer-node/tests/test_services.py asserts the bridge cannot write the ledger in any mode."
+  },
+
+  "approval": {
+    "where": "a ledger block with data.event = 'approval'",
+    "store": "blockchain/ledger.json only",
+    "approvals_md": "there is no approvals.md, and nothing may be coded to one. It was dropped from the design so the ledger cannot drift from a human-readable mirror that everyone reads and no test checks.",
+    "data_fields": {
+      "event": "approval",
+      "approval_id": "APL-YYYY-MM-DD-NNN",
+      "owner_id": "the consenting user number",
+      "owner_node": "the node that recorded it",
+      "question": "what was asked, verbatim",
+      "decision": "approved | rejected | clarified",
+      "agent": "the agent that asked",
+      "model": "the model that asked",
+      "note_refs": ["vault-relative paths of the notes this approval is attached to"],
+      "node_pubkey_b64": "the appending node's public key, inline so an offline verifier needs no local key material",
+      "signatures": {
+        "user": "base64, the user key over canonical JSON of data with `signatures` removed",
+        "node": "base64, the node identity key over the same bytes"
+      },
+      "recorded_at": "ISO8601 UTC"
+    },
+    "block_signature": "For these blocks the block-level `signature` equals data.signatures.node — the node's countersignature restated where the schema requires a signature. `hash` binds the whole block (including prev_hash and timestamp); data.signatures bind the record so it stays self-contained if copied out of the ledger.",
+    "dual_control": "user consent and node countersignature are separate keys. A node that can write the ledger cannot mint user consent; a user key without the node key cannot place a block in the chain.",
+    "event_vocabulary": {
+      "peer": ["approval", "report", "share", "inbox_acceptance"],
+      "master": ["election_outcome", "trust_root_formed", "trust_root_reformed", "trust_level_changed", "signature_issued", "share_ratified"],
+      "rule": "the vocabularies are disjoint. `share` records a share this peer made; only a master may ratify one. A peer writing a master event, or the reverse, is a contract break."
+    },
+    "reports": "A generated export or digest is recorded as data.event = 'report' with the same signatures and a note_refs list naming its inputs, so a report is attributable like a note."
+  },
+
+  "secret_index": {
+    "path": "00_System/secrets-index.json",
+    "store": "$SPARKNET_STATE_DIR/secrets/ (peer: <vault>/.state/secrets, mode 0700; master: outside the vault) — gitignored, never bundled",
+    "purpose": "track that a secret exists, who holds it and when it was last rotated, without the vault ever containing it",
+    "entry_fields": ["id", "kind", "holder_agent", "ref", "fingerprint", "scopes", "created", "last_rotated", "status", "notes"],
+    "ref": "a path under the state dir or the *name* of an environment variable — never a value",
+    "fingerprint": "sha256 of the secret's value, so a rotation is detectable without storing the value",
+    "forbidden_keys": ["value", "secret", "token", "password", "private_key"],
+    "agent_rule": "An agent resolves a value through `ref` at runtime, never echoes it, and never writes it into any file. alpha-agent.md states it; tests enforce it by scanning tracked files for registered values and for key-shaped literals."
+  },
+
+  "implementation": {
+    "shared": "shared/sparknet-provenance.py",
+    "reuses": "shared/sparknet-authz.py, loaded by path exactly as sparknet-consensus.py does — this adds no Ed25519, no canonicalisation and no key parsing. A second implementation would be a second trust boundary to get wrong.",
+    "note_implementation": "the frontmatter parser and the signing envelope live here and nowhere else",
+    "make_targets": ["provenance-verify", "user-init", "shims-check", "keys-check", "precommit"],
+    "state_machine": "provenance-verify exits 0 for valid/stale:metadata/pending, 2 for stale:content, 1 for invalid, and prints the per-note outcome plus a body-delta percentage for context"
+  },
+
+  "phase_boundary": {
+    "built_here": ["the numbered layout and shims", "the tracking block and its signature", "the user record and key custody", "the approval/report ledger records", "the secret index", "local ingestion from stdin or file"],
+    "not_built": ["the email service", "node-to-node transport", "the dispatch bridge as a server"],
+    "state": "specified, not built",
+    "rule": "The inbox dispatch policy below is a policy, not a running pipeline. Nothing in this repository may claim transport delivery works until a listener exists and ports.json says so."
+  },
+
+  "inbox_dispatch": {
+    "principle": "01_Inbox is read-only for agents until an item is accepted; acceptance is recorded in the ledger as `inbox_acceptance` and the item is then reviewed and, if untrusted, sanitized",
+    "rules": {
+      "master-node": "an item whose source is the master-node may be executed on notice — the Master is the signing role",
+      "peer-node": "an item whose source is another peer executes only on acceptance, and is reviewed and sanitized by a reviewer agent first",
+      "email": "the sender must be on the node's authorized-senders list, then the item is treated as peer-origin"
+    },
+    "reviewer_agents": "peer: agents/vault-curator; master: .opencode/agents/evidence-reviewer",
+    "authorised_senders": "recorded in 00_System/user.md (the record is the operator's, and who may push work onto this node is an operator decision)",
+    "transport": "specified, not built — see phase_boundary"
+  }
+}

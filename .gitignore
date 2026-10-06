@@ -1,8 +1,18 @@
 # Local vault config (paths only, but keep it out of history)
 .env
 
-# Review queue for LLM-written pages (WIKI_STAGED_WRITES=true)
-_staging/
+# Review queue for LLM-written pages (WIKI_STAGED_WRITES=true).
+# The root vault's category directory is documented in the charter and must
+# survive a fresh clone, so it is tracked through its .gitkeep while its staged
+# pages stay out of history. Ignoring the whole path meant a clone had no
+# _staging/ at all, which is the phantom directory tests/test_layout.py exists to
+# catch. The leading slash anchors this to the root vault.
+/_staging/*
+!/_staging/.gitkeep
+
+# Role subvaults carry a transient queue of the same name. Neither role charter
+# documents it, so it stays local: created where it is used, never in history.
+*/_staging/
 
 # Vault editor workspace state (machine-local)
 .vault-config/workspace.json
@@ -33,3 +43,14 @@ dist/
 # versions. Declared here so a cache can never be committed by an older tool.
 .ruff_cache/
 .pytest_cache/
+
+# Key material — the first line of defence, with `make keys-check` as the
+# second. Private keys live under .state/ (mode 0700/0600) and are never
+# committed, whatever directory one turns up in. Listed as bare patterns so
+# scripts/sparknet-keys-check.sh can prove the backstop is still present.
+*.ed25519
+*.pem
+*.key
+privkey*
+id_ed25519*
+*.seed

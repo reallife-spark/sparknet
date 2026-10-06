@@ -42,6 +42,8 @@ EXPECTED_TOP_LEVEL = {
     "AGENTS.md", "MEMORY.md", "MISSION.md", "PLAN.md", "README.md", "log.md",
     "Makefile", "pyproject.toml", "requirements.txt", "requirements-dev.txt",
     ".env.example", ".gitignore", "opencode.json", ".vault-config",
+    # per-clone hooks (activated by `make hooks`) — pre-commit runs keys-check
+    ".githooks",
     # curated navigation + the daily-update cache. index.md is hand-maintained,
     # not generated, so deleting it loses real content.
     "index.md", "hot.md",
@@ -70,7 +72,13 @@ VAULT_CATEGORY_DIRS = [
 ]
 
 # Directories whose contents are history rather than current specification.
-PROVENANCE_DIRS = {"references", "plans", "sessions", "journal", "_raw", "_archives"}
+# The legacy names are the fabric root's; the numbered ones are the role
+# subvaults' equivalents under the PARA layout (`peer-node/`), so a capture
+# that legitimately records a host path stays exempt after the move.
+PROVENANCE_DIRS = {
+    "references", "plans", "sessions", "journal", "_raw", "_archives",
+    "01_Inbox", "02_Daily", "03_Sources", "07_Archives",
+}
 
 SCAN_SUFFIXES = {".md", ".py", ".sh", ".json", ".template", ".conf", ".env.example"}
 SKIP_DIR_PARTS = {"__pycache__", ".git", ".venv", "dist", "node_modules",
@@ -227,7 +235,8 @@ def test_env_example_uses_placeholders_not_real_paths():
 
 def test_contract_and_shared_are_present_and_populated():
     for name in ("overlay.json", "capabilities.json", "identity-schema.json",
-                 "ports.json", "guard-protocol.md", "README.md"):
+                 "ports.json", "guard-protocol.md", "share-protocol.md",
+                 "consensus-protocol.md", "README.md"):
         path = REPO_ROOT / "contracts" / name
         assert path.is_file(), f"contracts/{name} is missing"
         assert path.stat().st_size > 0, f"contracts/{name} is empty"
