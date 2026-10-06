@@ -1024,11 +1024,14 @@ def test_the_election_port_is_declared_and_carries_no_authority(ports: dict):
     declared = {s["service"]: int(n) for n, s in ports["ports"].items()}
     assert "cluster-election" in declared, "the election port is used but undeclared"
     election = ports["ports"][str(declared["cluster-election"])]
-    assert election["implementation_state"] == "spec-only", (
-        "no election listener exists yet; claiming otherwise would repeat the port "
-        "defect Step 6 just fixed"
+    assert election["implementation_state"] == "implemented", (
+        "shared/sparknet-election.py serve is the exchange listener; ports.json "
+        "claiming spec-only would understate a built authority-adjacent surface"
     )
-    assert election["runtime"] == "not-listening"
+    assert election["runtime"] == "not-listening", (
+        "implemented but not running is the honest pair on this host: the code "
+        "exists, nothing here binds 4210"
+    )
     assert election["overlay_only"] is True
     assert "never a registry entry" in election["note"], (
         "the election port must be explicit that it does not carry authority, "

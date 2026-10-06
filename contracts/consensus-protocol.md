@@ -8,7 +8,7 @@ of working code will be wrong about a security boundary:
 |---|---|
 | Root formation and verification (`shared/sparknet-consensus.py`) | built, unit-tested |
 | Key separation (cluster / operational / identity) | built, unit-tested |
-| **The election itself** — who votes, and how a result becomes a root | **not built.** `verify_root` checks a root; it does not produce one. Step 14's implementation, and it needs a trust root to vote on. |
+| **The election itself** — who votes, and how a result becomes a root | **built** (fabric `PLAN.md` Step 11). `shared/sparknet-election.py` is the exchange: `serve` collects bids, ballots and root co-signatures on port 4210 and holds no private key — every signature is made by a member process holding its own cluster key. `peer-node/scripts/sparknet-election-request.sh` and `master-node/scripts/sparknet-election-approve.sh` run the member ceremony for each role. The listener is code, not a deployment: `contracts/ports.json` records 4210 `implemented` with runtime `not-listening` until a host actually runs it. See **Exchange** below. |
 | Re-formation when a member is dropped | **not built**, and unspecified — see below |
 
 The signer that consumes a root is built (`master-node/services/sparknet-signer.py`),
@@ -70,8 +70,8 @@ election opens; each member casts exactly one signed vote for one candidate
 three votes, three distinct members, all naming the same candidate?
         ├── no  → no trust root. No authority is issuable anywhere.
         │          Peers remain in peer-only mode, which is a working state.
-        └── yes → candidate generates its operational keypair
-                  root binds master_pubkey
+        └── yes → root binds the candidate's operational keypair
+                  (generated when the candidate bid)
                   all three members co-sign the root
         ▼
 root distributed; peers verify it and accept the registry signed under master_pubkey
@@ -100,6 +100,55 @@ escape is re-formation.
 
 Every deadline in this protocol is evaluated against an **injected clock**. No
 test waits for a real window.
+
+## Exchange
+
+The election runs as one HTTP service: `shared/sparknet-election.py serve`, port
+4210 (`contracts/ports.json`, `cluster-election`). This section is the contract
+that file implements; the shapes below must not drift without both moving
+together.
+
+| Endpoint | Body | Rule |
+|---|---|---|
+| `POST /election/request` | `{node_id, operational_pubkey_b64, nonce, ts}` + `signature_b64` over the canonical form, signed with the member's **cluster** key | one bid per member. Re-filing the identical bid is idempotent; a different one is `bid_already_filed`. The bid exists to publish a usable operational key, so one that does not parse is refused here, not three signatures later. |
+| `POST /election/vote` | a signed vote from `sparknet-consensus.py` carrying `election_id` | one vote per member, verified before storage. A second vote for a *different* candidate is refused as equivocation (`already_signed`); the same choice again is idempotent. |
+| `POST /election/root-signature` | `{node_id, signature_b64, election_id}` over the root's canonical bytes | one co-signature per member, each verified against that member's own cluster key **before** it is stored — a bad early signature must not hide behind "missing signatures" until all three arrived. The root forms at three. |
+| `GET /election/status`, `GET /election/root` | — | state machine: `collecting` → `awaiting_operational_key` (tally agreed, winner has not bid) → `awaiting_signatures` → `formed`; a tally that ran without agreement is `no_agreement`, terminal for this election, because filing a bid cannot rescue it. |
+
+Refusals answer with a stable machine-readable `reason`
+(`signer_not_a_member`, `bad_signature`, `wrong_election_id`,
+`bid_already_filed`, `already_signed`, `unexpected_master`, `no_root_yet`,
+`root_unusable`, …) — 400 for malformed input, 403 for identity failures, 409
+for state conflicts — so a member can tell a refusal from an outage without
+parsing prose.
+
+Properties the shape exists to preserve:
+
+- **The service holds no private key.** It validates, tallies and merges;
+  bids, ballots and co-signatures arrive already signed. An HTTP listener with
+  a signing key would be a worse trade than the round trip it saves.
+- **A member will not co-sign what it did not vote for.** The client refuses a
+  root naming anyone but the candidate its own ballot named
+  (`unexpected_master`), so two honest votes plus a lying exchange produce two
+  refusals, not a master. That check is the member's half of unanimity.
+- **The port carries no authority.** Signed votes and root signatures only —
+  never a registry entry, never an approval — so the election decides who may
+  hold the operational key without ever carrying it.
+- **Loopback by default.** `serve` binds `127.0.0.1` unless told otherwise;
+  binding the overlay address is a deployment act on a host that has the
+  overlay. Hence `ports.json`: `implemented`, runtime `not-listening`.
+
+Membership for the exchange is the out-of-band `cluster-members.json` —
+`node_id`, fingerprint, WireGuard public key, cluster public key, exactly three
+distinct members — read only by `serve`. Members identify themselves by the
+keys in it; there is no login, because the signatures are the identity.
+
+Role wiring: `make election-request` (peer) runs the whole ceremony — bid,
+vote, wait, co-sign, install on the node identity; `make election-approve
+EXPECT=<node>` (master) runs the same ceremony and additionally writes the
+formed root into `master-node/manifests/cluster-trust-root.json`. Both are
+wrappers around the shared `member` command, because both roles run the same
+conversation — the roles differ in what they hold, not in how they agree.
 
 ## The cluster trust root
 

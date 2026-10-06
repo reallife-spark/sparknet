@@ -73,10 +73,17 @@ def test_every_key_shaped_name_fails(scratch: Path, name: str):
     assert result.returncode == 1, name
 
 
+# The PEM marker is assembled at runtime, never written as one literal here:
+# this file is itself scanned by the checker, and a tracked file containing the
+# block it exists to detect is precisely what it reports.
+PEM_MARKER = "-----BEGIN " + "PRIVATE KEY-----"
+
+
 def test_a_pem_block_in_a_ordinary_file_fails(scratch: Path):
     (scratch / "notes.md").write_text(
-        "someone pasted this:\n-----BEGIN PRIVATE KEY-----\nMCowBQYDK2Vw\n"
-        "-----END PRIVATE KEY-----\n"
+        "someone pasted this:\n"
+        + PEM_MARKER
+        + "\nMCowBQYDK2Vw\n-----END " + "PRIVATE KEY-----\n"
     )
     result = run_checker(scratch)
     assert result.returncode == 1
@@ -178,7 +185,7 @@ def test_the_hook_blocks_a_bad_commit(tmp_path: Path):
     os.chmod(tmp_path / ".githooks" / "pre-commit", 0o755)
     (tmp_path / ".gitignore").write_text("\n".join(KEY_PATTERNS) + "\n")
 
-    (tmp_path / "leaked.key").write_text("-----BEGIN PRIVATE KEY-----\nx\n")
+    (tmp_path / "leaked.key").write_text(PEM_MARKER + "\nx\n")
     subprocess.run(["git", "add", "-f", "leaked.key"], cwd=tmp_path, check=True)
     bad = subprocess.run(["bash", ".githooks/pre-commit"], cwd=tmp_path,
                          capture_output=True, text=True)

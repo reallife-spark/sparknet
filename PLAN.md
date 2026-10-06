@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
 updated: 2026-10-06
-current: done
+current: 12
 ---
 
 # sparknet — Active Plan
@@ -313,11 +313,137 @@ current: done
         master scripts' `PY` default (fall back to `python3` when the excluded
         `.venv` is absent — a pre-existing gap, not caused by the migration).
 
+## Step 10 — Verification audit and claim reconciliation
+
+- [x] **Step 10** — Review every "working part" of both roles against the tree
+      and make the plans, statuses and contract prose agree with what is
+      actually there. Approval decisions recorded before starting: agx
+      deployment deferred (local rehearsal first, hosts later); the election is
+      **built** as a new step rather than left as a stub; peer↔peer is deployed
+      against a real transport with honest reporting that the sharing regime
+      itself is unbuilt.
+      - **Sub-steps**:
+        1. [x] gates run as a baseline: `validate`, `contract-test`,
+           `shims-check`, `keys-check`, `lint`, `provenance-verify` (both roles),
+           `test-all`, `bundle` + `bundle-verify` (both roles),
+           `wiki-preflight` (all three roots), `wiki-verify`.
+        2. [x] one red gate repaired: `make keys-check` failed on a clean tree
+           because `tests/test_keys.py`'s own fixtures pasted the PEM literal the
+           scanner searches for — the corpus was poisoning the scan. The marker is
+           now assembled at runtime (`PEM_MARKER`), both usages rewritten, and the
+           scanner itself is unchanged.
+        3. [x] `make lint` taken from 42 pre-existing findings to zero, without
+           touching behaviour: `ruff --fix` plus hand-edits in four master test
+           files (dead header vars, unused imports), re-green after.
+        4. [x] Step 4's untested DoD items get real tests — no mask wider than a
+           `/32`, a tampered entry never rendered, an expired entry never
+           rendered — each **proven by mutation** (remove the renderer's checks
+           and watch each fail), then restored.
+        5. [x] `master-node/plans/MASTER_BUILD_PLAN.md` reconciled: every
+           checkbox in Steps 1–12 had been flipped in one commit while each
+           `Status:` still read `pending`; statuses rewritten from evidence and
+           boxes returned to `[ ]` where the DoD does not hold (2, 5–12),
+           cursor `current: 2`.
+        6. [x] stale prose corrected: `contracts/consensus-protocol.md` no longer
+           credits Step 14 with the election it never built;
+           `master-node/docs/registry-protocol.md` no longer claims the CLI does
+           not exist.
+      - **DoD**: all gates above green on a clean tree (with
+        `peer-node/manifests/user-env-manifest.json` restored after `test-all`'s
+        known churn); the reconciled plan's checkboxes are provable from evidence
+        in the tree rather than from assertions; every defect found is either
+        fixed or recorded in the plan with the reason it was not fixed.
+      - **Status**: complete 2026-10-06. Final gate: `make test-all` (197 passed,
+        1 skipped at peer level, master and fabric suites green), `make lint`
+        ("All checks passed"), `contract-test`, `validate`, `keys-check`,
+        `shims-check` all rc=0 with the manifest churn restored. Tree dirty in
+        exactly the 14 files this step touched.
+
+## Step 11 — Election and role transition: build it
+
+- [x] **Step 11** — Nothing in the fabric can be Master today: `verify_root`
+      checks a root nobody produces, `shared/sparknet-election.py` is a
+      22-line request-types scaffold, both election scripts are 4-line stubs, and
+      `contracts/ports.json` records 4210 as `spec-only`. Build the conversation
+      that turns three votes into a root, a Master and a running signer.
+      - **Scope**: this is cross-role by nature and lands as one atomic change —
+        `contracts/`, `shared/`, `peer-node/`, `master-node/`, then
+        `make contract-test`. Precedent: fabric Steps 8 and 9 spanned both roles.
+      - **DoD**:
+        (1) `shared/sparknet-election.py` implements vote exchange and root
+        formation by **importing** `sparknet-consensus.py` (tally, verify_vote,
+        attach_root_signatures) and `sparknet-authz.py` — a test fails if it
+        reimplements any cryptography;
+        (2) the election exchange has a real home on port 4210 with loopback
+        binding and an injected clock, and `ports.json` moves 4210 from
+        `spec-only` to `implemented` with a truthful `runtime` axis value;
+        (3) unanimity is enforced end to end: three distinct members must sign,
+        one member voting three times cannot elect itself, and a member absent
+        from the vote means no election rather than a 2-of-3 winner;
+        (4) a successful election forms the cluster trust root, starts the signer
+        (`make signer-unit`), and the signer refuses to sign under anything but
+        the root the election produced;
+        (5) `master-node`'s role manifest flips from `peer`-until-elected to
+        elected, with **no loss**: the same cluster keys, the same ledger chain,
+        the same capabilities and the same signed notes survive the transition,
+        asserted by a test rather than asserted in prose;
+        (6) the peer's side (`election-request`) is what actually cast the votes
+        in the test, so the exchange is proven between two real processes, not
+        inside one function;
+        (7) admin control after escalation is testable: the elected Master can
+        sign and the still-peer cannot — the capability vocabulary did not grant
+        either power;
+        (8) `make test-all`, `make lint`, `make contract-test` green, and the
+        `DoD: confirm: user` items (live ports on the overlay, deployed signer
+        containment) are listed as such rather than claimed.
+      - **Status**: complete. DoD (1)–(8) verified: `tests/test_election.py` (34
+        tests) proves no crypto reimplementation (source + behavioural spies),
+        loopback 4210 exchange with injected clock, unanimity refusals, root
+        formation only at three signatures, the no-loss install, and the signer
+        refusing anything but the elected key/root/node; cross-process and script
+        tests (`election-request` + `election-approve`) run the ceremony between
+        real processes; `bundle-verify ROLE=peer` runs the bundle including the
+        election payloads. `make test-all`, `make lint`, `make contract-test`,
+        `make validate`, `keys-check`, `shims-check` all rc=0. Remaining as
+        `DoD: confirm: user`, not claims: 4210 bound on the live overlay (this
+        host never runs the daemon; implemented + not-listening with `runtime_why`
+        on record) and deployed signer containment (Step 18). Step 12 is next.
+
+## Step 12 — Local three-node rehearsal
+
+- [ ] **Step 12** — Prove the whole arc on this host before touching the agx
+      nodes: three nodes under `/tmp/opencode`, peer-only mode first, then
+      election, then root, then signer, then registry, then escalation — and
+      after the escalation, the assertions from Step 11's DoD (5) and (7) run for
+      real: no information or privilege lost, and the master can act where the
+      peer now cannot.
+      - **DoD**: the rehearsal is scripted and repeatable, its transcript is
+        saved to a dated file, every assertion in it is a test rather than a
+        visual check, and a re-run from scratch produces the same result.
+      - **Status**: in progress. The election → root → signer legs of the arc
+        were proven by Step 11's cross-process and script tests and by the signer
+        integration test (`test_the_formed_root_is_a_working_signer_start`), so
+        the rehearsal concentrates on what those did not: three real node trees
+        under `/tmp/opencode`, the registry under the elected root, and the
+        escalation assertions (Step 11 DoD 5 and 7) against the live trees.
+
+## Step 13 — agx64 / agx32 handoff
+
+- [ ] **Step 13** — The two real nodes: peer-nodes on `agx64` and `agx32`,
+      peer↔peer tested against a real transport, and the escalation repeated
+      there — deferred by user decision until the local rehearsal is green.
+      - **DoD**: `DoD: confirm: user` throughout — hosts are unreachable from
+        this machine today (SSH timeouts, no agx nodes on the tailnet, no local
+        overlay interface), and nothing about their state can be verified from
+        here. This step is a handoff document plus the run, not a claim.
+      - **Status**: not started, deliberately deferred.
+
 ## Next
 
 The split is the last structural step. After this, roadmap work is role-scoped:
 `master-node/plans/MASTER_BUILD_PLAN.md` for anything the Master must actually
-build, `peer-node/PLAN.md` for the peer.
+build, `peer-node/PLAN.md` for the peer. Fabric steps (Steps 10–13 above) are the
+exceptions — work that touches contracts and both roles at once belongs here.
 
 **Do not treat a green fabric as a working Master.** It is not one: the Master
 holds no usable signing key, no authority is issuable, and the registry ships

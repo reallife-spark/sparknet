@@ -8,15 +8,23 @@ Updated: 2026-10-06
 
 ## Standing State
 
-- **Plan cursors**: root `PLAN.md` `current: done` — **Steps 8 (peer vault to a
-  numbered PARA layout with signed provenance) and 9 (the same migration for
-  `master-node/`, plus the Master prepared as infrastructure administrator) are
-  complete**. `peer-node/PLAN.md` `current: 2` (container first);
+- **Plan cursors**: root `PLAN.md` `current: 12` — Steps 8 (peer vault) and 9
+  (master vault) complete; **Step 10 (verification audit) complete; Step 11
+  (election + role transition) complete** — a three-member ceremony now produces
+  a signed cluster trust root, flips exactly one identity to master with no loss,
+  and starts the isolated signer (34 tests, cross-process + scripts + live socket;
+  bundle-verify green). The roadmap is written out as Step 12 (local three-node
+  rehearsal — **being worked**, election/root/signer legs already proven, registry
+  + escalation arc remains) and Step 13 (agx64/agx32 handoff, deferred by user
+  decision).
+  `peer-node/PLAN.md` `current: 2` (container first);
   `master-node` `current: 2` — Phase 0 (13–18: consensus, parity, isolated signer,
-  admin surface), honest verification (19) and the **keypair/registry substrate
-  (1)** are complete; **Steps 2–12 remain unbuilt** and the cursor points at the
-  first of them. The peer build-out is `peer-node` Steps 2–8: container, grants,
-  bridge, Open WebUI, conversation passing, `MASTERSPIKE`, sharing regime.
+  admin surface), honest verification (19), the **keypair/registry substrate (1)**
+  and, as measured on 2026-10-06, **Steps 3 and 4** are complete; **Steps 2 and
+  5–12 are unbuilt** and the cursor points at the first of them (Step 2, whose DoD
+  is contradicted, not merely unimplemented). The peer build-out is `peer-node`
+  Steps 2–8: container, grants, bridge, Open WebUI, conversation passing,
+  `MASTERSPIKE`, sharing regime.
 - **Both role vaults now store content in `00_System`–`07_Archives`.** Legacy
   category names in `peer-node/` and `master-node/` are symlinks (shims), so the
   wiki skills and old instructions still resolve; `make shims-check` proves no
@@ -65,8 +73,9 @@ Updated: 2026-10-06
 - **Authority is key possession, not a capability grant.** A peer with the whole
   capability vocabulary but no private key can never grant, revoke or escalate.
 - **The Master role's Phase 0 and its own boundary work are built — but it is not
-  a working fabric** (build plan Steps 13–19 done; Steps 1–12 unbuilt; cursor at
-  1). It has `scripts/`, `services/`, `systemd/`, `manifests/`, `blockchain/` and
+  a working fabric** (build plan Steps 13–19 done; Steps 1 and 3–4 measured
+  complete; Steps 2 and 5–12 unbuilt; cursor at 2). It has `scripts/`,
+  `services/`, `systemd/`, `manifests/`, `blockchain/` and
   `security/`, and runs the peer's
   services **by path** — `make -C master-node parity` proves the resolution and
   the bundle check proves it landed inside the extracted bundle.
@@ -77,7 +86,24 @@ Updated: 2026-10-06
   `make units` because enabling a key-holder is the election's decision.
   What is missing is not a fault but a step: `shared/sparknet-consensus.py`
   verifies a trust root and cannot produce one, so nothing makes a node Master and
-  the signer has nothing to bind to in practice.
+  the signer has nothing to bind to in practice. Root `PLAN.md` Step 11 was that
+  step — it is now built (the consensus module is still where verification lives;
+  `sparknet-election.py` produces the root and is proven to contain no
+  reimplemented crypto), and the two confirm-user items (live overlay port,
+  deployed signer containment) remain unclaimed rather than asserted.
+- **Claim defects the 2026-10-06 audit found (all recorded where they were found,
+  not fixed silently).** (a) `master-node`'s Steps 1–12 all had `[x]` boxes
+  against `Status: pending` lines — the boxes were bulk-flipped in one commit and
+  the statuses never written; the plan now carries measured statuses per step.
+  (b) `make keys-check` failed on a clean tree because the test corpus pasted the
+  PEM literal the scanner searches for — the marker is assembled at runtime now.
+  (c) `master-node/manifests/registry.schema.json` validates nothing: it demands
+  `role`/`1.0.0`/`signature` where the shipped peer registry has no `role`,
+  `schema_version: "1.0"` (pinned by a peer test) and the signer emits
+  `signature_b64`. Two roles, two shapes, neither matching the schema — the
+  canonical shape is an open contract decision (master build plan Step 2).
+  (d) Steps 7–10 of the master plan were "verified" by tests that read the
+  scaffold's source text instead of binding anything; 7–8 lines each.
 - **The wiki suite is vendored** at `.opencode/skills/` (31 skills, MIT). No
   global skill farm dependency. `make wiki-sync` re-vendors, `make wiki-verify`
   proves no drift.
