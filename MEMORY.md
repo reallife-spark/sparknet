@@ -4,19 +4,22 @@
 > The plan and its cursor live in `PLAN.md` — this file mirrors it, it does not
 > own it. Per-session detail belongs in `sessions/YYYY-MM-DD.md`.
 
-Updated: 2026-10-06
+Updated: 2026-10-07
 
 ## Standing State
 
-- **Plan cursors**: root `PLAN.md` `current: 12` — Steps 8 (peer vault) and 9
+- **Plan cursors**: root `PLAN.md` `current: 13` — Steps 8 (peer vault) and 9
   (master vault) complete; **Step 10 (verification audit) complete; Step 11
   (election + role transition) complete** — a three-member ceremony now produces
   a signed cluster trust root, flips exactly one identity to master with no loss,
   and starts the isolated signer (34 tests, cross-process + scripts + live socket;
-  bundle-verify green). The roadmap is written out as Step 12 (local three-node
-  rehearsal — **being worked**, election/root/signer legs already proven, registry
-  + escalation arc remains) and Step 13 (agx64/agx32 handoff, deferred by user
-  decision).
+  bundle-verify green). **Step 12 (local three-node rehearsal) complete** — the
+  whole arc runs live on three real node trees under `/tmp/opencode/rehearsal`
+  (51 checks/0 failures, dated transcript, repeatable);
+  `scripts/sparknet-rehearsal.sh` is the reproducible harness, and the rehearsal
+  also exposed two real signer CLI str/Path defects now fixed with regression
+  tests. Step 13 (agx64/agx32 handoff) is next — written out but **still
+  deferred by user decision** (hosts unreachable).
   `peer-node/PLAN.md` `current: 2` (container first);
   `master-node` `current: 2` — Phase 0 (13–18: consensus, parity, isolated signer,
   admin surface), honest verification (19), the **keypair/registry substrate (1)**

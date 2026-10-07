@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
-updated: 2026-10-06
-current: 12
+updated: 2026-10-07
+current: 13
 ---
 
 # sparknet — Active Plan
@@ -411,7 +411,7 @@ current: 12
 
 ## Step 12 — Local three-node rehearsal
 
-- [ ] **Step 12** — Prove the whole arc on this host before touching the agx
+- [x] **Step 12** — Prove the whole arc on this host before touching the agx
       nodes: three nodes under `/tmp/opencode`, peer-only mode first, then
       election, then root, then signer, then registry, then escalation — and
       after the escalation, the assertions from Step 11's DoD (5) and (7) run for
@@ -420,12 +420,42 @@ current: 12
       - **DoD**: the rehearsal is scripted and repeatable, its transcript is
         saved to a dated file, every assertion in it is a test rather than a
         visual check, and a re-run from scratch produces the same result.
-      - **Status**: in progress. The election → root → signer legs of the arc
-        were proven by Step 11's cross-process and script tests and by the signer
-        integration test (`test_the_formed_root_is_a_working_signer_start`), so
-        the rehearsal concentrates on what those did not: three real node trees
-        under `/tmp/opencode`, the registry under the elected root, and the
-        escalation assertions (Step 11 DoD 5 and 7) against the live trees.
+      - **Status**: complete 2026-10-07. `scripts/sparknet-rehearsal.sh` builds
+        a fresh master bundle, extracts three node trees under
+        `/tmp/opencode/rehearsal`, personalises identities (node-alpha/beta/
+        gamma, distinct overlay + wireguard keys), mints cluster keys out of
+        band, and runs every node in peer-only mode first (validate + identity
+        stays `peer` + no trust root). A three-process election then runs against
+        the loopback exchange and the formed root is asserted: the winner's
+        identity flips to `master` with the operational key held, the losers stay
+        peers and write no root doc; Step 11 DoD (5) is checked as a real
+        before/after **no-loss** comparison (every unchanged tree file, ledger
+        and identity field byte-identical); the isolated signer binds to that
+        root and answers the `root-id` of the root alone with capability set
+        exactly `["sign"]`; the elected master signs a registry entry (DoD 7)
+        that a still-peer verifies by the root's public key alone; and the
+        escalation refusals hold live — the loser's own operational key, a node
+        the root does not name, and a tampered root are all refused. The
+        master-side `sparknet-registry-sign.sh` publishes under the elected key
+        and a still-peer verifies that entry by the root alone. 51 checks, 0
+        failures each run; transcript
+        `/tmp/opencode/rehearsal/rehearsal-2026-10-07.log`. The rehearsal also
+        exposed and drove fixes for two real signer CLI defects (see below).
+        DoD met: scripted and repeatable, dated transcript, every assertion a
+        test, re-runs identical (root ids differ per run via the injected clock;
+        assertions compare shapes, not fixed values).
+        - **Signer CLI defects caught by the rehearsal, not by the suites**: the
+          signer refused to start through its own command line. `--socket` is
+          kept as an unconverted string so the `tcp://` scheme check can see it,
+          but `check_socket_path` and `serve` then called `Path`-only methods
+          (`str.resolve()` / `str.exists()`) on it. Both now normalise with
+          `Path(...)` after the scheme check; `tests/test_signer_isolation.py`
+          gained a regression test for each (string socket accepted by the
+          checker, and the serve transport binding an argparse-shaped string).
+          The rehearsal's socket-up gate also now waits for a *real connection*
+          (`pong`) rather than a socket file, closing a bind→listen race where a
+          client could connect between `bind()` and `listen()` and see
+          ECONNREFUSED.
 
 ## Step 13 — agx64 / agx32 handoff
 
@@ -436,7 +466,9 @@ current: 12
         this machine today (SSH timeouts, no agx nodes on the tailnet, no local
         overlay interface), and nothing about their state can be verified from
         here. This step is a handoff document plus the run, not a claim.
-      - **Status**: not started, deliberately deferred.
+      - **Status**: not started, deliberately deferred until the local
+        rehearsal was green. Step 12 is now green; this step remains on hold
+        until the user lifts the deferral.
 
 ## Next
 
