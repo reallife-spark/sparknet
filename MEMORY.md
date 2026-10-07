@@ -18,8 +18,12 @@ Updated: 2026-10-07
   (51 checks/0 failures, dated transcript, repeatable);
   `scripts/sparknet-rehearsal.sh` is the reproducible harness, and the rehearsal
   also exposed two real signer CLI str/Path defects now fixed with regression
-  tests. Step 13 (agx64/agx32 handoff) is next — written out but **still
-  deferred by user decision** (hosts unreachable).
+  tests. Step 13 (agx64/agx32 handoff) is next — deferral lifted 2026-10-07 and
+  **in progress**: the handoff document `contracts/deployment-runbook.md` is
+  written and the run's confirm-user checklist is defined, but **the run is
+  blocked — both hosts still unreachable** (no ping/SSH; this host on
+  `192.168.178.0/24`, agx64/agx32 on `192.168.10.64`/`192.168.20.32`). Needs
+  the user to power them on or provide a route.
   `peer-node/PLAN.md` `current: 2` (container first);
   `master-node` `current: 2` — Phase 0 (13–18: consensus, parity, isolated signer,
   admin surface), honest verification (19), the **keypair/registry substrate (1)**

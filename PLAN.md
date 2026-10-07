@@ -466,9 +466,24 @@ current: 13
         this machine today (SSH timeouts, no agx nodes on the tailnet, no local
         overlay interface), and nothing about their state can be verified from
         here. This step is a handoff document plus the run, not a claim.
-      - **Status**: not started, deliberately deferred until the local
-        rehearsal was green. Step 12 is now green; this step remains on hold
-        until the user lifts the deferral.
+      - **Status**: in progress (deferral lifted 2026-10-07). The handoff
+        document — `contracts/deployment-runbook.md` — is written: it translates
+        the Step 12 rehearsal to real-host mechanics (full-node bundle to all
+        three hosts, state-dir cluster keys, overlay before the election, one
+        exchange host bound to the overlay, each node's own ceremony, the signer
+        via `sparknet-master-signer.service`, staged peer↔peer boundaries since
+        ports 4201–4203 remain spec-only) and a confirm-user checklist for the
+        run. Preparing the runbook exposed and fixed a real handoff-blocking
+        defect: the signer unit's `ExecStart` called a `sparknet-signer.py
+        serve` subcommand the CLI does not have (argparse rejected it, so the
+        unit would have died on first start after the election) — the unit now
+        matches the CLI and a mutation-proven regression test parses the unit's
+        own ExecStart against argparse. Stale `master-node/docs/role-transition.
+        md` (pre-election "current master approves" flow) rewritten to the built
+        unanimous ceremony. **The run itself is blocked**: both hosts are still
+        unreachable (SSH/ping timeout 2026-10-07; this host sits on
+        `192.168.178.0/24`, agx hosts on `192.168.10.64`/`192.168.20.32`).
+        Proceeding requires the user to power the hosts on or provide a route.
 
 ## Next
 
