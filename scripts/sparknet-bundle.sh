@@ -192,6 +192,26 @@ verify_bundle() {
   return 1
 }
 
+usage() {
+  cat <<'USAGE'
+sparknet-bundle.sh — assemble a standalone node bundle for one role
+
+Usage:
+  scripts/sparknet-bundle.sh <peer|master> [--out DIR] [--from-git REF]
+  scripts/sparknet-bundle.sh --verify <archive.tar.gz>
+  scripts/sparknet-bundle.sh --help
+
+Options:
+  --out DIR       write archives under DIR (default: dist/)
+  --from-git REF  build from a committed ref instead of the working tree
+  --verify        extract ARCHIVE elsewhere and run its deploy sequence there
+
+The bundle reproduces the repository layout (role subvault + contracts/ +
+shared/ + .opencode/ + opencode.json), because a role subvault alone is not a
+deployment.
+USAGE
+}
+
 role=""
 out_root="$REPO_ROOT/dist"
 from_git=""
@@ -204,6 +224,7 @@ while [ $# -gt 0 ]; do
     --from-git=*) from_git="${1#*=}"; shift ;;
     --verify)    verify="$2"; shift 2 ;;
     --verify=*)  verify="${1#*=}"; shift ;;
+    -h|--help)   usage; exit 0 ;;
     -*)          die "unknown option: $1" ;;
     *)           role="$1"; shift ;;
   esac
@@ -214,7 +235,7 @@ if [ -n "$verify" ]; then
   exit $?
 fi
 
-[ -n "$role" ] || die "usage: sparknet-bundle.sh <peer|master> [--out DIR] [--from-git REF]"
+[ -n "$role" ] || { usage >&2; exit 2; }
 case "$role" in
   peer|master) ;;
   *) die "role must be 'peer' or 'master', got: $role" ;;
@@ -308,7 +329,7 @@ fi
 |---|---|
 | `peer-node/` / `master-node/` | the role itself |
 | `contracts/` | the overlay, capability, identity, port and guard contracts this role obeys |
-| `shared/` | the canonical implementations — signed authorization and consensus |
+| `shared/` | the canonical implementations — signed authorization, consensus, plus the http/liveness/oob layers |
 | `.opencode/skills/` | the vendored wiki skill suite — no global skill farm needed |
 | `.opencode/agents/` | the role-aware agents — `vault`, and the node orchestrator |
 | `opencode.json` | registers the skills and agent with opencode |

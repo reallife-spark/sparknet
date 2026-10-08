@@ -129,9 +129,9 @@ Wiki skills read the vault location from `.env` in this directory
 
 ## Wiki skill suite
 
-**Vendored in this repository** at `.opencode/skills/` (31 skills, MIT, pinned
-upstream) — there is no global skill farm dependency, so a bare clone or an
-extracted node bundle can run the whole suite. Re-vendor with
+**Vendored in this repository** at `.opencode/skills/` (33 skills: 32 vendored +
+1 local, MIT, pinned upstream) — there is no global skill farm dependency, so a
+bare clone or an extracted node bundle can run the whole suite. Re-vendor with
 `make wiki-sync`, verify with `make wiki-verify`.
 
 Skills resolve the vault from the **nearest** `.env`, which is what keeps a role

@@ -25,6 +25,36 @@
 
 set -euo pipefail
 
+# This script is sourced, not executed — the whole point is that its exports
+# reach the caller. Guard the direct-execution path anyway, so `--help` is
+# answered instead of the resolver running for a caller that would throw the
+# result away, and so a bare execution says what to do rather than half-running.
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+  case "${1:-}" in
+    -h|--help)
+      cat <<'USAGE'
+sparknet-wiki-env.sh — resolve the wiki vault for a sparknet role (source it)
+
+Usage:
+  source scripts/sparknet-wiki-env.sh           # from a role subvault
+  scripts/sparknet-wiki-env.sh --help            # print this text (direct run)
+  SPARKNET_ALLOW_ANY_VAULT=1 source ...          # override, for repo tooling
+
+Exports: SPARKNET_ROLE, SPARKNET_VAULT_ROOT, VAULT_PATH, VAULT_LINK_FORMAT,
+         WIKI_STAGED_WRITES, SPARKNET_WIKI_ENV_FILE
+
+Fails loudly (exit 1) when the role .env is missing, because the skills'
+fallback (~/.wiki/config) would file knowledge into the wrong vault.
+USAGE
+      exit 0 ;;
+    *)
+      printf 'sparknet-wiki-env: this script is sourced, not executed.\n' >&2
+      printf 'Use:  source scripts/sparknet-wiki-env.sh\n' >&2
+      printf 'Or:   scripts/sparknet-wiki-env.sh --help\n' >&2
+      exit 2 ;;
+  esac
+fi
+
 _wiki_env_die() {
   printf '\nsparknet wiki preflight FAILED: %s\n\n' "$1" >&2
   printf 'The vendored wiki skills pick their vault by walking up from $PWD for a\n' >&2

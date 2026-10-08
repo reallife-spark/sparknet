@@ -18,6 +18,7 @@ exercised for its guard clauses.
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -151,3 +152,140 @@ def test_env_init_reports_a_stale_env_as_stale(tmp_path: Path):
     assert f'VAULT_PATH="{fake_vault / "peer-node"}"' in stale_env.read_text(), (
         "the stale .env was not rewritten to this vault"
     )
+
+# --- the fabric --help contract (fabric PLAN Step 14) ------------------------
+#
+# peer-node has enforced `--help` on its own scripts since its Step 5
+# (peer-node/tests/test_scripts.py::test_every_script_has_help); the fabric
+# scripts and the master role were outside that net, and the gap was not
+# theoretical. `sparknet-rehearsal.sh --help` executed the whole three-node
+# rehearsal: the first statements after the (absent) argument check were
+# `mkdir -p "$WORK"`, `: > "$TRANSCRIPT"` and a `tee` exec-redirect, so a help
+# request built node trees under /tmp/opencode, truncated the dated transcript
+# and bound election port 4210. Worse than a failure, because it looks like a
+# success. The same class showed up twice more on the master role:
+# `killswitch --help` handed the flag to the killswitch itself (as root, that
+# is the killswitch), and `keygen --help` ran the generator — on a machine with
+# no keys it would have created them while answering a question.
+#
+# So the contract is: `--help` exits 0, prints something, and *does nothing*.
+
+# Direct execution of a sourced-only library must stay silent rather than
+# print usage — peer's suite asserts exactly that
+# (test_env_library_stays_quiet_when_executed), so silence is its contract.
+SOURCE_ONLY_QUIET = {
+    "peer-node/scripts/sparknet-env.sh",
+}
+
+#: shared/*.py with a __main__ guard are CLIs and must answer --help. The
+#: modules without one (consensus, liveness) are libraries: executing them
+#: runs no code at all, which is harmless by construction rather than by
+#: contract, so they are excluded with the reason recorded here.
+def _shared_clis() -> list[Path]:
+    out = []
+    for path in sorted((REPO_ROOT / "shared").glob("sparknet-*.py")):
+        if '__name__ == "__main__"' in path.read_text():
+            out.append(path)
+    return out
+
+
+def _porcelain() -> str:
+    """The working tree, as git sees it: modified, staged and untracked files."""
+    proc = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=REPO_ROOT,
+        capture_output=True, text=True, check=True,
+    )
+    return proc.stdout
+
+
+def _help_env(tmp_path: Path) -> dict[str, str]:
+    """A rehearsal tree that must never be created while answering --help."""
+    env = dict(os.environ)
+    env["SPARKNET_REHEARSAL_DIR"] = str(tmp_path / "rehearsal")
+    return env
+
+
+@pytest.mark.parametrize(
+    "script",
+    [p for p in shell_scripts() if str(p.relative_to(REPO_ROOT)) not in SOURCE_ONLY_QUIET],
+    ids=lambda p: str(p.relative_to(REPO_ROOT)),
+)
+def test_fabric_every_script_has_help(script: Path, tmp_path: Path) -> None:
+    """Every script the fabric ships answers --help — without doing the work.
+
+    Three assertions, all load-bearing: exit 0 (a help request is a success),
+    non-empty output (a silent exit 0 is how `--help` looked before it was a
+    contract), and an untouched working tree plus an uncreated rehearsal dir
+    (the actual regression: scripts that executed their bodies on --help).
+    """
+    before = _porcelain()
+    proc = subprocess.run(
+        [str(script), "--help"], cwd=REPO_ROOT, env=_help_env(tmp_path),
+        capture_output=True, text=True, check=False, timeout=60,
+    )
+    name = script.name
+    assert proc.returncode == 0, f"{name} --help exited {proc.returncode}:\n{proc.stdout}{proc.stderr}"
+    assert (proc.stdout + proc.stderr).strip(), f"{name} --help printed nothing"
+    assert _porcelain() == before, (
+        f"{name} modified the working tree while answering --help — it executed "
+        "part of its body instead of printing usage"
+    )
+    assert not (tmp_path / "rehearsal").exists(), (
+        f"{name} created its working tree on --help"
+    )
+
+
+@pytest.mark.parametrize("cli", _shared_clis(), ids=lambda p: p.name)
+def test_every_shared_cli_has_help(cli: Path, tmp_path: Path) -> None:
+    """shared/ modules with a __main__ are CLIs too.
+
+    `sparknet-oob.py --help` used to exit 1 (usage to stderr), which made a
+    help request look like a failure; the exit-0 path is asserted here.
+    """
+    before = _porcelain()
+    proc = subprocess.run(
+        ["python3", str(cli), "--help"], cwd=REPO_ROOT, env=_help_env(tmp_path),
+        capture_output=True, text=True, check=False, timeout=60,
+    )
+    assert proc.returncode == 0, f"{cli.name} --help exited {proc.returncode}:\n{proc.stdout}{proc.stderr}"
+    assert (proc.stdout + proc.stderr).strip(), f"{cli.name} --help printed nothing"
+    assert _porcelain() == before, f"{cli.name} wrote to the working tree on --help"
+
+
+def test_rehearsal_help_never_touches_its_working_tree(tmp_path: Path) -> None:
+    """The specific regression behind the contract, asserted on its own.
+
+    Rehearsal is the one script where answering --help by running the body is
+    actively destructive: it truncates the dated transcript before printing
+    anything, so the failure mode is silent data loss plus a surprise election
+    ceremony on port 4210.
+    """
+    work = tmp_path / "rehearsal"
+    proc = subprocess.run(
+        [str(REPO_ROOT / "scripts" / "sparknet-rehearsal.sh"), "--help"],
+        cwd=REPO_ROOT, env=_help_env(tmp_path),
+        capture_output=True, text=True, check=False, timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "Usage:" in proc.stdout, f"no usage block:\n{proc.stdout}"
+    assert not work.exists(), "rehearsal created its working tree on --help"
+    assert "==" not in proc.stdout.splitlines()[0], (
+        "rehearsal started running steps instead of printing usage"
+    )
+
+
+def test_rehearsal_refuses_arguments_it_does_not_take(tmp_path: Path) -> None:
+    """A surprise argument must be refused, not ignored.
+
+    Ignoring it is how a stray flag used to fall through into the ceremony
+    itself; exit 2 keeps `--help` (0) and real runs (0) distinct from misuse.
+    """
+    work = tmp_path / "rehearsal"
+    proc = subprocess.run(
+        [str(REPO_ROOT / "scripts" / "sparknet-rehearsal.sh"), "--dry-run"],
+        cwd=REPO_ROOT, env=_help_env(tmp_path),
+        capture_output=True, text=True, check=False, timeout=60,
+    )
+    assert proc.returncode == 2, f"unexpected argument exited {proc.returncode}"
+    assert "unexpected argument" in proc.stderr
+    assert not work.exists(), "rehearsal began a run on a refused argument"

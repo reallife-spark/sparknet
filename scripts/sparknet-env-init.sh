@@ -16,6 +16,24 @@
 # wherever the repository is checked out.
 set -euo pipefail
 
+# --help before anything resolves a target: without this guard, `--help`
+# reached the directory check and exited 1 as "not a directory: --help".
+case "${1:-}" in
+  -h|--help)
+    printf '%s\n' \
+      'sparknet-env-init.sh — create a vault'"'"'s .env and wiki directory skeleton' \
+      '' \
+      'Usage:' \
+      '  scripts/sparknet-env-init.sh <role-dir|fabric-root> [--force]' \
+      '  scripts/sparknet-env-init.sh --help' \
+      '' \
+      'With no argument, defaults to the role subvault you are standing in' \
+      '(peer-node/, master-node/) or the fabric root. --force overwrites an' \
+      'existing .env. Paths written are absolute, so the result is correct' \
+      'wherever the repository is checked out.'
+    exit 0 ;;
+esac
+
 target="${1:-}"
 force=0
 [ "${2:-}" = "--force" ] && force=1

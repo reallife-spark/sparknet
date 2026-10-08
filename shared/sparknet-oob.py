@@ -172,6 +172,20 @@ def make_handoff(envelope: dict[str, Any]) -> bytes:
 if __name__ == "__main__":
     import sys
 
+    if "-h" in sys.argv or "--help" in sys.argv:
+        # Exit 0 on stdout: a usage request is a success, not a failure. The
+        # fallback below stays exit 1 because it means "you passed something
+        # this tool does not understand".
+        print(
+            "usage: sparknet-oob.py --self-test | --help\n"
+            "\n"
+            "--self-test  derive a stanza key from a fixed code+context and\n"
+            "             verify it (prints reason=ok and the handoff key length)\n"
+            "--help       print this text and exit\n"
+            "\n"
+            "Library: generate_oob, derive_stanza_key, verify_stanza, make_handoff."
+        )
+        sys.exit(0)
     if "--self-test" in sys.argv:
         code = generate_oob()
         ctx = b"peer-a\x00peer-b\x00offer-123"

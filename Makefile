@@ -3,9 +3,9 @@
 # This repository is three things at once:
 #
 #   contracts/ + shared/   the cross-role contract and its single implementation
+
 #   peer-node/             a working node — the only role that is implemented
-#   master-node/           the elected signing role — built (Steps 15-16); the
-#                           isolated signer and election land in 17/14
+#   master-node/           the elected signing role — built (Steps 15–18); signer deployed on agx64, election proven live 2026-10-07; Steps 19+ remain as roadmapped roles.
 #   .opencode/skills/      the wiki skill suite, vendored so a node needs no
 #                          global skill farm
 #
@@ -54,7 +54,7 @@ layout: ## Show the repository layout
 	  "├── master-node/         the elected signing role    [BUILT]" \
 	  "├── scripts/             fabric-level tooling" \
 	  "├── tests/               fabric + vendored-skill tests" \
-	  "└── .opencode/skills/    vendored wiki suite (31 skills)"
+	  "└── .opencode/skills/    vendored wiki suite (33 skills: 32 vendored + 1 local)"
 
 validate: ## Validate every role that has an implementation
 	@$(MAKE) --no-print-directory -C peer-node validate

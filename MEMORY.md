@@ -4,18 +4,16 @@
 > The plan and its cursor live in `PLAN.md` — this file mirrors it, it does not
 > own it. Per-session detail belongs in `sessions/YYYY-MM-DD.md`.
 
-Updated: 2026-10-07
+Updated: 2026-10-08
 
 ## Standing State
 
-- **Plan cursors**: root `PLAN.md` `current: done` — Steps 8 (peer vault) and 9
-  (master vault) complete; **Step 10 (verification audit) complete; Step 11
-  (election + role transition) complete** — a three-member ceremony now produces
-  a signed cluster trust root, flips exactly one identity to master with no loss,
-  and starts the isolated signer (34 tests, cross-process + scripts + live socket;
-  bundle-verify green). **Step 12 (local three-node rehearsal) complete** — the
-  whole arc runs live on three real node trees under `/tmp/opencode/rehearsal`
-  (51 checks/0 failures, dated transcript, repeatable);
+- **Plan cursors**: root `PLAN.md` `current: done` — **Step 14 (fabric claims
+  conformance + the `--help` contract) complete 2026-10-08**; Steps 1–14 all
+  closed (each DoD in `PLAN.md`). New fabric-level roadmap work opens a new
+  step rather than reopening one. **Step 12 (local three-node rehearsal)
+  complete** — the whole arc runs live on three real node trees under
+  `/tmp/opencode/rehearsal` (51 checks/0 failures, dated transcript, repeatable);
   `scripts/sparknet-rehearsal.sh` is the reproducible harness, and the rehearsal
   also exposed two real signer CLI str/Path defects now fixed with regression
   tests. **Step 13 (agx64/agx32 handoff) COMPLETE 2026-10-07** — the handoff
@@ -70,8 +68,8 @@ Updated: 2026-10-07
   confirm-user items answered; operator acknowledged 2026-10-07 and closed
   Phase 9 by decision ("Close without exercising")** — the destructive
   rollback / replace-Master legs in `contracts/deployment-runbook.md` §Phase 9
-  stay documented-but-unexecuted, so the live pair is left up. `PLAN.md` is
-  terminal.
+  stay documented-but-unexecuted, so the live pair is left up. `PLAN.md` Steps
+  1–13 closed 2026-10-07; Step 14 opened 2026-10-08.
   `peer-node/PLAN.md` `current: 2` (container first);
   `master-node` `current: 2` — Phase 0 (13–18: consensus, parity, isolated signer,
   admin surface), honest verification (19), the **keypair/registry substrate (1)**
@@ -114,15 +112,19 @@ Updated: 2026-10-07
   listens on `10.100.0.1:8080`; `DoD: confirm: user`, master Step 18) and the
   overlay doesn't survive reboot on the tegra host (`CONFIG_WIREGUARD=n`;
   userspace `wireguard-go`) — restore via
-  `/root/scripts/sparknet-wg-restore.sh`. Phase 9's destructive legs
+  `/root/scripts/sparknet-wg-restore.sh`. The signer's missing client timeout
+  (`_serve_one` blocks with no read timeout) is recorded as **master build plan
+  Step 20**, deliberately unbuilt. Phase 9's destructive legs
   (rollback / replace-Master re-formation) are documented in
   `contracts/deployment-runbook.md` and deliberately not executed.
   **Outstanding, unclaimed:** rotating
   and revoking the old broad OAuth token from the split-day leak.
-- **This host can verify very little of the roadmap.** One peer, no master, no
-  second node, and no `nvidia-smi`, `wg` or `nft`. Steps needing a second node or
-  the Master are unit-testable at best and carry `DoD: confirm: user` (the
-  agx64/agx32 run was verified from the hosts themselves, per the runbook).
+- **Local gates prove the tree; the pair proves the fabric.** Everything
+  `make test-all` / `lint` / `bundle-verify` check is fully verifiable on this
+  host. Claims about the live pair (agx64/agx32) were verified from those hosts
+  themselves per the runbook; anything further needing a second node or the
+  Master carries `DoD: confirm: user` rather than a local pass. This host has
+  no GPU (`nvidia-smi`) and does not run the overlay itself.
 
 ## Key Standing Facts
 
@@ -163,9 +165,10 @@ Updated: 2026-10-07
   canonical shape is an open contract decision (master build plan Step 2).
   (d) Steps 7–10 of the master plan were "verified" by tests that read the
   scaffold's source text instead of binding anything; 7–8 lines each.
-- **The wiki suite is vendored** at `.opencode/skills/` (31 skills, MIT). No
-  global skill farm dependency. `make wiki-sync` re-vendors, `make wiki-verify`
-  proves no drift.
+
+- **The wiki suite is vendored** at `.opencode/skills/` (33 skills: 32 vendored +
+  1 local, MIT). No global skill farm dependency. `make wiki-sync` re-vendors,
+  `make wiki-verify` proves no drift.
 - **Skills resolve the nearest `.env`.** That is what keeps a role subvault
   honest. Run `make wiki-preflight` first and never work around a failure: the
   skills would silently write into the wrong vault.
@@ -194,12 +197,18 @@ Updated: 2026-10-07
 - **`bash -n` is not a shell test.** It accepts `if [ -n "$x" ]]; then` — bash
   reads `]]` as an argument — so the failure only appears at runtime, on a branch
   nothing exercises. `tests/test_shell.py` checks for it textually.
-- **Every script must handle `--help`.** `test_every_script_has_help` runs every
-  `peer-node/scripts/*.sh` with `--help` against the real vault root, so a script
-  without arg handling *executes its full body* on `--help`. That was the true
-  cause of the old `user-env-manifest.json` timestamp churn (identity-capture and
-  provision silently ran during the suite); both now exit 0 on `--help` without
-  writing. Any new script must do the same.
+- **Every script must handle `--help` — and answering it must do nothing.**
+  Fabric-wide since Step 14: `tests/test_shell.py::test_fabric_every_script_has_help`
+  runs all 33 shell scripts with `--help` and asserts rc 0, non-empty usage, an
+  unchanged repo porcelain and an uncreated rehearsal tree; peer's own
+  `test_every_script_has_help` covers the peer vault. A script without arg
+  handling *executes its full body* on `--help` — that was the old
+  `user-env-manifest.json` timestamp churn (identity-capture and provision ran
+  during the suite), and on the master role `--help` reached the killswitch and
+  the key generator. `tests/test_claims.py` locks the prose side: documented
+  skill count == disk count, forbidden stale phrases absent from live surfaces,
+  index contract-table completeness. Any new script and any new claim must do
+  the same.
 - **Relocate before declaring anything path-independent.** Four bugs only appeared
   when the tree ran from a different directory: a `.env` recomputed against an
   empty variable, a fabric root detected by its directory name, and a stale

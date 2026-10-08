@@ -16,6 +16,26 @@
 #               ships without .git and is therefore scanned on disk)
 set -euo pipefail
 
+# --help before any directory is scanned: without this guard, `--help` was
+# treated as a scan target, reported "not a directory", and the script
+# exited 1 FAILED.
+case "${1:-}" in
+  -h|--help)
+    printf '%s\n' \
+      'sparknet-keys-check.sh — no key material may be tracked, none world-readable' \
+      '' \
+      'Usage:' \
+      '  scripts/sparknet-keys-check.sh              scan the whole repository' \
+      '  scripts/sparknet-keys-check.sh [dir ...]    scan each directory standalone' \
+      '  scripts/sparknet-keys-check.sh --help' \
+      '' \
+      'Checks: tracked key-shaped filenames, tracked PEM private-key blocks,' \
+      '.state/keys/ modes (keys 0600, dir 0700), and the .gitignore backstop.' \
+      'Scans on disk when the directory has no .git (an extracted bundle).' \
+      'Exit 0 = clean, exit 1 = problems found.'
+    exit 0 ;;
+esac
+
 PATTERN='(\.ed25519|\.pem|\.key|\.seed)$|(^|/)privkey|(^|/)id_ed25519'
 REQUIRED_PATTERNS=('*.ed25519' '*.pem' '*.key' 'privkey*' 'id_ed25519*' '*.seed')
 # On-disk fallback only (a bundle has no .git): skip places where a key-shaped

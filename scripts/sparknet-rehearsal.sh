@@ -14,6 +14,36 @@
 # starts over at /tmp/opencode.
 set -euo pipefail
 
+# Argument handling FIRST — before $WORK is touched, the transcript is
+# truncated or output is redirected into it. Without this guard, running the
+# script with `--help` executed the entire rehearsal: node trees built,
+# transcript truncated, election port bound. Sourced-style invocation passes
+# no arguments; the script takes none by design.
+usage() {
+  cat <<'USAGE'
+sparknet-rehearsal.sh — Step 12 election-to-escalation rehearsal (local trees)
+
+Usage:
+  scripts/sparknet-rehearsal.sh          run the full rehearsal
+  scripts/sparknet-rehearsal.sh --help    print this text and exit
+
+Environment:
+  SPARKNET_REHEARSAL_DIR   tree root   (default: /tmp/opencode/rehearsal)
+  SPARKNET_ELECTION_PORT   ceremony port (default: 4210)
+  SPARKNET_ELECTION_WAIT   max seconds per wait (default: 120)
+
+The run writes a dated transcript under the tree root and starts over from
+scratch on every invocation. Nothing outside the tree root is modified.
+USAGE
+}
+
+case "${1:-}" in
+  "") : ;;                                   # no arguments: run the rehearsal
+  -h|--help) usage; exit 0 ;;
+  *) printf 'sparknet-rehearsal: unexpected argument: %s\n\n' "$1" >&2
+     usage >&2; exit 2 ;;
+esac
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PY="$REPO_ROOT/.venv/bin/python"
 ELECTION="$REPO_ROOT/shared/sparknet-election.py"

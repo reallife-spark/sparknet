@@ -18,9 +18,9 @@ Not one node — a fabric with two node roles and a shared contract:
 | `contracts/` | both | overlay, capabilities, identity, ports, guard protocol — the single source of truth |
 | `shared/` | both | `sparknet-authz.py`, the one canonical signing implementation |
 | `peer-node/` | peer | **implemented** — guard, anchor, dispatch, its own vault |
-| `master-node/` | master | **built** (Steps 15–16) — runs the peer's services by path, signs nothing yet |
+| `master-node/` | master | **built** (Steps 15–18); runs the peer's services by path; isolated signer deployed on agx64, election/signer arc proven live 2026-10-07 |
 | `scripts/` | both | fabric tooling: skill vendoring, env init, bundling |
-| `.opencode/skills/` | both | the vendored wiki skill suite (31 skills, MIT) |
+| `.opencode/skills/` | both | the vendored wiki skill suite (33 skills: 32 vendored + 1 local, MIT) |
 
 **A role subvault alone is not a deployment.** A peer cannot verify a signature
 without `contracts/` and `shared/`, so a bare `peer-node/` copy deliberately
@@ -38,6 +38,7 @@ make layout        # what exists, and what is merely specified
 make devtools      # optional: .venv with cryptography, pytest, ruff
 make env-init      # write each vault's .env and category skeleton
 make test-all      # every suite: contract, fabric, peer, master
+make contract-test # the cross-role check alone: contracts/ vs both roles
 make validate      # both roles' charters, plans and manifests
 ```
 
@@ -86,10 +87,8 @@ than a description.
 Details in `peer-node/docs/`, starting with `wireguard.md` and
 `node-authorization.md`.
 
-> **Nothing above is live-verified.** WireGuard handshakes, `nftables`,
-> `chattr +i` enforcement, systemd units and guard-apply have not been exercised
-> on a development host. Treat them as designed, not demonstrated. The Master
-> holds no usable key yet, so no approval can be issued at all.
+> **Verified live on agx64+agx32 (2026-10-07):** unanimous 2/2 election formed; `sparknet-master-signer.service` active and restart-stable; signed registry entry distributed to a peer and verified by the root alone; revoke→peer-inert→re-authorize cycle executed live one-peer-at-a-time; reboot survival on agx64 (signer unit comes back, ledger intact, peer auth still verifies); overlay handshakes + ICMP ping ~2 ms 0% loss over real NICs via the gateway UDP relay.
+> **Designed but undemonstrated on a dev host:** kernel WireGuard path (`CONFIG_WIREGUARD=n` here, so userspace `wireguard-go` + `/root/scripts/sparknet-wg-restore.sh`); `nftables` containment rules; `chattr +i` enforcement of protected paths; `guard-apply` with euid 0 and `--apply-enabled` (required, off by default). Phase 9's destructive legs (rollback / replace-Master re-formation) remain documented-but-unexecuted at operator choice.
 
 ## Configuration in `/etc`
 

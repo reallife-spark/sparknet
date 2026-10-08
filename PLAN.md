@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
 updated: 2026-10-08
-current: 14
+current: done
 ---
 
 # sparknet — Active Plan
@@ -50,8 +50,9 @@ current: 14
         upstream; (4) the one absolute cluster path is patched, and the patch is
         a reviewable file rather than an in-place edit; (5) a test fails if a
         vendored skill contains a host path.
-      - **Status**: complete. 31 skills; upstream
-        `github.com/Ar9av/obsidian-wiki` at `ec2b6bc`, MIT.
+      - **Status**: complete. 31 skills at the time of this step; the suite is
+        33 today (count asserted against disk by `tests/test_claims.py`);
+        upstream `github.com/Ar9av/obsidian-wiki` at `ec2b6bc`, MIT.
       - **Note**: `skill-creator` is copied from git-tracked files because both
         source working trees contain a 40-deep symlink chain that a filesystem
         copy would follow forever.
@@ -570,19 +571,45 @@ current: 14
         dated transcript at `/mnt/log/sparknet-handoff-2026-10-07.md` (3 addenda)
         and the answered confirm-user list at
         `/mnt/log/sparknet-handoff-2026-10-07-confirm.md` — both landed. The
-        fabric plan is now terminal; further roadmap work is role-scoped (see
-        `## Next`).
+        roadmap work from Step 13 onward is role-scoped (see `## Next`);
+        Step 14 below is the single fabric-level exception, opened 2026-10-08.
+
+
+## Step 14 — fabric claims conformance and the `--help` contract
+
+- [x] **Step 14** — Consume the drift class from this session: stale/false master-status claims on live surfaces *and* the unenforced `--help` contract at fabric level.
+      - **DoD**: (1) `README.md`, `index.md`, `PLAN.md`, `Makefile`, `AGENTS.md`, `MASTER_BUILD_PLAN.md` preamble all state current truth (Steps 15–18, signer alive, skills=33); forbidden phrases absent (`signs nothing yet`, `holds no usable key`, etc.); (2) every `scripts/*.sh --help` → rc0 + usage + zero disk writes; rehearsal has an explicit guard **before** it ever touches `/tmp/opencode`; (3) new regression tests: `tests/test_shell.py::test_fabric_every_script_has_help` (rehearsal dir stays empty on --help) and `tests/test_claims.py` asserting skill-count == disk count, forbidden-phrase absence in live docs, and index.md contracts table completeness; (4) `make test-all`, `bundle-verify` both roles green.
+      - **Status**: complete 2026-10-08. DoD (1) README/index/PLAN/Makefile/
+        AGENTS + the MASTER_BUILD_PLAN preamble restate verified truth
+        (Steps 15–18 built, signer live on agx64, 33 skills) and
+        `tests/test_claims.py` proves the forbidden phrases stay absent,
+        the documented skill count equals what ships, and index.md's
+        contract table names every `contracts/` file. DoD (2) all 33 shell
+        scripts plus the five `shared/` CLIs exit 0 with usage and write
+        nothing — rehearsal now guards *before* `mkdir`/`tee`, the master's
+        killswitch and keygen before their side effects (keygen --help used
+        to generate keys). DoD (3) `test_fabric_every_script_has_help`
+        (with a repo-porcelain and no-rehearsal-dir check per script),
+        `test_every_shared_cli_has_help`, the two rehearsal-specific tests,
+        and `tests/test_claims.py` (4 tests) all exist and pass. DoD (4)
+        `make test-all` green — fabric 633 passed/3 skipped, peer 198/1,
+        master 119, contract suite green — and `make bundle-verify` green
+        for both roles, alongside lint/validate/keys-check/shims-check/
+        wiki-verify(33)/wiki-preflight. Cursor `current: done`: no `[ ]`
+        step remains at the fabric level.
 
 ## Next
 
 The split is the last structural step. After this, roadmap work is role-scoped:
 `master-node/plans/MASTER_BUILD_PLAN.md` for anything the Master must actually
-build, `peer-node/PLAN.md` for the peer. Fabric steps (Steps 10–13 above) are the
+build, `peer-node/PLAN.md` for the peer. Fabric steps (Steps 10–14 above) are the
 exceptions — work that touches contracts and both roles at once belongs here.
 
-**Do not treat a green fabric as a working Master.** It is not one: the Master
-holds no usable signing key, no authority is issuable, and the registry ships
-empty on purpose.
+**A green fabric is not a finished Master.** The election/signer arc is proven
+live (agx64/agx32, 2026-10-07: signed registry entry, revoke/restore, reboot
+survival), but the Master build plan's Steps 2 and 5–12 are unbuilt, the admin
+page is declared and not bound, and the registry ships **empty** on purpose —
+fail-closed until the Master signs each grant.
 
 Container packaging, the bridge, session grants, conversation passing, the
 sharing regime and `MASTERSPIKE` are peer-side work and are tracked in
@@ -604,11 +631,3 @@ wrong conclusion or a false green.
    stale archive from three days earlier and reported success.
 4. **A judgement no machine can make is `DoD: confirm: user`**, never a silent
    pass.
-
-
-## Step 14 — fabric claims conformance and the `--help` contract
-
-- [ ] **Step 14** — Consume the drift class from this session: stale/false master-status claims on live surfaces *and* the unenforced `--help` contract at fabric level.
-      - **DoD**: (1) `README.md`, `index.md`, `PLAN.md`, `Makefile`, `AGENTS.md`, `MASTER_BUILD_PLAN.md` preamble all state current truth (Steps 15–18, signer alive, skills=33); forbidden phrases absent (`signs nothing yet`, `holds no usable key`, etc.); (2) every `scripts/*.sh --help` → rc0 + usage + zero disk writes; rehearsal has an explicit guard **before** it ever touches `/tmp/opencode`; (3) new regression tests: `tests/test_shell.py::test_fabric_every_script_has_help` (rehearsal dir stays empty on --help) and `tests/test_claims.py` asserting skill-count == disk count, forbidden-phrase absence in live docs, and index.md contracts table completeness; (4) `make test-all`, `bundle-verify` both roles green.
-      - **Status**: in progress.
-
