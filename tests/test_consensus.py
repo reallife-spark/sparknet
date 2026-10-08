@@ -120,11 +120,13 @@ def _vote(consensus, cluster, voter: str, candidate: str, election: str, nonce: 
 # --- cluster shape ------------------------------------------------------------
 
 
-def test_a_cluster_is_three_members_and_that_is_not_a_parameter(consensus):
-    assert consensus.CLUSTER_SIZE == 3
-    assert consensus.UNANIMITY == 3, (
-        "unanimity is the whole point; if this drifts to a majority, one bad node "
-        "paired with one other can install a master"
+def test_a_cluster_is_a_pair_or_a_trio_and_that_is_not_a_parameter(consensus):
+    """Two or three members; unanimity is n-of-n, never a fixed count."""
+    assert consensus.MIN_CLUSTER_SIZE == 2
+    assert consensus.MAX_CLUSTER_SIZE == 3
+    assert not hasattr(consensus, "CLUSTER_SIZE"), (
+        "the old fixed-size flag must be gone, or a reader would think three is "
+        "the only lawful cluster"
     )
 
 
@@ -175,6 +177,53 @@ def test_two_of_three_is_not_enough(consensus, cluster):
         "install a hostile master"
     )
     assert result["counts"] == {"gamma": ["alpha", "beta"]}
+
+
+def test_a_pair_needs_both_members_to_agree(consensus, cluster):
+    """2-of-2 unanimity: neither member can install a master on its own."""
+    pair_members = [m for m in cluster["members"] if m["node_id"] in ("alpha", "beta")]
+
+    lone = consensus.tally(
+        [_vote(consensus, cluster, "alpha", "alpha", "e1", "n1")],
+        pair_members,
+        "e1",
+    )
+    assert lone["agreed"] is False
+    assert lone["reason"] == consensus.REASON_NOT_AGREED
+    assert lone["detail"].endswith("best had 1"), (
+        "one member's self-vote must not reach a 2-of-2 threshold"
+    )
+
+    both = consensus.tally(
+        [
+            _vote(consensus, cluster, "alpha", "alpha", "e1", "n1"),
+            _vote(consensus, cluster, "beta", "alpha", "e1", "n2"),
+        ],
+        pair_members,
+        "e1",
+    )
+    assert both["agreed"] is True
+    assert both["master_node_id"] == "alpha"
+    assert both["voters"] == ["alpha", "beta"]
+
+
+def test_a_pair_root_verifies_when_both_sign_and_refuses_a_lone_signature(consensus, cluster):
+    pair_members = [m for m in cluster["members"] if m["node_id"] in ("alpha", "beta")]
+    pair_private = {k: v for k, v in cluster["private"].items() if k in ("alpha", "beta")}
+
+    lone_signed = {k: consensus.sign_root(_root(pair_members, "alpha"), k, v) for k, v in pair_private.items()}
+    root = dict(_root(pair_members, "alpha"))
+    root["signatures"] = {"alpha": lone_signed["alpha"]["alpha"]}
+    ok, reason = consensus.verify_root(root)
+    assert ok is False and consensus.REASON_MISSING_SIGNATURE in reason, (
+        "a root co-signed by only one member of a pair must be refused"
+    )
+
+    both_signed = {k: consensus.sign_root(_root(pair_members, "alpha"), k, v) for k, v in pair_private.items()}
+    root = dict(_root(pair_members, "alpha"))
+    root["signatures"] = {k: both_signed[k][k] for k in pair_private}
+    ok, reason = consensus.verify_root(root)
+    assert ok is True, reason
 
 
 def test_three_distinct_members_unanimously_elect(consensus, cluster):
@@ -299,12 +348,27 @@ def test_a_root_signed_by_a_fourth_party_is_rejected(consensus, cluster):
     assert consensus.REASON_SIGNER_NOT_A_MEMBER in reason
 
 
-def test_a_root_with_two_members_is_rejected(consensus, cluster):
-    root = _root(cluster["members"][:2], "beta")
-    signed = consensus.attach_root_signatures(root, cluster["private"])
-    ok, reason = consensus.verify_root(signed)
-    assert ok is False
-    assert consensus.REASON_WRONG_MEMBER_COUNT in reason
+def test_a_root_outside_the_pair_or_trio_bounds_is_rejected(consensus, cluster):
+    """A cluster is 2 or 3 members; 1 is not a cluster, 4 is a different protocol."""
+    base = cluster["members"]
+    extra = [
+        {
+            "node_id": f"overflow-{i}",
+            "fingerprint": hashlib.sha256(f"fp-{i}".encode()).hexdigest(),
+            "wireguard_pubkey": "bHlwdG8tZ2FwdC1maWxsZXItMDk9PT0=",  # filler, not a secret
+            "cluster_pubkey": base[0]["cluster_pubkey"],
+        }
+        for i in range(2)
+    ]
+    overflow_members = base + extra
+    signed_by = {**cluster["private"], **{e["node_id"]: cluster["private"]["alpha"] for e in extra}}
+    for count, members in ((1, base[:1]), (4, overflow_members), (5, overflow_members)):
+        sliced = members[:count] if count == 1 else overflow_members[:count]
+        root = _root(sliced, sliced[0]["node_id"])
+        signed = consensus.attach_root_signatures(root, signed_by)
+        ok, reason = consensus.verify_root(signed)
+        assert ok is False, f"a {count}-member root must be rejected"
+        assert consensus.REASON_WRONG_MEMBER_COUNT in reason
 
 
 def test_a_root_naming_a_duplicate_member_is_rejected(consensus, cluster):

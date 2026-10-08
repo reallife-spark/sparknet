@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
-updated: 2026-10-07
-current: 13
+updated: 2026-10-08
+current: 14
 ---
 
 # sparknet — Active Plan
@@ -459,7 +459,7 @@ current: 13
 
 ## Step 13 — agx64 / agx32 handoff
 
-- [ ] **Step 13** — The two real nodes: peer-nodes on `agx64` and `agx32`,
+- [x] **Step 13** — The two real nodes: peer-nodes on `agx64` and `agx32`,
       peer↔peer tested against a real transport, and the escalation repeated
       there — deferred by user decision until the local rehearsal is green.
       - **DoD**: `DoD: confirm: user` throughout — hosts are unreachable from
@@ -480,10 +480,98 @@ current: 13
         matches the CLI and a mutation-proven regression test parses the unit's
         own ExecStart against argparse. Stale `master-node/docs/role-transition.
         md` (pre-election "current master approves" flow) rewritten to the built
-        unanimous ceremony. **The run itself is blocked**: both hosts are still
-        unreachable (SSH/ping timeout 2026-10-07; this host sits on
-        `192.168.178.0/24`, agx hosts on `192.168.10.64`/`192.168.20.32`).
-        Proceeding requires the user to power the hosts on or provide a route.
+        unanimous ceremony. **The election half of the run now FORMED
+        (2026-10-07)**: the two hosts were installed from a fresh bundle and both
+        co-signed the root naming `agx64` (root_id
+        `65d9ce25cbb40566b6735b0624d9840dc69ff35d66b3a97543fe650ed09212f5`, 2/2
+        signatures, `state: formed`); agx64's master-identity flipped to
+        `role: master`, agx32 stayed `peer` (`not_elected`, exactly right). One
+        marked deviation: the overlay could not carry the ceremony — UDP does not
+        cross the 192.168.10/20 boundary at this machine (the gateway), only
+        TCP/22 does, so the WireGuard handshake never completed and the exchange
+        was reached by SSH loopback tunnels to a `serve` on the fabric root
+        (trustless by design; keys stayed on the hosts; port 4210 never left
+        loopback). **Transport now solved (2026-10-07, Gateway Decision)**:
+        this gateway ships no kernel firewall tooling and this session has no
+        root, so per the operator's choice a **userspace UDP relay** stands in
+        for the UDP 51820 open (`/tmp/gateway_udp_relay.py`, binding
+        192.168.10.1:51820 + 192.168.20.1:51820, forwarding between the hosts;
+        no root needed) and both wg peers re-point at the gateway IPs. The
+        overlay now **handshakes and pings through real NICs** (received bytes
+        >0 both sides, 0% loss ~2 ms; required adding the peer /32 kernel
+        routes wg-quick would have made — AllowedIPs create none). **Phase 6 —
+        the signer is now LIVE via `sparknet-master-signer.service`**: the
+        master role root was staged at `/root` (so the unit's `%h` resolves),
+        state dir + keys moved to `/root/.local/state/sparknet/master-node`,
+        the root object extracted to `trust-root.json`, and `/root/.env` sets
+        `SPARKNET_NODE_ID`/`SPARKNET_STATE_DIR` plus a PATH preferring
+        `/root/.venv` (host system python3 is 3.8.10 + cryptography 2.8 and
+        would break `removesuffix` and the `>=42` pin; venv is 3.9.5 +
+        50.0.2). Asserted live: socket 0600, root-id → `65d9ce…`,
+        capabilities → `["sign"]`, restart survives, single key-holder.
+        **Phase 7 — registry + escalation live**: the signer signed a registry
+        entry for agx32 over the socket (verified by the root's master_pubkey
+        alone), all three refusals hold on the deployed unit (wrong key /
+        unnamed node / tampered root), and `sparknet-registry-sign.sh` wrote
+        `manifests/node-authorizations.json` (verifiable by the root alone).
+        **Phase 8 — peer↔peer, honestly bounded**: the signed registry + root
+        were delivered to agx32, which verified the entry with its OWN
+        `shared/sparknet-authz.py` and matched its fingerprint; no *share*
+        claimed (4201–4203 remain spec-only). **C4 revoke-demo run live
+        (2026-10-07, then restored)** — surfaced + fixed two artifact defects:
+        agx32's `master-ed25519.pub.b64` was a placeholder key (would fail every
+        signature check) and both hosts' `node-authorizations.json` were bare
+        entries while the guard needs the wrapped `authorizations:[...]` registry;
+        after fixing, one socket signature with `revoked: true` (ledger block
+        `64717431…`) made the peer `allowed: false reason: revoked caps: []`, its
+        guard `--status` show `capabilities: []`, reject a signature-VALID master
+        packet with `403 capability_missing`, and `wg-render-master` drop the
+        peer's stanza; a fresh `revoked: false` signature (`b3200847…`) restored
+        the pair. **C2 reboot proven (2026-10-07)**: ran a real
+        `shutdown -r +1` on agx64; host back in ~60 s; signer unit returned
+        `active` (enabled, unit-spawned PID 1763), socket `root-id` == `65d9ce25…`,
+        `capabilities ["sign"]`, `public-key` == the root's `master_pubkey`
+        (`r+ZjGb…`), ledger `84f090a8→64717431→b3200847` intact, peer
+        authorization still verifies (`allowed: True, caps: [guard-apply,
+        telemetry]`), overlay ping 0% loss both ways once restored. **New ops
+        caveat**: wg0 does NOT survive reboot on the tegra host
+        (`CONFIG_WIREGUARD=n`; overlay runs on userspace `wireguard-go`, started
+        ad hoc) — `/root/scripts/sparknet-wg-restore.sh` (idempotent) written and
+        proven; making the overlay a unit, or including the restore step in the
+        aggregate's "up" check, is now a Phase 9/ops item. Also caught: the
+        signer's single-threaded `_serve_one` has no client timeout (a connection
+        that never sends `\n` occupies the only accept slot) — worth a robustness
+        fix if the surface grows. Still open before the step can complete: Phase 9
+        (rollback/re-formation/revocation — not executed, destructive) and the
+        runbook's **confirm-user list** (C1–C6 in
+        `/mnt/log/sparknet-handoff-2026-10-07-confirm.md`). **C1/C3/C5 answered
+        with live probes (2026-10-07)**: overlay rides real NICs to the gateway
+        relay (routes `dev wg0`, endpoints `dev eth0`, handshakes seconds old,
+        ping ~2 ms 0% loss both ways) on userspace wireguard-go (tegra
+        `CONFIG_WIREGUARD=n`); exactly one process holds `operational.ed25519`
+        (signer PID 5063, fuser confirms no other fd holder, key 0600); deployed
+        signer containment confirmed (socket `srw-------` 0600 unix-stream owned
+        by the signer, no TCP listener, `--describe` caps `["sign"]` + 10 refuses,
+        `check_socket_path` exercised on the deployed module refuses `tcp://` and
+        outside-state-dir paths, no peer service imports the signer or references
+        signer.sock, parity unit asserts `not_reachable_from_here`). All six
+        C-rows answered. The step cannot complete until the operator acknowledges
+        the answers and decides on Phase 9. Transcript:
+        `/mnt/log/sparknet-handoff-2026-10-07.md`.
+      - **Status: COMPLETE 2026-10-07 — operator acknowledged and closed Phase 9
+        by decision ("acknowledge / proceed" + "Close without exercising").**
+        All six confirm-user items answered: C1/C3/C5 by live probe, C2 by a real
+        reboot, C4 demoed (with two artifact defects found & fixed), C6
+        acknowledged as understood-not-exercised by operator choice. Phase 9's
+        destructive legs (rollback, replace-Master re-formation) remain
+        documented-but-unexecuted, per operator decision, so the live pair stays
+        up; the wg0-not-reboot-safe caveat (`/root/scripts/sparknet-wg-restore.sh`)
+        is the noted ops input to any future teardown. Runbook deliverables: the
+        dated transcript at `/mnt/log/sparknet-handoff-2026-10-07.md` (3 addenda)
+        and the answered confirm-user list at
+        `/mnt/log/sparknet-handoff-2026-10-07-confirm.md` — both landed. The
+        fabric plan is now terminal; further roadmap work is role-scoped (see
+        `## Next`).
 
 ## Next
 
@@ -516,4 +604,11 @@ wrong conclusion or a false green.
    stale archive from three days earlier and reported success.
 4. **A judgement no machine can make is `DoD: confirm: user`**, never a silent
    pass.
+
+
+## Step 14 — fabric claims conformance and the `--help` contract
+
+- [ ] **Step 14** — Consume the drift class from this session: stale/false master-status claims on live surfaces *and* the unenforced `--help` contract at fabric level.
+      - **DoD**: (1) `README.md`, `index.md`, `PLAN.md`, `Makefile`, `AGENTS.md`, `MASTER_BUILD_PLAN.md` preamble all state current truth (Steps 15–18, signer alive, skills=33); forbidden phrases absent (`signs nothing yet`, `holds no usable key`, etc.); (2) every `scripts/*.sh --help` → rc0 + usage + zero disk writes; rehearsal has an explicit guard **before** it ever touches `/tmp/opencode`; (3) new regression tests: `tests/test_shell.py::test_fabric_every_script_has_help` (rehearsal dir stays empty on --help) and `tests/test_claims.py` asserting skill-count == disk count, forbidden-phrase absence in live docs, and index.md contracts table completeness; (4) `make test-all`, `bundle-verify` both roles green.
+      - **Status**: in progress.
 

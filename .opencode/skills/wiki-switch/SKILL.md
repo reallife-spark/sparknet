@@ -1,7 +1,7 @@
 ---
 name: wiki-switch
 description: >
-  Switch between multiple Obsidian wiki vault profiles. Use this skill when the user says
+  Switch between multiple orchestrator wiki vault profiles. Use this skill when the user says
   "/wiki-switch NAME", "switch to my work wiki", "switch vault", "change wiki", "which wiki am I on",
   "list my wikis", "show my vaults", "create a new vault config", or "add a new wiki profile".
   The skill manages named config files at ~/.wiki/config.NAME and activates one by
@@ -89,7 +89,7 @@ Scaffold a new vault config from the current active config as a template.
    - If there are no section headers, present all fields and let the user decide which to change
 4. Ask the user for updated values for the vault-specific fields. Use the current values as visible defaults — the user only needs to supply what differs.
 5. Write the updated values into `~/.wiki/config.<name>`.
-6. Update the top comment line to describe the new vault (e.g., `# Obsidian Wiki — <name> vault`).
+6. Update the top comment line to describe the new vault (e.g., `# orchestrator Wiki — <name> vault`).
 7. Confirm:
    ```
    Created: ~/.wiki/config.<name>

@@ -12,6 +12,10 @@
     ]
   },
   "skills": {
+    "computer-user": {
+      "sha256": "4f4011c0a2b707c5f0785b38a1c1d05ed5eaf3f2af57fc727bfcb9720f090a37",
+      "source": "/mnt/nvme/skills/wiki/computer-user"
+    },
     "cross-linker": {
       "sha256": "da837931c14ba8c2f9edc039548d0220a2d6ac3cf77e5f428f2f7fff3b574b0c",
       "source": "/mnt/nvme/skills/wiki/cross-linker"
@@ -40,15 +44,15 @@
       "sha256": "296894e9aa118a27ecc64ec64217d8166e1ac18f9dd924d7005f7a46baaf5917",
       "source": "/mnt/nvme/skills/wiki/llm-wiki"
     },
-    "obsidian-bases": {
+    "orchestrator-bases": {
       "sha256": "7f758d4056dcf1e5e2592ca8acd7d62638f9c01dd7b5e7149753506b8c5ba984",
       "source": "/mnt/nvme/skills/wiki/obsidian-bases"
     },
-    "obsidian-cli": {
+    "orchestrator-cli": {
       "sha256": "5270cea782a24748f4d512df1047f4c7eeb0fc85f56a2938627ef32c49e7b1bf",
       "source": "/mnt/nvme/skills/wiki/obsidian-cli"
     },
-    "obsidian-markdown": {
+    "orchestrator-markdown": {
       "sha256": "c6e0b7efb948bcdd5712e922204451db1c2634964c502e24b9433a6c6e98acf9",
       "source": "/mnt/nvme/skills/wiki/obsidian-markdown"
     },
@@ -63,6 +67,10 @@
     "vault-skill-factory": {
       "sha256": "371aba102b155d0f5216b7ae284ba7f29345fbbf2e599f4fe7d59090e0982c34",
       "source": "/mnt/nvme/skills/wiki/vault-skill-factory"
+    },
+    "wiki-audit": {
+      "sha256": "local",
+      "source": "local"
     },
     "wiki-capture": {
       "sha256": "740138cf78e207b35fbe310ff36efb556155bf2d9d5fb50d50e0eb67edd6f6d6",

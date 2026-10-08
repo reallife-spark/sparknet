@@ -10,7 +10,7 @@ that has never seen `/mnt/nvme`.
 - **Pinned commit**: `ec2b6bc` — "fix(wiki-ingest): archive promoted _raw/ drafts instead of deleting them"
 - **License**: MIT, © 2026 Ar9av — see [`LICENSE`](LICENSE)
 - **Farm source** (what this cluster runs today): `/mnt/nvme/skills/wiki`
-- **Shipped**: 31 skills · **Withheld**: 4
+- **Shipped**: 32 skills · **Withheld**: 4 · **Local**: 1
 
 ## Where they live and why not in `skills/`
 
@@ -36,6 +36,13 @@ constants in [`../../scripts/sync-wiki-skills.py`](../../scripts/sync-wiki-skill
 `EXCLUSIONS` and `GIT_SOURCES` — not by whatever happened to be on disk. To add
 or drop a skill, edit that list and re-run `make wiki-sync`; the diff in git is
 the review artifact.
+
+A third constant, `LOCAL_SKILLS`, names skills **authored in this repository**
+rather than copied from the farm. A local skill has no upstream to drift
+against, so the sync never copies it, never prunes it, and `--check` accepts it
+at face value. It exists at `.opencode/skills/<name>/SKILL.md` in the repo
+itself. To add one, author the directory first, then add the name to
+`LOCAL_SKILLS` (in the same edit) so the next sync does not prune it.
 
 State after each sync lives in [`.sync.json`](.sync.json): source path and
 content hash per skill, the pinned commit, the exclusion reasons, and which
@@ -71,6 +78,27 @@ instead of rotting invisibly.
 
 A sync **fails loudly** if a patch no longer applies, so an upstream rewrite can
 never silently drop a local fix.
+
+## The orchestrator dialect
+
+Two further transforms run on every copy, both declared in
+`scripts/sync-wiki-skills.py` so they stay visible in git instead of being
+silent edits:
+
+- **`RENAMES`** — upstream skill dirs that are vendored under a different name.
+  The three `obsidian-*` skills (`obsidian-bases`, `obsidian-cli`,
+  `obsidian-markdown`) are vendored as `orchestrator-*` because the vault no
+  longer names itself after that editor. The farm copy is untouched; the dest
+  dir and `.sync.json` record the renamed name, with the farm path still the
+  verified source.
+- **`dialect_rewrite`** — a conservative prose rewrite applied to every vendored
+  file. Bare "Obsidian" (the editor's name) becomes "orchestrator"; product
+  phrases like "Obsidian Bases" become "orchestrator Bases". External artifacts
+  are deliberately left alone, because they are real third-party names, not
+  sparknet prose: `.obsidian/` (the editor's config dir), `Obsidian CLI` (the
+  external tool some skills drive), docs URLs on `help.obsidian.md`, and the
+  `obsidian-wiki` upstream repo. If upstream later changes "Obsidian Bases" to
+  a different product phrase, the phrase table above needs re-review.
 
 ## Source integrity: why `skill-creator` is read from git
 
@@ -118,12 +146,12 @@ conditional, and each is optional:
 |---|---|---|
 | `python3` | ingest helpers, `wiki-setup` | most skills degrade |
 | `defuddle` CLI | `wiki-ingest`, `wiki-research` on URLs | URL sources fall back |
-| Obsidian CLI | `obsidian-cli` | that skill is inert |
+| Obsidian CLI | `orchestrator-cli` | that skill is inert |
 | Dataview plugin | `wiki-dashboard` queries | use Bases instead |
 | a Markdown renderer | `wiki-export` HTML output | export JSON/GraphML only |
 
 None of these are vendored: they are third-party binaries or an editor plugin,
-not skill content. `wiki-dashboard` deliberately prefers Obsidian Bases, which
+not skill content. `wiki-dashboard` deliberately prefers orchestrator Bases, which
 needs no community plugin.
 
 ## Vault scoping

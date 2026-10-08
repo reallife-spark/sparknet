@@ -22,7 +22,7 @@ to one role as though it described the whole system.
 | `contracts/` | both | the cross-role contract: overlay, capabilities, identity, ports, guard protocol. **Single source of truth.** |
 | `shared/` | both | `sparknet-authz.py` — the one signed-authorization implementation |
 | `peer-node/` | peer | a working node: guard, anchor, dispatch, its own wiki vault |
-| `master-node/` | master | the elected signing role — **built** (Steps 15–18); it runs the peer's services by path, holds an isolated signer, and declares an admin surface. **Election is still unbuilt (Step 14)**, so no node is Master and the signer has never been deployed |
+| `master-node/` | master | the elected signing role — **built** (Steps 15–18); it runs the peer's services by path, holds an isolated signer, and declares an admin surface. **The election/signer arc was proven live on real hosts 2026-10-07** (fabric Steps 12→13): agx64/agx32 co-formed a 2/2 trust root, the signer ran as `sparknet-master-signer.service` on agx64, signed a live registry, survived a real reboot, and a revoke/restore demo ran. Phase 9's destructive legs (rollback / replace-Master re-formation) are documented in `contracts/deployment-runbook.md` and deliberately left unexecuted |
 | `scripts/` | both | fabric-level tooling: vendoring, env, bundling |
 | `.opencode/skills/` | both | the vendored wiki suite |
 

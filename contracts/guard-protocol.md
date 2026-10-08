@@ -17,7 +17,7 @@ keeping the sentence would mislead exactly the reader it was meant to protect.
 A peer today contains the signing code. What stops a peer from signing is not its
 implementation — it never was, and under the election model it certainly is not. A
 peer lacks the **operational key**, and the operational key exists only inside a
-cluster trust root that all three members co-signed. A node outside the root, or a
+cluster trust root that every member co-signed. A node outside the root, or a
 node the root does not name as master, has nothing to sign with.
 
 So the authority asymmetry is preserved but relocated: from *"the peer cannot
@@ -25,7 +25,8 @@ sign"* to *"only a node named by a valid cluster trust root may use the operatio
 key."* That is a weaker guarantee than the old sentence implied, because it
 depends on state rather than on code, and it is stated as one.
 
-Who may hold that key is decided by unanimous agreement of three members, specified in
+Who may hold that key is decided by unanimous agreement of the members (2 of 2 in a
+pair, 3 of 3 in the full cluster), specified in
 `contracts/consensus-protocol.md` and carried as `cluster_trust_root` in
 `contracts/identity-schema.json`.
 
@@ -90,6 +91,29 @@ and every failure is fail-closed:
 7. **`euid 0`** — the apply path requires root.
 8. **`--apply-enabled`** — off by default in the shipped unit. Arming the guard
    to mutate is an explicit operator decision, not a default.
+
+## Two personalities, one listener
+
+The guard and every future overlay service sit on the shared transport
+(`shared/sparknet-http.py`), which formalises PAIR's dual-personality pattern:
+one listener chooses the caller's class by **source address**, not by anything
+the caller claims.
+
+- **Local personality** — a loopback source (`127.0.0.1`, `::1`).
+- **Peer personality** — any non-loopback source, i.e. the overlay.
+
+A route may be declared **loopback-only** (`serve(loopback_only_routes=...)`).
+A caller from the peer personality is then refused **HTTP 403
+`not-loopback`** *before* the request body is read or the signature verified —
+a peer cannot make the server do work on a local-only face, even with a valid
+signature and capability. The guard's own source check (step 1 above) remains
+the authority filter on who may mutate; the personality gate is the transport
+floor beneath it.
+
+Consequence for the share stanza (4201–4203): the peer share-stanza ports have
+**no local face**. They are peer-personality only, and a service that needs a
+local administration route must declare it explicitly as loopback-only rather
+than defaulting it on.
 
 ## Apply sequence
 

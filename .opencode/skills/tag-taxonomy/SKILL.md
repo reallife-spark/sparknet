@@ -1,7 +1,7 @@
 ---
 name: tag-taxonomy
 description: >
-  Enforce consistent tagging across the Obsidian wiki using a controlled vocabulary.
+  Enforce consistent tagging across the orchestrator wiki using a controlled vocabulary.
   Use this skill when the user says "fix my tags", "normalize tags", "clean up tags",
   "tag audit", "what tags should I use", "tag taxonomy", or whenever you're creating or
   updating wiki pages and need to choose the right tags. Also trigger when the user asks

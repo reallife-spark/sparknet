@@ -89,7 +89,7 @@ Same as Mode 1 above, but with reason `"rebuild"`.
 
 Remove all content from the category directories (`concepts/`, `entities/`, `skills/`, etc.) and the `projects/` directory. Keep:
 - `_archives/` (obviously)
-- `.obsidian/` (Obsidian config)
+- `.obsidian/` (orchestrator config)
 - `.env` (if present in vault)
 
 Reset `index.md` to the empty template. Reset `log.md` with just the rebuild entry. Delete `.manifest.json` (it'll be recreated during ingest).
@@ -208,5 +208,5 @@ Record QMD refresh in the final report as one of:
 1. **Always archive before destructive operations.** No exceptions.
 2. **Always confirm with the user** before clearing the live wiki.
 3. **Never delete archives** unless the user explicitly asks. Archives are cheap insurance.
-4. **The `.obsidian/` directory is sacred.** Never touch it during archive/rebuild/restore — it contains the user's Obsidian settings, plugins, and themes.
+4. **The `.obsidian/` directory is sacred.** Never touch it during archive/rebuild/restore — it contains the user's orchestrator settings, plugins, and themes.
 5. If something goes wrong mid-rebuild, the archive is there. Tell the user they can restore.

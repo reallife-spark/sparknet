@@ -14,6 +14,7 @@ the tests then prove both roles still agree.
 | `identity-schema.json` | canonical identity, fingerprinting, signed envelope |
 | `ports.json` | every listener and dial target, with `implementation_state` (code) kept separate from `runtime` (observed on a given host) |
 | `guard-protocol.md` | the Master↔peer approval conversation |
+| `health-protocol.md` | peer liveness and eviction: probe rhythm, activity-trumps-eviction, the full-dark rule, no-authority guarantee |
 | `share-protocol.md` | the peer↔peer sharing regime: offers, share types, the four clocks, trust levels, isolation, evidence |
 | `consensus-protocol.md` | how three nodes agree on who holds the signing key: election, the cluster trust root, re-formation |
 | `deployment-runbook.md` | the operational procedure for bringing the real three-node system up on actual hosts (Step 13): overlay, election, signer unit, registry, rollback |

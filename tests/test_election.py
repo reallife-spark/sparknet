@@ -876,6 +876,76 @@ def test_three_real_member_processes_form_the_root_and_flip_one_identity(tmp_pat
     assert status["root_id"] == winner_document["root_id"]
 
 
+def test_two_real_member_processes_form_a_pair_root_and_flip_one_identity(
+    tmp_path, consensus, election
+):
+    """A 2-of-2 pair election: two processes, one socket, one root, one flip.
+
+    The pair is the smallest lawful cluster. Both members must bid and vote for
+    the same candidate and both must co-sign — a single member can never reach
+    the threshold on its own — and the losing member's identity stays untouched.
+    """
+    pair = ("alpha", "beta")
+    key_dirs = {name: _keygen_dirs(tmp_path)[name] for name in pair}
+    members_path = tmp_path / "cluster-members.json"
+    members = [
+        {
+            "node_id": name,
+            "fingerprint": hashlib.sha256(f"election-test-{name}".encode()).hexdigest(),
+            "wireguard_pubkey": base64.b64encode(hashlib.sha256(f"wg-{name}".encode()).digest()).decode(),
+            "cluster_pubkey": (key_dirs[name] / "cluster.pub.b64").read_text().strip(),
+        }
+        for name in pair
+    ]
+    members_path.write_text(json.dumps({"schema_version": "1.0", "members": members}, indent=2))
+
+    identities = {}
+    for name in pair:
+        node_dir = tmp_path / f"pair-{name}"
+        node_dir.mkdir()
+        identities[name] = _identity(name, node_dir / "identity.json")
+    loser_before = identities["beta"].read_bytes()
+
+    port = _free_port()
+    base = f"http://127.0.0.1:{port}"
+    server = _serve_process(members_path, port)
+    try:
+        _wait_for_port(port)
+        procs = [
+            subprocess.Popen(
+                _member_cmd(base, "alpha", identities[name], key_dirs[name]),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            for name in pair
+        ]
+        outputs = {}
+        for name, proc in zip(pair, procs, strict=True):
+            out, err = proc.communicate(timeout=60)
+            assert proc.returncode == 0, f"{name} failed ({proc.returncode}):\n{out}\n{err}"
+            outputs[name] = json.loads(out)
+        assert election.status_of(base)["state"] == "formed"
+    finally:
+        _stop(server)
+
+    winner_doc = json.loads(identities["alpha"].read_text())
+    assert winner_doc["role"] == "master"
+    assert winner_doc["operational_key"]["held"] is True
+    assert identities["beta"].read_bytes() == loser_before, (
+        "the losing member of a pair must not be touched"
+    )
+    assert outputs["beta"]["accept"]["accepted"] is False
+    assert outputs["beta"]["accept"]["reason"] == "not_elected"
+
+    document = json.loads((tmp_path / "pair-alpha" / "trust-root.json").read_text())
+    root = document["root"]
+    ok, reason = consensus.verify_root(root)
+    assert ok, f"the pair root does not verify: {reason}"
+    assert set(root["signatures"]) == set(pair)
+    assert not (tmp_path / "pair-beta" / "trust-root.json").exists()
+
+
 def test_the_role_scripts_run_the_ceremony_and_refuse_a_wrong_expectation(tmp_path, consensus):
     """The scripts are how a human runs the election; they are the artifact.
 

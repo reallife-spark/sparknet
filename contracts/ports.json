@@ -59,9 +59,10 @@
    "bound_by": "peer",
    "overlay_only": false,
    "note": "OpenAI-compatible local proxy routing to domain agent ports. Local-only by design: it injects the user environment profile, so it must not be exposed.",
-   "implementation_state": "provisioned",
+   "implementation_state": "implemented",
    "runtime": "not-listening",
-   "status": "PROVISIONED, no listener. peer-node/services/sparknet-dispatch-bridge.py is a 110-line CLI with no bind or serve code. Tracked in peer-node/PLAN.md Step 4."
+   "runtime_why": "The listener is `peer-node/services/sparknet-dispatch-bridge.py --serve` (bind: localhost, port 4096) serving the signed /v1/status endpoint over shared/sparknet-http.py. Requests are signed with the node's own key from .state/keys; unsigned or stale traffic is refused with a JSON 401. The bridge's bind path is asserted end to end by tests/test_http_transport.py against a real loopback socket, but no daemon holds 4096 open on the development host, and none should be \u2014 `implemented` + `not-listening` is the honest pair: the code exists and binds when invoked.",
+   "status": "IMPLEMENTED, NOT RUNNING HERE \u2014 `sparknet-dispatch-bridge.py --serve` is the listener (loopback 4096 default). Signed /v1/status proves the shared transport shared/sparknet-http.py; full OpenAI-compatible routing (Step 4) still tracked in peer-node/PLAN.md."
   },
   "4097": {
    "service": "agent-engineering",
@@ -100,17 +101,18 @@
    "runtime": "not-listening",
    "status": "SPEC ONLY \u2014 no listener. Tracked in peer-node/PLAN.md Step 4."
   },
-  "4201": {
-   "service": "share-intake",
-   "protocol": "tcp/http",
-   "bound_by": "peer",
-   "overlay_only": true,
-   "binds_to": "the peer's own overlay address only",
-   "note": "Receives share offers and countersigned share grants from a sibling peer. Overlay-only because every request here must arrive over the fabric, carrying a grant naming the sender's fingerprint.",
-   "implementation_state": "spec-only",
-   "runtime": "not-listening",
-   "status": "SPEC ONLY \u2014 no listener. Tracked in peer-node/PLAN.md Step 8."
-  },
+"4201": {
+    "service": "share-intake",
+    "protocol": "tcp/http",
+    "bound_by": "peer",
+    "overlay_only": true,
+    "binds_to": "the peer's own overlay address only",
+    "note": "Receives share offers and countersigned share grants from a sibling peer. Overlay-only because every request here must arrive over the fabric, carrying a grant naming the sender's fingerprint.",
+    "transport_personality": "Peer personality only: the shared transport (shared/sparknet-http.py) classifies the caller by source address, and a loopback-only route class is refused 403 before the request is read. The share stanza has no local face; only a sibling on the overlay may dial it.",
+    "implementation_state": "spec-only",
+    "runtime": "not-listening",
+    "status": "SPEC ONLY \u2014 no listener. Tracked in peer-node/PLAN.md Step 8."
+   },
   "4202": {
    "service": "session-transfer",
    "protocol": "tcp/http",
@@ -202,12 +204,13 @@
     "status": "SPEC ONLY \u2014 no code and no daemon by design. Role responsibility contracted in master-node/docs/master-control-plane.md and scoped in master-node/plans/MASTER_ADMIN_PLAN.md."
    }
   },
- "invariants": [
-  "No role binds a wildcard address for an overlay-only port.",
-  "Peer-side listeners that inject local identity or accept mutations stay off the overlay.",
-  "The Master binds 9090 nowhere; it dials peers on 9090.",
-  "implementation_state never claims implemented without a bind path in the named service.",
-  "A port may be implemented and simultaneously not-listening. That combination is the normal case for an overlay service on a host whose overlay is down, and it must not be collapsed into a single boolean.",
-  "runtime is measured per host and never published as a contract fact; only implementation_state travels."
- ]
+"invariants": [
+   "No role binds a wildcard address for an overlay-only port.",
+   "Peer-side listeners that inject local identity or accept mutations stay off the overlay.",
+   "The Master binds 9090 nowhere; it dials peers on 9090.",
+   "implementation_state never claims implemented without a bind path in the named service.",
+   "A port may be implemented and simultaneously not-listening. That combination is the normal case for an overlay service on a host whose overlay is down, and it must not be collapsed into a single boolean.",
+   "runtime is measured per host and never published as a contract fact; only implementation_state travels.",
+   "A service built on the shared transport (shared/sparknet-http.py) may declare a route class loopback-only via serve(loopback_only_routes=...). A caller from the overlay is then refused HTTP 403 before the request is read \u2014 a signed and authorized peer included. Overlay-only ports must never expose such a route class to the fabric."
+  ]
 }

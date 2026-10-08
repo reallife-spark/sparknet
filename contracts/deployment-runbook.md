@@ -1,11 +1,14 @@
-# Deployment runbook — the real three-node handoff (Step 13: agx64 + agx32)
+# Deployment runbook — the real handoff (Step 13: agx64 + agx32)
 
-> Status: **handoff document written; run not started.** The two hosts are
-> unreachable from this machine as of 2026-10-07 (no ping, no SSH; this host is
-> on `192.168.178.0/24`, the agx hosts on `192.168.10.64` / `192.168.20.32`;
-> no agx node is on the tailnet). Step 13's DoD is `DoD: confirm: user`
-> throughout — every claim below about a deployed node must be confirmed by a
-> human who can see that node. This runbook is the procedure, not the proof.
+> Status: **Phase 0–1 complete; handoff being executed.** Routing to both hosts
+> was restored 2026-10-07 (NetworkManager profiles `agx64-link` /
+> `agx32-link` brought the 192.168.10.0/24 and 192.168.20.0/24 legs up), the
+> bundle has shipped to both nodes and been extracted, Python 3.9 venv +
+> `cryptography 50.0.2` are provisioned on both, cluster/operational keys are
+> minted, and `wireguard-go` (userspace, no tegra kernel module) is installed on
+> both for the overlay. Step 13's DoD is `DoD: confirm: user` throughout —
+> every claim below about a deployed node must be confirmed by a human who can
+> see that node. This runbook is the procedure, not the proof.
 
 This document is the operational companion to the protocols that define the
 behaviour: `consensus-protocol.md` (election, the cluster trust root,
@@ -24,17 +27,26 @@ rehearsal would silently fail.
 
 | Rehearsal (one box) | Real nodes (Step 13) |
 |---|---|
-| three node trees under `/tmp/opencode` | three physical hosts, `agx64`, `agx32`, plus a third (`nuc`/primary) that wins the election |
+| three node trees under `/tmp/opencode` | **two** physical hosts, `agx64` (192.168.10.64) and `agx32` (192.168.20.32), running as a 2-of-2 **pair** — one is elected Master, the other stays peer. (A three-node cluster stays lawful; Step 13 exercises the pair so that the elevate-to-master path is exactly the 2-of-2 unanimous vote, both peers deciding together.) |
 | exchange binds `127.0.0.1:4210`, ceremonies loopback | one host runs `serve` bound to its **overlay** address; ceremonies on each node dial `http://<exchange-overlay-ip>:4210` over the WireGuard overlay (`ports.json` 4210: `overlay_only: true`) |
 | cluster keys under `node-X/cluster-keys` in the scratch tree | cluster keys live in each node's **state dir** (`$SPARKNET_STATE_DIR/keys`), 0600, so they are not shipped with or backed up with the vault |
 | signer started as a background process | signer starts via `sparknet-master-signer.service`; the unit's `%h` paths resolve to the system manager's home (`/root` when no `User=` is set — the unit deliberately has none), so the master tree is installed at `/root` with config in `/root/.env` |
-| one machine's operator runs every ceremony | the three ceremonies are run **by each node's own operator** on that node, against the shared exchange |
+| one machine's operator runs every ceremony | the ceremonies are run **by each node's own operator** on that node, against the shared exchange. A pair has exactly two seats at the table; only the winner's operator runs `election-approve`, the other runs `election-request` |
 | peers "connect" only to the signer socket | peers talk to each other over the overlay; the **share transport (ports 4201–4203) is `spec-only` and unbuilt** — peer↔peer in this step means real overlay reachability and signed registry distribution, and that boundary is stated, not straddled |
 | everything supervised by the script | each phase below is asserted by the same check list; anything a script cannot observe is `confirm: user` |
 
 ## Preconditions on every host
 
-- Python 3.11+ and `cryptography` (the one runtime dependency, `requirements.txt`).
+- Python 3.9+ and `cryptography` (the one runtime dependency, `requirements.txt`).
+  The "3.11+" floor written when this book was drafted was stricter than the
+  code needs: the only 3.9+-only runtime call is `str.removesuffix()`, every
+  `X | None`/generic annotation is defused by `from __future__ import
+  annotations`, and `tomllib` is confined to the test suite. Verified 2026-10-07
+  on Ubuntu 20.04 hosts whose only candidate is **python3.9.5**: smoke tests for
+  `removesuffix`, annotation-as-string, and the exact `cryptography` API surface
+  the code imports (Ed25519 + PEM serialization) all pass. Note the hosts ship
+  `cryptography 2.8` — old enough that the surface still works, but the pin is
+  `>=42`, so **upgrade it to ≥42** or the peer guard refuses every approval.
   On a host without the repo `.venv`, the role scripts already fall back to
   `python3` when `$FABRIC_ROOT/.venv` is absent — but `cryptography` must be
   importable by that interpreter.
@@ -47,8 +59,8 @@ rehearsal would silently fail.
 
 A bundle is the whole node (`make bundle ROLE=master` assembles
 `peer-node/` + `master-node/` + `contracts/` + `shared/` + `scripts/` +
-`.opencode/`). One full-node bundle serves all three hosts; `ROLE=master` is
-the build profile, and the two peers prove themselves with the peer checks at
+`.opencode/`). The same bundle serves every host; `ROLE=master` is
+the build profile, and the pair proves itself with the peer checks at
 Phase 4.
 
 ```sh
@@ -86,7 +98,10 @@ Then `make -C master-node keygen` (creates
 
 ```sh
 ./scripts/sparknet-env-init.sh <peer-role-root>
-make -C peer-node keygen                # peer keys into its own state dir
+make -C peer-node keys                  # peer keys into its own state dir
+                                        # (NB: the peer target is `keys`; there is no `make keygen`
+                                        #  in peer-node — the runbook once said so, and the first
+                                        #  real run proved that stale line wrong)
 ```
 
 ## Phase 2 — the overlay is up before any election
@@ -94,19 +109,21 @@ make -C peer-node keygen                # peer keys into its own state dir
 The election rides the overlay (`ports.json` 4210 `overlay_only`). Bring `wg0`
 up first, out of band: each host generates a WireGuard keypair
 (`wg genkey | tee <state>/wg.key | wg pubkey > <state>/wg.pub`, 0600), the
-three public halves and overlay addresses (`10.100.0.1` `10.100.0.2`
-`10.100.0.3`) are exchanged, and each host's `[Peer]` stanzas are written from
-`master-node/configs/wireguard/master-peer.template`. Assert: every pair pings
-its `/32` before Phase 5. A node that cannot reach the exchange over the overlay
-cannot vote — that is the liveness price unanimity documents, not a fault.
+public halves and overlay addresses (`10.100.0.1` for the prospective Master,
+`10.100.0.2` for the peer — allocate from `overlay.json`
+`peer_host_range` for the rest) are exchanged, and each host's `[Peer]` stanzas
+are written from `master-node/configs/wireguard/master-peer.template`. Assert:
+both directions ping the `/32` before Phase 5. A node that cannot reach the
+exchange over the overlay cannot vote — that is the liveness price unanimity
+documents, not a fault.
 
 ## Phase 3 — cluster keys and the roster
 
 Each node runs `shared/sparknet-election.py keygen --key-dir
 $SPARKNET_STATE_DIR/keys` (mints the cluster Ed25519 and the operational
-keypair for bidding). The three `cluster.pub.b64` halves cross machines **out of
+keypair for bidding). The `cluster.pub.b64` halves cross machines **out of
 band** and are assembled into `cluster-members.json` exactly as the rehearsal
-did: three distinct `{node_id, fingerprint, wireguard_pubkey, cluster_pubkey}`,
+did: two or three distinct `{node_id, fingerprint, wireguard_pubkey, cluster_pubkey}`,
 fingerprint = sha256 hex of the member identifier. `serve` reads only this file.
 
 ## Phase 4 — peer-only proof (before any authority)
@@ -124,18 +141,19 @@ point — not a moment later.
 2. The winner candidate's operator runs
    `make -C master-node election-approve EXPECT=<winner>
    URL=http://10.100.0.<exchange>:4210 KEY_DIR=$SPARKNET_STATE_DIR/keys`.
-3. The two others run
+3. Every remaining member runs
    `make -C peer-node election-request CANDIDATE=<winner>
    URL=http://10.100.0.<exchange>:4210 KEY_DIR=$SPARKNET_STATE_DIR/keys`.
 
 Assert (scriptable on the exchange host, via `GET /election/status` until
 `formed`):
 
-- `GET /election/root` carries three co-signatures from three distinct members;
+- `GET /election/root` carries one co-signature from every distinct member —
+  two in the pair, three in the full cluster;
 - the winner's identity flips to `"role": "master"`, its operational key is
   `held`, its `master-node/manifests/cluster-trust-root.json` names it;
-- the other two stay `"role": "peer"` with **no** trust_root block and **no**
-  root document — same byte-level no-loss assertion as the rehearsal's
+- the other member(s) stay `"role": "peer"` with **no** trust_root block and
+  **no** root document — same byte-level no-loss assertion as the rehearsal's
   before/after snapshot (DoD 5) applied over `wg0` delivery.
 
 ## Phase 6 — the signer, via the unit, not a shell
@@ -170,9 +188,10 @@ with capability set exactly `["sign"]`.
 
 ## Phase 8 — peer↔peer on a real transport, honestly bounded
 
-With three registry entries the governance mode is `master_governed`
-(`overlay.json`). What exists to test now is real overlay reachability and
-signed registry distribution. The **share transport itself is unbuilt**
+This step's registry has two entries (the pair), so the governance mode is
+`peer_pair` (`overlay.json`): symmetric, no Master arbitration of shares. What
+exists to test now is real overlay reachability and signed registry
+distribution. The **share transport itself is unbuilt**
 (`ports.json` 4201–4203 `spec-only`); a data-plane stanza open/close recording
 in the ledger is the premise to check **when** the transport exists
 (`overlay.json` `data_plane_stanza.unverified_on_dev_host`). Do not claim a
@@ -185,7 +204,7 @@ behaviour, since no suite on this machine can see it.
   remove the state trust root and the flipped identity fields, `wg-quick down`,
   rebuild from Phase 0.
 - Replace the Master: never by revoking — a new root with a new nonce
-  (3/3), per `consensus-protocol.md` §Re-formation.
+  (n/n, i.e. 2/2 in the pair), per `consensus-protocol.md` §Re-formation.
 - Revoke a node: one signature; the node becomes inert at the guard
   (cannot receive a valid approval). **`confirm: user`**: the guard's bind-and
   -apply refusal on the revoked host.

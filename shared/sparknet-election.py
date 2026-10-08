@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Sparknet election — the exchange that turns three votes into a trust root.
+"""Sparknet election — the exchange that turns n votes into a trust root.
 
 `shared/sparknet-consensus.py` knows how to *count* a vote and how to *check* a
 root. It does not know how a conversation happens: nothing in it collects
-ballots from three live nodes, binds the winner's operational key into a root,
-or hands that root around to be co-signed. That gap is this module.
+ballots from all live cluster members, binds the winner's operational key into a
+root, or hands that root around to be co-signed. That gap is this module.
 
 Everything is delegated. Signature work goes through `sparknet-authz.py`;
 verification, tallying, canonicalisation, co-signing and root acceptance go
@@ -214,10 +214,10 @@ def ensure_keypair(key_dir: Path, name: str, authz: Any, force: bool = False) ->
 
 
 def load_members(path: Path) -> list[dict[str, Any]]:
-    """The cluster roster: three distinct members, exactly as a root must name them.
+    """The cluster roster: two (a pair) or three distinct members, as a root names them.
 
     Membership is out of band by contract — there is no authority to bootstrap
-    from, so the three nodes exchange WireGuard public keys among themselves
+    from, so the nodes exchange WireGuard public keys among themselves
     and this file is what came of it. The exchange verifies every ballot
     against it.
     """
@@ -239,10 +239,11 @@ def load_members(path: Path) -> list[dict[str, Any]]:
     ids = [member["node_id"] for member in members]
     if len(set(ids)) != len(ids):
         raise ElectionError(REASON_MALFORMED, "membership contains a duplicate node_id")
-    if len(members) != consensus.CLUSTER_SIZE:
+    if len(members) < consensus.MIN_CLUSTER_SIZE or len(members) > consensus.MAX_CLUSTER_SIZE:
         raise ElectionError(
             REASON_MALFORMED,
-            f"a cluster is exactly {consensus.CLUSTER_SIZE} members, this file has {len(members)}",
+            f"a cluster is {consensus.MIN_CLUSTER_SIZE} to "
+            f"{consensus.MAX_CLUSTER_SIZE} members, this file has {len(members)}",
         )
     return members
 
@@ -308,7 +309,7 @@ def verify_request(
         return False, REASON_BAD_SIGNATURE
     try:
         # The bid exists to name a usable operational key, so reject one that
-        # will not parse now rather than three signatures later.
+        # will not parse now rather than all signatures later.
         authz.public_key_from_b64(request["operational_pubkey_b64"])
     except Exception:  # noqa: BLE001
         return False, REASON_MALFORMED
@@ -352,7 +353,7 @@ def build_root(
             "consensus expects fields this builder does not produce: " + ", ".join(missing),
         )
     # Prove it is buildable before anyone signs it: a root that fails
-    # canonical_root now would fail at every one of the three co-signers.
+    # canonical_root now would fail at every one of the co-signers.
     consensus.canonical_root(unsigned)
     if tally_result.get("master_node_id") != unsigned["master_node_id"]:
         raise ElectionError(REASON_ROOT_UNUSABLE, "tally and root disagree about the winner")
@@ -365,7 +366,7 @@ def build_root(
 class ElectionExchange:
     """Collects bids, ballots and root signatures; never holds a private key.
 
-    All mutation happens under a plain lock: three members posting over
+    All mutation happens under a plain lock: members posting over
     loopback race only on the order of milliseconds, and a tally computed
     across an interleaved vote insertion is the one thing here that would be
     silently wrong rather than obviously wrong.
@@ -503,7 +504,7 @@ class ElectionExchange:
             return self._status_locked()
 
     def submit_signature(self, node_id: str, signature_b64: str, election_id: str | None = None) -> dict[str, Any]:
-        """Merge one member's co-signature into the root; form it at three."""
+        """Merge one member's co-signature into the root; form it at n signatures."""
         with self._lock:
             if election_id is not None and election_id != self.election_id:
                 raise ElectionError(REASON_WRONG_ELECTION_ID, f"expected {self.election_id!r}")
@@ -523,8 +524,8 @@ class ElectionExchange:
                 raise ElectionError(REASON_MISSING_FIELD, "no signature_b64")
             # Verify this one signature on its own before storing it.
             # `verify_root` checks members-before-signatures, so a bad early
-            # signature would hide behind "missing_signature" until all three
-            # arrived — and by then three honest members had believed the
+            # signature would hide behind "missing_signature" until all members
+            # arrived — and by then honest members had believed the
             # election was done. Same delegated primitives as everywhere else:
             # authz verifies, consensus supplies the bytes.
             authz = load_authz(self.shared_dir)
@@ -561,7 +562,7 @@ class ElectionExchange:
         self.tally_result = self.consensus.tally(list(self.votes.values()), self.members, self.election_id)
 
     def _maybe_form_root_locked(self) -> None:
-        """Build the root when the tally agreed and the winner has bid; seal it at three signatures."""
+        """Build the root when the tally agreed and the winner has bid; seal it at n signatures."""
         if self.root is not None:
             if len(self.signatures) >= len(self.members):
                 self.formed_at = self.formed_at or self._clock().isoformat()
@@ -950,8 +951,8 @@ def accept_root(
     if updated.get("role") != "master":
         updated["role"] = "master"
         updated["role_note"] = (
-            f"role became 'master' when {node_id} was elected: three of three "
-            f"members co-signed cluster trust root {root_id} "
+            f"role became 'master' when {node_id} was elected: all "
+            f"{len(members)} members co-signed cluster trust root {root_id} "
             f"(formed {root.get('formed_at')}), naming this node's operational "
             f"key. See contracts/consensus-protocol.md."
         )
@@ -1017,9 +1018,9 @@ def run_member(
 ) -> dict[str, Any]:
     """The full ceremony from one member's seat: bid, vote, wait, co-sign, accept.
 
-    One process per member, deliberately. Three votes must come from three
-    seats at the table, and a function that collected them from one process
-    would prove nothing about whether three nodes can actually do this.
+    One process per member, deliberately. Votes must come from separate seats at
+    the table, and a function that collected them from one process
+    would prove nothing about whether a real cluster can actually do this.
     """
     authz = load_authz(shared_dir)
     read_keypair(key_dir, "cluster", authz)  # fail before the exchange sees us

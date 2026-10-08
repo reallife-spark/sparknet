@@ -1,22 +1,22 @@
 ---
-name: obsidian-markdown
-description: Create and edit Obsidian Flavored Markdown with wikilinks, embeds, callouts, properties, and other Obsidian-specific syntax. Use when working with .md files in Obsidian, or when the user mentions wikilinks, callouts, frontmatter, tags, embeds, or Obsidian notes.
+name: orchestrator-markdown
+description: Create and edit orchestrator Flavored Markdown with wikilinks, embeds, callouts, properties, and other orchestrator-specific syntax. Use when working with .md files in orchestrator, or when the user mentions wikilinks, callouts, frontmatter, tags, embeds, or orchestrator notes.
 ---
 
-# Obsidian Flavored Markdown Skill
+# orchestrator Flavored Markdown Skill
 
-Create and edit valid Obsidian Flavored Markdown. Obsidian extends CommonMark and GFM with wikilinks, embeds, callouts, properties, comments, and other syntax. This skill covers only Obsidian-specific extensions -- standard Markdown (headings, bold, italic, lists, quotes, code blocks, tables) is assumed knowledge.
+Create and edit valid orchestrator Flavored Markdown. orchestrator extends CommonMark and GFM with wikilinks, embeds, callouts, properties, comments, and other syntax. This skill covers only orchestrator-specific extensions -- standard Markdown (headings, bold, italic, lists, quotes, code blocks, tables) is assumed knowledge.
 
-## Workflow: Creating an Obsidian Note
+## Workflow: Creating an orchestrator Note
 
 1. **Add frontmatter** with properties (title, tags, aliases) at the top of the file. See [PROPERTIES.md](references/PROPERTIES.md) for all property types.
-2. **Write content** using standard Markdown for structure, plus Obsidian-specific syntax below.
+2. **Write content** using standard Markdown for structure, plus orchestrator-specific syntax below.
 3. **Link related notes** using wikilinks (`[[Note]]`) for internal vault connections, or standard Markdown links for external URLs.
 4. **Embed content** from other notes, images, or PDFs using the `![[embed]]` syntax. See [EMBEDS.md](references/EMBEDS.md) for all embed types.
 5. **Add callouts** for highlighted information using `> [!type]` syntax. See [CALLOUTS.md](references/CALLOUTS.md) for all callout types.
-6. **Verify** the note renders correctly in Obsidian's reading view.
+6. **Verify** the note renders correctly in orchestrator's reading view.
 
-> When choosing between wikilinks and Markdown links: use `[[wikilinks]]` for notes within the vault (Obsidian tracks renames automatically) and `[text](url)` for external URLs only.
+> When choosing between wikilinks and Markdown links: use `[[wikilinks]]` for notes within the vault (orchestrator tracks renames automatically) and `[text](url)` for external URLs only.
 
 ## Internal Links (Wikilinks)
 
@@ -112,7 +112,7 @@ This entire block is hidden in reading view.
 %%
 ```
 
-## Obsidian-Specific Formatting
+## orchestrator-Specific Formatting
 
 ```markdown
 ==Highlighted text==                   Highlight syntax
@@ -140,7 +140,7 @@ graph TD
 ```
 ````
 
-To link Mermaid nodes to Obsidian notes, add `class NodeName internal-link;`.
+To link Mermaid nodes to orchestrator notes, add `class NodeName internal-link;`.
 
 ## Footnotes
 
@@ -189,7 +189,7 @@ Reviewed in [[Meeting Notes 2024-01-10#Decisions]].
 
 ## References
 
-- [Obsidian Flavored Markdown](https://help.obsidian.md/obsidian-flavored-markdown)
+- [orchestrator Flavored Markdown](https://help.obsidian.md/obsidian-flavored-markdown)
 - [Internal links](https://help.obsidian.md/links)
 - [Embed files](https://help.obsidian.md/embeds)
 - [Callouts](https://help.obsidian.md/callouts)

@@ -1,7 +1,7 @@
 ---
 name: wiki-dedup
 description: >
-  Scan the Obsidian wiki for page-level identity collisions — different pages covering the same
+  Scan the orchestrator wiki for page-level identity collisions — different pages covering the same
   concept under different names (e.g. "RSC" vs "React Server Components") — and merge them.
   Use this skill when the user says "dedup my wiki", "find duplicate pages", "merge duplicates",
   "identity resolution", "consolidate my wiki", "I have duplicate pages", or "my wiki has two pages

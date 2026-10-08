@@ -441,8 +441,9 @@ def test_a_node_declares_itself_peer_until_it_is_elected(role_dir: Path):
 def test_a_master_capable_node_is_eligible_and_claims_no_key():
     """The pre-election state must be explicit, not merely implied by the role.
 
-    Fail-closed is the whole property: until three distinct members have signed a
-    trust root, this node must be recorded as eligible but unkeyed. A manifest
+    Fail-closed is the whole property: until a unanimous cluster trust root has
+    been signed (every member of the pair or trio), this node must be recorded
+    as eligible but unkeyed. A manifest
     that quietly carried an operational key, or omitted the election block, would
     let a freshly provisioned node be treated as if it already had authority.
     """
@@ -521,6 +522,10 @@ def test_nothing_in_the_repo_still_says_worker():
             if not path.is_file() or path.suffix not in SCAN_SUFFIXES:
                 continue
             if {"__pycache__", ".pytest_cache", ".ruff_cache"} & set(path.parts):
+                continue
+            # Plans are provenance: they may record what things were called at
+            # the time (see the VOCABULARY_SURFACES comment above).
+            if "plans" in set(path.parts):
                 continue
             # This file names the old vocabulary on purpose, to search for it.
             if path.resolve() == Path(__file__).resolve():
@@ -951,15 +956,18 @@ def test_the_trust_root_replaces_the_single_key_model(ports: dict):
         "the root must state what it supersedes, or the old single-key model "
         "stays readable as though it were current"
     )
-    assert root["members"]["count"] == 3
-    assert root["members"]["fixed_at_three"] is True, (
-        "three is a protocol decision, not a tunable; a fourth member changes the "
-        "threshold and needs its own design"
+    assert root["members"]["min"] == 2, (
+        "a pair is the smallest cluster that still refuses self-elevation"
     )
-    assert root["unanimity"]["threshold"] == "3 of 3"
+    assert root["members"]["max"] == 3
+    assert root["members"]["boundary"], (
+        "the count range is a protocol decision, not a tunable; a fourth member "
+        "changes the threshold and needs its own design"
+    )
+    assert root["unanimity"]["threshold"].startswith("n of n")
     assert root["not_threshold_crypto"], (
-        "state plainly that this is three signatures, not threshold cryptography, "
-        "so nobody designs a quorum scheme expecting MPC semantics"
+        "state plainly that this is ordinary per-member signatures, not threshold "
+        "cryptography, so nobody designs a quorum scheme expecting MPC semantics"
     )
 
 
@@ -986,7 +994,7 @@ def test_root_acceptance_requires_distinct_signers_that_the_root_names(ports: di
 
 def test_replace_requires_unanimity_but_revoke_does_not(ports: dict):
     table = load("identity-schema.json")["cluster_trust_root"]["threshold_table"]
-    assert table["replace_master"].startswith("3 of 3"), (
+    assert table["replace_master"].startswith("n of n"), (
         "changing who holds authority must not be unilateral"
     )
     assert table["revoke_node"].startswith("1"), (

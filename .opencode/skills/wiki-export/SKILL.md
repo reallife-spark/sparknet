@@ -1,7 +1,7 @@
 ---
 name: wiki-export
 description: >
-  Export the Obsidian wiki's knowledge graph to structured formats for use in external tools.
+  Export the orchestrator wiki's knowledge graph to structured formats for use in external tools.
   Use this skill when the user says "export wiki", "export graph", "export to JSON", "export to Gephi",
   "export to Neo4j", "graphml", "visualize wiki", "knowledge graph export", "export to OKF",
   "OKF bundle", "open knowledge format", "export as markdown bundle", or wants to use their

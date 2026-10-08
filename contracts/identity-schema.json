@@ -49,9 +49,11 @@
     "canonicalised_by": "contracts/consensus-protocol.md",
     "replaces": "master_public_key as the root of authority. That field survives as the operational public key a root binds, not as an authority in itself.",
     "members": {
-      "count": 3,
-      "fixed_at_three": true,
-      "fixed_rationale": "Three is the smallest cluster that can tolerate one dishonest member while refusing to let it win. A fourth member changes the threshold and needs its own protocol, so the count is not a parameter."
+      "min": 2,
+      "max": 3,
+      "min_is": "a pair \u2014 two members agreeing 2 of 2. The smallest cluster that can still refuse a self-elevation, because a single compromised node cannot install itself without the other's co-signature.",
+      "max_is": "the full cluster \u2014 three members agreeing 3 of 3.",
+      "boundary": "A fourth member changes the agreement threshold and needs its own protocol, so the count is a bounded range, not a free parameter."
     },
     "two_keys": {
       "cluster_key": "per member; signs the trust root only; never signs a registry entry",
@@ -74,7 +76,7 @@
       },
       "members": {
         "type": "array",
-        "length": 3,
+        "length": "2 or 3 (see members.min / members.max)",
         "items": {
           "node_id": "string",
           "fingerprint": "hex \u2014 sha256 of the projected identity",
@@ -93,32 +95,32 @@
       }
     },
     "acceptance_rules": [
-      "three valid signatures",
-      "from three DISTINCT members \u2014 a member voting three times has voted once",
+      "n valid signatures \u2014 exactly one per member",
+      "from n DISTINCT members \u2014 a member voting multiple times has voted once",
       "each signature matching the cluster_pubkey of a member the root itself names",
       "the registry being verified is signed under master_pubkey as this root names it"
     ],
     "acceptance_rules_note": "The third and fourth rules are what stop a root from naming members while being signed by strangers, and from binding an operational key nothing ever recognised. Without them the first two rules are decorative.",
     "unanimity": {
-      "threshold": "3 of 3",
-      "chosen_over_majority_because": "a 2-of-3 majority lets one compromised node paired with any other install a hostile master; with unanimity a single bad node can deny an election but can never win one",
+      "threshold": "n of n \u2014 2 of 2 for a pair, 3 of 3 for the full cluster",
+      "chosen_over_majority_because": "an n\u22121-of-n majority lets one compromised node paired with another install a hostile master; with unanimity a single bad node can deny an election but can never win one",
       "cost": "one offline node blocks the election indefinitely",
       "cost_accepted_because": "the alternative quietly reintroduces the single point of compromise this protocol exists to remove",
       "escape": "re-formation, which itself requires unanimity among the members it names"
     },
     "threshold_table": {
-      "replace_master": "3 of 3 \u2014 changes who holds authority",
+      "replace_master": "n of n \u2014 changes who holds authority",
       "revoke_node": "1 signature \u2014 a revoked node is inert either way, so revocation is a safe denial"
     },
     "threshold_table_note": "Unilateral revocation only removes reach. Unilateral replacement would hand the key to whoever committed the change. This is the same reasoning as capabilities.json's escalation_note.",
-    "not_threshold_crypto": "Three ordinary Ed25519 signatures over identical canonical bytes. Unanimity protects WHO MAY HOLD the operational key, not each individual signature.",
-    "bootstrap": "There is no authority to bootstrap from: the registry ships empty. Members exchange WireGuard public keys out of band, then co-sign the first root. The first root is itself a 3-of-3 event.",
+    "not_threshold_crypto": "Ordinary Ed25519 signatures over identical canonical bytes, one per member. Unanimity protects WHO MAY HOLD the operational key, not each individual signature.",
+    "bootstrap": "There is no authority to bootstrap from: the registry ships empty. Members exchange WireGuard public keys out of band, then co-sign the first root. The first root is itself an n-of-n event.",
     "reformation": {
       "on_master_change": "a new root is formed; its nonce differs, so it is not a replay of the root in force. The superseded root still verifies on its own - nothing inside it says it was replaced - so re-formation means every node must LEARN the new root, and a signer pointed at a different root than its ledger records is refused without --accept-requalification. See consensus-protocol.md, Re-formation.",
       "on_blocked_election": "the remaining members may form a new root with new membership, dropping the member that would not agree",
       "not_a_bypass": "re-formation cannot install a master without unanimity among the members it names; a node removed by re-formation cannot re-form its way back alone"
     },
-    "cluster_key_use": "A cluster key signs only the root. Because every root needs all three signatures, one stolen cluster key cannot install a master on its own \u2014 it is one of three required signatures."
+    "cluster_key_use": "A cluster key signs only the root. Because every root needs all members to sign, one stolen cluster key cannot install a master on its own \u2014 it is one of the required signatures."
   },
   "master_public_key": {
     "path": "manifests/keys/master-ed25519.pub.b64",

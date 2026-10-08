@@ -22,6 +22,12 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.6",
 ]
+# Opt-in via `make chroma-dev`. The fabric's runtime allow-list stays
+# `cryptography` only — chromadb backs the OPTIONAL local index in
+# scripts/sparknet-chroma.py and must never leak into `dependencies`.
+chroma = [
+    "chromadb>=0.5",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

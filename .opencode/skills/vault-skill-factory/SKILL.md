@@ -1,7 +1,7 @@
 ---
 name: vault-skill-factory
 description: >
-  Generate a portable, self-contained Agent Skill from mature, curated Obsidian wiki pages —
+  Generate a portable, self-contained Agent Skill from mature, curated orchestrator wiki pages —
   turning a cluster of verified knowledge into a reusable "digital expert" (SKILL.md + references/).
   Use this skill when the user says "/vault-skill-factory", "make a skill from my wiki", "turn these
   pages into a skill", "generate an agent skill from my vault", "package my notes on X as a skill",

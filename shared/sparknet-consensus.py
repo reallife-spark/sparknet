@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Sparknet consensus: how three nodes agree on who holds the signing key.
+"""Sparknet consensus: how the members of a cluster agree on who holds the key.
 
-The fabric elects its Master rather than being told where one is. Three members
-join; of those three, one is elected, and the election requires unanimity because
-a 2-of-3 majority would let one compromised node paired with any other install a
-hostile Master.
+The fabric elects its Master rather than being told where one is. A cluster is a
+pair (two members) or the full cluster (three); of them, one is elected, and the
+election requires unanimity because any n−1-of-n majority would let one
+compromised node paired with another install a hostile Master.
 
-The result is a **cluster trust root**: three ordinary Ed25519 signatures over
-identical canonical bytes, from three distinct members, binding the elected
-Master's operational public key. This is *not* threshold cryptography and is not
-MPC — unanimity protects *who may hold* the operational key, not each individual
+The result is a **cluster trust root**: n ordinary Ed25519 signatures over
+identical canonical bytes, from n distinct members, binding the elected Master's
+operational public key. This is *not* threshold cryptography and is not MPC —
+unanimity protects *who may hold* the operational key, not each individual
 signature.
 
 Ed25519 is not reimplemented here. Every signing and verification operation goes
@@ -38,12 +38,17 @@ from typing import Any
 
 SCHEMA_VERSION = "1.0"
 
-#: A cluster is three members. This is a protocol decision, not a tunable: a
-#: fourth member changes the agreement threshold and needs its own design.
-CLUSTER_SIZE = 3
+#: A cluster is two (a pair) or three (the full cluster) members. This is a
+#: protocol decision, not a tunable: a fourth member changes the agreement
+#: threshold and needs its own design.
+MIN_CLUSTER_SIZE = 2
+MAX_CLUSTER_SIZE = 3
 
 #: Unanimity. See contracts/consensus-protocol.md for why not a majority.
-UNANIMITY = CLUSTER_SIZE
+#: Computed from the roster at tallied size, so a pair requires 2 of 2 and the
+#: full cluster requires 3 of 3 — never a fixed count.
+def _unanimity(member_ids: frozenset[str]) -> int:
+    return len(member_ids)
 
 DEFAULT_SHARED_DIR = Path(__file__).resolve().parent
 
@@ -127,7 +132,7 @@ def canonical_root(root: dict[str, Any]) -> dict[str, Any]:
     """Project a root down to its agreement-bearing fields, sorted.
 
     Anything not in ROOT_SIGNED_FIELDS is dropped, so operational metadata cannot
-    change what the three members agreed to.
+    change what the members agreed to.
     """
     if not isinstance(root, dict):
         raise ConsensusError("root must be a mapping")
@@ -159,7 +164,7 @@ def canonical_root(root: dict[str, Any]) -> dict[str, Any]:
 
 
 def root_bytes(root: dict[str, Any]) -> bytes:
-    """Deterministic serialisation of the root the three members sign.
+    """Deterministic serialisation of the root the members sign.
 
     Same rule as the identity canonical form: sort_keys and tight separators, so
     the bytes do not depend on dict insertion order or Python formatting.
@@ -180,7 +185,7 @@ def _now(clock: Callable[[], datetime]) -> datetime:
     if value.tzinfo is None:
         raise ConsensusError(
             "clock returned a naive datetime; consensus requires an aware clock so "
-            "that three nodes cannot disagree about what time it is"
+            "that members cannot disagree about what time it is"
         )
     return value
 
@@ -279,6 +284,7 @@ def tally(
     member_ids = {m["node_id"] for m in members}
     if len(member_ids) != len(members):
         raise ConsensusError("membership contains a duplicate node_id")
+    needed = _unanimity(frozenset(member_ids))
 
     seen: dict[str, str] = {}
     candidates: dict[str, set[str]] = {}
@@ -317,14 +323,14 @@ def tally(
         seen[voter] = vote["candidate_node_id"]
         candidates.setdefault(vote["candidate_node_id"], set()).add(voter)
 
-    agreed_candidates = {c: v for c, v in candidates.items() if len(v) == UNANIMITY}
+    agreed_candidates = {c: v for c, v in candidates.items() if len(v) == needed}
     if not agreed_candidates:
         best = max((len(v) for v in candidates.values()), default=0)
         return {
             "agreed": False,
             "reason": REASON_NOT_AGREED,
             "detail": (
-                f"no candidate has all {UNANIMITY} members; best had {best}"
+                f"no candidate has all {needed} members; best had {best}"
                 if considered
                 else "no votes for this election"
             ),
@@ -387,9 +393,9 @@ def sign_root(
     """Sign a root with **one** member's cluster key. This is the production ceremony.
 
     Each member runs this on its own node and sends the resulting one-entry map to
-    the others; when three maps arrive they are merged into `root["signatures"]`.
+    the others; when every member's map arrives they are merged into `root["signatures"]`.
     No process ever holds more than one cluster key, which is the property that
-    makes unanimity meaningful: `attach_root_signatures` can take all three, but
+    makes unanimity meaningful: `attach_root_signatures` can take every key, but
     only as a fixture, and the live path never uses it.
 
     Merging is deliberately dumb — `merge_root_signatures` just refuses duplicates
@@ -435,7 +441,7 @@ def merge_root_signatures(
     if missing:
         raise ConsensusError(
             f"root is unsigned by: {', '.join(sorted(missing))}; a root needs all "
-            f"{CLUSTER_SIZE} members to sign"
+            f"{len(member_ids)} members to sign"
         )
     signed = dict(root)
     signed["signatures"] = merged
@@ -449,12 +455,12 @@ def attach_root_signatures(
 
     `cluster_keys_b64` maps node_id -> base64 private key.
 
-    Read the docstring on this function before using it in anger: it takes all
-    three private keys at once, so it is a *convenience and a test fixture*, not the
+    Read the docstring on this function before using it in anger: it takes every
+    member's private key at once, so it is a *convenience and a test fixture*, not the
     production ceremony. A live cluster co-signs one root with each member signing
     only its own copy, then merges the signature maps off the WireGuard interface.
-    Handing this function three keys hands one process the ability to produce a
-    root on its own, which is exactly what `tally`'s 2-of-3 refusal exists to
+    Handing this function every key hands one process the ability to produce a
+    root on its own, which is exactly what `tally`'s unanimity refusal exists to
     prevent. Production uses `sign_root` per member instead.
     """
     authz = _load_authz(shared_dir)
@@ -464,7 +470,7 @@ def attach_root_signatures(
     if missing:
         raise ConsensusError(
             f"no cluster key supplied for: {', '.join(sorted(missing))}; a root "
-            f"needs all {CLUSTER_SIZE} members to sign"
+            f"needs all {len(member_ids)} members to sign"
         )
     signatures: dict[str, str] = {}
     message = root_bytes(root)
@@ -488,7 +494,7 @@ def verify_root(
     `cluster_pubkey` the root itself states.
 
     The last check is the one that carries weight. Without it a root could name
-    three members and be signed by three strangers. With `trust` supplied (the
+    members and be signed by strangers. With `trust` supplied (the
     root already held), a root with a different nonce is rejected as superseded,
     which is what makes re-formation actually replace anything.
     """
@@ -510,9 +516,10 @@ def verify_root(
             )
 
     members = projected["members"]
-    if len(members) != CLUSTER_SIZE:
+    if len(members) < MIN_CLUSTER_SIZE or len(members) > MAX_CLUSTER_SIZE:
         return False, (
-            f"{REASON_WRONG_MEMBER_COUNT}: expected {CLUSTER_SIZE}, got {len(members)}"
+            f"{REASON_WRONG_MEMBER_COUNT}: expected {MIN_CLUSTER_SIZE} or "
+            f"{MAX_CLUSTER_SIZE}, got {len(members)}"
         )
     ids = [m["node_id"] for m in members]
     if len(set(ids)) != len(ids):

@@ -28,13 +28,14 @@ updated in the same commit.
 
 ## `sparknet-consensus.py`
 
-How three nodes agree on who holds the signing key: master election, the
-3-of-3 unanimity rule, canonical cluster trust roots, and re-formation when the
-Master changes. The narrative contract is `contracts/consensus-protocol.md`.
+How the cluster agrees on who holds the signing key: master election, the
+n-of-n unanimity rule (2 of 2 in a pair, 3 of 3 in the full cluster), canonical
+cluster trust roots, and re-formation when the Master changes. The narrative
+contract is `contracts/consensus-protocol.md`.
 
-**Why it is here and not in the Master.** All three members run this, including
-the two that are only peers. The Master does not decide who the Master is — the
-three nodes do. Putting the decision in `master-node/services/` would hand the
+**Why it is here and not in the Master.** Every member runs this, including
+those that are only peers. The Master does not decide who the Master is — the
+members do. Putting the decision in `master-node/services/` would hand the
 decision to the party the decision is about, which is the thing the election
 exists to prevent.
 
@@ -53,6 +54,28 @@ this module raises rather than falling back to a local implementation.
 **Every deadline is injected.** No code path here reads the wall clock, so the
 agreement rules are testable in seconds instead of hours, and a missed window
 cannot hide behind a test nobody waits for.
+
+## `sparknet-http.py`
+
+The signed JSON transport both roles dial: stdlib HTTP client + server where
+every request carries an Ed25519 signature over method+path+body-sha256+
+timestamp (see the module docstring for the exact envelope). The first real
+consumer is the peer's dispatch bridge (`peer-node/services/
+sparknet-dispatch-bridge.py --serve`, port 4096, `tests/test_http_transport.py`).
+
+**Why it is here and not in a role.** A client that signs and a server that
+verifies must agree byte-for-byte on what the signature covers; two copies
+would drift the way authz copies would, and requests would verify on the node
+that made them and fail everywhere else.
+
+**It does not reimplement Ed25519.** Every signing and verification operation
+calls into `sparknet-authz.py`, loaded by path from this directory — the same
+loader pattern and the same refusal to fall back that `sparknet-consensus.py`
+uses.
+
+**Replay defence is the freshness window.** A signature is only good within
+`max_age_seconds` of the timestamp it names, and the clock is injectable so the
+window is testable without sleeping.
 
 ## Adding to this directory
 

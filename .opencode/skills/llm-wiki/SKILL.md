@@ -1,7 +1,7 @@
 ---
 name: llm-wiki
 description: >
-  The foundational knowledge distillation pattern for building and maintaining an AI-powered Obsidian wiki.
+  The foundational knowledge distillation pattern for building and maintaining an AI-powered orchestrator wiki.
   Based on Andrej Karpathy's LLM Wiki architecture. Use this skill whenever the user wants to understand the
   wiki pattern, set up a new knowledge base, or needs guidance on the three-layer architecture (raw sources →
   wiki → schema). Also use when discussing knowledge management strategy, wiki structure decisions, or how
@@ -25,10 +25,10 @@ Don't confuse this with the in-vault `_raw/` staging folder, which is a differen
 
 ### Layer 2: The Wiki (LLM-maintained)
 
-A collection of interconnected Obsidian-compatible markdown files organized by category. This is the compiled knowledge — synthesized, cross-referenced, and navigable. Each page has:
+A collection of interconnected orchestrator-compatible markdown files organized by category. This is the compiled knowledge — synthesized, cross-referenced, and navigable. Each page has:
 
 - YAML frontmatter (title, category, tags, sources, timestamps)
-- Obsidian `[[wikilinks]]` connecting related concepts
+- orchestrator `[[wikilinks]]` connecting related concepts
 - Clear provenance — every claim traces back to a source
 
 The wiki lives at the path configured via `VAULT_PATH` in `.env`.
@@ -82,7 +82,7 @@ $VAULT_PATH/
 
 **Cross-referencing:** Project pages should `[[wikilink]]` to global pages and vice versa. A project's overview page should link to the key concept, skill, and entity pages relevant to that project — whether they live under the project or globally.
 
-**Naming rule:** The project overview file must be named `<project-name>.md`, not `_project.md`. Obsidian's graph view uses the filename as the node label — `_project.md` makes every project appear as `_project` in the graph, making it unreadable. So `projects/my-project/my-project.md`, `projects/another-project/another-project.md`, etc.
+**Naming rule:** The project overview file must be named `<project-name>.md`, not `_project.md`. orchestrator's graph view uses the filename as the node label — `_project.md` makes every project appear as `_project` in the graph, making it unreadable. So `projects/my-project/my-project.md`, `projects/another-project/another-project.md`, etc.
 
 Each project directory has an overview page structured like this:
 
@@ -207,7 +207,7 @@ Things that are unresolved or need more sources.
 
 The generic template suits most sources. **Academic papers are the exception.** For ML/AI/LLM/VLM (and similar) papers landing in `references/`, the substance lives in the architecture, the equations, and the results table — exactly what a terse "Key Ideas" list flattens away. For these, use the richer template below. This is the one place where *"compile, don't retrieve"* yields to a thorough, self-contained walkthrough a reader could study instead of the paper.
 
-Obsidian renders the needed primitives natively, so no extra tooling is required: Mermaid fenced diagrams, `$$…$$` LaTeX (MathJax), markdown tables, and `![[image]]` / `![[paper.pdf#page=N]]` embeds.
+orchestrator renders the needed primitives natively, so no extra tooling is required: Mermaid fenced diagrams, `$$…$$` LaTeX (MathJax), markdown tables, and `![[image]]` / `![[paper.pdf#page=N]]` embeds.
 
 Use this template only when the source is an academic paper (arXiv/conference) with load-bearing figures or equations. Everything else uses the generic Page Template above. Frontmatter, provenance markers, confidence, lifecycle, and `relationships:` are unchanged — only the body sections differ.
 
@@ -287,7 +287,7 @@ Example:
 ```
 
 **Why this syntax:**
-- `^[...]` is footnote-adjacent in Obsidian — renders cleanly and never collides with `[[wikilinks]]`.
+- `^[...]` is footnote-adjacent in orchestrator — renders cleanly and never collides with `[[wikilinks]]`.
 - Inline (suffix) so a single bullet stays a single bullet.
 - Default = extracted means existing pages without markers stay valid.
 
@@ -484,7 +484,7 @@ Use the cheapest verification path that proves the new content is visible: `qmd 
 
 5. **Human curates, LLM maintains.** The human decides what sources to add and what questions to ask. The LLM handles the bookkeeping — updating cross-references, maintaining consistency, noting contradictions.
 
-6. **Obsidian is the IDE.** The user browses and explores the wiki in Obsidian. Everything must be valid Obsidian markdown with working wikilinks.
+6. **orchestrator is the IDE.** The user browses and explores the wiki in orchestrator. Everything must be valid orchestrator markdown with working wikilinks.
 
 ## Link Format
 

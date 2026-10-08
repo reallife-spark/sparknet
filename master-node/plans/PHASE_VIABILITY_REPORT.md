@@ -129,4 +129,4 @@ each asserts **no mutation** by hashing the whole tree before and after — so
 - **`agents/*/agent.py` are stubs** and `agents/*.service` run `/bin/true`.
 - **Git push is blocked**, and a credential that was once committed in plaintext
   must be rotated and purged from history before any push. See
-  `plans/GITHUB_PUSH_BLOCKER.md`.
+  `GITHUB_PUSH_BLOCKER.md`.

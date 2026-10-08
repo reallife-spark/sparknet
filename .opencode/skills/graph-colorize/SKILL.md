@@ -1,26 +1,26 @@
 ---
 name: graph-colorize
 description: >
-  Color-code the Obsidian graph view by rewriting `.obsidian/graph.json` colorGroups.
+  Color-code the orchestrator graph view by rewriting `.obsidian/graph.json` colorGroups.
   Use this skill when the user says "color my graph", "color code obsidian", "colorize
   the graph", "color the graph by tag", "color by category", "highlight visibility
   in graph", "make the graph colorful", "distinguish tags in graph", or wants nodes
-  in Obsidian's graph view tinted by tag, folder, or visibility. Generates a
+  in orchestrator's graph view tinted by tag, folder, or visibility. Generates a
   `colorGroups` array from the vault's actual tags/categories and merges it into the
   existing graph.json without clobbering other graph settings. Always backs up first.
 ---
 
-# Graph Colorize — Color-code the Obsidian Graph View
+# Graph Colorize — Color-code the orchestrator Graph View
 
-You are rewriting `$VAULT_PATH/.obsidian/graph.json` so Obsidian's graph view tints nodes by tag, folder, or visibility.
+You are rewriting `$VAULT_PATH/.obsidian/graph.json` so orchestrator's graph view tints nodes by tag, folder, or visibility.
 
-Obsidian stores graph settings in `<vault>/.obsidian/graph.json`. The `colorGroups` array is a list of `{query, color}` pairs; the first matching query wins per node. Queries use Obsidian's search syntax: `tag:#foo`, `path:"concepts"`, `file:foo`, etc. Color is `{"a": 1, "rgb": <packed-int>}` where the int is `(R << 16) | (G << 8) | B`.
+orchestrator stores graph settings in `<vault>/.obsidian/graph.json`. The `colorGroups` array is a list of `{query, color}` pairs; the first matching query wins per node. Queries use orchestrator's search syntax: `tag:#foo`, `path:"concepts"`, `file:foo`, etc. Color is `{"a": 1, "rgb": <packed-int>}` where the int is `(R << 16) | (G << 8) | B`.
 
 ## Before You Start
 
 1. **Resolve config** — follow the Config Resolution Protocol in `llm-wiki/SKILL.md` (walk up CWD for `.env` → `~/.wiki/config` → prompt setup). This gives `VAULT_PATH`.
-2. Confirm `$VAULT_PATH/.obsidian/` exists. If it doesn't, the vault has never been opened in Obsidian — tell the user to open the vault once in Obsidian, then re-run.
-3. **Warn the user if Obsidian is likely open**: Obsidian overwrites `graph.json` on close. Tell them to close the vault first, or be ready to reload (Cmd/Ctrl+R) and not touch the graph settings until they reload.
+2. Confirm `$VAULT_PATH/.obsidian/` exists. If it doesn't, the vault has never been opened in orchestrator — tell the user to open the vault once in orchestrator, then re-run.
+3. **Warn the user if orchestrator is likely open**: orchestrator overwrites `graph.json` on close. Tell them to close the vault first, or be ready to reload (Cmd/Ctrl+R) and not touch the graph settings until they reload.
 
 ## Step 1: Pick a Mode
 
@@ -96,7 +96,7 @@ Emit exactly three entries, in this order (first-match wins, so most restrictive
 {"query": "tag:#visibility/pii", "color": {"a": 1, "rgb": 14767961}}
 ```
 
-Pages with no `visibility/` tag remain Obsidian's default color — do not add a catch-all.
+Pages with no `visibility/` tag remain orchestrator's default color — do not add a catch-all.
 
 ### Mode: `combined`
 
@@ -152,8 +152,8 @@ Graph colorized → .obsidian/graph.json
   Palette: blue, orange, red, teal, green, yellow, purple
   Backup:  .obsidian/graph.json.backup-20260424-1432
 
-Reload Obsidian (Cmd/Ctrl+R) to see the new colors.
-If Obsidian is currently open, close it first OR reload immediately — Obsidian
+Reload orchestrator (Cmd/Ctrl+R) to see the new colors.
+If orchestrator is currently open, close it first OR reload immediately — orchestrator
 overwrites graph.json on close and can erase these changes.
 ```
 
@@ -168,13 +168,13 @@ Append to `$VAULT_PATH/log.md`:
 - **No tags in vault** in `by-tag` mode → fall back to `by-category` and tell the user.
 - **User wants to undo** → restore from the latest `graph.json.backup-*` and note that in `log.md`.
 - **User wants to clear all color groups** → set `colorGroups: []`, back up, log as `GRAPH_COLORIZE mode=clear`.
-- **`.obsidian/` missing** → the vault hasn't been opened in Obsidian yet. Tell the user to open it once, then re-run. Don't create `.obsidian/` yourself — Obsidian populates many files there on first open.
+- **`.obsidian/` missing** → the vault hasn't been opened in orchestrator yet. Tell the user to open it once, then re-run. Don't create `.obsidian/` yourself — orchestrator populates many files there on first open.
 - **Query syntax gotchas**: folder paths with spaces need quoting (`path:"my folder"`); tags with nested slashes work literally (`tag:#visibility/internal`); don't URL-encode.
-- **Obsidian open during edit**: surface the risk — Obsidian reads graph.json at startup and **rewrites it on close**. If the user is editing live, tell them to close Obsidian first or run the reload (Cmd/Ctrl+R) immediately and avoid opening graph settings before they do.
+- **orchestrator open during edit**: surface the risk — orchestrator reads graph.json at startup and **rewrites it on close**. If the user is editing live, tell them to close orchestrator first or run the reload (Cmd/Ctrl+R) immediately and avoid opening graph settings before they do.
 
 ## Notes
 
 - This is a pure config edit — no page content changes, no frontmatter writes.
 - Re-running is safe: each run creates a new backup, only `colorGroups` is rewritten.
 - If the user has manually curated color groups they want to keep, offer `combined` mode or ask before overwriting.
-- The palette here matches `wiki-export`'s `graph.html` community colors, so the Obsidian graph and the exported visualization look consistent.
+- The palette here matches `wiki-export`'s `graph.html` community colors, so the orchestrator graph and the exported visualization look consistent.

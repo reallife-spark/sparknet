@@ -78,6 +78,24 @@ GIT_SOURCES: dict[str, tuple[str, str]] = {
     "skill-creator": ("/mnt/nvme/github/obsidian-wiki", ".skills/skill-creator"),
 }
 
+# Skills authored in this repository, not vendored from the farm or upstream.
+# A local skill has no source to copy and no upstream to drift against, so
+# `--apply` must never prune it, `--check` must accept it at face value, and
+# opencode bundles it from the same `.opencode/skills/` tree as the vendored
+# suite. The dir lives here in the repo: `.opencode/skills/<name>/SKILL.md`.
+LOCAL_SKILLS: set[str] = {
+    "wiki-audit",
+}
+
+# Farm directory names that are vendored under a *different* dest name. Used
+# when sparknet renames an upstream skill rather than patching its content.
+# Key: farm source dir. Value: name recorded in .sync.json and on disk.
+RENAMES: dict[str, str] = {
+    "obsidian-bases": "orchestrator-bases",
+    "obsidian-cli": "orchestrator-cli",
+    "obsidian-markdown": "orchestrator-markdown",
+}
+
 IGNORED_NAMES = {"__pycache__", ".DS_Store", ".pytest_cache"}
 IGNORED_SUFFIXES = {".pyc", ".pyo"}
 
@@ -203,6 +221,57 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+# The word "Obsidian" in the vendored suite names the markdown editor this
+# vault no longer goes by. When sparknet rebrands the suite, prose naming the
+# editor becomes prose naming the orchestrator. Four things are deliberately
+# left alone because they are real external artifacts, not sparknet prose:
+#   * `.obsidian/`            — the editor's config directory (a folder name)
+#   * `Obsidian CLI`          — the external command-line tool some skills drive
+#   * `https://help.obsidian.md` etc. — the editor's documentation URLs
+#   * `obsidian-wiki`         — the upstream repository this suite is vendored from
+# Renames are ordered: whole skill names first, then phrases, then the bare
+# editor word with guards against `.obsidian`, `Obsidian CLI` and URL hosts.
+DIALECT_RENAMES = (
+    ("obsidian-cli", "orchestrator-cli"),
+    ("obsidian-markdown", "orchestrator-markdown"),
+    ("obsidian-bases", "orchestrator-bases"),
+    ("Obsidian Bases", "orchestrator Bases"),
+    ("Obsidian Vault", "orchestrator Vault"),
+)
+# Bare word rewrite. `(?<![.\w-])` kills `.obsidian` (URL host, config dir)
+# and `obsidian-wiki`; `(?! CLI)` protects the external tool name.
+DIALECT_WORD = re.compile(r"(?<![.\w-])Obsidian\b(?! CLI)")
+
+
+def dialect_rewrite(text: str) -> str:
+    """Apply the sparknet dialect to vendored skill content.
+
+    Conservative by design: only the editor's name is rebranded. The renames
+    above touch whole skill names and product phrases; the word rule rewrites
+    bare "Obsidian" when it stands alone as the editor's name, with explicit
+    guards for the external artifacts listed above.
+    """
+    for old, new in DIALECT_RENAMES:
+        text = text.replace(old, new)
+    return DIALECT_WORD.sub("orchestrator", text)
+
+
+def dialect_rewrite_tree(root: Path) -> None:
+    """Apply the dialect to every text file under `root`, in place."""
+    for path in sorted(root.rglob("*")):
+        if not path.is_file():
+            continue
+        if path.name in IGNORED_NAMES or path.suffix in IGNORED_SUFFIXES:
+            continue
+        try:
+            text = path.read_text()
+        except (UnicodeDecodeError, OSError):
+            continue
+        rewritten = dialect_rewrite(text)
+        if rewritten != text:
+            path.write_text(rewritten)
+
+
 def source_digest(name: str, src: Path) -> str:
     """Hash a source skill: every tracked file plus its relative path."""
     parts: list[str] = []
@@ -252,6 +321,7 @@ def find_host_paths() -> list[str]:
 def apply_mode() -> None:
     included = [n for n in skill_dirs() if n not in EXCLUSIONS]
     included += [n for n in GIT_SOURCES if n not in included]
+    included += [n for n in LOCAL_SKILLS if n not in included]
 
     DEST.mkdir(parents=True, exist_ok=True)
     print(f"source : {SOURCE}")
@@ -259,6 +329,8 @@ def apply_mode() -> None:
     print(f"ship   : {len(included)} skills")
     for name, reason in EXCLUSIONS.items():
         print(f"  skip {name:<22} {reason}")
+    for name in sorted(LOCAL_SKILLS):
+        print(f"  local {name:<22} authored in-repo, not vendored")
 
     state: dict[str, object] = {
         "upstream": UPSTREAM_REPO,
@@ -271,29 +343,44 @@ def apply_mode() -> None:
     }
 
     for name in included:
+        dest_name = RENAMES.get(name, name)
+        if name in LOCAL_SKILLS:
+            if not (DEST / name / "SKILL.md").is_file():
+                sys.exit(f"local skill {name} missing SKILL.md at {DEST.relative_to(REPO_ROOT)}/{name}")
+            state["skills"][name] = {
+                "source": "local",
+                "sha256": "local",
+            }
+            continue
         if name in GIT_SOURCES:
             repo, relpath = GIT_SOURCES[name]
             src = Path(repo) / relpath
-            copy_skill_from_git(name, Path(repo), relpath, DEST)
-            print(f"  vendored {name:<22} (git-tracked only, from {relpath})")
+            copy_skill_from_git(dest_name, Path(repo), relpath, DEST)
+            print(f"  vendored {dest_name:<22} (git-tracked only, from {relpath})")
         else:
             src = SOURCE / name
             if not src.is_dir():
                 sys.exit(f"missing source for {name}: {src}")
-            copy_skill(name, src, DEST)
-            print(f"  vendored {name}")
-        patches = apply_patches(name)
+            copy_skill(dest_name, src, DEST)
+            if dest_name != name:
+                print(f"  vendored {dest_name:<22} (renamed from {name})")
+            else:
+                print(f"  vendored {name}")
+        patches = apply_patches(dest_name)
         if patches:
-            state["patches"][name] = patches  # type: ignore[index]
-        state["skills"][name] = {  # type: ignore[index]
+            state["patches"][dest_name] = patches  # type: ignore[index]
+        dialect_rewrite_tree(DEST / dest_name)
+        state["skills"][dest_name] = {  # type: ignore[index]
             "source": str(src),
             "sha256": source_digest(name, src) if (src / "SKILL.md").is_file() else "git",
         }
 
     # Prune anything vendored previously that is no longer in the set, so a
-    # removed skill cannot linger and keep registering.
+    # removed skill cannot linger and keep registering. Compare against the
+    # on-disk (post-rename) names.
+    dest_names = {RENAMES.get(n, n) for n in included}
     for child in sorted(DEST.iterdir()):
-        if child.is_dir() and child.name not in included:
+        if child.is_dir() and child.name not in dest_names:
             shutil.rmtree(child)
             print(f"  pruned  {child.name}")
 
@@ -332,6 +419,9 @@ def check_mode() -> int:
     for name, meta in sorted(recorded.items()):  # type: ignore[union-attr]
         if not (DEST / name / "SKILL.md").is_file():
             problems.append(f"{name}: vendored copy has no SKILL.md")
+            continue
+        if meta.get("source") == "local":
+            # Authored in-repo; nothing to compare against, presence verified above.
             continue
         if meta["sha256"] == "git":
             # Git-sourced: the working tree may be polluted, so verify the

@@ -1,7 +1,7 @@
 ---
 name: wiki-ingest
 description: >
-  Ingest any source into the Obsidian wiki by distilling its knowledge into interconnected wiki pages.
+  Ingest any source into the orchestrator wiki by distilling its knowledge into interconnected wiki pages.
   Handles structured documents (PDFs, markdown, articles, papers, notes, folders), raw/unstructured
   text (chat exports, conversation logs, Slack/Discord threads, meeting transcripts, CSV/JSON data,
   journal entries, browser bookmarks, email archives, text dumps), AND web URLs. Use whenever the
@@ -14,9 +14,9 @@ description: >
   specific ingest skill (claude-history-ingest, etc.).
 ---
 
-# Obsidian Ingest — Document Distillation
+# orchestrator Ingest — Document Distillation
 
-You are ingesting source documents into an Obsidian wiki. Your job is not to summarize — it is to **distill and integrate** knowledge across the entire wiki.
+You are ingesting source documents into an orchestrator wiki. Your job is not to summarize — it is to **distill and integrate** knowledge across the entire wiki.
 
 ## Before You Start
 
@@ -88,7 +88,7 @@ Read the source(s) the user wants to ingest. In append mode, skip files the mani
 - Markdown (`.md`) — read directly
 - Text (`.txt`) — read directly
 - PDF (`.pdf`) — use the Read tool with page ranges. For **academic papers** (arXiv/conference), see *Academic papers* below — re-read figure- and equation-dense pages with vision so the architecture diagram, key equations, and results tables aren't lost.
-- Web clippings — markdown files from Obsidian Web Clipper
+- Web clippings — markdown files from orchestrator Web Clipper
 - **Structured data** (`.json`, `.jsonl`, `.csv`, `.tsv`, `.html`) — parse the structure first, then distill the knowledge it carries. See *Unstructured & conversational sources* below.
 - **Chat / conversation exports** — ChatGPT `conversations.json`, Slack/Discord channel JSON, timestamped chat logs, meeting transcripts. See *Unstructured & conversational sources* below.
 - **Images** (`.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`) — *requires a vision-capable model*. Use the Read tool, which renders the image into your context. Treat screenshots, whiteboard photos, diagrams, and slide captures as first-class sources. If your model doesn't support vision, skip image sources and tell the user which files were skipped so they can re-run with a vision-capable model.
@@ -151,7 +151,7 @@ Research papers (arXiv/conference PDFs) carry their substance in figures, equati
 2. **Capture the method visually — prefer the paper's real figures.**
    - **Embed the paper's own architecture/method figure as the primary visual.** Most arXiv figures are a single embedded raster. With PyMuPDF (`fitz`): use `page.get_image_info(xrefs=True)` to find the figure's `xref` and bbox — it is usually the wide image sitting just above its caption (locate the caption with `page.search_for("Figure N")`) — then `img = doc.extract_image(xref)` and save `img["image"]` to `attachments/<slug>-figN.<ext>` using the native `img["ext"]` (it may be JPEG, not PNG — don't hardcode the extension; downscale oversized figures, e.g. `sips -Z 1800 <file>`). If the figure is vector rather than raster (`extract_image` returns nothing and `page.get_drawings()` is non-empty), render the bbox region instead: `page.get_pixmap(clip=rect, matrix=fitz.Matrix(4, 4))` — compute `rect` by unioning `get_drawings()` rects (drawings-only; text blocks pull in body text) within one column above the caption, and in multi-column papers bound the window below the previous element so adjacent tables/text aren't caught; verify the render and re-crop if needed. Embed with `![[<slug>-figN.<ext>]]` plus an italic caption.
    - **Also embed a key results / motivating figure** when the paper has one — a scaling plot, a benchmark chart, or a capability collage — in the Results section alongside the table.
-   - **Mermaid is the dependency-free fallback.** If PyMuPDF/poppler isn't available or a figure can't be extracted, draw the architecture as a Mermaid diagram instead — Obsidian renders Mermaid fenced code blocks natively with no dependencies. `![[<source>.pdf#page=N]]` (the whole source page) is another no-extract option.
+   - **Mermaid is the dependency-free fallback.** If PyMuPDF/poppler isn't available or a figure can't be extracted, draw the architecture as a Mermaid diagram instead — orchestrator renders Mermaid fenced code blocks natively with no dependencies. `![[<source>.pdf#page=N]]` (the whole source page) is another no-extract option.
 3. **Keep the math as math.** Set the 1–3 core equations as `$$…$$` display LaTeX, not backtick code.
 4. **Tabulate results.** Render headline benchmark numbers as a markdown table, not a comma-separated blob.
 5. **Write the page with the Paper Deep-Dive Template** (`llm-wiki/SKILL.md`) into `references/`, in addition to the distilled concept/entity cross-links. This is the deliberate exception to "aim for 10–15 small pages" (Step 4) — a paper earns one rich, self-contained page.
@@ -237,7 +237,7 @@ You'll apply markers in Step 5. Don't conflate these — the wiki's value depend
 If the source belongs to a specific project:
 - Place project-specific knowledge under `projects/<project-name>/<category>/`
 - Place general knowledge in global category directories
-- Create or update the project overview at `projects/<name>/<name>.md` (named after the project — never `_project.md`, as Obsidian uses filenames as graph node labels)
+- Create or update the project overview at `projects/<name>/<name>.md` (named after the project — never `_project.md`, as orchestrator uses filenames as graph node labels)
 
 If the source is not project-specific, put everything in global categories.
 

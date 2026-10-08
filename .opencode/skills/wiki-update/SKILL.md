@@ -1,7 +1,7 @@
 ---
 name: wiki-update
 description: >
-  Sync the current project's knowledge into the Obsidian wiki. Use this skill from any project
+  Sync the current project's knowledge into the orchestrator wiki. Use this skill from any project
   when the user says "update wiki", "sync to wiki", "save this to my wiki", "update obsidian",
   or wants to distill what they've been working on into their knowledge base. This is the
   cross-project skill that lets you push knowledge from wherever you are into the vault.
@@ -9,7 +9,7 @@ description: >
 
 # Wiki Update — Sync Any Project to Your Wiki
 
-You are distilling knowledge from the current project into the user's Obsidian wiki. This skill works from any project directory, not just the obsidian-wiki repo.
+You are distilling knowledge from the current project into the user's orchestrator wiki. This skill works from any project directory, not just the obsidian-wiki repo.
 
 ## Before You Start
 

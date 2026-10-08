@@ -1,6 +1,6 @@
 ---
 name: json-canvas
-description: Create and edit JSON Canvas files (.canvas) with nodes, edges, groups, and connections. Use when working with .canvas files, creating visual canvases, mind maps, flowcharts, or when the user mentions Canvas files in Obsidian.
+description: Create and edit JSON Canvas files (.canvas) with nodes, edges, groups, and connections. Use when working with .canvas files, creating visual canvases, mind maps, flowcharts, or when the user mentions Canvas files in orchestrator.
 ---
 
 # JSON Canvas Skill
@@ -90,7 +90,7 @@ Nodes are objects placed on the canvas. Array order determines z-index: first no
 }
 ```
 
-**Newline pitfall**: Use `\n` for line breaks in JSON strings. Do **not** use the literal `\\n` -- Obsidian renders that as the characters `\` and `n`.
+**Newline pitfall**: Use `\n` for line breaks in JSON strings. Do **not** use the literal `\\n` -- orchestrator renders that as the characters `\` and `n`.
 
 ### File Nodes
 

@@ -22,7 +22,7 @@
       },
       "peer_pair": {
         "node_count": 2,
-        "rule": "Symmetric. No Master arbitration is available or required: the two peers verify shared information against their existing knowledge base instead. The Master does not interpose on their share, and a Master outage does not interrupt it.",
+        "rule": "Symmetric. No Master arbitration is available or required: the two members verify shared information against their existing knowledge base instead. The Master does not interpose on their share, and a Master outage does not interrupt it. One member may be the elected Master — its operational key governs authority-plane messages only (registry, approval, 10.100.0.1/32) and still does not arbitrate this pair's shares.",
         "peer_pair_rationale": "Requiring a Master in a two-node mesh would give the Master a veto over data the Master cannot review on both sides, and would make the smallest useful deployment depend on a third party."
       },
       "master_governed": {

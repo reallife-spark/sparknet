@@ -1,7 +1,7 @@
 ---
 name: cross-linker
 description: >
-  Scan the Obsidian wiki and automatically discover missing cross-references between pages.
+  Scan the orchestrator wiki and automatically discover missing cross-references between pages.
   Use this skill when the user says "link my pages", "find missing links", "cross-reference",
   "connect my wiki", "add wikilinks", "what pages should be linked", or after any large ingestion
   to ensure new pages are woven into the existing knowledge graph. Also trigger when the user

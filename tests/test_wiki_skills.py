@@ -37,6 +37,12 @@ EXPECTED_EXCLUSIONS = {
     "wiki-history-ingest",
 }
 
+# Authored in-repo rather than vendored from the farm. Kept in sync with
+# scripts/sync-wiki-skills.py by test_local_skill_list_matches_the_sync_script.
+EXPECTED_LOCAL_SKILLS = {
+    "wiki-audit",
+}
+
 # Referenced by vendored skills but deliberately not shipped. Pre-existing
 # upstream references; see .opencode/skills/README.md. If an upstream sync
 # resolves or adds one, this test fails so the README gets updated on purpose.
@@ -52,8 +58,8 @@ EXPECTED_DANGLING = {
 
 SKILL_REF_RE = re.compile(
     r"\b(wiki-[a-z-]+|llm-wiki|cross-linker|tag-taxonomy|memory-bridge"
-    r"|vault-skill-factory|graph-colorize|obsidian-markdown|obsidian-bases"
-    r"|obsidian-cli|json-canvas|impl-validator|skill-creator|daily-update|defuddle"
+    r"|vault-skill-factory|graph-colorize|orchestrator-markdown|orchestrator-bases"
+    r"|orchestrator-cli|json-canvas|impl-validator|skill-creator|daily-update|defuddle"
     r"|[a-z]+-history-ingest)\b"
 )
 
@@ -204,6 +210,44 @@ def test_exclusion_list_matches_the_sync_script():
 def test_excluded_skill_is_actually_absent(name: str):
     assert not (SKILLS_DIR / name).exists(), (
         f"{name} is excluded but vendored — either the exclusion or the copy is wrong"
+    )
+
+
+def test_local_skill_list_matches_the_sync_script():
+    """The tests and the sync script must agree on which skills are in-repo.
+
+    A local skill is authored under .opencode/skills/ and records `source:
+    "local"` in .sync.json. If the list drifts, an in-repo skill could be
+    pruned by the next --apply (or an unexpected local skill could linger
+    unrecorded).
+    """
+    proc = subprocess.run(
+        [sys.executable, "-c",
+         f"import importlib.util,sys;"
+         f"spec=importlib.util.spec_from_file_location('sync', r'{SYNC_SCRIPT}');"
+         f"m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);"
+         f"print('\\n'.join(sorted(m.LOCAL_SKILLS)))"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    from_script = set(proc.stdout.split())
+    assert from_script == EXPECTED_LOCAL_SKILLS, (
+        f"sync script local skills {sorted(from_script)}, tests expect "
+        f"{sorted(EXPECTED_LOCAL_SKILLS)}"
+    )
+
+
+@pytest.mark.parametrize("name", sorted(EXPECTED_LOCAL_SKILLS))
+def test_local_skill_is_present_and_recorded_as_local(name: str):
+    skill_md = SKILLS_DIR / name / "SKILL.md"
+    assert skill_md.is_file(), f"{name}: local skill missing SKILL.md"
+    state = json.loads(SYNC_STATE.read_text())
+    recorded = state["skills"].get(name)
+    assert recorded is not None, f"{name}: not recorded in .sync.json"
+    assert recorded.get("source") == "local", (
+        f"{name}: recorded as {recorded.get('source')} — must be 'local'"
     )
 
 

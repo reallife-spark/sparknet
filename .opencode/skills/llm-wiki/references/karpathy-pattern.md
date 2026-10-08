@@ -6,7 +6,7 @@ Source: https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
 
 "The wiki is a persistent, compounding artifact. The knowledge is compiled once and then kept current, not re-derived on every query."
 
-Human curates sources and asks questions; LLM maintains the knowledge system. Obsidian becomes the IDE, the LLM becomes the programmer, and the wiki becomes the codebase.
+Human curates sources and asks questions; LLM maintains the knowledge system. orchestrator becomes the IDE, the LLM becomes the programmer, and the wiki becomes the codebase.
 
 ## Why This Beats RAG
 
@@ -22,10 +22,10 @@ Traditional RAG rediscovers knowledge on every query — it searches raw sources
 
 ## Recommended Tools
 
-- **Obsidian** — IDE for browsing and exploring the wiki
+- **orchestrator** — IDE for browsing and exploring the wiki
 - **Web Clipper** — Browser extension for converting articles to markdown
 - **Marp** — Markdown-based slide decks from wiki content
-- **Dataview** — Obsidian plugin for querying page metadata
+- **Dataview** — orchestrator plugin for querying page metadata
 - **qmd** — Local search engine with BM25/vector hybrid search
 
 ## Applications

@@ -1,16 +1,16 @@
 ---
 name: wiki-dashboard
 description: >
-  Create dynamic, queryable dashboard views of the Obsidian vault using Obsidian Bases or Dataview.
+  Create dynamic, queryable dashboard views of the orchestrator vault using orchestrator Bases or Dataview.
   Use this skill when the user says "create a dashboard", "vault dashboard", "show all X as a table",
   "dynamic view", "query my vault", "build a content index", "show me all concepts/entities/projects",
   or wants a structured, auto-updating view of their wiki content.
-  Bases is native to Obsidian 1.8+ (no plugin needed). Dataview requires the community plugin.
+  Bases is native to orchestrator 1.8+ (no plugin needed). Dataview requires the community plugin.
 ---
 
 # Wiki Dashboard — Dynamic Vault Views
 
-Two tools available: **Obsidian Bases** (native, GUI-driven, no plugin) and **Dataview** (community plugin, SQL-like, more powerful). Check which the user has and prefer Bases unless they ask for Dataview or need GROUP BY / computed columns.
+Two tools available: **orchestrator Bases** (native, GUI-driven, no plugin) and **Dataview** (community plugin, SQL-like, more powerful). Check which the user has and prefer Bases unless they ask for Dataview or need GROUP BY / computed columns.
 
 ## Before You Start
 
@@ -21,9 +21,9 @@ Two tools available: **Obsidian Bases** (native, GUI-driven, no plugin) and **Da
 
 ---
 
-## Option A — Obsidian Bases (`.base` files)
+## Option A — orchestrator Bases (`.base` files)
 
-Bases are YAML files that define live views over vault notes. Native to Obsidian 1.8+, no plugin needed.
+Bases are YAML files that define live views over vault notes. Native to orchestrator 1.8+, no plugin needed.
 
 ### Official canonical schema
 
@@ -87,7 +87,7 @@ filters:
 
 ### Property name conventions
 
-Different contexts use different naming — confirmed from Obsidian's auto-reformat behaviour:
+Different contexts use different naming — confirmed from orchestrator's auto-reformat behaviour:
 
 | Context | Frontmatter field `tags` | File name | Formula |
 |---|---|---|---|
@@ -279,7 +279,7 @@ views:
 | `formula.formulaName` | A named formula result |
 | `now()` | Current timestamp in ms |
 
-> **On Obsidian UI-generated format:** When Obsidian's GUI writes or reformats a `.base` file it may output a simplified shorthand with top-level `columns:`, `sort:`, and `view:` keys instead of the canonical schema. That format also works — Obsidian accepts both. Manually authored files should use the canonical schema above.
+> **On orchestrator UI-generated format:** When orchestrator's GUI writes or reformats a `.base` file it may output a simplified shorthand with top-level `columns:`, `sort:`, and `view:` keys instead of the canonical schema. That format also works — orchestrator accepts both. Manually authored files should use the canonical schema above.
 
 ---
 

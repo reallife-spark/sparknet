@@ -1,7 +1,7 @@
 ---
 name: wiki-context-pack
 description: >
-  Produce a token-bounded context pack from the Obsidian wiki — a compact, structured slice of the most
+  Produce a token-bounded context pack from the orchestrator wiki — a compact, structured slice of the most
   relevant pages for a topic or recent activity, designed for downstream consumption by another agent or skill.
   Use when the user says "/wiki-context-pack", "make a context pack", "give me a context slice for X",
   "pack the wiki for my agent", or "bounded context for Y". Different from wiki-query (which answers a

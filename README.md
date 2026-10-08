@@ -114,7 +114,7 @@ page would land there instead, with nothing to tell you.
 Exactly one third-party package, `cryptography>=42`, because Ed25519 is not in
 the standard library. `pytest` and `ruff` are optional development tools and the
 suite runs without them. Some wiki skills shell out to optional external tools
-(`defuddle`, the Obsidian CLI, Dataview); their absence degrades that skill, not
+(`defuddle`, the orchestrator CLI, Dataview); their absence degrades that skill, not
 the suite.
 
 ## GitHub

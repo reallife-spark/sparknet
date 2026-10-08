@@ -24,7 +24,8 @@ PY := $(if $(wildcard $(VENV_PY)),$(VENV_PY),python3)
 ROLE ?= peer
 
 .PHONY: help help-role layout validate test test-all test-peer test-master \
-        contract-test lint devtools env-init wiki-sync wiki-verify \
+        contract-test lint devtools chroma-dev chroma-init chroma-inspect \
+        chroma-index chroma-query env-init wiki-sync wiki-verify \
         wiki-preflight bundle bundle-verify status-plan clean dist \
         keys-check shims-check hooks
 
@@ -111,6 +112,28 @@ devtools: ## Create .venv with cryptography, pytest and ruff (opt-in)
 	@"$(VENV_PY)" -m pip install --quiet -r "$(VAULT_ROOT)/requirements-dev.txt"
 	@"$(VENV_PY)" -m pytest --version && "$(VENV_PY)" -m ruff --version
 	@echo "Dev tools ready."
+
+# --- optional local Chroma index (scripts/sparknet-chroma.py) ------------------
+
+CHROMA_SCOPE ?= peer
+
+chroma-dev: ## Install the OPTIONAL chromadb package (sparknet[chroma]); allow-list untouched
+	@if [ ! -x "$(VENV_PY)" ]; then python3 -m venv "$(VENV_PY)"; fi
+	@"$(VENV_PY)" -m pip install --quiet --upgrade pip
+	@"$(VENV_PY)" -m pip install --quiet 'chromadb>=0.5'
+	@echo "chromadb ready. Run: make chroma-init / chroma-index / chroma-query CHROMA_SCOPE=fabric"
+
+chroma-init: ## Create the CHROMA_SCOPE collection (peer|master|fabric) in .state/chroma/
+	@$(PY) scripts/sparknet-chroma.py "$(CHROMA_SCOPE)" init
+
+chroma-inspect: ## Show what chroma-index WOULD index, without needing chromadb
+	@$(PY) scripts/sparknet-chroma.py "$(CHROMA_SCOPE)" inspect
+
+chroma-index: ## Build/upsert the CHROMA_SCOPE index (requires chroma-dev)
+	@$(PY) scripts/sparknet-chroma.py "$(CHROMA_SCOPE)" index
+
+chroma-query: ## Search the CHROMA_SCOPE index: make chroma-query CHROMA_SCOPE=fabric QUERY="..."
+	@$(PY) scripts/sparknet-chroma.py "$(CHROMA_SCOPE)" query "$(QUERY)"
 
 env-init: ## Write every vault's .env + wiki dirs from its .env.example
 	@./scripts/sparknet-env-init.sh "$(VAULT_ROOT)"

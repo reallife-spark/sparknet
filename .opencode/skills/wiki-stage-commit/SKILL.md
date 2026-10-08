@@ -161,4 +161,4 @@ Staging queue: K files remaining
 - Staged files use the same page template as live pages — they are ready to land, just awaiting approval
 - Patch files use a human-readable diff format: lines starting with `+` are additions, lines starting with `-` are deletions
 - `index.md` and `log.md` are always updated immediately on ingest (they are low-risk tracking files) — only category pages go through staging
-- The `_staging/` directory is not tracked by Obsidian's graph view — pages only appear in the wiki after promotion
+- The `_staging/` directory is not tracked by orchestrator's graph view — pages only appear in the wiki after promotion

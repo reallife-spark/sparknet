@@ -1,6 +1,6 @@
-# Consensus protocol — how three nodes agree on who holds the key
+# Consensus protocol — how the cluster agrees on who holds the key
 
-All three nodes implement this conversation. The state of the implementation is
+Every node implements this conversation. The state of the implementation is
 worth stating precisely, because a reader who takes this page for a description
 of working code will be wrong about a security boundary:
 
@@ -27,9 +27,9 @@ and held the signing key. That is not a fabric; it is a server with clients, and
 it has the weakness every such arrangement has — the key sits on whatever machine
 was named, and nothing about that machine's legitimacy was ever agreed.
 
-So the Master is **elected**. Three nodes join, and of those three one is chosen.
-The choice is unanimous. The chosen node is a peer that additionally holds an
-operational signing key.
+So the Master is **elected**. The members of a cluster — a pair of two, or the
+full cluster of three — choose one of themselves. The choice is unanimous. The
+chosen node is a peer that additionally holds an operational signing key.
 
 ## The asymmetry is a role state, not a structure
 
@@ -41,7 +41,7 @@ which state the node is in.
 This matters for anyone reading the code. "The peer cannot sign" is not a
 property of the peer's implementation — it never was, and now it certainly is
 not. The property is that **only a node named by a valid cluster trust root may
-use the operational key**, and that root required all three members to agree.
+use the operational key**, and that root required every member to agree.
 
 The authority asymmetry is preserved. It moved from "the code differs" to "the
 state differs", which is a weaker guarantee and is stated as one.
@@ -49,9 +49,11 @@ state differs", which is a weaker guarantee and is stated as one.
 ## Membership
 
 Membership is a set of node identities, each pairing an identity fingerprint
-with a WireGuard public key. A node joins by exchanging its WireGuard public key
-out-of-band with the two others — there is no authority to bootstrap from,
-because the registry ships empty on purpose.
+with a WireGuard public key. A cluster is **two members (a pair) or three (the
+full cluster)**; a fourth member changes the agreement threshold and needs its
+own protocol, so the count is a bounded range, not a parameter. A node joins by
+exchanging its WireGuard public key out-of-band with the other members — there
+is no authority to bootstrap from, because the registry ships empty on purpose.
 
 A member is not trusted merely for being a member. Each member holds a **cluster
 key**: an Ed25519 keypair used only for agreeing on the trust root, never for
@@ -61,37 +63,40 @@ useless to a node that is merely present.
 ## Election
 
 ```
-three members present
+the members present
         │
         ▼
 election opens; each member casts exactly one signed vote for one candidate
         │
         ▼
-three votes, three distinct members, all naming the same candidate?
+every member's vote names the same candidate?
         ├── no  → no trust root. No authority is issuable anywhere.
         │          Peers remain in peer-only mode, which is a working state.
         └── yes → root binds the candidate's operational keypair
                   (generated when the candidate bid)
-                  all three members co-sign the root
+                  every member co-signs the root
         ▼
 root distributed; peers verify it and accept the registry signed under master_pubkey
 ```
 
 **One member, one vote.** Votes are deduplicated by member identity, so a node
-that casts three votes for itself has cast one.
+that casts many votes for itself has cast one.
 
 **Votes are signed and carry a nonce**, so a vote cannot be replayed into a later
 election.
 
 ### Why unanimity, and what it costs
 
-Unanimity is chosen over a 2-of-3 majority deliberately.
+Unanimity is chosen over any n−1-of-n majority (2-of-3 in the full cluster, 1-of-2
+in a pair) deliberately.
 
-With a majority, one compromised node paired with any second node installs a
-hostile master. With unanimity, a single bad node can **deny** an election — it
+With a majority, one compromised node paired with any other installs a hostile
+master. With unanimity, a single bad node can **deny** an election — it
 can refuse to vote, and the cluster stays without a root — but it can never
 **win** one. That is the right trade for a fabric whose whole premise is that
-nobody can grant themselves authority.
+nobody can grant themselves authority. It is also why a pair is lawful: 2-of-2
+means one member alone can never elevate itself, which is the same
+no-self-elevation property the full cluster gets from 3-of-3.
 
 The price is liveness: one offline node blocks the election indefinitely. That is
 accepted rather than worked around, because the alternative quietly reintroduces
@@ -110,9 +115,9 @@ together.
 
 | Endpoint | Body | Rule |
 |---|---|---|
-| `POST /election/request` | `{node_id, operational_pubkey_b64, nonce, ts}` + `signature_b64` over the canonical form, signed with the member's **cluster** key | one bid per member. Re-filing the identical bid is idempotent; a different one is `bid_already_filed`. The bid exists to publish a usable operational key, so one that does not parse is refused here, not three signatures later. |
+| `POST /election/request` | `{node_id, operational_pubkey_b64, nonce, ts}` + `signature_b64` over the canonical form, signed with the member's **cluster** key | one bid per member. Re-filing the identical bid is idempotent; a different one is `bid_already_filed`. The bid exists to publish a usable operational key, so one that does not parse is refused here, not at co-signature time. |
 | `POST /election/vote` | a signed vote from `sparknet-consensus.py` carrying `election_id` | one vote per member, verified before storage. A second vote for a *different* candidate is refused as equivocation (`already_signed`); the same choice again is idempotent. |
-| `POST /election/root-signature` | `{node_id, signature_b64, election_id}` over the root's canonical bytes | one co-signature per member, each verified against that member's own cluster key **before** it is stored — a bad early signature must not hide behind "missing signatures" until all three arrived. The root forms at three. |
+| `POST /election/root-signature` | `{node_id, signature_b64, election_id}` over the root's canonical bytes | one co-signature per member, each verified against that member's own cluster key **before** it is stored — a bad early signature must not hide behind "missing signatures" until every member arrived. The root forms at the last signature, and only when every member voted for the same candidate. |
 | `GET /election/status`, `GET /election/root` | — | state machine: `collecting` → `awaiting_operational_key` (tally agreed, winner has not bid) → `awaiting_signatures` → `formed`; a tally that ran without agreement is `no_agreement`, terminal for this election, because filing a bid cannot rescue it. |
 
 Refusals answer with a stable machine-readable `reason`
@@ -139,7 +144,7 @@ Properties the shape exists to preserve:
   overlay. Hence `ports.json`: `implemented`, runtime `not-listening`.
 
 Membership for the exchange is the out-of-band `cluster-members.json` —
-`node_id`, fingerprint, WireGuard public key, cluster public key, exactly three
+`node_id`, fingerprint, WireGuard public key, cluster public key, two or three
 distinct members — read only by `serve`. Members identify themselves by the
 keys in it; there is no login, because the signatures are the identity.
 
@@ -155,17 +160,17 @@ conversation — the roles differ in what they hold, not in how they agree.
 ```
 cluster_trust_root = {
   version, nonce, formed_at,
-  members: [ { node_id, fingerprint, wireguard_pubkey, cluster_pubkey } × 3 ],
+  members: [ { node_id, fingerprint, wireguard_pubkey, cluster_pubkey } × n ],
   master_node_id, master_pubkey
 }
 ```
 
-co-signed by all three member cluster keys, over the canonical bytes.
+co-signed by every member's cluster key, over the canonical bytes.
 
 Peers accept a root only when:
 
-1. it carries three valid signatures,
-2. from three **distinct** members,
+1. it carries n valid signatures, exactly one per member,
+2. from n **distinct** members,
 3. each matching the `cluster_pubkey` of a member the root itself names,
 4. and the `master_pubkey` is the one the registry is signed under.
 
@@ -183,7 +188,7 @@ This is the asymmetry that makes the protocol tolerable:
 
 | Act | Threshold | Why |
 |---|---|---|
-| **Replace** the master | 3 of 3 | changes who holds authority |
+| **Replace** the master | n of n | changes who holds authority |
 | **Revoke** a node | 1 signature | a revoked node is inert either way |
 
 Unilateral revocation is safe because it is a denial: it removes reach and cannot
@@ -200,7 +205,7 @@ root already in force is refused as `root_replayed`, and the new root's
 `master_pubkey` is the only one the new root authorises.
 
 **But a new nonce does not make the old root stop verifying, and it is worth being
-blunt about that.** The old root remains internally valid forever — same three
+blunt about that.** The old root remains internally valid forever — same member
 signatures, same master, nothing in it says it was superseded. `verify_root` is a
 pure function over one root plus, optionally, the root the caller already holds;
 given two roots with different nonces it can say "you already have this one", and
@@ -224,10 +229,11 @@ unanimity cannot be reached, the members that remain form a new root with a new
 membership — dropping the node that would not agree.
 
 **That escape does not exist yet, and the contract currently contradicts itself
-here.** With exactly three members and unanimity required, a root needs all three
-signatures, so if one member is merely *unreachable* — powered off, disk failed,
-not hostile — the two survivors cannot form a root either. "Reduce membership by
-re-formation, with unanimity among the survivors" is unsatisfiable at n=3: the
+here.** With unanimity required, a root needs every member to sign, so if one
+member is merely *unreachable* — powered off, disk failed, not hostile — the
+survivors cannot form a root either. "Reduce membership by re-formation, with
+unanimity among the survivors" is unsatisfiable: a full cluster losing one member
+leaves two, a pair losing one leaves one, and a lone node is not a cluster. The
 case where re-formation is needed is precisely the case where it is impossible.
 
 This is recorded rather than papered over, because the resolutions are policy
@@ -235,9 +241,9 @@ choices, not implementation details, and each trades something real:
 
 | Option | Threshold after a member is lost | Cost |
 |---|---|---|
-| **A** — permanent triple | stays 3 of 3 | a single failed disk requires manual recovery from backup. Highest integrity, lowest availability. |
-| **B** — 2 of 3 to reduce, 3 of 3 to grant | 2 signatures to form a reduced root, 3 to form a full one | a Byzantine pair could remove an honest node. Needs a rule preventing two colluding nodes from reaching authority. |
-| **C** — 4th member joins before any drop | unchanged at 3 of 3 | requires a join ceremony, which is also unspecified |
+| **A** — keep the original count | stays n of n | a single failed disk requires manual recovery from backup. Highest integrity, lowest availability. |
+| **B** — majority to reduce, unanimity to grant | n−1 signatures to form a reduced root, n to form a full one | a Byzantine majority could remove an honest node. Needs a rule preventing colluding nodes from reaching authority. |
+| **C** — a member joins before any drop | unchanged at n of n | requires a join ceremony, which is also unspecified |
 
 A second open question sits alongside it, and is narrower but no less real:
 
@@ -245,9 +251,10 @@ A second open question sits alongside it, and is narrower but no less real:
 |---|---|---|
 | **How does a re-formed root reach a peer?** A new root is served by the nodes that formed it, and the old one is locally indistinguishable from the new one. | no signed ordering exists in the root, and `verify_root` cannot invent one | announcing over a channel the superseded Master also controls means a rolled-back Master can suppress the news of its own replacement. That is the classic reason a leader needs a *lease*, not a broadcast. |
 
-Until one is chosen, the correct statement is: **a three-node cluster cannot
-survive the loss of a member, by design or by omission, and a peer that has not
-learned of a re-formed root still honours the superseded Master.** Everything
+Until one is chosen, the correct statement is: **a cluster cannot
+survive the loss of a member below its minimum of two, by design or by omission,
+and a peer that has not learned of a re-formed root still honours the superseded
+Master.** Everything
 downstream — the signer's `--accept-requalification`, root supersession in
 `shared/sparknet-consensus.py` — is built for the general case, but a *reduced*
 root is a document this contract does not yet define.
@@ -267,9 +274,9 @@ This is structural, and deliberately not a permission rule: a deny rule is a pol
 statement that the thing it governs may later ignore, and the governed surface here
 is a multi-user LLM application.
 
-The cluster keys are a different matter. They sign only the root, which all three
-members must co-sign, so a single stolen cluster key cannot install a Master on its
-own — it is one of three required signatures.
+The cluster keys are a different matter. They sign only the root, which every
+member must co-sign, so a single stolen cluster key cannot install a Master on its
+own — it is one of the required signatures.
 
 ## What is not contracted here
 
@@ -277,7 +284,7 @@ own — it is one of three required signatures.
   scope here and would need its own threshold; a 4-member cluster's unanimity
   requirement is a different protocol, not a parameter.
 - **What a vote is worth economically.** Votes are signed and distinct, not
-  stake-weighted and not Sybil-resistant. A cluster is three known nodes.
+  stake-weighted and not Sybil-resistant. A cluster is two or three known nodes.
 - **Transport.** How the vote reaches the other members is implementation.
 - **Timing attacks.** Elections use an injected clock and no nonce reuse window is
   specified beyond the election's own nonce.

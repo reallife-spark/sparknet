@@ -1,16 +1,16 @@
 ---
 name: wiki-setup
 description: >
-  Initialize a new Obsidian wiki vault with the correct structure, special files, and configuration.
+  Initialize a new orchestrator wiki vault with the correct structure, special files, and configuration.
   Use this skill when the user wants to set up a new wiki from scratch, initialize the vault structure,
   create the .env file, or says things like "set up my wiki", "initialize obsidian", "create a new vault",
   "get started with the wiki". Also use when the user needs to reconfigure their existing vault or
   fix a broken setup.
 ---
 
-# Obsidian Setup — Vault Initialization
+# orchestrator Setup — Vault Initialization
 
-You are setting up a new Obsidian wiki vault (or repairing an existing one).
+You are setting up a new orchestrator wiki vault (or repairing an existing one).
 
 ## Step 1: Create .env
 
@@ -52,11 +52,11 @@ If `.env` doesn't exist, create it from `.env.example`. Ask the user for:
 mkdir -p "$VAULT_PATH"/{concepts,entities,skills,references,synthesis,journal,projects,_archives,_raw,_staging,.obsidian}
 ```
 
-- `.obsidian/` — Obsidian's own config. Creates vault recognition.
+- `.obsidian/` — orchestrator's own config. Creates vault recognition.
 - `projects/` — Per-project knowledge (populated during ingest).
 - `_archives/` — Stores wiki snapshots for rebuild/restore operations.
 - `_raw/` — Staging area for unprocessed drafts. Drop rough notes here; `wiki-ingest` will promote them to proper wiki pages and move the originals into `_raw/_archived/` (created on first use).
-- `_staging/` — Review queue for LLM-written pages when `WIKI_STAGED_WRITES=true`. Pages here are not visible in Obsidian's graph until promoted via `/wiki-stage-commit`.
+- `_staging/` — Review queue for LLM-written pages when `WIKI_STAGED_WRITES=true`. Pages here are not visible in orchestrator's graph until promoted via `/wiki-stage-commit`.
 
 ## Step 3: Create Special Files
 
@@ -129,7 +129,7 @@ updated: TIMESTAMP
 
 ## Step 4: Create .obsidian Configuration
 
-Create minimal Obsidian config for a good out-of-box experience:
+Create minimal orchestrator config for a good out-of-box experience:
 
 ### .obsidian/app.json
 ```json
@@ -148,14 +148,14 @@ Create minimal Obsidian config for a good out-of-box experience:
 }
 ```
 
-## Step 5: Recommend Obsidian Plugins
+## Step 5: Recommend orchestrator Plugins
 
 Tell the user about these recommended community plugins (they install manually):
 
 1. **Dataview** — Query page metadata, create dynamic tables. Essential for a wiki.
 2. **Graph Analysis** — Enhanced graph view for exploring connections.
 3. **Templater** — If they want to create pages manually using templates.
-4. **Obsidian Git** — Auto-backup the vault to a git repo.
+4. **orchestrator Git** — Auto-backup the vault to a git repo.
 
 ## Step 6: Verify Setup
 
@@ -170,7 +170,7 @@ Run a quick sanity check:
 - [ ] Source directories (if configured) exist and are readable
 
 Report the results and tell the user they can now:
-1. Open the vault in Obsidian (File → Open Vault → select the directory)
+1. Open the vault in orchestrator (File → Open Vault → select the directory)
 2. Run `wiki-status` to see what's available to ingest
 3. Run `wiki-ingest` to add their first sources
 4. Run `claude-history-ingest` to mine their Claude conversations

@@ -4,7 +4,7 @@ This document captures the planning session for ingesting the Sparknet Master Ar
 
 ## Session Inputs
 - Google Doc: https://docs.google.com/document/d/1KEwbDSPSg3T8MaQPrmEODsxSkSohGLkBPIJVwktuioQ/edit?usp=drivesdk
-- Exported text saved to: `peer-node/plans/Sparknet_Master_Architecture_Deployment_Summary.md`
+- Exported text saved to: `master-node/plans/Sparknet_Master_Architecture_Deployment_Summary.md`
 - Existing blueprint: /mnt/knowledge/sparknet/Sparknet_Enterprise_Architecture_Blueprint.md
 
 ## Key Architectural Requirements (from Google Doc)

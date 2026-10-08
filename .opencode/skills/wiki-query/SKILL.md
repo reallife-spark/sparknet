@@ -1,7 +1,7 @@
 ---
 name: wiki-query
 description: >
-  Answer questions by searching the compiled Obsidian wiki. Use this skill when the user asks a question
+  Answer questions by searching the compiled orchestrator wiki. Use this skill when the user asks a question
   about their knowledge base, wants to find information across their wiki, asks "what do I know about X",
   "find everything related to Y", or wants synthesized answers with citations from their wiki pages.
   Also use when the user wants to explore connections between topics in their wiki, or asks a multi-hop
@@ -13,7 +13,7 @@ description: >
 
 # Wiki Query — Knowledge Retrieval
 
-You are answering questions against a compiled Obsidian wiki, not raw source documents. The wiki contains pre-synthesized, cross-referenced knowledge.
+You are answering questions against a compiled orchestrator wiki, not raw source documents. The wiki contains pre-synthesized, cross-referenced knowledge.
 
 ## This skill is READ-ONLY
 
