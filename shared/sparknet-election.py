@@ -45,7 +45,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable
 from datetime import datetime, timezone
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -156,6 +156,30 @@ def load_authz(shared_dir: Path | None = None) -> Any:
     return load_consensus(shared_dir)._load_authz(  # noqa: SLF001
         Path(shared_dir) if shared_dir else None
     )
+
+
+def load_http(shared_dir: Path | None = None) -> Any:
+    """The shared handler base, reached the way consensus reaches its deps.
+
+    `sparknet-http.py` owns the socket timeout (``TimeoutHandler``); this
+    module's listener must share that base or the exchange silently reverts to
+    unbounded reads (review finding F4).  The usual callers already put
+    ``sparknet-http`` in ``sys.modules``, so the common path is a lookup.
+    """
+    cached = sys.modules.get("sparknet_http")
+    if cached is not None:
+        return cached
+    here = Path(shared_dir) if shared_dir else DEFAULT_SHARED_DIR
+    path = here / "sparknet-http.py"
+    if not path.is_file():
+        raise ElectionError(REASON_MALFORMED, f"shared/sparknet-http.py not found at {path}")
+    return _load_by_path("sparknet_http", path)
+
+
+#: Loaded at import: the handler base is code, not configuration, so the one
+#: sibling copy is the only correct source. ``tests/test_service_timeouts.py``
+#: fails if the listener stops deriving from TimeoutHandler.
+_HTTP = load_http()
 
 
 # --- keys -----------------------------------------------------------------------
@@ -593,7 +617,7 @@ class ElectionExchange:
 # --- HTTP -----------------------------------------------------------------------
 
 
-class _Handler(BaseHTTPRequestHandler):
+class _Handler(_HTTP.TimeoutHandler):
     """Four endpoints, all of them validated before they mutate anything.
 
     The contract's *Exchange* section specifies these shapes; anything that
@@ -674,9 +698,12 @@ class _Handler(BaseHTTPRequestHandler):
             self._refuse(exc)
             return
         except Exception as exc:  # noqa: BLE001 - never leak a traceback to a member
+            # The reason stays stable; the exception names internals a member
+            # has no right to see. Log it where only an operator will read it.
+            print(f"[election] internal error on {self.path}: {exc!r}", file=sys.stderr)
             self._send(
                 500,
-                {"ok": False, "reason": REASON_MALFORMED, "detail": str(exc)},
+                {"ok": False, "reason": REASON_MALFORMED, "detail": "internal error"},
             )
             return
         self._send(200, payload)

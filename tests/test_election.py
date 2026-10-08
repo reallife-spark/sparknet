@@ -1180,3 +1180,57 @@ def test_the_root_authorises_exactly_one_key_and_it_is_the_winners(election, con
         assert derived[loser] != root["master_pubkey"]
     # And the root names exactly the member set the membership declares.
     assert {m["node_id"] for m in root["members"]} == set(MEMBERS)
+
+
+# --- timeouts -------------------------------------------------------------------
+
+
+def test_slow_client_is_dropped_and_the_exchange_keeps_serving(election, live, monkeypatch) -> None:
+    """F4: the exchange's listener must drop an idle trickle connection.
+
+    A client that stops mid-request-line must not hold one of the exchange's
+    threads open. The ``live`` fixture serves the real ``_Handler``; patching
+    its ``timeout`` class attribute applies to the *next* connection, because
+    ``StreamRequestHandler.setup`` reads it per connection. monkeypatch
+    restores it afterwards.
+    """
+    monkeypatch.setattr(election._Handler, "timeout", 0.4)
+    port = int(live.rsplit(":", 1)[1])
+    sock = socket.create_connection(("127.0.0.1", port), timeout=5)
+    sock.sendall(b"GET /election/status HTTP/1.1")  # deliberately no CRLF: the read blocks
+    sock.settimeout(3)
+    assert sock.recv(4096) == b"", "the exchange must close an idle trickle connection"
+    sock.close()
+
+    # A fresh, complete request on a new connection is still answered.
+    status = election.status_of(live)
+    assert status["root"] is None, "the exchange must still serve a status call"
+
+
+def test_internal_errors_do_not_leak_internals(election, live, monkeypatch, capsys) -> None:
+    """F10: the exchange's 500s must name a stable reason, never the exception.
+
+    The exception text can name files or membership internals that have no
+    business crossing the bus; it is logged to stderr for an operator instead.
+    """
+    def _boom(body, consensus):  # noqa: ARG001
+        raise RuntimeError("SECRET_ELECTION_DETAIL")
+
+    monkeypatch.setattr(election.ElectionExchange, "submit_request", _boom)
+
+    import urllib.error
+    import urllib.request
+
+    body = json.dumps({"member": "alpha", "bid": {"op_key": "x"}}).encode()
+    req = urllib.request.Request(live + "/election/request", data=body, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=5) as response:
+            payload = json.loads(response.read())
+            status = response.status
+    except urllib.error.HTTPError as exc:
+        payload = json.loads(exc.read())
+        status = exc.code
+    assert status == 500
+    assert payload["ok"] is False
+    assert "SECRET_ELECTION_DETAIL" not in str(payload)
+    assert "SECRET_ELECTION_DETAIL" in capsys.readouterr().err

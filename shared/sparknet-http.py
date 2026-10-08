@@ -75,6 +75,15 @@ VERSION_PREFIX = b"sparknet-http/1"
 DEFAULT_MAX_AGE_SECONDS = 300
 DEFAULT_BIND = "127.0.0.1"
 
+#: How many seconds one request may take before the server drops the
+#: connection.  The 2026-10-08 review (finding F4) showed what a missing
+#: bound costs: a client that connects and never finishes a request line (or
+#: sends a Content-Length and then stops) would hold a listener thread open
+#: indefinitely.  Every sparknet listener derives from :class:`TimeoutHandler`
+#: so the bound is one number in one file — ``tests/test_service_timeouts.py``
+#: fails if a listener stops inheriting it.
+DEFAULT_REQUEST_TIMEOUT_SECONDS = 15.0
+
 # Two personalities, one listener.  A route class (``loopback_only_routes``)
 # is the local personality: only a loopback source may reach it, and anything
 # else is refused with 403 *before* the request is even read.  Everything else
@@ -271,7 +280,28 @@ class RequestError(Exception):
         self.detail = detail
 
 
-class _Handler(BaseHTTPRequestHandler):
+class TimeoutHandler(BaseHTTPRequestHandler):
+    """A request handler whose reads are bounded by a socket timeout.
+
+    ``BaseHTTPRequestHandler`` inherits from ``StreamRequestHandler``, whose
+    ``setup`` applies ``timeout`` to the connection socket.  A client that
+    connects and never finishes a request line or body therefore costs one
+    listener thread for at most ``DEFAULT_REQUEST_TIMEOUT_SECONDS`` instead of
+    forever: ``handle_one_request`` catches the timeout — ``socket.timeout`` on
+    Python ≤3.9, ``TimeoutError`` on ≥3.10 — marks the connection closed and
+    the loop moves on.
+
+    Every sparknet listener derives from this class.  A listener that stops
+    (a new bare ``BaseHTTPRequestHandler`` subclass, a fresh implementation in
+    a new service) silently reverts to unbounded reads, which is exactly the
+    defect the 2026-10-08 review found; ``tests/test_service_timeouts.py``
+    fails on that mutation.
+    """
+
+    timeout = DEFAULT_REQUEST_TIMEOUT_SECONDS
+
+
+class _Handler(TimeoutHandler):
     """Verifies the signed envelope, then dispatches to the router."""
 
     server_version = "sparknet-http/1"
@@ -368,7 +398,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._refuse(exc)
             return
         except Exception as exc:  # noqa: BLE001 - never leak a traceback to a caller
-            self._send(500, {"ok": False, "reason": "internal", "detail": str(exc)})
+            print(f"[sparknet-http] internal error on {self.command} {self.path}: {exc!r}", file=sys.stderr)
+            self._send(500, {"ok": False, "reason": "internal"})
             return
         self._send(code, payload)
 
@@ -401,7 +432,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._refuse(exc)
             return
         except Exception as exc:  # noqa: BLE001
-            self._send(500, {"ok": False, "reason": "internal", "detail": str(exc)})
+            print(f"[sparknet-http] internal error on {self.command} {self.path}: {exc!r}", file=sys.stderr)
+            self._send(500, {"ok": False, "reason": "internal"})
             return
         self._send(code, payload)
 

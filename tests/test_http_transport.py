@@ -352,3 +352,52 @@ def test_dispatch_bridge_serves_signed_status(http, authz):
         assert "never through this bridge" in payload["note"]
     finally:
         server.close()
+
+# --- timeouts and 500 hygiene -------------------------------------------------
+
+
+def test_router_exceptions_do_not_leak_internals(http, keypair, capsys):
+    """F10: a 500 must name a stable reason, never the exception text.
+
+    The exception can mention file paths, key material or internals the caller
+    has no right to see; it goes to stderr instead, where an operator reads it.
+    """
+    def _boom(method, path, body, identity):
+        raise RuntimeError("SECRET_TRANSPORT_DETAIL")
+
+    priv, pub = keypair
+    server = _Serve(http, _boom, pub)
+    try:
+        code, payload = http.post_json(server.base, "POST", "/v1/status", {"probe": 1}, priv)
+        assert code == 500
+        assert payload["reason"] == "internal"
+        assert "SECRET_TRANSPORT_DETAIL" not in str(payload)
+        assert "SECRET_TRANSPORT_DETAIL" in capsys.readouterr().err
+    finally:
+        server.close()
+
+
+def test_slow_client_is_dropped_then_a_fresh_connection_is_served(http, keypair, monkeypatch):
+    """F4: a client that never finishes its request line must not hold the listener.
+
+    The request line is sent without its trailing CRLF, so the server's
+    ``readline`` blocks; the socket timeout (patched down to 0.4 s for the
+    test) has to make the listener drop the connection, after which a fresh,
+    complete request is still answered.
+    """
+    priv, pub = keypair
+    server = _Serve(http, _echo_router, pub)
+    try:
+        monkeypatch.setattr(http._Handler, "timeout", 0.4)
+
+        sock = socket.create_connection(("127.0.0.1", server.port), timeout=5)
+        sock.sendall(b"GET / HTTP/1.1")  # deliberately incomplete: no CRLF yet
+        sock.settimeout(3)
+        assert sock.recv(4096) == b"", "the listener must close an idle trickle connection"
+        sock.close()
+
+        code, payload = http.post_json(server.base, "POST", "/v1/status", {"probe": 2}, priv)
+        assert code == 200
+        assert payload["ok"] is True
+    finally:
+        server.close()
