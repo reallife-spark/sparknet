@@ -8,7 +8,7 @@ Updated: 2026-10-07
 
 ## Standing State
 
-- **Plan cursors**: root `PLAN.md` `current: 13` — Steps 8 (peer vault) and 9
+- **Plan cursors**: root `PLAN.md` `current: done` — Steps 8 (peer vault) and 9
   (master vault) complete; **Step 10 (verification audit) complete; Step 11
   (election + role transition) complete** — a three-member ceremony now produces
   a signed cluster trust root, flips exactly one identity to master with no loss,
@@ -18,12 +18,60 @@ Updated: 2026-10-07
   (51 checks/0 failures, dated transcript, repeatable);
   `scripts/sparknet-rehearsal.sh` is the reproducible harness, and the rehearsal
   also exposed two real signer CLI str/Path defects now fixed with regression
-  tests. Step 13 (agx64/agx32 handoff) is next — deferral lifted 2026-10-07 and
-  **in progress**: the handoff document `contracts/deployment-runbook.md` is
-  written and the run's confirm-user checklist is defined, but **the run is
-  blocked — both hosts still unreachable** (no ping/SSH; this host on
-  `192.168.178.0/24`, agx64/agx32 on `192.168.10.64`/`192.168.20.32`). Needs
-  the user to power them on or provide a route.
+  tests. **Step 13 (agx64/agx32 handoff) COMPLETE 2026-10-07** — the handoff
+  document `contracts/deployment-runbook.md` is written and every confirm-user
+  item was answered live on the real pair. **The election FORMED on the real
+  pair (2026-10-07)** — both hosts co-signed a root naming agx64
+  (2/2, root_id `65d9ce25cbb40566b6735b0624d9840dc69ff35d66b3a97543fe650ed09212f5`);
+  agx64 master-identity flipped to master, agx32 stayed peer. Transport
+  deviation: **UDP did not cross the 192.168.10/20 subnet boundary at this
+  machine (the gateway)**, so the ceremony ran over SSH loopback tunnels
+  (trustless relay; keys stayed on hosts; 4210 loopback-only). **Transport
+  solved thereafter (Gateway Decision)** — the gateway has no kernel firewall
+  tooling and no root here, so a **userspace UDP relay** (`/tmp/gateway_udp_relay.py`,
+  binds 192.168.10.1:51820 + 192.168.20.1:51820, forwards between the hosts;
+  no root needed) stands in for opening UDP 51820, and wg peers re-point at the
+  gateway IPs. The overlay now **handshakes and pings on real NICs** (0% loss
+  ~2 ms; peer /32 kernel routes had to be added — AllowedIPs create none).
+  **Phase 6–8 are live**: master role root staged at `/root` (signer unit's `%h`),
+  state dir + keys moved to `/root/.local/state/sparknet/master-node`,
+  trust-root.json extracted, `/root/.env` sets SPARKNET_NODE_ID/STATE_DIR and a
+  PATH preferring the 3.9.5+crypto50 venv over the host's unusable 3.8.10+
+  crypto2.8 system python; signer runs via `sparknet-master-signer.service`
+  (socket 0600, root-id `65d9ce…`, capabilities `["sign"]`, restart survives,
+  single key-holder). Registry: signed entry for agx32 (verified by the root
+  alone) + `manifests/node-authorizations.json`; three escalation refusals hold
+  live; agx32 verified the distributed entry with its own authz and matched its
+  fingerprint. No *share* claimed (4201–4203 spec-only). **C4 revoke-demo live
+  (2026-10-07, pair restored after)** — surfaced + fixed two artifact defects:
+  agx32's `manifests/keys/master-ed25519.pub.b64` was a placeholder key (would
+  fail every signature check) and both hosts' `node-authorizations.json` were
+  bare entries while the guard needs the wrapped `authorizations:[…]` registry.
+  After fixes: one socket signature `revoked: true` (ledger block 64717431…)
+  ⇒ peer `reason: revoked caps: []`, guard `capabilities: []`, a
+  signature-VALID master packet refused `403 capability_missing`, and
+  `wg-render-master` dropped the stanza; fresh `revoked: false` signature
+  (b3200847…) restored the pair. **C2 reboot proven**: ran a real reboot on
+  agx64; signer unit came back active (enabled), socket root-id == `65d9ce25…`,
+  capabilities `["sign"]`, ledger intact, peer auth still verifies after reboot.
+  **New ops caveat**: wg0 does NOT survive reboot on this tegra host
+  (`CONFIG_WIREGUARD=n`; overlay is userspace `wireguard-go`, started ad hoc) —
+  restore via `/root/scripts/sparknet-wg-restore.sh` (proven, idempotent); a
+  wg0 unit or restore-inclusive "up" check is a Phase 9/ops item. Also noted:
+  signer `_serve_one` single-threaded, no client timeout. **C1/C3/C5 answered
+  with live probes**: overlay rides real NICs to the gateway relay (routes
+  `dev wg0`, endpoints `dev eth0`, handshakes seconds old, ping ~2 ms 0% loss
+  both ways; userspace wireguard-go since tegra `CONFIG_WIREGUARD=n`); exactly
+  one process holds `operational.ed25519` (signer PID 5063, no other fd holder,
+  key 0600); deployed signer containment confirmed (socket `srw-------` 0600
+  unix-stream by the signer, no TCP listener, `--describe` caps `["sign"]`,
+  `check_socket_path` refuses `tcp://` and outside-state paths, no peer service
+  imports the signer, parity asserts `not_reachable_from_here`). **All six
+  confirm-user items answered; operator acknowledged 2026-10-07 and closed
+  Phase 9 by decision ("Close without exercising")** — the destructive
+  rollback / replace-Master legs in `contracts/deployment-runbook.md` §Phase 9
+  stay documented-but-unexecuted, so the live pair is left up. `PLAN.md` is
+  terminal.
   `peer-node/PLAN.md` `current: 2` (container first);
   `master-node` `current: 2` — Phase 0 (13–18: consensus, parity, isolated signer,
   admin surface), honest verification (19), the **keypair/registry substrate (1)**
@@ -62,13 +110,19 @@ Updated: 2026-10-07
   which one it is in before writing anything — see the Memory Protocol note below.
 - **Config**: `.env` per vault (`VAULT_PATH`, gitignored, regenerated by
   `make env-init`); staged writes: false.
-- **Blockers**: none blocking. The Master still holds no usable signing key, the
-  admin page is declared but not bound, and live network behaviour is still
-  unverified. **Outstanding, unclaimed:** rotating
+- **Blockers**: none blocking. The admin page is declared but not bound (nothing
+  listens on `10.100.0.1:8080`; `DoD: confirm: user`, master Step 18) and the
+  overlay doesn't survive reboot on the tegra host (`CONFIG_WIREGUARD=n`;
+  userspace `wireguard-go`) — restore via
+  `/root/scripts/sparknet-wg-restore.sh`. Phase 9's destructive legs
+  (rollback / replace-Master re-formation) are documented in
+  `contracts/deployment-runbook.md` and deliberately not executed.
+  **Outstanding, unclaimed:** rotating
   and revoking the old broad OAuth token from the split-day leak.
 - **This host can verify very little of the roadmap.** One peer, no master, no
   second node, and no `nvidia-smi`, `wg` or `nft`. Steps needing a second node or
-  the Master are unit-testable at best and carry `DoD: confirm: user`.
+  the Master are unit-testable at best and carry `DoD: confirm: user` (the
+  agx64/agx32 run was verified from the hosts themselves, per the runbook).
 
 ## Key Standing Facts
 
@@ -79,9 +133,9 @@ Updated: 2026-10-07
   `make bundle` assembles a real deployment; `make bundle-verify` proves it.
 - **Authority is key possession, not a capability grant.** A peer with the whole
   capability vocabulary but no private key can never grant, revoke or escalate.
-- **The Master role's Phase 0 and its own boundary work are built — but it is not
-  a working fabric** (build plan Steps 13–19 done; Steps 1 and 3–4 measured
-  complete; Steps 2 and 5–12 unbuilt; cursor at 2). It has `scripts/`,
+- **The Master role's Phase 0 and its own boundary work are built — and the
+  election/signer arc is now proven live** (build plan Step 14; Steps 13–19 done;
+  fabric PLAN Step 13 complete 2026-10-07). It has `scripts/`,
   `services/`, `systemd/`, `manifests/`, `blockchain/` and
   `security/`, and runs the peer's
   services **by path** — `make -C master-node parity` proves the resolution and
@@ -89,15 +143,13 @@ Updated: 2026-10-07
   `services/sparknet-signer.py` is the only process holding the operational key:
   unix socket, mode 0600, typed payloads, never signs caller-supplied bytes, and
   refuses to start against a root superseded in its own ledger. Unit-tested with
-  36 tests and 12 mutations; **never run deployed**, and its unit is excluded from
-  `make units` because enabling a key-holder is the election's decision.
-  What is missing is not a fault but a step: `shared/sparknet-consensus.py`
-  verifies a trust root and cannot produce one, so nothing makes a node Master and
-  the signer has nothing to bind to in practice. Root `PLAN.md` Step 11 was that
-  step — it is now built (the consensus module is still where verification lives;
-  `sparknet-election.py` produces the root and is proven to contain no
-  reimplemented crypto), and the two confirm-user items (live overlay port,
-  deployed signer containment) remain unclaimed rather than asserted.
+  36 tests and 12 mutations; **deployed and proven in production on agx64
+  (2026-10-07)** — ran as `sparknet-master-signer.service`, formed the 2/2 trust
+  root with agx32, signed a live registry entry, survived a real reboot, refused
+  non-Master keys/unnamed nodes/tampered roots, and drove a live
+  revoke→peer-inert→re-authorize cycle; its unit stays excluded from `make units`
+  by design (enabling a key-holder is the election's decision). The remaining
+  honestly-unclaimed item is the admin page: declared, not bound (Step 18 DoD).
 - **Claim defects the 2026-10-06 audit found (all recorded where they were found,
   not fixed silently).** (a) `master-node`'s Steps 1–12 all had `[x]` boxes
   against `Status: pending` lines — the boxes were bulk-flipped in one commit and
@@ -142,10 +194,12 @@ Updated: 2026-10-07
 - **`bash -n` is not a shell test.** It accepts `if [ -n "$x" ]]; then` — bash
   reads `]]` as an argument — so the failure only appears at runtime, on a branch
   nothing exercises. `tests/test_shell.py` checks for it textually.
-- **`make test-all` dirties the tree.** The suite exercises `env-init`, which
-  refreshes `peer-node/manifests/user-env-manifest.json` and rewrites its
-  `timestamp`. Expected, not corruption — `git checkout` it rather than
-  committing the churn.
+- **Every script must handle `--help`.** `test_every_script_has_help` runs every
+  `peer-node/scripts/*.sh` with `--help` against the real vault root, so a script
+  without arg handling *executes its full body* on `--help`. That was the true
+  cause of the old `user-env-manifest.json` timestamp churn (identity-capture and
+  provision silently ran during the suite); both now exit 0 on `--help` without
+  writing. Any new script must do the same.
 - **Relocate before declaring anything path-independent.** Four bugs only appeared
   when the tree ran from a different directory: a `.env` recomputed against an
   empty variable, a fabric root detected by its directory name, and a stale
