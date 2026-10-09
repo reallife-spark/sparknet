@@ -62,8 +62,9 @@
     },
     "fields": {
       "version": {
-        "type": "integer",
-        "purpose": "root schema version"
+        "type": "string",
+        "purpose": "root schema version; \"1.1\" is current (chained supersession), \"1.0\" is the pre-chain schema still accepted for roots already in force",
+        "compatibility": "A 1.0 root signed the fields below WITHOUT previous_root_id and keeps verifying against its original bytes and id; the canonical form is version-aware. A 1.1 root chains to a 1.0 parent by naming that parent's 1.0-computed root_id."
       },
       "nonce": {
         "type": "string",
@@ -92,13 +93,18 @@
       "master_pubkey": {
         "type": "string",
         "purpose": "the operational public key this root authorises; registry signatures are checked against it"
+      },
+      "previous_root_id": {
+        "type": "string",
+        "purpose": "root_id of the root this one supersedes; the empty string for a genesis root. Signed from schema 1.1; a 1.0 root has no such field and is treated as genesis on the trust path."
       }
     },
     "acceptance_rules": [
       "n valid signatures \u2014 exactly one per member",
       "from n DISTINCT members \u2014 a member voting multiple times has voted once",
       "each signature matching the cluster_pubkey of a member the root itself names",
-      "the registry being verified is signed under master_pubkey as this root names it"
+      "the registry being verified is signed under master_pubkey as this root names it",
+      "on the trust path (a root already held), the candidate names the held root as previous_root_id \u2014 supersession is a chain, not a free replacement (unchained_root otherwise)"
     ],
     "acceptance_rules_note": "The third and fourth rules are what stop a root from naming members while being signed by strangers, and from binding an operational key nothing ever recognised. Without them the first two rules are decorative.",
     "unanimity": {

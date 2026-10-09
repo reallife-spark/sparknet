@@ -136,6 +136,35 @@ ROOT_SIGNED_FIELDS = (
     "previous_root_id",
 )
 
+#: The schema before chained supersession. A 1.0 root signed the same fields
+#: **without** `previous_root_id`. Those roots are still in force somewhere (the
+#: live pair formed one on 2026-10-07), so the signed-field set is version-aware:
+#: a 1.0 root must keep verifying against its original bytes, and keep its id, or
+#: the schema bump would be a silent key-rotation event that no peer can follow.
+LEGACY_SCHEMA_VERSION = "1.0"
+ROOT_SIGNED_FIELDS_V1 = (
+    "version",
+    "nonce",
+    "formed_at",
+    "members",
+    "master_node_id",
+    "master_pubkey",
+)
+
+
+def _root_signed_fields(root: dict[str, Any]) -> tuple[str, ...]:
+    """The signed-field set a root's schema version binds to.
+
+    This is the migration seam. `previous_root_id` is part of the signed bytes
+    from 1.1 on, so a 1.0 root cannot simply gain the field: doing so would
+    change what was signed and invalidate every co-signature. Instead a 1.0 root
+    is projected with the 1.0 field set — reproducing its original id — and a
+    1.1 root chains to it by naming that id as its `previous_root_id`.
+    """
+    if root.get("version") == LEGACY_SCHEMA_VERSION:
+        return ROOT_SIGNED_FIELDS_V1
+    return ROOT_SIGNED_FIELDS
+
 
 # --- canonicalisation ---------------------------------------------------------
 
@@ -148,12 +177,10 @@ def canonical_root(root: dict[str, Any]) -> dict[str, Any]:
     """
     if not isinstance(root, dict):
         raise ConsensusError("root must be a mapping")
-    missing = [f for f in ROOT_SIGNED_FIELDS if f not in root]
+    fields = _root_signed_fields(root)
+    missing = [f for f in fields if f not in root]
     if missing:
         raise ConsensusError(f"root missing required field(s): {', '.join(missing)}")
-    previous = root["previous_root_id"]
-    if not isinstance(previous, str):
-        raise ConsensusError("previous_root_id must be a string")
     members = root["members"]
     if not isinstance(members, list):
         raise ConsensusError("members must be a list")
@@ -168,15 +195,20 @@ def canonical_root(root: dict[str, Any]) -> dict[str, Any]:
     # Member order must not affect the bytes, or two nodes listing members
     # differently would compute different roots for the same agreement.
     projected_members.sort(key=lambda m: m["node_id"])
-    return {
+    projected = {
         "version": root["version"],
         "nonce": root["nonce"],
         "formed_at": root["formed_at"],
         "members": projected_members,
         "master_node_id": root["master_node_id"],
         "master_pubkey": root["master_pubkey"],
-        "previous_root_id": root["previous_root_id"],
     }
+    if "previous_root_id" in fields:
+        previous = root["previous_root_id"]
+        if not isinstance(previous, str):
+            raise ConsensusError("previous_root_id must be a string")
+        projected["previous_root_id"] = previous
+    return projected
 
 
 def root_bytes(root: dict[str, Any]) -> bytes:
@@ -530,7 +562,7 @@ def verify_root(
                 f"{REASON_REPLAY}: this nonce is already the root in force; a new "
                 f"root needs a new nonce"
             )
-        chained = projected["previous_root_id"] == root_id(previous)
+        chained = projected.get("previous_root_id", "") == root_id(previous)
         if not chained:
             return False, (
                 f"{REASON_UNCHAINED}: this root does not descend from the root in "
@@ -621,7 +653,7 @@ def verify_chain(roots: list[dict[str, Any]]) -> tuple[bool, str]:
     if not roots:
         return False, f"{REASON_UNCHAINED}: an empty chain verifies nothing"
     try:
-        terminal = canonical_root(roots[-1])["previous_root_id"]
+        terminal = canonical_root(roots[-1]).get("previous_root_id", "")
     except ConsensusError as exc:
         return False, f"{REASON_UNCHAINED}: terminal root unusable: {exc}"
     if terminal != "":

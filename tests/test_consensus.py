@@ -456,6 +456,67 @@ def test_a_new_nonce_without_the_chain_is_refused(consensus, cluster):
     assert "previous_root_id" in reason, reason
 
 
+def test_a_legacy_1_0_root_still_verifies_with_its_original_id(consensus, cluster):
+    """The schema bump must not invalidate a root already in force.
+
+    A 1.0 root signed six fields and had no `previous_root_id`. The canonical
+    form is version-aware so that root keeps verifying against its original
+    bytes and keeps its id — the migration seam the Step 16 deploy depends on.
+    """
+    legacy = {
+        "version": "1.0",
+        "nonce": "legacy-1",
+        "formed_at": _clock().isoformat(),
+        "members": cluster["members"],
+        "master_node_id": "beta",
+        "master_pubkey": next(
+            m["cluster_pubkey"] for m in cluster["members"] if m["node_id"] == "beta"
+        ),
+    }
+    signed = consensus.attach_root_signatures(legacy, cluster["private"])
+    assert consensus.verify_root(signed) == (True, consensus.REASON_OK)
+    assert "previous_root_id" not in consensus.canonical_root(signed), (
+        "a 1.0 root must not gain previous_root_id: it was not signed, and adding "
+        "it would change the bytes and void every co-signature"
+    )
+
+
+def test_a_1_1_root_chains_to_a_1_0_parent_by_its_legacy_id(consensus, cluster):
+    """A chained re-formation can name a 1.0 root as its predecessor.
+
+    The parent's id is computed the 1.0 way, so the child's `previous_root_id`
+    is the *live* root id the cluster already holds. This is what makes the
+    upgrade to 1.1 a forward step rather than a fresh election.
+    """
+    legacy = consensus.attach_root_signatures(
+        {
+            "version": "1.0",
+            "nonce": "legacy-1",
+            "formed_at": _clock().isoformat(),
+            "members": cluster["members"],
+            "master_node_id": "beta",
+            "master_pubkey": next(
+                m["cluster_pubkey"] for m in cluster["members"] if m["node_id"] == "beta"
+            ),
+        },
+        cluster["private"],
+    )
+    parent_id = consensus.root_id(legacy)
+    child = consensus.attach_root_signatures(
+        _root(cluster["members"], "gamma", nonce="child-1", previous_root_id=parent_id),
+        cluster["private"],
+    )
+    assert consensus.verify_root(child, trust=legacy) == (True, consensus.REASON_OK)
+
+    orphan = consensus.attach_root_signatures(
+        _root(cluster["members"], "gamma", nonce="child-2", previous_root_id="0" * 64),
+        cluster["private"],
+    )
+    ok, reason = consensus.verify_root(orphan, trust=legacy)
+    assert ok is False
+    assert consensus.REASON_UNCHAINED in reason
+
+
 def test_a_chained_root_may_not_add_a_member(consensus, cluster):
     """Re-formation may replace the master or shrink membership; a chained root
     that ADDS a member is the join ceremony, which is a different contract."""

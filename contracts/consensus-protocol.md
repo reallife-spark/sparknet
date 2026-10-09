@@ -172,6 +172,15 @@ the empty string for a cluster's first root, the held root's id for a
 re-formation. It is one of the signed fields, so ordering travels inside the
 very thing being ordered; the Re-formation section builds the chain on this.
 
+**The signed-field set is version-aware.** `previous_root_id` entered the signed
+fields in schema 1.1. A **1.0** root (the schema before chained supersession)
+signed the same block *without* it, and such a root is still lawful: it is
+projected with the 1.0 field set, so it keeps verifying against its original
+bytes and keeps its id. A 1.1 root chains to a 1.0 parent by naming that
+parent's 1.0-computed `root_id` as its `previous_root_id` — the upgrade path is a
+forward re-formation, not a fresh election, and it does not void the live pair's
+existing co-signatures.
+
 Peers accept a root only when:
 
 1. it carries n valid signatures, exactly one per member,
