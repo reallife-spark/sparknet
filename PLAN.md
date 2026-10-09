@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
 updated: 2026-10-09
-current: done
+current: 21
 ---
 
 # sparknet — Active Plan
@@ -640,9 +640,56 @@ memory; 16 and 17 closed this session. All commits are local only
       changed signer to the live agx64 pair is not done (batch-end operator
       decision).
 
-Cursor `current: done` (no `[ ]` fabric step below). The batch's sole open
-commit is its bookkeeping, and the two `DoD: confirm: user` deployment/
-build decisions are the operator's to make, not the plan's to invent.
+**Deploy record (2026-10-09, operator-authorized).** The Step 15/16/20 changes
+are now **live on the agx64/agx32 pair**, not just local. agx64 (Master) runs the
+hardened signer under the unchanged root `65d9ce25…` (socket `root-id` +
+`capabilities ["sign"]` re-asserted after restart, ledger intact); a silent client
+now gets `{"ok": false, "error": "timeout"}` and a second client is served in
+parallel (Step 20 proven live). agx32 (peer) has the matching
+`shared/sparknet-consensus.py` + `sparknet-election.py` and verifies the same root
+id under its own Python. Originals are backed up on both hosts
+(`/root/sparknet-deploy-backup-*` on agx64, `~/sparknet-node/.deploy-backup-*` on
+agx32). The deploy exposed a **field-only defect the suites could not**: on the
+hosts' Python 3.9.5, `socket.timeout` is *not* `TimeoutError` (they unified in
+3.10), so Step 20's `except TimeoutError` let a silent client's timeout escape,
+killed the serving thread and closed with a bare EOF. Fixed in `7fa03b9`
+(`except (TimeoutError, socket.timeout)` + a regression test) and re-verified live.
+The batch's build decisions (F2/F3) moved to **Step 21**; push status is recorded
+in `GITHUB_PUSH_BLOCKER`.
+
+## Step 21 — Reduced-membership re-formation (F2) and live cross-node root sync (F3)
+
+- [ ] **Step 21** — Step 16 built the chained-supersession *policy*, the signer's
+      monotonic adoption and `verify_chain`, but two halves stayed spec-only and
+      were recorded as `DoD: confirm: user` on Step 16. Build them here; they are
+      cross-role and contract-touching, so they belong at the fabric level.
+      - **F2 — reduced-membership re-formation**: re-form a trust root with a
+        member removed. The new root is a chained descendant (`previous_root_id`
+        = the parent) whose member set is a **strict subset** of its parent's;
+        unanimity now means all *surviving* members, and the removed member's
+        signature is neither required nor accepted.
+      - **F3 — live cross-node root sync**: deliver a re-formed root to the
+        peer(s) so each verifies it with **its own** `shared/sparknet-consensus.py`
+        and adopts it monotonically (no rollback), rather than only in-process.
+      - **DoD**:
+        (1) F2 — a test drives a real N→N-1 re-formation through the election
+        exchange: the new root chains to its parent by `previous_root_id`, names
+        exactly the surviving members, is signed by every survivor and none else;
+        `verify_root`/`verify_chain` accept it, while a root that still names the
+        removed member, or omits a survivor's signature, is refused;
+        (2) F3 — the re-formed root reaches a second real process (the peer) that
+        verifies it with its own consensus copy and adopts it; the peer refuses a
+        rollback to the parent and a stranger fork;
+        (3) both legs mutation-proven — break the subset, chain or unanimity
+        guard and watch a named test fail;
+        (4) `contracts/consensus-protocol.md` and `PAIR_REFORMATION_DESIGN.md`
+        agree with the built behaviour (and with the Step 16 policy-B text);
+        (5) `make test-all`, `make lint`, `make contract-test`, `validate`,
+        `keys-check`, `shims-check` green; live deploy to agx64/agx32 is
+        `DoD: confirm: user` (operator authorizes it, as with the 2026-10-09
+        deploy).
+      - **Status**: not started — spec-only as of Step 16 (`b0126ce`); the live
+        pair currently runs the Step 16 policy without a re-formation exercise.
 
 ## Next
 
