@@ -8,18 +8,23 @@ Updated: 2026-10-09
 
 ## Standing State
 
-- **Plan cursors**: root `PLAN.md` `current: done`. Step 14 (claims +
-  `--help`) closed 2026-10-08. **Hardening batch (2026-10-09) CLOSED as code**:
-  Step 15 `f1b790c` (timeouts + guard fixes), Step 20 `bc518d6` (signer
-  per-client read timeout + serialised key use, mutation-proven),
+- **Plan cursor**: root `PLAN.md` `current: 21`. Step 14 (claims + `--help`)
+  closed 2026-10-08. **Hardening batch (2026-10-09) CLOSED as code and
+  DEPLOYED**: Step 15 `f1b790c` (timeouts + guard fixes), Step 20 `bc518d6`
+  (signer per-client read timeout + serialised key use, mutation-proven),
   Step 16 `b0126ce` (consensus chained supersession, policy B), Step 17
   `MCP_A2A_DESIGN.md` (fabric root, design-proposal status — MCP/A2A two
-  layers, unchanged until adopted in its own commit). **Open, operator-owned,
-  not plan work**: (1) deploy the changed signer to the live agx64 pair
-  (Steps 20+16); (2) confirm/decline F2 reduced-membership re-formation and F3
-  live cross-node root sync (both stay spec-only until decision). R2 + R5
-  deferred by decision (one line in `log.md`). `main` 6 ahead of `origin/main`,
-  nothing pushed (`GITHUB_PUSH_BLOCKER`).
+  layers, unchanged until adopted in its own commit). `49b715a` adds the
+  version-aware 1.0/1.1 root canonical form (deploy precondition — else the
+  live 1.0 root fails the signer's startup `verify_root`); `7fa03b9` fixes the
+  signer read deadline on Python 3.9 (see the live-signer bullet). **Step 21
+  OPEN**: F2 reduced-membership re-formation + F3 live cross-node root sync —
+  the two Step 16 halves that stayed spec-only. R2 + R5 deferred by decision
+  (one line in `log.md`). `main` **11 ahead** of `origin/main`, **nothing
+  pushed**: `GITHUB_PUSH_BLOCKER` still stands — `gh` is not installed, the
+  repo's credential helper is `!gh auth git-credential` (so it fails), both
+  `~/.ssh` keys are unauthorized on GitHub, and no token is in the secret
+  stores. Needs an operator-provided PAT or SSH key.
 - **Roots are now a signed chain, not free replacements (policy B).**
   `previous_root_id` is in `ROOT_SIGNED_FIELDS` (genesis = `""`, schema 1.1);
   `verify_root`'s trust path refuses an unchained root (`unchained_root`),
@@ -29,11 +34,20 @@ Updated: 2026-10-09
   a flag, a stranger/rollback needs `--accept-requalification`. Live pair
   facts below are unchanged in kind; a re-formed root must now chain to the
   held `65d9ce25…` root.
-- **The live signer on agx64 still runs the pre-Step-20 binary** (single
-  client slot, no read timeout — the wedge found live on 2026-10-07). The
-  fixed serve transport ships in this repo only until the operator deploys it
-  (batch decision above). **Step 12 (local three-node rehearsal)
-  complete** — the whole arc runs live on three real node trees under
+- **The live signer on agx64 runs the hardened transport as of 2026-10-09.**
+  Steps 15/16/20 plus the version-aware compat (`49b715a`) and the py3.9
+  read-deadline fix (`7fa03b9`) are deployed to both agx64 (Master, unit
+  restarted, root-id `65d9ce…` unchanged, capabilities `["sign"]`, ledger
+  intact) and agx32 (peer shared code; its own Python 3.9.5 verifies the same
+  root). Live-proven: a silent client gets `{"ok":false,"error":"timeout"}` at
+  the deadline while a second client is served in parallel. **The py3.9 defect
+  is the lesson**: on the hosts' Python 3.9.5 `socket.timeout` is *not*
+  `TimeoutError`, so Step 20's `except TimeoutError` killed the serving thread
+  and closed with a bare EOF — the local test venv (3.14) could not reproduce
+  it; always preflight on the **target** interpreter. Backups:
+  `/root/sparknet-deploy-backup-20261009-0736/` (agx64),
+  `~/sparknet-node/.deploy-backup-20261009-0736/` (agx32). **Step 12 (local
+  three-node rehearsal) complete** — the whole arc runs live on three real node trees under
   `/tmp/opencode/rehearsal` (51 checks/0 failures, dated transcript, repeatable);
   `scripts/sparknet-rehearsal.sh` is the reproducible harness, and the rehearsal
   also exposed two real signer CLI str/Path defects now fixed with regression
@@ -133,9 +147,9 @@ Updated: 2026-10-09
   listens on `10.100.0.1:8080`; `DoD: confirm: user`, master Step 18) and the
   overlay doesn't survive reboot on the tegra host (`CONFIG_WIREGUARD=n`;
   userspace `wireguard-go`) — restore via
-  `/root/scripts/sparknet-wg-restore.sh`. The signer's missing client timeout
-  (`_serve_one` blocks with no read timeout) is recorded as **master build plan
-  Step 20**, deliberately unbuilt. Phase 9's destructive legs
+  `/root/scripts/sparknet-wg-restore.sh`. The signer's client timeout /
+  non-blocking accept (master build plan Step 20) is now built and deployed
+  (2026-10-09, with the py3.9 read-deadline fix). Phase 9's destructive legs
   (rollback / replace-Master re-formation) are documented in
   `contracts/deployment-runbook.md` and deliberately not executed.
   **Outstanding, unclaimed:** rotating
@@ -171,7 +185,9 @@ Updated: 2026-10-09
   root with agx32, signed a live registry entry, survived a real reboot, refused
   non-Master keys/unnamed nodes/tampered roots, and drove a live
   revoke→peer-inert→re-authorize cycle; its unit stays excluded from `make units`
-  by design (enabling a key-holder is the election's decision). The remaining
+  by design (enabling a key-holder is the election's decision). **Re-deployed
+  2026-10-09** with Steps 15/16/20, the version-aware root compat and the py3.9
+  read-deadline fix. The remaining
   honestly-unclaimed item is the admin page: declared, not bound (Step 18 DoD).
 - **Claim defects the 2026-10-06 audit found (all recorded where they were found,
   not fixed silently).** (a) `master-node`'s Steps 1–12 all had `[x]` boxes
