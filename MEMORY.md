@@ -20,11 +20,12 @@ Updated: 2026-10-09
   signer read deadline on Python 3.9 (see the live-signer bullet). **Step 21
   OPEN**: F2 reduced-membership re-formation + F3 live cross-node root sync —
   the two Step 16 halves that stayed spec-only. R2 + R5 deferred by decision
-  (one line in `log.md`). `main` **11 ahead** of `origin/main`, **nothing
-  pushed**: `GITHUB_PUSH_BLOCKER` still stands — `gh` is not installed, the
-  repo's credential helper is `!gh auth git-credential` (so it fails), both
-  `~/.ssh` keys are unauthorized on GitHub, and no token is in the secret
-  stores. Needs an operator-provided PAT or SSH key.
+  (one line in `log.md`). **Pushed** this session: `main` at `4e276df` on
+  `origin/main` (`d901c8f..4e276df`), after the remote was corrected — it had
+  drifted to `reallife-spark/SparkNet-Node`, renamed back to
+  `reallife-spark/sparknet` by operator decision. `gh` lives at
+  `~/.local/bin/gh` (authenticated); it is only missing from a non-interactive
+  `PATH`.
 - **Roots are now a signed chain, not free replacements (policy B).**
   `previous_root_id` is in `ROOT_SIGNED_FIELDS` (genesis = `""`, schema 1.1);
   `verify_root`'s trust path refuses an unchained root (`unchained_root`),
@@ -214,10 +215,12 @@ Updated: 2026-10-09
   when one role's copy of the contract drifts.
 - **The shipped registry is empty on purpose.** No node has privileges until the
   Master signs something. That is the fail-closed default, not an oversight.
-- **`gh` may hold a working token while git has no helper.** They are independent:
-  `gh auth status` can be valid with git still unable to authenticate. Push with
-  `git -c 'credential.helper=!gh auth git-credential' push` — scoped to the one
-  command, so no git config is touched.
+- **`gh` lives at `~/.local/bin/gh` (authenticated as `reallife-spark`), but a
+  non-interactive shell's `PATH` omits `~/.local/bin`**, so the repo-local helper
+  `!gh auth git-credential` silently fails to resolve it and git looks
+  unauthenticated. Push with `PATH="$HOME/.local/bin:$PATH" git push origin main`.
+  The fabric's remote is **`reallife-spark/sparknet`** (private); a remote that
+  drifted to `SparkNet-Node` is wrong.
 - **`make bundle-verify` only verifies the newest archive.** Rebuild first
   (`make bundle ROLE=…`) or it will cheerfully re-prove a stale bundle.
 - **Never read large tool output through a pipe.** `opencode agent list` is ~9 MB
