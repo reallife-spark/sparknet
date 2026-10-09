@@ -154,9 +154,18 @@ def _all_votes(exchange, consensus, cluster, candidate: str = WINNER):
         exchange.submit_vote(_vote(consensus, cluster, name, candidate))
 
 
-def _formed(election, consensus, cluster, candidate: str = WINNER):
-    """Run the whole ceremony in-process; returns (exchange, signed root)."""
-    exchange = election.ElectionExchange(cluster["members"], clock=_clock)
+def _formed(
+    election, consensus, cluster, candidate: str = WINNER, previous_root_id: str = ""
+):
+    """Run the whole ceremony in-process; returns (exchange, signed root).
+
+    `previous_root_id` links the formed root to the root it supersedes. A
+    re-formation passes the held root's id here; policy B refuses any
+    supersession that does not name the root in force.
+    """
+    exchange = election.ElectionExchange(
+        cluster["members"], clock=_clock, previous_root_id=previous_root_id
+    )
     _all_bids(exchange, election, cluster)
     _all_votes(exchange, consensus, cluster, candidate)
     root = exchange.status()["root"]
@@ -642,15 +651,30 @@ def test_re_presenting_the_root_already_in_force_is_refused(election, consensus,
 
 
 def test_a_new_nonce_supersedes_the_held_root(election, consensus, cluster, tmp_path):
-    """Re-formation: a later root with new signatures replaces the held one."""
+    """Re-formation: a later, chained root replaces the held one."""
     _, first = _formed(election, consensus, cluster, candidate="alpha")
-    _, second = _formed(election, consensus, cluster, candidate=WINNER)
+    _, second = _formed(
+        election, consensus, cluster, candidate=WINNER, previous_root_id=consensus.root_id(first)
+    )
     assert first["nonce"] != second["nonce"]
+    assert second["previous_root_id"] == consensus.root_id(first), (
+        "the re-formation root must name the held root to be its successor"
+    )
     identity_path = _identity(WINNER, tmp_path / "identity.json")
     out = election.accept_root(second, identity_path, trust_root=first)
     assert out["accepted"] and out["root_id"] != consensus.root_id(first)
     after = json.loads(identity_path.read_text())
     assert after["trust_root"]["root_id"] == consensus.root_id(second)
+
+
+def test_an_unchained_new_root_is_refused_in_accept(election, consensus, cluster, tmp_path):
+    """The trust flip refuses a well-signed root with no lineage to the held one."""
+    _, first = _formed(election, consensus, cluster, candidate="alpha")
+    _, stranger = _formed(election, consensus, cluster, candidate=WINNER)
+    identity_path = _identity(WINNER, tmp_path / "identity.json")
+    with pytest.raises(election.ElectionError) as exc:
+        election.accept_root(stranger, identity_path, trust_root=first)
+    assert consensus.REASON_UNCHAINED in exc.value.detail, exc.value.detail
 
 
 def test_re_running_accept_is_idempotent(election, consensus, cluster, tmp_path):

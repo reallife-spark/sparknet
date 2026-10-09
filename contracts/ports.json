@@ -211,6 +211,7 @@
    "implementation_state never claims implemented without a bind path in the named service.",
    "A port may be implemented and simultaneously not-listening. That combination is the normal case for an overlay service on a host whose overlay is down, and it must not be collapsed into a single boolean.",
    "runtime is measured per host and never published as a contract fact; only implementation_state travels.",
-   "A service built on the shared transport (shared/sparknet-http.py) may declare a route class loopback-only via serve(loopback_only_routes=...). A caller from the overlay is then refused HTTP 403 before the request is read \u2014 a signed and authorized peer included. Overlay-only ports must never expose such a route class to the fabric."
+   "A service built on the shared transport (shared/sparknet-http.py) may declare a route class loopback-only via serve(loopback_only_routes=...). A caller from the overlay is then refused HTTP 403 before the request is read \u2014 a signed and authorized peer included. Overlay-only ports must never expose such a route class to the fabric.",
+   "Re-formation news uses no new port: the chained lineage is pulled over the existing share/registry path (4220 git-repo or 4201 share-intake), the same channel the receiving peer already grants. Adding a port would hand re-formation a transport edge no other authority has."
   ]
 }

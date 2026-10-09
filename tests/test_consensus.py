@@ -89,14 +89,15 @@ def cluster():
     return {"members": members, "private": private}
 
 
-def _root(members, master: str, nonce: str = "nonce-1", clock=None) -> dict:
+def _root(members, master: str, nonce: str = "nonce-1", clock=None, previous_root_id: str = "") -> dict:
     return {
-        "version": "1.0",
+        "version": "1.1",
         "nonce": nonce,
         "formed_at": (clock or _clock)().isoformat(),
         "members": members,
         "master_node_id": master,
         "master_pubkey": next(m["cluster_pubkey"] for m in members if m["node_id"] == master),
+        "previous_root_id": previous_root_id,
     }
 
 
@@ -418,20 +419,109 @@ def test_swapping_a_member_key_after_signing_is_caught(consensus, cluster):
 
 
 def test_a_new_root_supersedes_the_old_one(consensus, cluster):
-    """Changing the master means a new root, and the old key stops counting."""
+    """Changing the master means a new root, and the old key stops counting.
+
+    Policy B makes supersession a chain: the new root names the held root as
+    `previous_root_id`, and only that parented root may replace it. A second
+    root with a new nonce but no lineage is a stranger, not a successor.
+    """
     first = consensus.attach_root_signatures(
         _root(cluster["members"], "beta", nonce="first"), cluster["private"]
     )
-    second = consensus.attach_root_signatures(
-        _root(cluster["members"], "gamma", nonce="second"), cluster["private"]
+    chained = consensus.attach_root_signatures(
+        _root(cluster["members"], "gamma", nonce="second", previous_root_id=consensus.root_id(first)),
+        cluster["private"],
     )
-    assert consensus.verify_root(second, trust=first)[0] is True
+    assert consensus.verify_root(chained, trust=first)[0] is True
 
-    authorised = consensus.authorised_master_pubkey(second)
-    assert authorised == second["master_pubkey"]
+    authorised = consensus.authorised_master_pubkey(chained)
+    assert authorised == chained["master_pubkey"]
     assert authorised != first["master_pubkey"], (
         "after re-formation the previous master's key must no longer be authorised"
     )
+
+
+def test_a_new_nonce_without_the_chain_is_refused(consensus, cluster):
+    """The F1 gap, closed: a well-signed root that does not descend from the
+    held root is refused on the trust path, even with a fresh nonce."""
+    first = consensus.attach_root_signatures(
+        _root(cluster["members"], "beta", nonce="first"), cluster["private"]
+    )
+    stranger = consensus.attach_root_signatures(
+        _root(cluster["members"], "gamma", nonce="second"), cluster["private"]
+    )
+    ok, reason = consensus.verify_root(stranger, trust=first)
+    assert ok is False
+    assert consensus.REASON_UNCHAINED in reason
+    assert "previous_root_id" in reason, reason
+
+
+def test_a_chained_root_may_not_add_a_member(consensus, cluster):
+    """Re-formation may replace the master or shrink membership; a chained root
+    that ADDS a member is the join ceremony, which is a different contract."""
+
+    def _new_member(name: str) -> tuple[dict, str]:
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+        raw = hashlib.sha256(f"sparknet-test-cluster-{name}".encode()).digest()
+        key = Ed25519PrivateKey.from_private_bytes(raw)
+        private_b64 = base64.b64encode(
+            key.private_bytes(
+                serialization.Encoding.Raw,
+                serialization.PrivateFormat.Raw,
+                serialization.NoEncryption(),
+            )
+        ).decode()
+        public = key.public_key().public_bytes(
+            serialization.Encoding.Raw, serialization.PublicFormat.Raw
+        )
+        return (
+            {
+                "node_id": name,
+                "fingerprint": hashlib.sha256(f"fp-{name}".encode()).hexdigest(),
+                "wireguard_pubkey": base64.b64encode(public).decode(),
+                "cluster_pubkey": base64.b64encode(public).decode(),
+            },
+            private_b64,
+        )
+
+    first = consensus.attach_root_signatures(
+        _root(cluster["members"], "beta", nonce="first"), cluster["private"]
+    )
+    delta, delta_priv = _new_member("delta")
+    joined = consensus.attach_root_signatures(
+        _root(
+            [*cluster["members"], delta],
+            "gamma",
+            nonce="second",
+            previous_root_id=consensus.root_id(first),
+        ),
+        {**cluster["private"], "delta": delta_priv},
+    )
+    ok, reason = consensus.verify_root(joined, trust=first)
+    assert ok is False
+    assert consensus.REASON_UNCHAINED in reason
+    assert "ADDS a member" in reason, reason
+
+
+def test_a_chained_root_may_not_shrink_below_the_minimum(consensus, cluster):
+    """A lone survivor holds a removal proof, not a cluster."""
+    first = consensus.attach_root_signatures(
+        _root(cluster["members"], "beta", nonce="first"), cluster["private"]
+    )
+    lone = consensus.attach_root_signatures(
+        _root(
+            [cluster["members"][0]],
+            cluster["members"][0]["node_id"],
+            nonce="second",
+            previous_root_id=consensus.root_id(first),
+        ),
+        {cluster["members"][0]["node_id"]: cluster["private"][cluster["members"][0]["node_id"]]},
+    )
+    ok, reason = consensus.verify_root(lone, trust=first)
+    assert ok is False
+    assert consensus.REASON_UNCHAINED in reason, reason
 
 
 def test_replaying_a_root_is_refused(consensus, cluster):

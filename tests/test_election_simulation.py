@@ -163,7 +163,7 @@ def _sign_root(consensus, cluster, root):
     return consensus.attach_root_signatures(root, cluster["cluster_private"])
 
 
-def _root(consensus, cluster, clock, master, nonce):
+def _root(consensus, cluster, clock, master, nonce, previous_root_id: str = ""):
     return {
         "version": consensus.SCHEMA_VERSION,
         "nonce": nonce,
@@ -171,6 +171,7 @@ def _root(consensus, cluster, clock, master, nonce):
         "members": cluster["members"],
         "master_node_id": master,
         "master_pubkey": cluster["operational"][master],
+        "previous_root_id": previous_root_id,
     }
 
 
@@ -372,48 +373,49 @@ def test_the_cluster_re_forms_when_the_master_changes():
     assert result["master_node_id"] == "gamma"
 
     root_gamma = _sign_root(
-        consensus, cluster, _root(consensus, cluster, clock, "gamma", "root-2")
+        consensus,
+        cluster,
+        _root(
+            consensus,
+            cluster,
+            clock,
+            "gamma",
+            "root-2",
+            previous_root_id=consensus.root_id(root_alpha),
+        ),
     )
     ok, reason = consensus.verify_root(root_gamma, trust=root_alpha)
     assert ok, f"the new root must verify against the one it replaces: {reason}"
     assert consensus.authorised_master_pubkey(root_gamma) == cluster["operational"]["gamma"]
 
-    # Re-presenting the root already in force is a replay and is refused. This is the
-    # only ordering `verify_root` can do: it sees one root and the one already held,
-    # and can say "you already have this one". It cannot say which of two *different*
-    # roots is newer — see the note below.
+    # Re-presenting the root already in force is a replay and is refused; so is a
+    # well-signed root that does not descend from it. The chain (`previous_root_id`)
+    # is the ordering `verify_root` uses now, so ordering no longer lives only in
+    # the ledger.
     ok, reason = consensus.verify_root(root_alpha, trust=root_alpha)
     assert ok is False
     assert reason.startswith(consensus.REASON_REPLAY), reason
+    stranger = _sign_root(
+        consensus, cluster, _root(consensus, cluster, clock, "beta", "root-3")
+    )
+    ok, reason = consensus.verify_root(stranger, trust=root_alpha)
+    assert ok is False
+    assert consensus.REASON_UNCHAINED in reason, reason
 
 
-def test_a_superseded_root_still_verifies_on_its_own_and_that_is_a_named_gap():
-    """The limitation, stated rather than papered over.
+def test_a_superseded_root_cannot_supersede_its_newer_successor():
+    """The old gap, now closed by the chain (policy B).
 
-    `verify_root` is a pure function over one root plus, optionally, the root the
-    caller already holds. Two roots with different nonces are both internally
-    valid and both signed by all three members, so after a re-formation the *old*
-    root still verifies. A peer that has not yet learned the new root keeps
-    honouring the old Master — and there is no local check that could tell it
-    otherwise, because nothing in the old root says it was superseded.
+    This test previously pinned the gap: it asserted that after a re-formation
+    the *old* root still verifies against the new one, because nothing in a
+    root said which root it replaced. Policy B fixes exactly that — every root
+    carries `previous_root_id`, the id of the root it supersedes — so a pure
+    verifier holding the new root can now refuse the old one offline, with no
+    ledger and no peer. The test is kept so that the suite pins the closure.
 
-    Two things follow, and both are real.
-
-    *This is why supersession is enforced where history lives* — the ledger records
-    the `root_id` each signature was issued under, and
-    `sparknet-signer.check_not_reverted` refuses to start against a different one
-    without `--accept-requalification`. That is tested in
-    `master-node/tests/test_signer_isolation.py`, and this test is not going to
-    pretend the pure function does the same job.
-
-    *A peer still needs a way to learn of the new root.* How a re-formed root
-    propagates is the same open question as how a cluster re-forms at all, and it
-    is recorded in `contracts/consensus-protocol.md`. It is a policy decision, not
-    something to settle inside a test.
-
-    Asserted so the gap is visible in the suite. If a future root gets an ordering
-    — a generation counter, a signed sequence number — this test fails and should
-    be rewritten, because that would close it.
+    The chain is the global replacement for the local
+    `check_not_reverted`-style enforcement: ordering is carried by the very
+    thing being ordered (the root), instead of by where history lives.
     """
     consensus = _module()
     cluster = _cluster()
@@ -424,18 +426,126 @@ def test_a_superseded_root_still_verifies_on_its_own_and_that_is_a_named_gap():
     )
     clock.advance(minutes=5)
     new = _sign_root(
-        consensus, cluster, _root(consensus, cluster, clock, "gamma", "root-2")
+        consensus,
+        cluster,
+        _root(
+            consensus,
+            cluster,
+            clock,
+            "gamma",
+            "root-2",
+            previous_root_id=consensus.root_id(old),
+        ),
     )
 
-    assert consensus.verify_root(old)[0], (
-        "the old root was genuinely valid once"
+    assert consensus.verify_root(old)[0], "the old root was genuinely valid once"
+    assert consensus.verify_root(new, trust=old)[0], "the chained successor verifies"
+    ok, reason = consensus.verify_root(old, trust=new)
+    assert ok is False, (
+        "the old root does not name the new one as its parent, so a verifier "
+        "holding the new root can now see it for what it is: a superseded root, "
+        "refused without a ledger"
     )
-    assert consensus.verify_root(old, trust=new)[0], (
-        "and a pure verifier with no ledger cannot tell it has been superseded. "
-        "Closing this needs a signed ordering in the root, not a cleverer check."
-    )
-    assert consensus.verify_root(new)[0]
+    assert consensus.REASON_UNCHAINED in reason, reason
     assert consensus.root_id(old) != consensus.root_id(new)
+
+
+def test_verify_chain_accepts_a_two_link_formation_line():
+    """A peer that missed the re-formation may verify the whole lineage."""
+    consensus = _module()
+    cluster = _cluster()
+    clock = SimClock()
+
+    genesis = _sign_root(
+        consensus, cluster, _root(consensus, cluster, clock, "alpha", "root-1")
+    )
+    clock.advance(minutes=5)
+    reformed = _sign_root(
+        consensus,
+        cluster,
+        _root(
+            consensus,
+            cluster,
+            clock,
+            "gamma",
+            "root-2",
+            previous_root_id=consensus.root_id(genesis),
+        ),
+    )
+    assert consensus.verify_chain([reformed, genesis])[0] is True
+
+
+def test_verify_chain_refuses_a_lineage_with_a_hole():
+    """A chain that skips a generation fails on the missing link."""
+    consensus = _module()
+    cluster = _cluster()
+    clock = SimClock()
+
+    genesis = _sign_root(
+        consensus, cluster, _root(consensus, cluster, clock, "alpha", "root-1")
+    )
+    clock.advance(minutes=5)
+    middle = _sign_root(
+        consensus,
+        cluster,
+        _root(
+            consensus,
+            cluster,
+            clock,
+            "beta",
+            "root-2",
+            previous_root_id=consensus.root_id(genesis),
+        ),
+    )
+    clock.advance(minutes=5)
+    newest = _sign_root(
+        consensus,
+        cluster,
+        _root(
+            consensus,
+            cluster,
+            clock,
+            "gamma",
+            "root-3",
+            previous_root_id=consensus.root_id(middle),
+        ),
+    )
+    # Drop `middle`: newest claims to descend from it but it is not in the pull.
+    ok, reason = consensus.verify_chain([newest, genesis])
+    assert ok is False
+    assert consensus.REASON_UNCHAINED in reason, reason
+    # The full line verifies.
+    assert consensus.verify_chain([newest, middle, genesis])[0] is True
+
+
+def test_verify_chain_refuses_a_chain_that_does_not_reach_genesis():
+    """The oldest supplied root must itself be a genesis root."""
+    consensus = _module()
+    cluster = _cluster()
+    clock = SimClock()
+
+    genesis = _sign_root(
+        consensus, cluster, _root(consensus, cluster, clock, "alpha", "root-1")
+    )
+    clock.advance(minutes=5)
+    reformed = _sign_root(
+        consensus,
+        cluster,
+        _root(
+            consensus,
+            cluster,
+            clock,
+            "gamma",
+            "root-2",
+            previous_root_id=consensus.root_id(genesis),
+        ),
+    )
+    # `reformed` is the oldest supplied link but is not genesis; it still names a
+    # parent, so the lineage is incomplete.
+    ok, reason = consensus.verify_chain([reformed])
+    assert ok is False
+    assert consensus.REASON_UNCHAINED in reason
+    assert "genesis" in reason, reason
 
 
 def test_first_round_votes_do_not_help_a_later_election():

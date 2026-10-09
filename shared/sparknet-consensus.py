@@ -36,7 +36,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 
 #: A cluster is two (a pair) or three (the full cluster) members. This is a
 #: protocol decision, not a tunable: a fourth member changes the agreement
@@ -112,6 +112,7 @@ REASON_MISSING_SIGNATURE = "missing_signature"
 REASON_SIGNER_NOT_A_MEMBER = "signer_not_a_member"
 REASON_BAD_SIGNATURE = "bad_signature"
 REASON_REPLACED = "root_superseded"
+REASON_UNCHAINED = "unchained_root"
 REASON_REPLAY = "root_replayed"
 REASON_NOT_AGREED = "no_unanimous_agreement"
 REASON_VOTE_REPLAY = "vote_replayed"
@@ -121,8 +122,19 @@ REASON_MEMBER_ALREADY_VOTED = "member_already_voted"
 ROOT_MEMBER_FIELDS = ("node_id", "fingerprint", "wireguard_pubkey", "cluster_pubkey")
 
 #: Root fields covered by the signatures. `nonce` is included so a later root can
-#: never verify against an earlier one's signatures.
-ROOT_SIGNED_FIELDS = ("version", "nonce", "formed_at", "members", "master_node_id", "master_pubkey")
+#: never verify against an earlier one's signatures; `previous_root_id` is
+#: included so a later root is bound to the root it supersedes — supersession is
+#: a chain (policy B in the re-formation design), never a free replacement. The
+#: first root of a cluster records the empty string: it has no predecessor.
+ROOT_SIGNED_FIELDS = (
+    "version",
+    "nonce",
+    "formed_at",
+    "members",
+    "master_node_id",
+    "master_pubkey",
+    "previous_root_id",
+)
 
 
 # --- canonicalisation ---------------------------------------------------------
@@ -139,6 +151,9 @@ def canonical_root(root: dict[str, Any]) -> dict[str, Any]:
     missing = [f for f in ROOT_SIGNED_FIELDS if f not in root]
     if missing:
         raise ConsensusError(f"root missing required field(s): {', '.join(missing)}")
+    previous = root["previous_root_id"]
+    if not isinstance(previous, str):
+        raise ConsensusError("previous_root_id must be a string")
     members = root["members"]
     if not isinstance(members, list):
         raise ConsensusError("members must be a list")
@@ -160,6 +175,7 @@ def canonical_root(root: dict[str, Any]) -> dict[str, Any]:
         "members": projected_members,
         "master_node_id": root["master_node_id"],
         "master_pubkey": root["master_pubkey"],
+        "previous_root_id": root["previous_root_id"],
     }
 
 
@@ -514,6 +530,29 @@ def verify_root(
                 f"{REASON_REPLAY}: this nonce is already the root in force; a new "
                 f"root needs a new nonce"
             )
+        chained = projected["previous_root_id"] == root_id(previous)
+        if not chained:
+            return False, (
+                f"{REASON_UNCHAINED}: this root does not descend from the root in "
+                f"force. Supersession is a chain: a new root must name the held "
+                f"root as previous_root_id, or it is a stranger, not a successor, "
+                f"however well it is signed"
+            )
+        held_ids = {m["node_id"] for m in previous["members"]}
+        new_ids = {m["node_id"] for m in projected["members"]}
+        if not new_ids.issubset(held_ids):
+            return False, (
+                f"{REASON_UNCHAINED}: re-formation may only replace the master "
+                f"or shrink membership (evidence for the drop lives in the "
+                f"registry); a chained root that ADDS a member is the join "
+                f"ceremony, which is a different contract"
+            )
+        if len(new_ids) < MIN_CLUSTER_SIZE:
+            return False, (
+                f"{REASON_UNCHAINED}: a chained root may not fall below "
+                f"{MIN_CLUSTER_SIZE} members; a lone survivor holds a removal "
+                f"proof, not a cluster"
+            )
 
     members = projected["members"]
     if len(members) < MIN_CLUSTER_SIZE or len(members) > MAX_CLUSTER_SIZE:
@@ -561,6 +600,43 @@ def verify_root(
             f"{REASON_SIGNER_NOT_A_MEMBER}: the elected master "
             f"{projected['master_node_id']} is not a member of the root"
         )
+    return True, REASON_OK
+
+
+def verify_chain(roots: list[dict[str, Any]]) -> tuple[bool, str]:
+    """Verify a pull-chain of roots, newest first.
+
+    Policy B makes supersession a chain: every root after the first must name the
+    root it descends from as `previous_root_id`. A peer that has been offline
+    while the cluster re-formed once (or twice) does not hold the intermediate
+    roots and cannot use the single-hop `verify_root(root, trust=held)` check on
+    the newest root; it must verify the whole line. `roots[0]` is the newest, and
+    `roots[-1]` must be a genesis root (`previous_root_id == ""`).
+
+    Each step uses `verify_root` with `trust` set to the next-older root, which
+    carries the whole re-formation discipline forward: a step that breaks the
+    chain, adds a member, or drops below the minimum is refused with the same
+    reasons as an exchange against a single held root.
+    """
+    if not roots:
+        return False, f"{REASON_UNCHAINED}: an empty chain verifies nothing"
+    try:
+        terminal = canonical_root(roots[-1])["previous_root_id"]
+    except ConsensusError as exc:
+        return False, f"{REASON_UNCHAINED}: terminal root unusable: {exc}"
+    if terminal != "":
+        return False, (
+            f"{REASON_UNCHAINED}: the chain does not terminate at a genesis root; "
+            f"the oldest supplied root still names a parent, so the lineage is "
+            f"incomplete"
+        )
+    for index, root in enumerate(roots):
+        trust = roots[index + 1] if index + 1 < len(roots) else None
+        ok, reason = verify_root(root, trust=trust)
+        if not ok:
+            return False, (
+                f"{REASON_UNCHAINED}: link {index} of the chain fails: {reason}"
+            )
     return True, REASON_OK
 
 

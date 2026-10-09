@@ -47,6 +47,7 @@
     ]
   },
   "escalation_note": "capabilities and overlay_ipv4 are inside the signed envelope (see contracts/identity-schema.json), so editing them in the registry file invalidates the signature. A node with registry write access can revoke (a safe denial) but cannot escalate to guard-apply.",
+  "reformation_note": "Re-formation (a chained master change, policy B) introduces no new capability: it re-uses the election capability for a new root, the existing revoke for any removal, and the existing share/registry path to pull the chained lineage. There is deliberately no 're-form' grant a node could hold \u2014 the direction of a chained root (previous_root_id naming the root in force) is what a signer and a verifier check, so no capability can be added to it without breaking the signature.",
   "share_types": {
     "purpose": "A share type states what a share actually conveys. Naming the type is not bookkeeping: a receiver that accepts kb-view must not thereby accept full, so the type is inside the signed share grant and is checked at both ends.",
     "closed_vocabulary": true,

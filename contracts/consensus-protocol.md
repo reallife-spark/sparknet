@@ -161,22 +161,35 @@ conversation — the roles differ in what they hold, not in how they agree.
 cluster_trust_root = {
   version, nonce, formed_at,
   members: [ { node_id, fingerprint, wireguard_pubkey, cluster_pubkey } × n ],
-  master_node_id, master_pubkey
+  master_node_id, master_pubkey,
+  previous_root_id
 }
 ```
 
 co-signed by every member's cluster key, over the canonical bytes.
+`previous_root_id` is the id (`root_id`) of the root this one supersedes:
+the empty string for a cluster's first root, the held root's id for a
+re-formation. It is one of the signed fields, so ordering travels inside the
+very thing being ordered; the Re-formation section builds the chain on this.
 
 Peers accept a root only when:
 
 1. it carries n valid signatures, exactly one per member,
 2. from n **distinct** members,
 3. each matching the `cluster_pubkey` of a member the root itself names,
-4. and the `master_pubkey` is the one the registry is signed under.
+4. and the `master_pubkey` is the one the registry is signed under,
+
+and, on the trust path (a peer that already holds a root), additionally:
+
+5. it names the held root as `previous_root_id` — it descends from the root in
+   force. A well-signed root with a fresh nonce but no lineage is refused as
+   `unchained_root`: supersession is a chain, not a free replacement.
 
 Points 3 and 4 matter more than they look. Without 3, a root could name members
 and be signed by strangers. Without 4, a root could bind a master public key
-that no authority ever recognised.
+that no authority ever recognised. Without 5, a re-formed cluster could be
+replaced by a rival well-signed root that claims no descent, and the ordering
+of two roots would depend entirely on where history happens to live.
 
 The root is self-describing: it carries its own membership, so a peer joining
 later reads the membership from the root rather than from configuration that could
@@ -204,37 +217,45 @@ A new root has a new nonce, so it is not a replay of the old one: re-presenting 
 root already in force is refused as `root_replayed`, and the new root's
 `master_pubkey` is the only one the new root authorises.
 
-**But a new nonce does not make the old root stop verifying, and it is worth being
-blunt about that.** The old root remains internally valid forever — same member
-signatures, same master, nothing in it says it was superseded. `verify_root` is a
-pure function over one root plus, optionally, the root the caller already holds;
-given two roots with different nonces it can say "you already have this one", and
-it cannot say which is newer. Two roots are only ordered by something outside
-themselves.
+**The new root is chained, not free.** Every root carries `previous_root_id`,
+the id of the root it supersedes. On the trust path — a peer that already holds a
+root — `verify_root` refuses any candidate that does not name the held root as
+`previous_root_id`, as `unchained_root`, however well it is signed. This closes
+the old gap in which a pure verifier could not order two different roots: ordering
+is now signed into the root itself, so it survives offline and does not depend on
+where history lives. Membership under the chain may only replace the master or
+*shrink* — a chained root that adds a member is the join ceremony, which is a
+different contract — and may not fall below the cluster minimum of two.
 
-Supersession is therefore enforced where history lives, not in the pure verifier:
+**Supersession is still enforced where history lives, as the last line of
+defence.** The ledger records the `root_id` each signature was issued under.
+`sparknet-signer.check_not_reverted` is monotonic: a root whose
+`previous_root_id` names the ledger's root in force is a provably forward step and
+is adopted without ceremony; anything else — the same lockstep again, a rollback,
+or a stranger root with no lineage — is refused unless
+`--accept-requalification` says so deliberately.
 
-- every signature a node issues records the `root_id` it was issued under, so a
-  ledger containing a different `root_id` means the process is being pointed at a
-  root it has already moved past — `sparknet-signer.check_not_reverted` refuses
-  that unless `--accept-requalification` says so deliberately;
-- a peer must *learn* the new root before the old Master stops being recognised by
-  it. Until it does, the old root's authority still verifies, because nothing local
-  contradicts it.
-
-That second bullet is a real gap and is recorded below rather than asserted away.
+**A peer that missed a re-formation verifies the whole line.** It cannot use the
+single-hop `verify_root(root, trust=held)` on a multi-generation-old held root;
+`verify_chain(roots)`, newest first, walks each link with the same trust
+discipline down to a genesis root. The news of a re-formation therefore reaches a
+peer as a pull of successive roots, each chained to the one before — not as a
+broadcast of the *latest* authority, which a rolled-back Master could suppress.
+The pull path is the existing share/registry channel; no new port, no new
+capability. *How far an offline peer may fall behind, and how the lineage is
+fetched, is the mode of exposure to be specified separately.*
 
 **Re-formation is also meant to be the escape from a blocked election.** If
 unanimity cannot be reached, the members that remain form a new root with a new
 membership — dropping the node that would not agree.
 
-**That escape does not exist yet, and the contract currently contradicts itself
-here.** With unanimity required, a root needs every member to sign, so if one
-member is merely *unreachable* — powered off, disk failed, not hostile — the
-survivors cannot form a root either. "Reduce membership by re-formation, with
-unanimity among the survivors" is unsatisfiable: a full cluster losing one member
-leaves two, a pair losing one leaves one, and a lone node is not a cluster. The
-case where re-formation is needed is precisely the case where it is impossible.
+**That escape still does not exist, and the contract stays honest about it.** With
+unanimity required, a root needs every member to sign, so if one member is merely
+*unreachable* — powered off, disk failed, not hostile — the survivors cannot form
+a root either. "Reduce membership by re-formation, with unanimity among the
+survivors" is unsatisfiable: a full cluster losing one member leaves two, a pair
+losing one leaves one, and a lone node is not a cluster. The case where
+re-formation is needed is precisely the case where it is impossible.
 
 This is recorded rather than papered over, because the resolutions are policy
 choices, not implementation details, and each trades something real:
@@ -245,19 +266,11 @@ choices, not implementation details, and each trades something real:
 | **B** — majority to reduce, unanimity to grant | n−1 signatures to form a reduced root, n to form a full one | a Byzantine majority could remove an honest node. Needs a rule preventing colluding nodes from reaching authority. |
 | **C** — a member joins before any drop | unchanged at n of n | requires a join ceremony, which is also unspecified |
 
-A second open question sits alongside it, and is narrower but no less real:
-
-| Question | Why it is open | Cost of guessing |
-|---|---|---|
-| **How does a re-formed root reach a peer?** A new root is served by the nodes that formed it, and the old one is locally indistinguishable from the new one. | no signed ordering exists in the root, and `verify_root` cannot invent one | announcing over a channel the superseded Master also controls means a rolled-back Master can suppress the news of its own replacement. That is the classic reason a leader needs a *lease*, not a broadcast. |
-
-Until one is chosen, the correct statement is: **a cluster cannot
-survive the loss of a member below its minimum of two, by design or by omission,
-and a peer that has not learned of a re-formed root still honours the superseded
-Master.** Everything
-downstream — the signer's `--accept-requalification`, root supersession in
-`shared/sparknet-consensus.py` — is built for the general case, but a *reduced*
-root is a document this contract does not yet define.
+Until one is chosen, the correct statement is: **a cluster cannot survive the
+loss of a member below its minimum of two, by design or by omission.** Everything
+built here — the chain, `verify_chain`, the monotonic `check_not_reverted` — makes
+a *chained, same-membership* re-formation (a master change) a defined, checked act.
+A *reduced*-membership root remains a document this contract does not yet define.
 
 **Re-formation is not a bypass.** Whatever threshold is chosen, it cannot install a
 Master without unanimity among the members of the *new* root, and a node removed by

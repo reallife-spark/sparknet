@@ -348,8 +348,15 @@ def build_root(
     tally_result: dict[str, Any],
     members: list[dict[str, Any]],
     now: datetime | None = None,
+    previous_root_id: str = "",
 ) -> dict[str, Any]:
     """The unsigned root a unanimous tally produces.
+
+    `previous_root_id` links this root to the root it supersedes (the empty
+    string for a cluster's first root). A re-formation through the election
+    ceremony passes the held root's id here; the consensus module refuses any
+    supersession that does not name the root in force, so omitting it only
+    ever yields a genesis root.
 
     `master_pubkey` is the candidate's operational key from its signed bid —
     the point of the whole ceremony: the root is what binds a key nobody else
@@ -369,6 +376,7 @@ def build_root(
         "members": list(members),
         "master_node_id": request["node_id"],
         "master_pubkey": request["operational_pubkey_b64"],
+        "previous_root_id": previous_root_id,
     }
     missing = [field for field in consensus.ROOT_SIGNED_FIELDS if field not in unsigned]
     if missing:
@@ -402,6 +410,7 @@ class ElectionExchange:
         shared_dir: Path | None = None,
         clock: Callable[[], datetime] | None = None,
         election_id: str = DEFAULT_ELECTION_ID,
+        previous_root_id: str = "",
     ) -> None:
         self.shared_dir = Path(shared_dir) if shared_dir else DEFAULT_SHARED_DIR
         self.consensus = load_consensus(self.shared_dir)
@@ -409,6 +418,7 @@ class ElectionExchange:
         self.member_ids = {member["node_id"] for member in members}
         self.members_by_id = {member["node_id"]: member for member in members}
         self.election_id = election_id
+        self.previous_root_id = previous_root_id
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self.requests: dict[str, dict[str, Any]] = {}
         self.votes: dict[str, dict[str, Any]] = {}
@@ -604,6 +614,7 @@ class ElectionExchange:
             self.tally_result,
             list(self.members),
             now=self._clock(),
+            previous_root_id=self.previous_root_id,
         )
         if len(self.signatures) >= len(self.members):
             self.formed_at = self._clock().isoformat()
