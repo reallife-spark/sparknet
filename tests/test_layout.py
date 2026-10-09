@@ -42,6 +42,9 @@ EXPECTED_TOP_LEVEL = {
     "AGENTS.md", "MEMORY.md", "MISSION.md", "PLAN.md", "README.md", "log.md",
     "Makefile", "pyproject.toml", "requirements.txt", "requirements-dev.txt",
     ".env.example", ".gitignore", "opencode.json", ".vault-config",
+    # design proposals that deliberately sit at the fabric root, NOT in
+    # contracts/ (their status says so; see Step 17)
+    "MCP_A2A_DESIGN.md",
     # per-clone hooks (activated by `make hooks`) — pre-commit runs keys-check
     ".githooks",
     # curated navigation + the daily-update cache. index.md is hand-maintained,
