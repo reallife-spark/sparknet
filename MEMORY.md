@@ -4,14 +4,35 @@
 > The plan and its cursor live in `PLAN.md` — this file mirrors it, it does not
 > own it. Per-session detail belongs in `sessions/YYYY-MM-DD.md`.
 
-Updated: 2026-10-08
+Updated: 2026-10-09
 
 ## Standing State
 
-- **Plan cursors**: root `PLAN.md` `current: done` — **Step 14 (fabric claims
-  conformance + the `--help` contract) complete 2026-10-08**; Steps 1–14 all
-  closed (each DoD in `PLAN.md`). New fabric-level roadmap work opens a new
-  step rather than reopening one. **Step 12 (local three-node rehearsal)
+- **Plan cursors**: root `PLAN.md` `current: done`. Step 14 (claims +
+  `--help`) closed 2026-10-08. **Hardening batch (2026-10-09) CLOSED as code**:
+  Step 15 `f1b790c` (timeouts + guard fixes), Step 20 `bc518d6` (signer
+  per-client read timeout + serialised key use, mutation-proven),
+  Step 16 `b0126ce` (consensus chained supersession, policy B), Step 17
+  `MCP_A2A_DESIGN.md` (fabric root, design-proposal status — MCP/A2A two
+  layers, unchanged until adopted in its own commit). **Open, operator-owned,
+  not plan work**: (1) deploy the changed signer to the live agx64 pair
+  (Steps 20+16); (2) confirm/decline F2 reduced-membership re-formation and F3
+  live cross-node root sync (both stay spec-only until decision). R2 + R5
+  deferred by decision (one line in `log.md`). `main` 6 ahead of `origin/main`,
+  nothing pushed (`GITHUB_PUSH_BLOCKER`).
+- **Roots are now a signed chain, not free replacements (policy B).**
+  `previous_root_id` is in `ROOT_SIGNED_FIELDS` (genesis = `""`, schema 1.1);
+  `verify_root`'s trust path refuses an unchained root (`unchained_root`),
+  chained growth, and chained drops below the minimum; `verify_chain(roots)`
+  verifies a pulled lineage newest-first to genesis; the signer's
+  `check_not_reverted` is monotonic — a chained descendant is adopted without
+  a flag, a stranger/rollback needs `--accept-requalification`. Live pair
+  facts below are unchanged in kind; a re-formed root must now chain to the
+  held `65d9ce25…` root.
+- **The live signer on agx64 still runs the pre-Step-20 binary** (single
+  client slot, no read timeout — the wedge found live on 2026-10-07). The
+  fixed serve transport ships in this repo only until the operator deploys it
+  (batch decision above). **Step 12 (local three-node rehearsal)
   complete** — the whole arc runs live on three real node trees under
   `/tmp/opencode/rehearsal` (51 checks/0 failures, dated transcript, repeatable);
   `scripts/sparknet-rehearsal.sh` is the reproducible harness, and the rehearsal

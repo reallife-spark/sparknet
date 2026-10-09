@@ -1,6 +1,6 @@
 ---
 title: sparknet Plan
-updated: 2026-10-08
+updated: 2026-10-09
 current: done
 ---
 
@@ -597,6 +597,52 @@ current: done
         for both roles, alongside lint/validate/keys-check/shims-check/
         wiki-verify(33)/wiki-preflight. Cursor `current: done`: no `[ ]`
         step remains at the fabric level.
+
+## Hardening batch (2026-10-09, all committed locally, no push)
+
+A four-finding batch raised out of the Step 14 audit and the live agx64/agx32
+arc. Steps 15 and 20 were optioned `current: done` + recorded in the session
+memory; 16 and 17 closed this session. All commits are local only
+(`origin/main` still 0/0 ahead — `GITHUB_PUSH_BLOCKER` stands).
+
+- [x] **Step 15 — harden service timeouts + guard fixes** (F4, F6, F7, F10, F12,
+      F13). DoD: the service-timeout cluster (silent client wedges the signer
+      slot — later superseded by Step 20's real fix), the guard's timeout and
+      request-size floors, and the argument-ordering / lockstep guards landed as
+      mutation-proven changes; full gates green. Commit `f1b790c`.
+- [x] **Step 16 — chained supersession of a cluster trust root, policy B**
+      (closes the F1 ordering gap). DoD: `previous_root_id` joins the signed
+      root fields (genesis = `""`); the `verify_root` trust path refuses an
+      unchained root (`REASON_UNCHAINED`), a chained root that adds a member,
+      and a chained root below the minimum; `verify_chain(roots)` verifies a
+      pulled lineage newest-first to genesis; the signer's `check_not_reverted`
+      is monotonic (adopts a chained descendant without a flag, refuses a
+      stranger or a rollback without `--accept-requalification`);
+      `SCHEMA_VERSION` → 1.1; contracts (`consensus-protocol.md`,
+      `identity-schema.json`, `capabilities.json`, `ports.json`) and
+      `PAIR_REFORMATION_DESIGN.md` state policy B; gates green (fabric 649
+      passed/3 skipped, master 125, peer 204/1); chain + member-subset guards
+      mutation-proven. Commit `b0126ce`. **DoD: confirm: user** remains for the
+      two items the batch did not build: the reduced-membership re-formation
+      (F2) and live cross-node sync of re-formed roots (F3) — both stay spec-only.
+- [x] **Step 17 — MCP/A2A design doc at the fabric root, design-only.**
+      DoD: `MCP_A2A_DESIGN.md` at the fabric root (NOT in `contracts/`) states
+      `status: "design proposal, not a contract change"`, maps MCP (tool-calling
+      inside one agent, server-side) vs A2A (the existing signed transport +
+      grants, overlay-only), and commits to adopting any part of it only in its
+      own commit with `make contract-test` green. Uncommitted until batch commit.
+- [x] **Step 20 — signer per-client read timeout + serialised key use.**
+      DoD: a silent client is answered `{ok:False, error:"timeout"}` after the
+      read deadline and the connection closed while a second client is served in
+      parallel; exactly one signer lock keeps the single-key holder + chain
+      ordering invariant; mutation-proven via a deterministic serialising
+      transport fake. Commit `bc518d6`. **DoD: confirm: user** — redeploy of the
+      changed signer to the live agx64 pair is not done (batch-end operator
+      decision).
+
+Cursor `current: done` (no `[ ]` fabric step below). The batch's sole open
+commit is its bookkeeping, and the two `DoD: confirm: user` deployment/
+build decisions are the operator's to make, not the plan's to invent.
 
 ## Next
 
