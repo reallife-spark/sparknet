@@ -43,6 +43,22 @@ Three consequences worth holding onto:
 Read the role's own `AGENTS.md` before working inside it. The peer and master
 charters differ in substance, and the peers are not a subset of the masters.
 
+## Agent surface
+
+The TUI agent picker shows the primaries: **Plan**, **Build**, **Vault**,
+**Chat** (built-ins plus files in `.opencode/agents/`), and **Node
+Orchestrator** (`sparknet-node.md`). A notification plugin at
+`scripts/plugins/kde-notify.ts` pings paired KDE Connect devices on agent
+questions, permission prompts, and when each turn completes. The plugin is
+fabric-root-local and is deliberately not shipped in node bundles.
+
+It is **not** registered in `opencode.json` and does **not** live in
+`.opencode/plugin*/` (auto-discovery): on opencode 1.18.35 a plugin inherited
+by a nested location makes opencode hang whenever it starts from a role
+worktree. It is injected only into fabric-root sessions, via `make tui` (sets
+`OPENCODE_CONFIG=scripts/plugins/kde-notif.opencode.json`). Role worktrees
+launch with plain `opencode` and stay plugin-free.
+
 ## Commands
 
 Run everything through `make`; it picks the venv interpreter and the optional
@@ -50,20 +66,23 @@ tooling consistently.
 
 | Command | Use |
 |---|---|
-| `make help` / `make -C peer-node help` | what the fabric and each role can do |
+| `make help` / `make -C peer-node help` | what the fabric and ea
+ch role can do |
 | `make layout` / `make help-role` | what exists, and what is merely specified |
 | `make validate` | both roles' charters, plans and manifests |
 | `make test-all` | **every** suite: contract, fabric, peer, master |
 | `make contract-test` | the peer still matches `contracts/` |
-| `make wiki-sync` / `make wiki-verify` | re-vendor the wiki suite / prove no drift |
+| `make wiki-sync` / `make wiki-verify` | re-vendor the wiki suit
+e / prove no drift |
 | `make wiki-preflight` | prove the skills resolve *this* vault |
+| `make tui` | launch the TUI from the fabric root **with** KDE notifications (`OPENCODE_CONFIG=…kde-notif.opencode.json`) — roles launch plugin-free with plain `opencode` |
 | `make bundle ROLE=peer\|master` | build a standalone node bundle in `dist/` |
 | `make bundle-verify ROLE=…` | extract it elsewhere and prove it runs |
 | `make keys-check` | no key-shaped names or PEM blocks tracked; `.state/` keys 0600 |
 | `make shims-check` | every legacy name in `peer-node/` and `master-node/` is still a symlink |
 | `make hooks` | point this clone at `.githooks/` so commits run `keys-check` |
 | `make -C peer-node provenance-verify` | signed notes, ledger chain and approvals |
-| `make -C peer-node precommit` | keys-check + secret scan + strict verify before you commit |
+| `make -C peer-node precommit` | keys-check + secret scan + strict verify before you commit — KDE plugin is not bundled; it’s fabric-root-local only |
 
 Bare `pytest` at the root runs only `tests/` (fabric level). Use `make test-all`
 when you mean the whole repository.
@@ -117,6 +136,16 @@ Wiki skills read the vault location from `.env` in this directory
   not silently reuse a finished plan.
 - A step whose DoD cannot be auto-verified is marked `DoD: confirm: user` and
   the user is asked.
+
+## Todo Sidebar Protocol
+
+The opencode TUI **Todo** panel is not derived from `PLAN.md` or from tool
+activity — it updates only when the agent calls the `todowrite` tool.
+
+- At the start of any task with 3+ steps, call `todowrite` once to lay out the steps.
+- On each item's completion, call `todowrite` again with updated statuses
+  (finished item `completed`, next item `in_progress`); do not batch.
+- A stale sidebar means a missed `todowrite`, not a UI bug.
 
 ## Canonical placement
 

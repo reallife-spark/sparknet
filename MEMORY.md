@@ -4,11 +4,25 @@
 > The plan and its cursor live in `PLAN.md` — this file mirrors it, it does not
 > own it. Per-session detail belongs in `sessions/YYYY-MM-DD.md`.
 
-Updated: 2026-10-09
+Updated: 2026-10-10
 
 ## Standing State
 
-- **Plan cursor**: root `PLAN.md` `current: 21`. Step 14 (claims + `--help`)
+- **Plan cursor**: root `PLAN.md` **`current: done`** (plan terminal, all steps
+  1–27 `[x]`). Step 22 (KDE Connect notifications) closed 2026-10-10: both
+  devices (raxxarMobile + Galaxy Tab A 2016) paired and pinged live rc=0 via the
+  plugin's exact discovery+notify path.
+  **Step 21 (F2 reduced-membership re-formation + F3 live cross-node root sync)
+  closed 2026-10-10** as **option B full** (schema 1.2: signed `epoch`, removal
+  proofs, exact-removal trust path; F3 delivered to a real peer `accept`
+  subprocess; mutation-proven; docs reconciled) — only live deploy is
+  `DoD: confirm: user`. **Steps 23–25 closed 2026-10-10**: Step 23 (node131/133
+  proof pair) on the operator's direction to treat the host-visible checks as
+  passed (not independently re-verified); Steps 24 (`compute-serve` design) and
+  25 (cluster-inference design + reserved vocabulary) as their documentary DoD,
+  verified (`compute-serve` still absent; `cluster-dispatch`/`cluster-serve`
+  reserved in both places). New roadmap work gets a **new** step; this plan is
+  not reused. Step 14 (claims + `--help`)
   closed 2026-10-08. **Hardening batch (2026-10-09) CLOSED as code and
   DEPLOYED**: Step 15 `f1b790c` (timeouts + guard fixes), Step 20 `bc518d6`
   (signer per-client read timeout + serialised key use, mutation-proven),
@@ -16,25 +30,245 @@ Updated: 2026-10-09
   `MCP_A2A_DESIGN.md` (fabric root, design-proposal status — MCP/A2A two
   layers, unchanged until adopted in its own commit). `49b715a` adds the
   version-aware 1.0/1.1 root canonical form (deploy precondition — else the
-  live 1.0 root fails the signer's startup `verify_root`); `7fa03b9` fixes the
+  live 1.0 root fails the signer's startup `verify_root`);   `7fa03b9` fixes the
   signer read deadline on Python 3.9 (see the live-signer bullet). **Step 21
-  OPEN**: F2 reduced-membership re-formation + F3 live cross-node root sync —
-  the two Step 16 halves that stayed spec-only. R2 + R5 deferred by decision
+  CLOSED 2026-10-10**: F2 reduced-membership re-formation + F3 live cross-node root
+  sync — the two Step 16 halves that stayed spec-only — are now built as **option
+  B full** (schema 1.2, signed `epoch`, removal proofs, exact-removal trust path),
+  mutation-proven and doc-reconciled; only live deploy is `DoD: confirm: user`. R2 + R5 deferred by decision
   (one line in `log.md`). **Pushed** this session: `main` at `4e276df` on
   `origin/main` (`d901c8f..4e276df`), after the remote was corrected — it had
   drifted to `reallife-spark/SparkNet-Node`, renamed back to
   `reallife-spark/sparknet` by operator decision. `gh` lives at
   `~/.local/bin/gh` (authenticated); it is only missing from a non-interactive
   `PATH`.
-- **Roots are now a signed chain, not free replacements (policy B).**
-  `previous_root_id` is in `ROOT_SIGNED_FIELDS` (genesis = `""`, schema 1.1);
-  `verify_root`'s trust path refuses an unchained root (`unchained_root`),
-  chained growth, and chained drops below the minimum; `verify_chain(roots)`
-  verifies a pulled lineage newest-first to genesis; the signer's
-  `check_not_reverted` is monotonic — a chained descendant is adopted without
-  a flag, a stranger/rollback needs `--accept-requalification`. Live pair
-  facts below are unchanged in kind; a re-formed root must now chain to the
-  held `65d9ce25…` root.
+- **A second, independent pair exists as a proof clone (2026-10-09, fabric
+  PLAN Step 23; closed 2026-10-10 on operator direction — see the cursor
+  bullet).** `node131` (.131) + `node133` (.133)
+  were built from the dirty-worktree master bundle into `~/sparknet-cluster2`
+  with an isolated state dir `~/.local/state/sparknet/cluster2`, on overlay
+  `wg1` (userspace `wireguard-go`, `10.100.0.1/32`↔`10.100.0.2/32`, 51820).
+  The 2/2 election formed root_id `29fbb13e…f676` (node131 Master, node133
+  `not_elected`); a **distinct** unit `sparknet-master-signer-c2.service` runs
+  on .131 (root-id match, caps `["sign"]`, restart-surviving) while the live
+  agx64 signer and `/root/…/trust-root.json` are untouched. The isolated signer
+  signed a registry entry for peer node133 (verified by root alone); three
+  escalation refusals hold; node133 reaches the master over `wg1` with caps
+  `[telemetry,p2p-sync,push-receive]` and no private Master key. Phase 9
+  (destructive) left unexecuted. **Isolation caveat**: both clusters use
+  `10.100.0.0/24`, so `wg1` must not run concurrently with the live cluster's
+  `wg0` (and `/root/scripts/sparknet-wg-restore.sh` must not run while `wg1` is
+  up). Lesson: the signer pins its socket to `SPARKNET_STATE_DIR` via
+  `_default_state_dir()` — a second signer needs that env set explicitly.
+  Transcript `/mnt/log/sparknet-cluster2-2026-10-09.md`. Not a promotion; no
+  live state repointed. **Operator asked to confirm the host-visible checklist
+  2026-10-10, could not confirm directly, then directed 2026-10-10 to treat the
+  step as passed; Step 23 was closed on that direction (checks not
+  independently re-verified).**
+- **Signed delegated compute is spec'd, not built (fabric PLAN Step 24, design
+  proposal 2026-10-09).** `COMPUTE_CAPABILITY_DESIGN.md` at the fabric root
+  proposes a `compute-serve` capability (the second `sensitive: true` after
+  `guard-apply`) so a peer can execute a **Master-signed** compute task over the
+  overlay and return a node-attested result. The load-bearing honesty: a peer is
+  already authoritative for its own compute, so local compute is **not** gated —
+  only *delegated* work is. It binds nothing: no capability, port, contract or
+  role changed. Adoption would need a two-place vocabulary edit
+  (`contracts/capabilities.json` + the hard-coded `KNOWN_CAPABILITIES` in
+  `shared/sparknet-authz.py`) plus a typed signer op `sign-compute-task`. Still
+  **not adopted** — `compute-serve` is **not** in the vocabulary.
+- **Cluster inference is spec'd; the two names reserved; the `sign-cluster-job`
+  signer op built; and the node's own AI stack declared as committed config
+  (fabric PLAN Steps 25–27, 2026-10-09/10).** `CLUSTER_INFERENCE_DESIGN.md`
+  at the fabric root specs the `sparknet-cluster` prompt: per-node Ollama + Open WebUI
+  (Master included), a prompt sent to a chosen node or fanned out to the cluster, local
+  vault for own prompts vs the Master's shared vector DB for cluster jobs, and jobs
+  recorded in the initiator's + Master's + participants' sessions. **Adopted:** (a) the
+  two capability names — `cluster-dispatch` (initiate, not sensitive) and `cluster-serve`
+  (accept a subtask, **sensitive: true**, second after `guard-apply`, confidentiality
+  direction) — added to `contracts/capabilities.json` and the hard-coded
+  `KNOWN_CAPABILITIES` in `shared/sparknet-authz.py`; the closed vocabulary is now
+  `telemetry, p2p-sync, push-receive, guard-apply, cluster-vote, cluster-dispatch,
+  cluster-serve`; (b) the typed `sign-cluster-job` signer op (Step 26) over the
+  **one** canonical job projection in `shared/sparknet-authz.py`
+  (`CLUSTER_JOB_MODES`/`CLUSTER_JOB_FIELDS`/`cluster_job_message()`/`is_expired()`),
+  so the signer and the future verifier cannot drift the way `sign-guard-approval`
+  and the guard did — the op has **no caller yet** and grants nothing; and (c) the
+  node's **own AI stack** as committed config (Step 27 / peer PLAN Step 9, slice A of
+  adoption item 3, peer-side): `peer-node/configs/ai-stack/docker-compose.yml`
+  (exactly `ollama` :11434 + `open-webui` :8080 → `http://ollama:11434`,
+  `RAG_INGESTION_ENABLED=false`, both `127.0.0.1`-only, no GPU declared),
+  `peer-node/manifests/ai-stack.json` (loopback-only, own-server-only, no
+  key/signer/state-dir mount, `sign`/`cluster-dispatch`/`cluster-serve` explicitly
+  not granted), `peer-node/tests/test_node_ai_stack.py` (11 wiring tests, PyYAML
+  + docker-compose-config), `make ai-stack-config`. **Declared, not deployed** —
+  no image pulled, nothing binds 11434/8080; running healthcheck
+  `DoD: confirm: user`. Still
+  **proposed, not adopted**: envelopes, the four modes (decompose/shard/best_of_n/
+  mixture), the reduce/contribution-map, the mode-dependent authority (Master ratifies
+  at n≥3, direct signed initiator at n=2), the `4223` top-K index (served, not
+  replicated), the Open WebUI `local`/`node/<id>`/`cluster` interface, task ingress and
+  the inference-auto-executes/actions-guarded boundary — each lands in its own
+  commit; live deploy is `DoD: confirm: user`.
+- **The deployable node container exists and is built (peer PLAN Step 2,
+  complete 2026-10-10).** `peer-node/container/` + `configs/container/`: a
+  multi-arch **CPU** opencode image (pinned `1.18.35` per TARGETARCH, no CUDA,
+  the node bundle at `/srv/sparknet`, `.env` regenerated at boot — nothing
+  path-baked) and a long-lived **anchor** sidecar (wireguard-go userspace, built
+  from source off the official GitHub mirror pinned `0.0.20230223`/`21636207`
+  — the vanity `golang.zx2c4.com` module domain 404s; inert mode without a
+  rendered config). The app joins the anchor's netns
+  (`network_mode: service:anchor`), `.state` is a host bind mount never a named
+  volume, the healthcheck is GPU-agnostic, and `make container-preflight`
+  proves `chattr +i` before anything relies on it. Make: `container-build`
+  (`make dist` → staged bundle → buildx `linux/arm64,linux/amd64`,
+  registry-ready) and `container-load` (host arch `--load`). Proven **on this
+  build host**: amd64+arm64 cross-build (amd64 opencode ran under qemu →
+  `1.18.35`), the compose stack came up with `sparknet-node` **healthy, no
+  GPU**, anchor inert, bundle-verify green, peer 236 passed (new
+  `test_node_container.py` wiring suite + the fabric `--help` contract). **Not
+  claimed** (peer charter): a live WireGuard tunnel, deployed-node `chattr +i`,
+  and the target-host healthcheck — all `DoD: confirm: user`. Cursor 2→3
+  (signed grants next), then 3→4.
+- **Signed session grants exist and are enforced on disk (peer PLAN Step 3,
+  complete 2026-10-10) — the conversation-hash heuristic is gone, not built.**
+  Every vault write is now authorised by one signed grant (two-tier trust: the
+  Master-signed registry is the permanent ceiling, the signed grant is the
+  conversation). `shared/sparknet-authz.py`: `grant_message`/`mint_grant`/
+  `verify_grant` + `grant-mint`/`grant-verify` CLI, offline via `--master-key`
+  with no Master running; the verification order restates
+  `contracts/identity-schema.json grant.verification_order` = guard-protocol
+  order unchanged (signature → registry fingerprint/revoked/entry-sig →
+  capability subset → expiry+skew → nonce → presenter), all fail-closed, and
+  provenance performs **no** cryptography of its own. The contract now carries
+  the whole rule set: peer event vocabulary gained `grant_use`, the tracking
+  block gained the optional `grant` field, provenance-protocol.md gained a
+  "Signed session grants" section. `shared/sparknet-provenance.py`:
+  `_dual_sign` (one dual-control signing path for every peer-written block),
+  `build_grant_use_data`, `consumed_grant_nonces` (the ledger is the nonce
+  retention store; a replayed grant dies at the nonce check),
+  `grant_scope_allows` (containment = prefix-of-**path-parts**, so
+  `05_Knowledge/con` never covers `05_Knowledge/configs`; empty scope allows
+  nothing; `..` refused), `write_granted_note`, and a `grant-write` CLI.
+  In-scope writes land with `tracking.grant` frontmatter + a signed note + a
+  dual-signed hash-chained `grant_use` ledger block (`decision: granted`);
+  out-of-scope writes are **quarantined** under `_raw/grant-quarantine/<grant_id>/`
+  with the same accounting (`decision: quarantined`), so nothing is lost and
+  authority is never widened. `tests/test_grants.py` (29 tests) covers every
+  refusal plus DoD 5: a subagent's write is attributed in the ledger to the
+  **acting child session** while authority traces to the parent grant — audit
+  is finer than authority. Gates 2026-10-10: peer 265 passed/1 skipped, fabric
+  687/3 skipped, contract-test, validate, ruff change-set clean, and
+  `make bundle-verify ROLE=peer` green. Does **not** yet enforce over HTTP —
+  Step 4 does (the bridge: grant-checked `/vault/*` endpoints, persistent
+  grant-keyed sessions, no conversation identity derived from content hashing).
+  **Not claimed**: live two-tier enforcement on a real node. Cursor 3→4.
+- **The bridge is now a real server — grant-checked `/vault/*` tools,
+  persistent grant-keyed sessions, one OpenAPI surface (peer PLAN Step 4,
+  complete 2026-10-10).** `peer-node/services/sparknet-dispatch-bridge.py`
+  listens loopback-only on 4096 with two personalities on one port: the
+  **signed** envelope surface (`/v1/status` unchanged — fabric transport test
+  green) and the **plain** Open WebUI surface (`/v1/models`, `/v1/chat/
+  completions`, `/session/<grant_id>/message`, `/vault/list|cat|capture|
+  promote|patch`) whose routes require `Authorization: Bearer <base64url signed
+  grant>` verified in guard-protocol order (one stable refusal vocabulary:
+  missing-grant/grant-refused/out-of-scope/bad-path). `/v1/models` lists agents
+  declared on disk (`.opencode/agents/*.md` ∪ `agents/*/` pods — never
+  fabricated models). Sessions: `$SPARKNET_STATE_DIR/sessions/<grant_id>.json`
+  (0600, schema `sparknet-session/1`), grant-keyed, plain content turns — **no
+  content-hash identity** — and restart survival is itself a test. Shared
+  provenance grew `_verified_grant` (one fail-closed ladder for capture/promote/
+  patch), `_target_within_scope`, `promote_granted_note` (pending raw/staged
+  drafts only — a stranger's signed note moves for nobody) and
+  `patch_granted_note` (exactly-once body replace → re-sign → stays `valid`);
+  every mutation appends a dual-signed `grant_use` block. The bridge names **no
+  ledger path** — the `test_services.py` invariant is now "cannot write what it
+  cannot name" (`"blockchain" not in source`; the old `json.dump` check was
+  dropped because Step 4 obliges session persistence). `manifests/vault-openapi.json`
+  (6 operations, BearerAuth) is how Open WebUI consumes the vault tools as HTTP
+  tools — no client-executed MCP bridge, no Node runtime (Step 4 DoD 5). Gates:
+  peer 284 passed/1 skipped, fabric 687/3 skip, contract-test, validate, ruff
+  lint on the change set, `make -C peer-node precommit` green (daily journal now
+  signature-enveloped), bundle-verify ROLE=peer rc=0. **Not claimed**: the live
+  Open WebUI handshake and routing `/v1/chat/completions` into a running agent
+  are Steps 5–6; the bridge records and routes turns and never impersonates an
+  assistant. Cursor 4→5 (Step 5 — Open WebUI surface).
+- **The Open WebUI surface exists as committed config, with the bridge's
+  Approve/Deny path in server code (peer PLAN Step 5, complete 2026-10-10).**
+  `manifests/agent-models.json` (schema `sparknet-agent-models/1`) declares
+  **plan/build/vault/node-orchestrator selectable as models**, each bound to
+  the agent that owns it (`node-orchestrator` → `sparknet-node`); the bridge
+  serves declared-first, discovered pods after, no manifest → no declared
+  surface (fail-closed). **Permission requests resolve through the bridge**:
+  `POST /session/<grant>/permissions` raises (perm-N, pending) and
+  `POST /session/<grant>/permissions/<id>` decides allow/deny — grant-checked,
+  session-scoped, persisted in the grant-keyed session, restart-surviving;
+  refusals stable (404 no-session/unknown-permission, 409 already-resolved,
+  400 malformed). The ai-stack compose declares the whole surface:
+  `OPENAI_API_BASE_URLS: http://host.docker.internal:4096/v1`
+  (`extra_hosts host.docker.internal:host-gateway`), `MODEL_FILTER_ENABLED/LIST`,
+  `DEFAULT_MODELS`, RAG still off, and **`OPENAI_API_KEYS` expands a
+  deploy-time `${SPARKNET_WEBUI_BRIDGE_GRANT:?...}` — no token committed, compose
+  fails loudly while unset**; `manifests/ai-stack.json` gained `webui_surface`
+  claims. Tests: `test_webui_surface.py` (11) + ai-stack surface assertions;
+  peer 298 passed/1 skipped, fabric 687/3 skip, contract-test, validate, ruff
+  lint, bundle-verify rc=0, precommit green. **Not claimed**: the **live** Open
+  WebUI handshake (webui container → surface → card → resolve past the bridge's
+  loopback gate) is `DoD: confirm: user`; routing a conversation into a running
+  agent is Step 6. Cursor 5→6.
+- **Conversations pass between the node's own agents (peer PLAN Step 6,
+  complete 2026-10-10).** Native verbs only, on the grant-owned
+  `/session/:id` surface: `message` accepts `agent` (hand-off keeps the
+  session and its history, each turn tagged with the agent that handled it),
+  `fork` at a message writes a sibling `sessions/<id>-f<n>.json` carrying the
+  shared prefix (the original stays whole; pending permission cards don't
+  branch), `children` lists the branch, and the `share` verbs declare
+  `session-view`/`session-handoff` in `open` (kb-*/full are 400 → Step 8 owns
+  the clocked cross-node regime). The ownership gate is now load-then-check
+  `owner_grant_id` (404 no-session / 403 not-your-session) instead of
+  `parts[0]==grant_id`, so fork siblings are reachable by the same grant only;
+  initial session keeps id==owner==grant, so prior session tests pass
+  unchanged. SESSION_SCHEMA `sparknet-session/2`; `do_DELETE` added; new
+  `conversation_passing` claims in `manifests/ai-stack.json`. DoD 4 ran
+  against a real `ThreadingHTTPServer` (`test_conversation_passing.py`, 13
+  tests); peer 311 passed/1 skipped, all gates green. **Not claimed**:
+  executing a turn inside a live plan/build/vault process (routing ≠ running)
+  and Step 8's sharing regime. Cursor 6→7 (Step 7 — MASTERSPIKE).
+- **MASTERSPIKE is a format carrier, never a signer (peer PLAN Step 7, complete
+  2026-10-10).** One source, two backends: `peer-node/scripts/sparknet-masterspike.py`
+  generates `manifests/masterspike/Modelfile` (base `llama3.2`,
+  `temperature 0.1`, llm-wiki format body in `SYSTEM """`) and
+  `vllm-system-prompt.md` (byte-identical body) from `.opencode/skills/llm-wiki/SKILL.md`,
+  each with `source-sha256` provenance headers. `make model-generate` /
+  `model-verify` (fails on divergence/moved/removed source) / `model-build` /
+  `model-serve`. `masterspike` is selectable in `agent-models.json` and the webui
+  `MODEL_FILTER_LIST`; `manifests/masterspike.json` declares `signing_boundary`
+  (`capability: null`, `sign` explicitly not granted — authority is Ed25519 in
+  the Master, never a prompt). Fabric `tests/test_layout.py` gained
+  `EXCLUDED_GENERATED` for the verbatim-copy artifact. `test_masterspike.py` (10
+  tests); peer 322 passed/1 skipped, all gates green, bundle-verify rc=0.
+  **Not claimed**: the model is declared, not built — this host's `ollama` has
+  no daemon; pull + `ollama create` + serve + live selection are
+  `DoD: confirm: user`. Cursor 7→8 (Step 8 — inter-node sharing and the
+  governance regime).
+- **Roots are now a signed, epoch-chained lineage, and a reduced root must carry
+  its removal evidence (policy B, schema 1.2, Step 21).**
+  `previous_root_id` is in `ROOT_SIGNED_FIELDS` (genesis = `""`); a signed
+  `epoch` (genesis 0, chained = parent+1) distinguishes a genuine next
+  generation from a lockstep re-issue, and the signed-field set is
+  version-aware so 1.0/1.1/1.2 roots each keep verifying against their original
+  bytes and ids (a live 1.1 root is epoch 0 and can parent the first 1.2
+  re-formation). `verify_root`'s trust path refuses an unchained root
+  (`unchained_root`), chained growth, a wrong epoch, a drop below
+  `MIN_CLUSTER_SIZE`, and — the new discipline — a strict-subset child whose
+  dropped set (parent − child) is not exactly the set its carried,
+  independently-signed **removal proofs** evidence
+  (`missing_removal_proof`/`unexpected_removal_proof`/`bad_removal_proof`); a
+  survivor-unanimous reduced root names exactly the survivors and is signed by
+  every survivor and none else. `verify_chain(roots)` verifies a pulled lineage
+  newest-first; the signer's `check_not_reverted` is monotonic — a chained
+  descendant is adopted without a flag, a stranger/rollback needs
+  `--accept-requalification`. Live pair facts below are unchanged in kind; a
+  re-formed root must chain to the held `65d9ce25…` root.
 - **The live signer on agx64 runs the hardened transport as of 2026-10-09.**
   Steps 15/16/20 plus the version-aware compat (`49b715a`) and the py3.9
   read-deadline fix (`7fa03b9`) are deployed to both agx64 (Master, unit
@@ -106,7 +340,9 @@ Updated: 2026-10-09
   rollback / replace-Master legs in `contracts/deployment-runbook.md` §Phase 9
   stay documented-but-unexecuted, so the live pair is left up. `PLAN.md` Steps
   1–13 closed 2026-10-07; Step 14 opened 2026-10-08.
-  `peer-node/PLAN.md` `current: 2` (container first);
+  `peer-node/PLAN.md` `current: 8` (Steps 4–7 — bridge server, Open WebUI
+  surface, intra-node conversation passing and MASTERSPIKE — complete
+  2026-10-10; Step 8 — inter-node sharing and the governance regime — next);
   `master-node` `current: 2` — Phase 0 (13–18: consensus, parity, isolated signer,
   admin surface), honest verification (19), the **keypair/registry substrate (1)**
   and, as measured on 2026-10-06, **Steps 3 and 4** are complete; **Steps 2 and

@@ -63,8 +63,8 @@
     "fields": {
       "version": {
         "type": "string",
-        "purpose": "root schema version; \"1.1\" is current (chained supersession), \"1.0\" is the pre-chain schema still accepted for roots already in force",
-        "compatibility": "A 1.0 root signed the fields below WITHOUT previous_root_id and keeps verifying against its original bytes and id; the canonical form is version-aware. A 1.1 root chains to a 1.0 parent by naming that parent's 1.0-computed root_id."
+        "purpose": "root schema version; \"1.2\" is current (chained supersession + admission epoch + reduced-membership removal proofs), \"1.1\" is the chained schema without epoch, \"1.0\" is the pre-chain schema; all three are still accepted for roots already in force",
+        "compatibility": "A 1.0 root signed the fields below WITHOUT previous_root_id; a 1.1 root signed them WITHOUT epoch. Each keeps verifying against its original bytes and id, because the canonical form is version-aware. A 1.1 root chains to a 1.0 parent by naming that parent's 1.0-computed root_id; a 1.2 root chains to a 1.1 parent by naming it and taking epoch 1 (the older parent is treated as height 0)."
       },
       "nonce": {
         "type": "string",
@@ -97,6 +97,10 @@
       "previous_root_id": {
         "type": "string",
         "purpose": "root_id of the root this one supersedes; the empty string for a genesis root. Signed from schema 1.1; a 1.0 root has no such field and is treated as genesis on the trust path."
+      },
+      "epoch": {
+        "type": "integer",
+        "purpose": "the signed, clock-free height of the root in its lineage: 0 for a genesis root, exactly parent.epoch + 1 for a chained one. Signed from schema 1.2; a root older than 1.2 has no epoch and is treated as height 0, so a live 1.1 root can parent the first 1.2 re-formation. On the trust path verify_root refuses a 1.2+ root whose epoch is not the held root's plus one (unchained_root), so a stale root cannot be replayed as a fresh generation."
       }
     },
     "acceptance_rules": [
@@ -104,7 +108,9 @@
       "from n DISTINCT members \u2014 a member voting multiple times has voted once",
       "each signature matching the cluster_pubkey of a member the root itself names",
       "the registry being verified is signed under master_pubkey as this root names it",
-      "on the trust path (a root already held), the candidate names the held root as previous_root_id \u2014 supersession is a chain, not a free replacement (unchained_root otherwise)"
+      "on the trust path (a root already held), the candidate names the held root as previous_root_id \u2014 supersession is a chain, not a free replacement (unchained_root otherwise)",
+      "on the trust path, a 1.2+ candidate's epoch is exactly the held root's epoch plus one (unchained_root otherwise)",
+      "on the trust path, a candidate whose membership is a strict subset of the held root's is refused unless its dropped set equals exactly the set its removal proofs evidence \u2014 one proof per dropped member, no proof for a member that stays (missing_removal_proof / unexpected_removal_proof otherwise)"
     ],
     "acceptance_rules_note": "The third and fourth rules are what stop a root from naming members while being signed by strangers, and from binding an operational key nothing ever recognised. Without them the first two rules are decorative.",
     "unanimity": {
@@ -122,8 +128,8 @@
     "not_threshold_crypto": "Ordinary Ed25519 signatures over identical canonical bytes, one per member. Unanimity protects WHO MAY HOLD the operational key, not each individual signature.",
     "bootstrap": "There is no authority to bootstrap from: the registry ships empty. Members exchange WireGuard public keys out of band, then co-sign the first root. The first root is itself an n-of-n event.",
     "reformation": {
-      "on_master_change": "policy B: the new root is CHAINED to the root in force via previous_root_id (one of the signed fields). On the trust path verify_root refuses any candidate that does not name the held root as its predecessor (unchained_root), and verify_chain(roots) lets a peer that missed a re-formation verify the whole lineage newest-first down to a genesis root. The ledger remains the last line of defence: check_not_reverted is monotonic, adopting a root whose previous_root_id names the ledger's root in force without a flag and refusing anything else without --accept-requalification. News of a re-formation is PULLED along the existing share/registry path as successive chained roots, never broadcast by the superseded master. See consensus-protocol.md, Re-formation.",
-      "on_blocked_election": "the remaining members may form a new root with new membership, dropping the member that would not agree - this reduced-membership path is still NOT BUILT and is recorded as a named gap in consensus-protocol.md",
+      "on_master_change": "policy B: the new root is CHAINED to the root in force via previous_root_id (one of the signed fields), with epoch one above the parent's. On the trust path verify_root refuses any candidate that does not name the held root as its predecessor (unchained_root), and verify_chain(roots) lets a peer that missed a re-formation verify the whole lineage newest-first down to a genesis root. The ledger remains the last line of defence: check_not_reverted is monotonic, adopting a root whose previous_root_id names the ledger's root in force without a flag and refusing anything else without --accept-requalification. News of a re-formation is PULLED along the existing share/registry path as successive chained roots, never broadcast by the superseded master. See consensus-protocol.md, Re-formation.",
+      "on_blocked_election": "policy B, adopted (schema 1.2, fabric PLAN.md Step 21): an unreachable member is dropped by forming a chained, strict-subset root whose members are exactly the survivors, each survivor co-signing. The drop is EVIDENCED by one removal proof per dropped member, carried alongside the root but not one of the signed fields. verify_root refuses a reduced root unless its dropped set equals exactly the set the proofs evidence (missing_removal_proof / unexpected_removal_proof otherwise). Two proof kinds: 'revocation' (signed by the parent root's elected Master with its operational key - the contract's existing one-signature revoke made durable) and 'attested' (signed by every surviving member with its cluster key). A lone survivor holds only the proof (a tombstone) and must re-witness a new member: the minimum of two is not relaxed. See consensus-protocol.md, Re-formation.",
       "not_a_bypass": "re-formation cannot install a master without unanimity among the members it names; a node removed by re-formation cannot re-form its way back alone"
     },
     "cluster_key_use": "A cluster key signs only the root. Because every root needs all members to sign, one stolen cluster key cannot install a master on its own \u2014 it is one of the required signatures."

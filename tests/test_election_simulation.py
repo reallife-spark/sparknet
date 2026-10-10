@@ -163,7 +163,15 @@ def _sign_root(consensus, cluster, root):
     return consensus.attach_root_signatures(root, cluster["cluster_private"])
 
 
-def _root(consensus, cluster, clock, master, nonce, previous_root_id: str = ""):
+def _root(
+    consensus,
+    cluster,
+    clock,
+    master,
+    nonce,
+    previous_root_id: str = "",
+    epoch: int = 0,
+):
     return {
         "version": consensus.SCHEMA_VERSION,
         "nonce": nonce,
@@ -172,6 +180,7 @@ def _root(consensus, cluster, clock, master, nonce, previous_root_id: str = ""):
         "master_node_id": master,
         "master_pubkey": cluster["operational"][master],
         "previous_root_id": previous_root_id,
+        "epoch": epoch,
     }
 
 
@@ -382,6 +391,7 @@ def test_the_cluster_re_forms_when_the_master_changes():
             "gamma",
             "root-2",
             previous_root_id=consensus.root_id(root_alpha),
+            epoch=1,
         ),
     )
     ok, reason = consensus.verify_root(root_gamma, trust=root_alpha)
@@ -435,6 +445,7 @@ def test_a_superseded_root_cannot_supersede_its_newer_successor():
             "gamma",
             "root-2",
             previous_root_id=consensus.root_id(old),
+            epoch=1,
         ),
     )
 
@@ -470,6 +481,7 @@ def test_verify_chain_accepts_a_two_link_formation_line():
             "gamma",
             "root-2",
             previous_root_id=consensus.root_id(genesis),
+            epoch=1,
         ),
     )
     assert consensus.verify_chain([reformed, genesis])[0] is True
@@ -495,6 +507,7 @@ def test_verify_chain_refuses_a_lineage_with_a_hole():
             "beta",
             "root-2",
             previous_root_id=consensus.root_id(genesis),
+            epoch=1,
         ),
     )
     clock.advance(minutes=5)
@@ -508,6 +521,7 @@ def test_verify_chain_refuses_a_lineage_with_a_hole():
             "gamma",
             "root-3",
             previous_root_id=consensus.root_id(middle),
+            epoch=2,
         ),
     )
     # Drop `middle`: newest claims to descend from it but it is not in the pull.
@@ -538,6 +552,7 @@ def test_verify_chain_refuses_a_chain_that_does_not_reach_genesis():
             "gamma",
             "root-2",
             previous_root_id=consensus.root_id(genesis),
+            epoch=1,
         ),
     )
     # `reformed` is the oldest supplied link but is not genesis; it still names a

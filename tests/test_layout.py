@@ -42,9 +42,14 @@ EXPECTED_TOP_LEVEL = {
     "AGENTS.md", "MEMORY.md", "MISSION.md", "PLAN.md", "README.md", "log.md",
     "Makefile", "pyproject.toml", "requirements.txt", "requirements-dev.txt",
     ".env.example", ".gitignore", "opencode.json", ".vault-config",
+    # the node image build context is the repo root, so what the image may
+    # receive is governed by a tracked .dockerignore (peer PLAN Step 2/Step 9)
+    ".dockerignore",
     # design proposals that deliberately sit at the fabric root, NOT in
     # contracts/ (their status says so; see Step 17)
     "MCP_A2A_DESIGN.md",
+    "COMPUTE_CAPABILITY_DESIGN.md",
+    "CLUSTER_INFERENCE_DESIGN.md",
     # per-clone hooks (activated by `make hooks`) — pre-commit runs keys-check
     ".githooks",
     # curated navigation + the daily-update cache. index.md is hand-maintained,
@@ -87,6 +92,16 @@ SCAN_SUFFIXES = {".md", ".py", ".sh", ".json", ".template", ".conf", ".env.examp
 SKIP_DIR_PARTS = {"__pycache__", ".git", ".venv", "dist", "node_modules",
                   ".pytest_cache", ".ruff_cache", ".opencode"}
 
+# Generated committed artifacts whose body is a verbatim copy of a vendored,
+# already-excluded source (.opencode/skills/llm-wiki/SKILL.md, produced by
+# peer-node/scripts/sparknet-masterspike.py). Link-scanning the copy would only
+# re-litigate the vendor's example paths; `make model-verify` proves the copy
+# bytes are identical, which is the stronger guarantee. If the generator is
+# changed so this artifact stops being a verbatim copy, remove it from here.
+EXCLUDED_GENERATED = frozenset({
+    "peer-node/manifests/masterspike/vllm-system-prompt.md",
+})
+
 
 def markdown_files() -> list[Path]:
     out = []
@@ -94,6 +109,8 @@ def markdown_files() -> list[Path]:
         if SKIP_DIR_PARTS & set(path.parts):
             continue
         if path.parts[len(REPO_ROOT.parts) - 1] == ".opencode":
+            continue
+        if str(path.relative_to(REPO_ROOT)) in EXCLUDED_GENERATED:
             continue
         out.append(path)
     return out

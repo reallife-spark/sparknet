@@ -155,25 +155,57 @@ def _all_votes(exchange, consensus, cluster, candidate: str = WINNER):
 
 
 def _formed(
-    election, consensus, cluster, candidate: str = WINNER, previous_root_id: str = ""
+    election,
+    consensus,
+    cluster,
+    candidate: str = WINNER,
+    previous_root_id: str = "",
+    epoch: int = 0,
+    members=None,
+    removal_proofs=None,
 ):
     """Run the whole ceremony in-process; returns (exchange, signed root).
 
-    `previous_root_id` links the formed root to the root it supersedes. A
-    re-formation passes the held root's id here; policy B refuses any
-    supersession that does not name the root in force.
+    `previous_root_id` links the formed root to the root it supersedes; a
+    re-formation also advances `epoch` (parent + 1). Policy B refuses any
+    supersession that does not name the root in force, and a reduced-membership
+    child must carry a removal proof per dropped member.
     """
+    roster = members if members is not None else cluster["members"]
+    names = [m["node_id"] for m in roster]
     exchange = election.ElectionExchange(
-        cluster["members"], clock=_clock, previous_root_id=previous_root_id
+        roster,
+        clock=_clock,
+        previous_root_id=previous_root_id,
+        epoch=epoch,
+        removal_proofs=removal_proofs,
     )
-    _all_bids(exchange, election, cluster)
-    _all_votes(exchange, consensus, cluster, candidate)
+    for name in names:
+        exchange.submit_request(_bid(election, cluster, name))
+    for name in names:
+        exchange.submit_vote(_vote(consensus, cluster, name, candidate))
     root = exchange.status()["root"]
-    for name in MEMBERS:
-        exchange.submit_signature(name, consensus.sign_root(root, name, cluster["private"][name])[name])
+    for name in names:
+        exchange.submit_signature(
+            name, consensus.sign_root(root, name, cluster["private"][name])[name]
+        )
     status = exchange.status()
     assert status["state"] == "formed"
     return exchange, status["root"]
+
+
+def _attested(consensus, cluster, removed: str, parent_root_id: str, survivors, nonce="rp-1"):
+    """A removal proof signed by every survivor, the F2 evidence for a drop."""
+    proof = {
+        "removed_node_id": removed,
+        "parent_root_id": parent_root_id,
+        "kind": "attested",
+        "nonce": nonce,
+        "ts": "2026-10-06T12:00:00+00:00",
+    }
+    for name in survivors:
+        proof = consensus.sign_removal_proof(proof, name, cluster["private"][name])
+    return proof
 
 
 def _identity(node_id: str, path: Path) -> Path:
@@ -654,7 +686,12 @@ def test_a_new_nonce_supersedes_the_held_root(election, consensus, cluster, tmp_
     """Re-formation: a later, chained root replaces the held one."""
     _, first = _formed(election, consensus, cluster, candidate="alpha")
     _, second = _formed(
-        election, consensus, cluster, candidate=WINNER, previous_root_id=consensus.root_id(first)
+        election,
+        consensus,
+        cluster,
+        candidate=WINNER,
+        previous_root_id=consensus.root_id(first),
+        epoch=1,
     )
     assert first["nonce"] != second["nonce"]
     assert second["previous_root_id"] == consensus.root_id(first), (
@@ -675,6 +712,193 @@ def test_an_unchained_new_root_is_refused_in_accept(election, consensus, cluster
     with pytest.raises(election.ElectionError) as exc:
         election.accept_root(stranger, identity_path, trust_root=first)
     assert consensus.REASON_UNCHAINED in exc.value.detail, exc.value.detail
+
+
+def test_a_reduced_membership_re_formation_through_the_exchange(election, consensus, cluster, tmp_path):
+    """F2: 3 -> 2 driven through the exchange, then accepted.
+
+    A real re-formation, not a hand-built root: the exchange takes the reduced
+    roster, the survivors co-sign, the dropped member is evidenced, and the
+    accept path installs the reduced root while leaving the departing member's
+    files alone.
+    """
+    _, genesis = _formed(election, consensus, cluster, candidate="beta")
+    survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
+    proof = _attested(
+        consensus, cluster, "gamma", consensus.root_id(genesis), ["alpha", "beta"]
+    )
+    _, reformed = _formed(
+        election,
+        consensus,
+        cluster,
+        candidate="beta",
+        previous_root_id=consensus.root_id(genesis),
+        epoch=1,
+        members=survivors,
+        removal_proofs=[proof],
+    )
+    assert reformed["previous_root_id"] == consensus.root_id(genesis)
+    assert reformed["epoch"] == 1
+    assert {m["node_id"] for m in reformed["members"]} == {"alpha", "beta"}
+    assert set(reformed["signatures"]) == {"alpha", "beta"}, (
+        "only the survivors may co-sign a reduced root"
+    )
+    assert consensus.verify_root(reformed, trust=genesis) == (True, consensus.REASON_OK)
+    assert consensus.verify_chain([reformed, genesis]) == (True, consensus.REASON_OK)
+
+    identity_path = _identity("beta", tmp_path / "identity.json")
+    out = election.accept_root(reformed, identity_path, trust_root=genesis)
+    assert out["accepted"] and out["root_id"] == consensus.root_id(reformed)
+    after = json.loads(identity_path.read_text())
+    assert after["trust_root"]["root_id"] == consensus.root_id(reformed)
+
+
+def test_a_reduced_root_without_evidence_is_refused_in_accept(election, consensus, cluster, tmp_path):
+    """The accept path carries the same removal-proof requirement as
+    `verify_root`: a reduced root with no evidence never flips an identity."""
+    _, genesis = _formed(election, consensus, cluster, candidate="beta")
+    survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
+    _, reformed = _formed(
+        election,
+        consensus,
+        cluster,
+        candidate="beta",
+        previous_root_id=consensus.root_id(genesis),
+        epoch=1,
+        members=survivors,
+        removal_proofs=None,
+    )
+    identity_path = _identity("beta", tmp_path / "identity.json")
+    with pytest.raises(election.ElectionError) as exc:
+        election.accept_root(reformed, identity_path, trust_root=genesis)
+    assert consensus.REASON_MISSING_REMOVAL_PROOF in exc.value.detail, exc.value.detail
+    after = json.loads(identity_path.read_text())
+    assert "trust_root" not in after or after.get("trust_root") is None
+
+
+# --- F3: live cross-node sync, a real second process --------------------------
+
+
+def _write_root_doc(path: Path, root: dict) -> Path:
+    path.write_text(json.dumps({"root": root}, indent=2, sort_keys=True))
+    return path
+
+
+def test_the_reformed_root_reaches_the_peer_process_and_is_adopted(election, consensus, cluster, tmp_path):
+    """F3: the F2 output is delivered to a real peer process.
+
+    The shipped ``accept`` subcommand runs in its own interpreter and loads its
+    own ``shared/sparknet-consensus.py`` from ``--shared-dir``. Handed the
+    re-formed root and the parent it descends from, it verifies the chain and
+    installs the reduced root as the node's held trust root.
+    """
+    _, genesis = _formed(election, consensus, cluster, candidate="beta")
+    survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
+    proof = _attested(
+        consensus, cluster, "gamma", consensus.root_id(genesis), ["alpha", "beta"]
+    )
+    _, reformed = _formed(
+        election,
+        consensus,
+        cluster,
+        candidate="beta",
+        previous_root_id=consensus.root_id(genesis),
+        epoch=1,
+        members=survivors,
+        removal_proofs=[proof],
+    )
+    genesis_doc = _write_root_doc(tmp_path / "genesis.json", genesis)
+    reformed_doc = _write_root_doc(tmp_path / "reformed.json", reformed)
+    identity_path = _identity("beta", tmp_path / "identity.json")
+
+    result = _cli(
+        [
+            "accept",
+            "--root",
+            str(reformed_doc),
+            "--trust",
+            str(genesis_doc),
+            "--identity",
+            str(identity_path),
+        ]
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["accepted"] is True
+    assert payload["root_id"] == consensus.root_id(reformed)
+    after = json.loads(identity_path.read_text())
+    assert after["trust_root"]["root_id"] == consensus.root_id(reformed)
+
+
+def test_the_peer_process_refuses_a_rollback_and_a_stranger_fork(election, consensus, cluster, tmp_path):
+    """F3: once the peer holds the re-formed root, its own process refuses both
+    a rollback to the parent and a well-signed root with no lineage to it."""
+    _, genesis = _formed(election, consensus, cluster, candidate="beta")
+    survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
+    proof = _attested(
+        consensus, cluster, "gamma", consensus.root_id(genesis), ["alpha", "beta"]
+    )
+    _, reformed = _formed(
+        election,
+        consensus,
+        cluster,
+        candidate="beta",
+        previous_root_id=consensus.root_id(genesis),
+        epoch=1,
+        members=survivors,
+        removal_proofs=[proof],
+    )
+    _, stranger = _formed(election, consensus, cluster, candidate="beta")
+    genesis_doc = _write_root_doc(tmp_path / "genesis.json", genesis)
+    reformed_doc = _write_root_doc(tmp_path / "reformed.json", reformed)
+    stranger_doc = _write_root_doc(tmp_path / "stranger.json", stranger)
+    identity_path = _identity("beta", tmp_path / "identity.json")
+
+    adopted = _cli(
+        [
+            "accept",
+            "--root",
+            str(reformed_doc),
+            "--trust",
+            str(genesis_doc),
+            "--identity",
+            str(identity_path),
+        ]
+    )
+    assert adopted.returncode == 0, adopted.stderr or adopted.stdout
+
+    rollback = _cli(
+        [
+            "accept",
+            "--root",
+            str(genesis_doc),
+            "--trust",
+            str(reformed_doc),
+            "--identity",
+            str(identity_path),
+        ]
+    )
+    assert rollback.returncode != 0, "the peer process adopted a rollback to the parent"
+    assert consensus.REASON_UNCHAINED in rollback.stdout, rollback.stdout
+
+    fork = _cli(
+        [
+            "accept",
+            "--root",
+            str(stranger_doc),
+            "--trust",
+            str(reformed_doc),
+            "--identity",
+            str(identity_path),
+        ]
+    )
+    assert fork.returncode != 0, "the peer process adopted a stranger fork"
+    assert consensus.REASON_UNCHAINED in fork.stdout, fork.stdout
+
+    after = json.loads(identity_path.read_text())
+    assert after["trust_root"]["root_id"] == consensus.root_id(reformed), (
+        "a refused root must not move the held trust root"
+    )
 
 
 def test_re_running_accept_is_idempotent(election, consensus, cluster, tmp_path):

@@ -331,7 +331,8 @@ fi
 | `contracts/` | the overlay, capability, identity, port and guard contracts this role obeys |
 | `shared/` | the canonical implementations — signed authorization, consensus, plus the http/liveness/oob layers |
 | `.opencode/skills/` | the vendored wiki skill suite — no global skill farm needed |
-| `.opencode/agents/` | the role-aware agents — `vault`, and the node orchestrator |
+| `.opencode/agents/`      | the role-aware agents (built-ins + vendored) — `catalog`, `chart`, sparknet-node, vault, chat |
+| `scripts/plugins/kde-notify.*` | intentionally **not** bundled; KDE Connect desktop notifications are fabric-root-local only (`.opencode/plugin/*` was never created; notifications are injected via `OPENCODE_CONFIG` at the root) |
 | `opencode.json` | registers the skills and agent with opencode |
 | `requirements.txt` | `cryptography`, the only runtime dependency |
 

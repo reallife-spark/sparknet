@@ -349,6 +349,8 @@ def build_root(
     members: list[dict[str, Any]],
     now: datetime | None = None,
     previous_root_id: str = "",
+    epoch: int = 0,
+    removal_proofs: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """The unsigned root a unanimous tally produces.
 
@@ -357,6 +359,13 @@ def build_root(
     ceremony passes the held root's id here; the consensus module refuses any
     supersession that does not name the root in force, so omitting it only
     ever yields a genesis root.
+
+    `epoch` is the signed, clock-free height of the root (0 at genesis, the
+    parent's epoch + 1 for a re-formation). `removal_proofs` certifies a
+    reduced-membership re-formation: they are carried alongside the root but are
+    not one of the signed fields (each is independently signed), so the members'
+    co-signatures stay small while `verify_root` still refuses a chained root
+    whose dropped set is not exactly what the proofs evidence.
 
     `master_pubkey` is the candidate's operational key from its signed bid —
     the point of the whole ceremony: the root is what binds a key nobody else
@@ -377,6 +386,7 @@ def build_root(
         "master_node_id": request["node_id"],
         "master_pubkey": request["operational_pubkey_b64"],
         "previous_root_id": previous_root_id,
+        "epoch": epoch,
     }
     missing = [field for field in consensus.ROOT_SIGNED_FIELDS if field not in unsigned]
     if missing:
@@ -389,6 +399,8 @@ def build_root(
     consensus.canonical_root(unsigned)
     if tally_result.get("master_node_id") != unsigned["master_node_id"]:
         raise ElectionError(REASON_ROOT_UNUSABLE, "tally and root disagree about the winner")
+    if removal_proofs:
+        unsigned["removal_proofs"] = [dict(proof) for proof in removal_proofs]
     return unsigned
 
 
@@ -411,6 +423,8 @@ class ElectionExchange:
         clock: Callable[[], datetime] | None = None,
         election_id: str = DEFAULT_ELECTION_ID,
         previous_root_id: str = "",
+        epoch: int = 0,
+        removal_proofs: list[dict[str, Any]] | None = None,
     ) -> None:
         self.shared_dir = Path(shared_dir) if shared_dir else DEFAULT_SHARED_DIR
         self.consensus = load_consensus(self.shared_dir)
@@ -419,6 +433,8 @@ class ElectionExchange:
         self.members_by_id = {member["node_id"]: member for member in members}
         self.election_id = election_id
         self.previous_root_id = previous_root_id
+        self.epoch = epoch
+        self.removal_proofs = [dict(proof) for proof in (removal_proofs or [])]
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self.requests: dict[str, dict[str, Any]] = {}
         self.votes: dict[str, dict[str, Any]] = {}
@@ -615,6 +631,8 @@ class ElectionExchange:
             list(self.members),
             now=self._clock(),
             previous_root_id=self.previous_root_id,
+            epoch=self.epoch,
+            removal_proofs=self.removal_proofs,
         )
         if len(self.signatures) >= len(self.members):
             self.formed_at = self._clock().isoformat()
@@ -720,6 +738,25 @@ class _Handler(_HTTP.TimeoutHandler):
         self._send(200, payload)
 
 
+def _load_held_root(path: Path) -> dict[str, Any]:
+    """Read a held root from a file — either a bare root or a `root` document.
+
+    A node's held root lives as `{"root": {...}, "root_id": ...}` (what
+    `accept_root` writes), but a bare root dict is also accepted so a test or an
+    operator can point `serve` at a root directly.
+    """
+    try:
+        document = json.loads(Path(path).read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ElectionError(REASON_MALFORMED, f"held root unreadable: {exc}") from exc
+    root = document.get("root") if isinstance(document, dict) else None
+    if not isinstance(root, dict):
+        root = document if isinstance(document, dict) else None
+    if not isinstance(root, dict) or "members" not in root:
+        raise ElectionError(REASON_MALFORMED, f"{path} is not a root document")
+    return root
+
+
 def serve(
     members_path: Path,
     bind: str = DEFAULT_BIND,
@@ -727,18 +764,47 @@ def serve(
     shared_dir: Path | None = None,
     clock: Callable[[], datetime] | None = None,
     election_id: str = DEFAULT_ELECTION_ID,
+    trust_root: Path | None = None,
+    removal_proofs: Path | None = None,
     ready: Callable[[], None] | None = None,
 ) -> None:
     """Run the exchange until interrupted.
 
+    `trust_root` is the root in force: supplying it turns this exchange into a
+    **re-formation** — the formed root chains to it by `previous_root_id` and
+    takes the next `epoch`. Omit it for a genesis election. `removal_proofs` is
+    a JSON list of removal proofs carried onto a reduced-membership root, so a
+    cluster that dropped a member forms a child the verifier will accept (the
+    survivors are the `members_path` roster; the dropped member is simply not in
+    it). The consensus module checks that the dropped set equals the evidenced
+    set exactly, so proofs for a member who is not dropped are refused.
+
     `ready` is called once the socket is listening, so a test can know when to
     start its members without sleeping on a guess.
     """
+    previous_root_id = ""
+    epoch = 0
+    proofs: list[dict[str, Any]] | None = None
+    if trust_root is not None:
+        held = _load_held_root(trust_root)
+        consensus = load_consensus(shared_dir)
+        previous_root_id = consensus.root_id(held)
+        epoch = int(held.get("epoch", 0)) + 1
+    if removal_proofs is not None:
+        try:
+            proofs = json.loads(Path(removal_proofs).read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ElectionError(REASON_MALFORMED, f"removal proofs unreadable: {exc}") from exc
+        if not isinstance(proofs, list):
+            raise ElectionError(REASON_MALFORMED, "removal proofs must be a JSON list")
     exchange = ElectionExchange(
         load_members(members_path),
         shared_dir=shared_dir,
         clock=clock,
         election_id=election_id,
+        previous_root_id=previous_root_id,
+        epoch=epoch,
+        removal_proofs=proofs,
     )
     server = ThreadingHTTPServer((bind, port), _Handler)
     server.exchange = exchange  # type: ignore[attr-defined]
@@ -1151,6 +1217,18 @@ def _main(argv: list[str] | None = None) -> int:
     p.add_argument("--bind", default=DEFAULT_BIND)
     p.add_argument("--port", type=int, default=DEFAULT_PORT)
     p.add_argument("--election-id", default=DEFAULT_ELECTION_ID)
+    p.add_argument(
+        "--trust",
+        type=Path,
+        default=None,
+        help="root in force: turns this into a re-formation chaining to it",
+    )
+    p.add_argument(
+        "--removal-proofs",
+        type=Path,
+        default=None,
+        help="JSON list of removal proofs for a reduced-membership re-formation",
+    )
 
     def member_args(p: argparse.ArgumentParser, with_identity: bool = False) -> None:
         p.add_argument("--url", default=f"http://{DEFAULT_BIND}:{DEFAULT_PORT}")
@@ -1211,6 +1289,8 @@ def _main(argv: list[str] | None = None) -> int:
                 port=args.port,
                 shared_dir=shared_dir,
                 election_id=args.election_id,
+                trust_root=args.trust,
+                removal_proofs=args.removal_proofs,
             )
             payload = {"stopped": True}
         elif args.command == "request":

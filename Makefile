@@ -23,7 +23,7 @@ VENV_PY := $(VAULT_ROOT)/.venv/bin/python
 PY := $(if $(wildcard $(VENV_PY)),$(VENV_PY),python3)
 ROLE ?= peer
 
-.PHONY: help help-role layout validate test test-all test-peer test-master \
+.PHONY: help help-role layout tui validate test test-all test-peer test-master \
         contract-test lint devtools chroma-dev chroma-init chroma-inspect \
         chroma-index chroma-query env-init wiki-sync wiki-verify \
         wiki-preflight bundle bundle-verify status-plan clean dist \
@@ -38,6 +38,9 @@ help: ## Show this help
 	@echo "  Role subvaults have their own targets:"
 	@echo "    make -C peer-node help"
 	@echo "    make -C master-node help"
+
+tui: ## Launch opencode with KDE Connect notifications (fabric-root sessions only)
+	OPENCODE_CONFIG=$(VAULT_ROOT)/scripts/plugins/kde-notif.opencode.json opencode
 
 help-role: ## What each role is, and whether it runs
 	@printf '  %-14s %s\n' "peer-node"   "IMPLEMENTED — guard, anchor, dispatch, wiki vault"

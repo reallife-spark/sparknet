@@ -125,10 +125,32 @@ user consent, and a user key without the node key cannot place a block in the
 chain. The block-level `signature` restates the node's countersignature where
 the schema requires a signature; `hash` binds the whole block.
 
-Peer-written events are `approval`, `report`, `share` and `inbox_acceptance`.
-Master events are the disjoint set in `tracking-schema.json`; a peer writing one
-is a contract break, because only the Master can observe what those events
-describe.
+Peer-written events are `approval`, `report`, `share`, `inbox_acceptance` and
+`grant_use`. Master events are the disjoint set in `tracking-schema.json`; a peer
+writing one is a contract break, because only the Master can observe what those
+events describe.
+
+## Signed session grants
+
+A grant (`contracts/identity-schema.json` `grant`) is the signed artifact every
+knowledge write is authorised by — it replaces the conversation-hash heuristic
+with an artifact that names the node, the user, the conversation and the vault
+scope, issued by the Master or the offline operator key under
+`shared/sparknet-authz.py sign --master-key` while the Master is unbuilt.
+
+Minting and verification both live in `shared/sparknet-authz.py` — the one
+crypto implementation. Verification is `contracts/identity-schema.json`
+`grant.verification_order`, which is guard-protocol.md's check order unchanged:
+signature → registry fingerprint not revoked → capability subset → expiry →
+nonce never used on this node → the presenter is the node the grant names. Every
+rejection is fail-closed: forged, expired, replayed, nonce-reused and
+out-of-scope writes land nothing at their target.
+
+Exercise of a grant is recorded in the ledger as a `grant_use` block, dual-signed
+like an approval and hash-chained, naming the grant, its parent (for a delegated
+subagent grant), the acting session and the note(s) written. An out-of-scope
+write is quarantined to `_raw/` and recorded as `decision: quarantined`, so
+authority is never widened by a signature and material is never silently lost.
 
 ## Inbox dispatch — a policy, not a pipeline
 

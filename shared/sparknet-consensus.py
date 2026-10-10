@@ -36,7 +36,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = "1.1"
+SCHEMA_VERSION = "1.2"
 
 #: A cluster is two (a pair) or three (the full cluster) members. This is a
 #: protocol decision, not a tunable: a fourth member changes the agreement
@@ -117,6 +117,12 @@ REASON_REPLAY = "root_replayed"
 REASON_NOT_AGREED = "no_unanimous_agreement"
 REASON_VOTE_REPLAY = "vote_replayed"
 REASON_MEMBER_ALREADY_VOTED = "member_already_voted"
+# F2 (reduced-membership re-formation): a chained root that drops a member must
+# carry a valid removal proof for exactly the members it drops — no more, no
+# fewer. These reasons are stable strings like the rest.
+REASON_MISSING_REMOVAL_PROOF = "missing_removal_proof"
+REASON_BAD_REMOVAL_PROOF = "bad_removal_proof"
+REASON_UNEXPECTED_REMOVAL_PROOF = "unexpected_removal_proof"
 
 #: Member fields covered by a member's signature over the root.
 ROOT_MEMBER_FIELDS = ("node_id", "fingerprint", "wireguard_pubkey", "cluster_pubkey")
@@ -126,6 +132,11 @@ ROOT_MEMBER_FIELDS = ("node_id", "fingerprint", "wireguard_pubkey", "cluster_pub
 #: included so a later root is bound to the root it supersedes — supersession is
 #: a chain (policy B in the re-formation design), never a free replacement. The
 #: first root of a cluster records the empty string: it has no predecessor.
+#:
+#: `epoch` entered the signed fields in schema 1.2 — the reduced-membership work.
+#: It is a monotonic counter (0 for a genesis root, parent + 1 for every
+#: re-formation), signed so no root can lie about where it sits in the lineage,
+#: and independent of the wall clock so two nodes never disagree about ordering.
 ROOT_SIGNED_FIELDS = (
     "version",
     "nonce",
@@ -134,6 +145,7 @@ ROOT_SIGNED_FIELDS = (
     "master_node_id",
     "master_pubkey",
     "previous_root_id",
+    "epoch",
 )
 
 #: The schema before chained supersession. A 1.0 root signed the same fields
@@ -151,18 +163,36 @@ ROOT_SIGNED_FIELDS_V1 = (
     "master_pubkey",
 )
 
+#: The schema that added the chain (policy B) but not yet the epoch: a 1.1 root
+#: signed `previous_root_id` and nothing else new. Kept so a root already in
+#: force on the live pair keeps its original bytes and id across the 1.2 bump —
+#: the same migration discipline that carried 1.0 into 1.1.
+CHAINED_SCHEMA_VERSION = "1.1"
+ROOT_SIGNED_FIELDS_V11 = (
+    "version",
+    "nonce",
+    "formed_at",
+    "members",
+    "master_node_id",
+    "master_pubkey",
+    "previous_root_id",
+)
+
 
 def _root_signed_fields(root: dict[str, Any]) -> tuple[str, ...]:
     """The signed-field set a root's schema version binds to.
 
-    This is the migration seam. `previous_root_id` is part of the signed bytes
-    from 1.1 on, so a 1.0 root cannot simply gain the field: doing so would
-    change what was signed and invalidate every co-signature. Instead a 1.0 root
-    is projected with the 1.0 field set — reproducing its original id — and a
-    1.1 root chains to it by naming that id as its `previous_root_id`.
+    This is the migration seam. Each new signed field would otherwise change
+    every co-signature. `previous_root_id` is part of the signed bytes from 1.1
+    on and `epoch` from 1.2 on, so an older root is projected with its own
+    version's field set — reproducing its original id — and a newer root chains
+    to it by naming that id as its `previous_root_id`.
     """
-    if root.get("version") == LEGACY_SCHEMA_VERSION:
+    version = root.get("version")
+    if version == LEGACY_SCHEMA_VERSION:
         return ROOT_SIGNED_FIELDS_V1
+    if version == CHAINED_SCHEMA_VERSION:
+        return ROOT_SIGNED_FIELDS_V11
     return ROOT_SIGNED_FIELDS
 
 
@@ -208,6 +238,11 @@ def canonical_root(root: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(previous, str):
             raise ConsensusError("previous_root_id must be a string")
         projected["previous_root_id"] = previous
+    if "epoch" in fields:
+        epoch = root["epoch"]
+        if not isinstance(epoch, int) or isinstance(epoch, bool) or epoch < 0:
+            raise ConsensusError("epoch must be a non-negative integer")
+        projected["epoch"] = epoch
     return projected
 
 
@@ -530,6 +565,164 @@ def attach_root_signatures(
     return signed
 
 
+# --- removal proofs (reduced-membership re-formation) -------------------------
+#
+# A re-formation may *shrink* the cluster: the survivors form a chained child
+# root that names only themselves. Dropping a member is a denial — it removes
+# reach and cannot add any — but it must still be *evidenced*, or a colluding
+# majority could silently vanish an honest node and a pure verifier would have
+# no way to tell a lawful reduction from a forgery. So a child root that drops a
+# member carries a **removal proof** per dropped member, and `verify_root`'s
+# trust path refuses a child unless its dropped set is *exactly* the set the
+# proofs evidence.
+#
+# Two kinds of proof are accepted:
+#   - "revocation": signed by the PARENT root's elected Master with its
+#     *operational* key. This is the contract's existing 1-signature revoke made
+#     durable as evidence the chain can check — the operator who may already
+#     unilaterally revoke a node can hand the survivors the proof of it.
+#   - "attested": signed by EVERY surviving member with its *cluster* key. This
+#     is majority-to-reduce (n-1 survivors consent), the design's
+#     "survivor-signed statement that the member is unreachable-and-departed".
+#
+# A lone survivor has no cluster to form (below MIN_CLUSTER_SIZE); it holds only
+# the proof — a tombstone — and must re-witness a new member before a root can
+# exist again. The floor is not relaxed here.
+
+#: Fields covered by a removal proof's signature(s).
+REMOVAL_PROOF_FIELDS = ("removed_node_id", "parent_root_id", "kind", "nonce", "ts")
+REMOVAL_PROOF_KINDS = ("revocation", "attested")
+
+
+def canonical_removal_proof(proof: dict[str, Any]) -> dict[str, Any]:
+    """Project a removal proof to its signed fields, sorted."""
+    if not isinstance(proof, dict):
+        raise ConsensusError("removal proof must be a mapping")
+    missing = [f for f in REMOVAL_PROOF_FIELDS if f not in proof]
+    if missing:
+        raise ConsensusError(f"removal proof missing field(s): {', '.join(missing)}")
+    if proof["kind"] not in REMOVAL_PROOF_KINDS:
+        raise ConsensusError(
+            f"removal proof kind must be one of {REMOVAL_PROOF_KINDS}, "
+            f"got {proof['kind']!r}"
+        )
+    return {f: proof[f] for f in sorted(REMOVAL_PROOF_FIELDS)}
+
+
+def removal_proof_bytes(proof: dict[str, Any]) -> bytes:
+    return json.dumps(
+        canonical_removal_proof(proof), sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+
+
+def sign_removal_proof(
+    proof: dict[str, Any],
+    signer_node_id: str,
+    private_key_b64: str,
+    shared_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Add one signer's signature to a removal proof (its `signatures` map)."""
+    authz = _load_authz(shared_dir)
+    try:
+        key = authz.private_key_from_b64(private_key_b64)
+        signature = authz.sign_bytes(key, removal_proof_bytes(proof))
+    except Exception as exc:  # noqa: BLE001 - surface the real cause
+        raise ConsensusError(f"cannot sign removal proof: {exc}") from exc
+    signed = dict(proof)
+    signatures = dict(signed.get("signatures") or {})
+    if signer_node_id in signatures:
+        raise ConsensusError(f"{signer_node_id} has already signed this removal proof")
+    signatures[signer_node_id] = signature
+    signed["signatures"] = signatures
+    return signed
+
+
+def verify_removal_proof(
+    proof: dict[str, Any],
+    previous: dict[str, Any],
+    survivors: list[str],
+    shared_dir: Path | None = None,
+) -> tuple[bool, str]:
+    """Check one removal proof against the parent root it names.
+
+    `survivors` is the child root's membership (the members that stay). For an
+    `attested` proof every survivor must have signed; for a `revocation` the
+    parent's Master must have signed with its operational key. A proof signed by
+    anyone else, or missing a required signer, is refused.
+    """
+    authz = _load_authz(shared_dir)
+    try:
+        projected = canonical_removal_proof(proof)
+        prev = canonical_root(previous)
+    except ConsensusError as exc:
+        return False, f"{REASON_BAD_REMOVAL_PROOF}: {exc}"
+
+    signatures = proof.get("signatures")
+    if not isinstance(signatures, dict) or not signatures:
+        return False, f"{REASON_MISSING_SIGNATURE}: removal proof carries no signatures"
+
+    if projected["kind"] == "revocation":
+        required = {prev["master_node_id"]: prev["master_pubkey"]}
+    else:  # attested
+        by_id = {m["node_id"]: m for m in prev["members"]}
+        strangers = [s for s in survivors if s not in by_id]
+        if strangers:
+            return False, (
+                f"{REASON_BAD_REMOVAL_PROOF}: survivors {', '.join(sorted(strangers))} "
+                f"are not members of the parent root"
+            )
+        required = {s: by_id[s]["cluster_pubkey"] for s in survivors}
+
+    extra = set(signatures) - set(required)
+    if extra:
+        return False, (
+            f"{REASON_BAD_REMOVAL_PROOF}: signed by non-required "
+            f"{', '.join(sorted(extra))}"
+        )
+    absent = set(required) - set(signatures)
+    if absent:
+        return False, (
+            f"{REASON_MISSING_SIGNATURE}: removal proof unsigned by "
+            f"{', '.join(sorted(absent))}"
+        )
+
+    message = removal_proof_bytes(projected)
+    for node_id, public_key_b64 in required.items():
+        try:
+            public_key = authz.public_key_from_b64(public_key_b64)
+            public_key.verify(base64.b64decode(signatures[node_id]), message)
+        except Exception:  # noqa: BLE001 - any verification failure is a bad proof
+            return False, (
+                f"{REASON_BAD_REMOVAL_PROOF}: {node_id}'s signature does not verify"
+            )
+    return True, REASON_OK
+
+
+def _removal_proofs_by_member(root: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Map a chained root's `removal_proofs` list by removed member id.
+
+    `removal_proofs` is carried alongside the root but is **not** one of the
+    signed fields: each proof is independently signed by its authority, so it
+    authenticates itself, and the signed root stays small. A duplicate proof for
+    one member is refused — two different evidences for the same drop would make
+    "exactly the dropped set" ambiguous.
+    """
+    proofs = root.get("removal_proofs") or []
+    if not isinstance(proofs, list):
+        raise ConsensusError("removal_proofs must be a list")
+    by_member: dict[str, dict[str, Any]] = {}
+    for proof in proofs:
+        if not isinstance(proof, dict):
+            raise ConsensusError("each removal proof must be a mapping")
+        removed = proof.get("removed_node_id")
+        if not isinstance(removed, str) or not removed:
+            raise ConsensusError("removal proof missing removed_node_id")
+        if removed in by_member:
+            raise ConsensusError(f"more than one removal proof for {removed}")
+        by_member[removed] = proof
+    return by_member
+
+
 def verify_root(
     root: dict[str, Any],
     trust: dict[str, Any] | None = None,
@@ -570,6 +763,19 @@ def verify_root(
                 f"root as previous_root_id, or it is a stranger, not a successor, "
                 f"however well it is signed"
             )
+        # The epoch is the signed, clock-free height of the root in its lineage.
+        # A 1.2+ root must sit exactly one above the root it descends from, so a
+        # root cannot claim a height it has not earned (a stale root replayed as
+        # a fresh one, or a forged forward jump). Roots older than 1.2 predate the
+        # field and are treated as height 0, so a live 1.1 root can be the parent
+        # of the first 1.2 re-formation without a re-election.
+        if "epoch" in projected:
+            parent_epoch = canonical_root(previous).get("epoch", 0)
+            if projected["epoch"] != parent_epoch + 1:
+                return False, (
+                    f"{REASON_UNCHAINED}: epoch must be exactly {parent_epoch + 1} "
+                    f"(one above the root in force), got {projected['epoch']}"
+                )
         held_ids = {m["node_id"] for m in previous["members"]}
         new_ids = {m["node_id"] for m in projected["members"]}
         if not new_ids.issubset(held_ids):
@@ -585,6 +791,41 @@ def verify_root(
                 f"{MIN_CLUSTER_SIZE} members; a lone survivor holds a removal "
                 f"proof, not a cluster"
             )
+        # A reduction must be *evidenced*. The dropped set is held minus new; the
+        # proofs must cover exactly that set — no missing proof (a silent
+        # eviction) and no proof for a member that stays (a forged drop record).
+        dropped = held_ids - new_ids
+        try:
+            proofs = _removal_proofs_by_member(root)
+        except ConsensusError as exc:
+            return False, f"{REASON_BAD_REMOVAL_PROOF}: {exc}"
+        unexpected = set(proofs) - dropped
+        if unexpected:
+            return False, (
+                f"{REASON_UNEXPECTED_REMOVAL_PROOF}: a removal proof was supplied "
+                f"for {', '.join(sorted(unexpected))}, which the child root still "
+                f"names; the dropped set must equal the evidenced set exactly"
+            )
+        missing = dropped - set(proofs)
+        if missing:
+            return False, (
+                f"{REASON_MISSING_REMOVAL_PROOF}: the child root drops "
+                f"{', '.join(sorted(missing))} with no removal proof; a reduction "
+                f"must be evidenced by a revocation (parent Master, operational "
+                f"key) or an attested statement (every survivor, cluster key)"
+            )
+        parent_id = root_id(previous)
+        for removed_id in sorted(dropped):
+            proof = proofs[removed_id]
+            if proof.get("parent_root_id") != parent_id:
+                return False, (
+                    f"{REASON_BAD_REMOVAL_PROOF}: {removed_id}'s removal proof names "
+                    f"{proof.get('parent_root_id')!r}, not the root in force "
+                    f"{parent_id!r}"
+                )
+            ok, why = verify_removal_proof(proof, previous, sorted(new_ids), shared_dir)
+            if not ok:
+                return False, f"{REASON_BAD_REMOVAL_PROOF}: {why}"
 
     members = projected["members"]
     if len(members) < MIN_CLUSTER_SIZE or len(members) > MAX_CLUSTER_SIZE:

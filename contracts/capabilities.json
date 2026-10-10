@@ -7,7 +7,9 @@
     "p2p-sync",
     "push-receive",
     "guard-apply",
-    "cluster-vote"
+    "cluster-vote",
+    "cluster-dispatch",
+    "cluster-serve"
   ],
   "definitions": {
     "telemetry": {
@@ -36,6 +38,18 @@
       "holder": "peer",
       "sensitive": false,
       "note": "Every member holds this, because election is what makes a master at all. It is deliberately weak: a vote is deduplicated by member identity, so casting three votes for yourself is still one vote. It confers nothing \u2014 it is a say, not a grant. See contracts/consensus-protocol.md."
+    },
+    "cluster-dispatch": {
+      "grants": "Submit a cluster job: split a prompt into signed subtasks and fan them out, as separate one-to-one requests, to the nodes this node is connected to.",
+      "holder": "peer",
+      "sensitive": false,
+      "note": "The initiate side of cluster inference. Launching a job makes no peer act by itself: where governance is master_governed (three or more members) the Master must ratify the job before any cluster-serve node accepts a subtask, and at peer_pair (exactly two members) the initiator signs it directly. It is not sensitive for that reason \u2014 the gate that makes a peer run work is cluster-serve on the receiving node plus, at three or more, the Master's ratification."
+    },
+    "cluster-serve": {
+      "grants": "Accept a signed cluster subtask over the overlay, run it against this node's own model and local knowledge, and return an attested result.",
+      "holder": "peer",
+      "sensitive": true,
+      "note": "The second sensitive capability after guard-apply, sensitive in the confidentiality direction rather than the mutation direction: the holder lets delegated inference read its local knowledge and returns the result to the cluster. It generalises the compute-serve proposal (COMPUTE_CAPABILITY_DESIGN.md) from a closed operation whitelist to a signed prompt. A node running its own prompts is not gated by this \u2014 only delegated subtasks are \u2014 and any action a served answer triggers still passes the node's own guard."
     }
   },
   "master_capabilities": {

@@ -46,7 +46,7 @@ import stat
 import subprocess
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 DEFAULT_SHARED_DIR = Path(__file__).resolve().parent
@@ -1222,6 +1222,42 @@ def approval_signable(data: dict[str, Any]) -> bytes:
     return canonical_json({k: v for k, v in data.items() if k != "signatures"})
 
 
+def _node_public_b64(vault: Path) -> str:
+    """This vault's node public key, inline so an offline verifier needs no keys."""
+    authz = _load_authz()
+    node_path = _node_key_path(vault)
+    if not node_path.is_file():
+        raise ProvenanceError(f"{node_path} not found (run `make keys`)")
+    _refuse_loose_key(node_path)
+    return authz.public_key_b64(authz.load_private_key(node_path).public_key())
+
+
+def _dual_sign(vault: Path, record: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
+    """Attach the two signatures every peer-written block carries.
+
+    User key = consent / attribution, node key = attestation this node recorded
+    it. Separate keys, separate meanings, exactly as an approval block carries —
+    a `grant_use` block is not a new signature scheme, it is the same dual
+    control over a different event.
+    """
+    authz = _load_authz()
+    if not user_is_filled(record):
+        raise ProvenanceError("user record is unfilled; run `make user-init` first")
+    user_path = _user_key_path(vault)
+    node_path = _node_key_path(vault)
+    for path, hint in ((user_path, "run `make user-init`"), (node_path, "run `make keys`")):
+        if not path.is_file():
+            raise ProvenanceError(f"{path} not found ({hint})")
+        _refuse_loose_key(path)
+    user_key = authz.load_private_key(user_path)
+    node_key = authz.load_private_key(node_path)
+    message = approval_signable(data)
+    return {
+        "user": authz.sign_bytes(user_key, message),
+        "node": authz.sign_bytes(node_key, message),
+    }
+
+
 def build_approval_data(
     *,
     vault: Path,
@@ -1242,19 +1278,6 @@ def build_approval_data(
     """
     if decision not in ("approved", "rejected", "clarified"):
         raise ProvenanceError(f"decision must be approved|rejected|clarified, got {decision!r}")
-    authz = _load_authz()
-    if not user_is_filled(record):
-        raise ProvenanceError("user record is unfilled; run `make user-init` first")
-
-    user_path = _user_key_path(vault)
-    node_path = _node_key_path(vault)
-    for path, hint in ((user_path, "run `make user-init`"), (node_path, "run `make keys`")):
-        if not path.is_file():
-            raise ProvenanceError(f"{path} not found ({hint})")
-        _refuse_loose_key(path)
-    user_key = authz.load_private_key(user_path)
-    node_key = authz.load_private_key(node_path)
-
     moment = (clock or _now)()
     try:
         blocks = load_ledger(vault / "blockchain" / "ledger.json").get("blocks", [])
@@ -1275,14 +1298,10 @@ def build_approval_data(
         "agent": agent,
         "model": model,
         "note_refs": sorted(note_refs),
-        "node_pubkey_b64": authz.public_key_b64(node_key.public_key()),
+        "node_pubkey_b64": _node_public_b64(vault),
         "recorded_at": _iso(moment),
     }
-    message = approval_signable(data)
-    data["signatures"] = {
-        "user": authz.sign_bytes(user_key, message),
-        "node": authz.sign_bytes(node_key, message),
-    }
+    data["signatures"] = _dual_sign(vault, record, data)
     return data
 
 
@@ -1375,6 +1394,433 @@ def approval_ids_in_ledger(vault: Path) -> set[str]:
         if isinstance(block, dict) and isinstance(block.get("data"), dict)
         and block["data"].get("approval_id")
     }
+
+
+# --- signed session grants -----------------------------------------------------
+
+
+def _safe_rel(raw: str) -> PurePosixPath:
+    """Normalise a vault-relative path, refusing anything that climbs out."""
+    path = PurePosixPath(str(raw).strip())
+    if path.is_absolute() or not path.parts or ".." in path.parts:
+        raise ProvenanceError(f"not a vault-relative path: {raw!r}")
+    return path
+
+
+def grant_scope_allows(scope: list[str], target_rel: str) -> bool:
+    """Is this vault-relative write inside the grant's scope?
+
+    Containment is a prefix of *path parts*, not a string prefix, so
+    `05_Knowledge/con` does not cover `05_Knowledge/configs`. An empty scope
+    allows nothing: contracts/identity-schema.json `vault_scope` says empty
+    means node-level config only, no knowledge access — so a scope-less grant
+    cannot reach any note.
+    """
+    target = _safe_rel(target_rel)
+    for raw in scope:
+        if not str(raw).strip():
+            continue
+        prefix = _safe_rel(str(raw))
+        if target.parts[: len(prefix.parts)] == prefix.parts:
+            return True
+    return False
+
+
+def quarantine_rel(vault: Path, grant_id: str, name: str) -> str:
+    """Where an out-of-scope write lands: under `_raw/`, never at its target.
+
+    The numbered path is derived from the contract's own legacy map, so this
+    writes `03_Sources/grant-quarantine/...` on a role vault — which is the
+    same file the `_raw/` shim names, and leaves the shim itself untouched.
+    The material is kept (the vault does not delete what it was given) while
+    authority is never widened by a signature.
+    """
+    legacy = contract()["layout"]["legacy_map"]
+    raw_dir = legacy.get("_raw", "_raw")
+    return str(PurePosixPath(raw_dir, "grant-quarantine", grant_id, name))
+
+
+def consumed_grant_nonces(vault: Path) -> set[str]:
+    """Grant nonces this node has already recorded.
+
+    The ledger is the retention store contracts/identity-schema.json requires
+    (`nonce.retention`): a nonce in any grant_use block is spent, so replaying
+    that grant fails for as long as the chain exists.
+    """
+    path = vault / "blockchain" / "ledger.json"
+    if not path.is_file():
+        return set()
+    ledger = load_ledger(path)
+    return {
+        str(block["data"].get("nonce"))
+        for block in ledger.get("blocks", [])
+        if isinstance(block, dict)
+        and isinstance(block.get("data"), dict)
+        and block["data"].get("event") == "grant_use"
+        and block["data"].get("nonce")
+    }
+
+
+def build_grant_use_data(
+    *,
+    vault: Path,
+    grant: dict[str, Any],
+    decision: str,
+    session: str,
+    note_refs: list[str],
+    agent: str,
+    model: str,
+    record: dict[str, Any],
+    clock=None,
+) -> dict[str, Any]:
+    """Assemble a `grant_use` record over the same dual-control envelope as an
+    approval: user consent plus node countersignature over one payload.
+
+    `session` is required because it is the whole point of the record — the
+    grant says what was permitted, the acting session says who used it, and the
+    two differ whenever a subagent inherited a parent grant.
+    """
+    if decision not in ("granted", "quarantined"):
+        raise ProvenanceError(f"decision must be granted|quarantined, got {decision!r}")
+    if not isinstance(session, str) or not session:
+        raise ProvenanceError("session is required: audit trails to the acting session, not the grant")
+    if not isinstance(grant, dict) or not grant.get("grant_id"):
+        raise ProvenanceError("grant must carry a grant_id")
+    moment = (clock or _now)()
+    try:
+        blocks = load_ledger(vault / "blockchain" / "ledger.json").get("blocks", [])
+    except ProvenanceError:
+        blocks = []
+    uses = sum(
+        1
+        for block in blocks
+        if isinstance(block, dict) and (block.get("data") or {}).get("event") == "grant_use"
+    )
+    data: dict[str, Any] = {
+        "event": "grant_use",
+        "grant_use_id": f"GUSE-{moment.date().isoformat()}-{uses + 1:03d}",
+        "grant_id": str(grant.get("grant_id")),
+        "parent_grant_id": grant.get("parent_grant_id"),
+        "conversation_key": str(grant.get("conversation_key") or ""),
+        "nonce": str(grant.get("nonce") or ""),
+        "user_identity": str(grant.get("user_identity") or ""),
+        "session": session,
+        "decision": decision,
+        "vault_scope": list(grant.get("vault_scope") or []),
+        "agent": agent,
+        "model": model,
+        "note_refs": sorted(note_refs),
+        "owner_id": str(record.get("owner_id")),
+        "owner_node": _node_id(vault),
+        "node_pubkey_b64": _node_public_b64(vault),
+        "recorded_at": _iso(moment),
+    }
+    data["signatures"] = _dual_sign(vault, record, data)
+    return data
+
+
+def write_granted_note(
+    vault: Path,
+    grant: dict[str, Any],
+    *,
+    target: str,
+    body: bytes,
+    session: str,
+    registry: dict[str, Any],
+    node_identity: dict[str, Any],
+    agent: str = "grant",
+    model: str = "local",
+    clock=None,
+) -> tuple[Path, str, dict[str, Any]]:
+    """Write one note under a signed session grant. Fail-closed, in this order.
+
+    Returns ``(note_path, decision, ledger_block)``.
+
+    1. The grant is verified against the Master-signed registry and the node
+       identity presenting it. A forged, expired, replayed, nonce-reused or
+       out-of-node grant raises here and touches nothing — that is
+       contracts/identity-schema.json `grant.verification_order`, the guard's
+       check order, executed by shared/sparknet-authz.py: the one crypto
+       implementation, not a second one.
+    2. The target is checked against `vault_scope`. Out of scope never lands at
+       the target: the material is quarantined under `_raw/` and the ledger
+       records `decision: quarantined`, so nothing is silently lost and nothing
+       silently lands outside the grant.
+    3. The note is written with provenance frontmatter — owner, the grant, and
+       the acting session — and signed with the user key.
+    4. A `grant_use` block is appended, dual-signed and hash-chained, carrying
+       the grant id, its parent when delegated, and the acting session. Audit
+       is therefore finer than authority: authority traces to the parent grant,
+       audit traces to the child session that used it.
+    """
+    authz = _load_authz()
+    record = parse_user_record(vault)
+    if not user_is_filled(record):
+        raise ProvenanceError("user record is unfilled; run `make user-init` first")
+    if not isinstance(session, str) or not session:
+        raise ProvenanceError("session is required: audit trails to the acting session")
+    if not body.strip():
+        raise ProvenanceError("refusing to write an empty note")
+    master_b64 = str((registry or {}).get("master_public_key_b64") or "")
+    if not master_b64:
+        raise ProvenanceError("registry carries no master_public_key_b64 — refusing to verify")
+    # Fail fast on missing keys, before any file is written.
+    _node_public_b64(vault)
+
+    decision = authz.verify_grant(
+        grant,
+        master_public_key=authz.public_key_from_b64(master_b64),
+        registry=registry,
+        node_identity=node_identity,
+        consumed_nonces=consumed_grant_nonces(vault),
+        now=(clock or _now)(),
+    )
+    if not decision.allowed:
+        raise ProvenanceError(f"grant refused ({decision.reason}): {grant.get('grant_id', '?')}")
+
+    now = (clock or _now)()
+    rel = _safe_rel(target)
+    if grant_scope_allows(list(grant.get("vault_scope") or []), str(rel)):
+        outcome = "granted"
+        note_rel = str(rel)
+    else:
+        outcome = "quarantined"
+        note_rel = quarantine_rel(vault, str(grant["grant_id"]), rel.name)
+
+    note_path = vault / note_rel
+    if note_path.exists():
+        raise ProvenanceError(f"{note_rel} already exists — refusing to overwrite a vault note")
+
+    heading = next(
+        (
+            line.lstrip("#").strip()
+            for line in body.decode("utf-8", "replace").splitlines()
+            if line.startswith("#")
+        ),
+        "",
+    )
+    tracking: dict[str, Any] = {
+        "schema": "sparknet-tracking/1",
+        "owner_id": str(record.get("owner_id") or ""),
+        "owner_node": str(record.get("owner_node") or _node_id(vault)),
+        "owner_ref": USER_RECORD_REF,
+        "validity": {"state": "unsigned"},
+        "conversation": [],
+        "shares": [],
+        "agent": agent,
+        "model": model,
+        "approvals": [],
+        "grant": {
+            "grant_id": str(grant.get("grant_id")),
+            "parent_grant_id": grant.get("parent_grant_id"),
+            "conversation_key": str(grant.get("conversation_key") or ""),
+            "session": session,
+            "scope": list(grant.get("vault_scope") or []),
+        },
+    }
+    meta = {"title": heading or PurePosixPath(note_rel).stem, "type": "vault-page", "captured": now.date().isoformat()}
+    if not body.endswith(b"\n"):
+        body += b"\n"
+    note_path.parent.mkdir(parents=True, exist_ok=True)
+    note_path.write_bytes(sign_note(emit_note({**meta, "tracking": tracking}, body), vault, agent=agent, model=model))
+
+    block = append_block(
+        vault,
+        build_grant_use_data(
+            vault=vault,
+            grant=grant,
+            decision=outcome,
+            session=session,
+            note_refs=[note_rel],
+            agent=agent,
+            model=model,
+            record=record,
+            clock=clock,
+        ),
+    )
+    return note_path, outcome, block
+
+
+def _verified_grant(
+    vault: Path,
+    grant: dict[str, Any],
+    *,
+    registry: dict[str, Any],
+    node_identity: dict[str, Any],
+    session: str,
+    clock=None,
+) -> tuple[dict[str, Any], Any]:
+    """The one fail-closed grant ladder every grant-scoped mutation shares.
+
+    write/promote/patch are three entry points, not three policies: each calls
+    this and only this to establish that the presenting vault holds the node
+    key, that the Master-signed registry names a verifier, and that the grant
+    walks identity-schema.json `grant.verification_order` with this node's
+    ledger as the nonce store. A mutation that skipped one step of this ladder
+    would be the second authority the fabric forbids.
+    """
+    authz = _load_authz()
+    if not isinstance(session, str) or not session:
+        raise ProvenanceError("session is required: audit trails to the acting session")
+    master_b64 = str((registry or {}).get("master_public_key_b64") or "")
+    if not master_b64:
+        raise ProvenanceError("registry carries no master_public_key_b64 — refusing to verify")
+    _node_public_b64(vault)
+    record = parse_user_record(vault)
+    if not user_is_filled(record):
+        raise ProvenanceError("user record is unfilled; run `make user-init` first")
+    decision = authz.verify_grant(
+        grant,
+        master_public_key=authz.public_key_from_b64(master_b64),
+        registry=registry,
+        node_identity=node_identity,
+        consumed_nonces=consumed_grant_nonces(vault),
+        now=(clock or _now)(),
+    )
+    if not decision.allowed:
+        raise ProvenanceError(f"grant refused ({decision.reason}): {grant.get('grant_id', '?')}")
+    return record, decision
+
+
+def _target_within_scope(rel: PurePosixPath, grant: dict[str, Any], verb: str) -> None:
+    if rel.suffix != ".md":
+        raise ProvenanceError(f"{verb} refuses a non-note target: {rel!s}")
+    if rel.parts[0] in ("blockchain", ".state"):
+        raise ProvenanceError(f"{verb} refuses to touch {rel.parts[0]!r}: {rel!s}")
+    if not grant_scope_allows(list(grant.get("vault_scope") or []), str(rel)):
+        raise ProvenanceError(
+            f"{verb} target {rel!s} is outside grant vault_scope {list(grant.get('vault_scope') or [])}"
+        )
+
+
+def promote_granted_note(
+    vault: Path,
+    grant: dict[str, Any],
+    *,
+    source: str,
+    target: str,
+    session: str,
+    registry: dict[str, Any],
+    node_identity: dict[str, Any],
+    agent: str = "grant",
+    model: str = "local",
+    clock=None,
+) -> tuple[Path, str, dict[str, Any]]:
+    """Move one note to its final place under a signed session grant.
+
+    Returns ``(note_path, decision, ledger_block)``. Fail-closed like
+    ``write_granted_note``: the grant verifies before anything moves, both the
+    source and the destination must be inside ``vault_scope``, the destination
+    must be free, and only a **pending raw/staged draft** — an unsigned note
+    sitting in ``_raw``/``03_Sources`` or ``_staging`` — may be promoted. A
+    signed note is somebody's attributed work; a grant that did not create it
+    must not relocate it. Content is unchanged, so the draft's provenance stays
+    as it was; the move is recorded as a new dual-signed ``grant_use`` block
+    naming the final place.
+    """
+    record, _ = _verified_grant(
+        vault, grant, registry=registry, node_identity=node_identity, session=session, clock=clock
+    )
+    src = _safe_rel(source)
+    dst = _safe_rel(target)
+    _target_within_scope(src, grant, "promote")
+    _target_within_scope(dst, grant, "promote")
+    src_path = vault / src
+    dst_path = vault / dst
+    if not src_path.is_file():
+        raise ProvenanceError(f"promote source does not exist: {src!s}")
+    if dst_path.exists():
+        raise ProvenanceError(f"promote destination already exists: {dst!s}")
+
+    try:
+        frontmatter, _body = split_note(src_path.read_bytes())
+        tracking = tracking_of(frontmatter)
+    except (FrontmatterError, UnicodeDecodeError):
+        # A raw capture with no frontmatter fence is the *definition* of a
+        # pending draft — nothing to parse means nothing to misattribute.
+        tracking = {}
+    validity = tracking.get("validity")
+    pending = not isinstance(validity, dict) or validity.get("state") in (None, "unsigned")
+    if not pending or src.parts[0] not in ("03_Sources", "_staging"):
+        raise ProvenanceError(f"promote refuses {src!s}: only pending raw/staged drafts may be promoted")
+
+    dst_path.parent.mkdir(parents=True, exist_ok=True)
+    src_path.replace(dst_path)
+    block = append_block(
+        vault,
+        build_grant_use_data(
+            vault=vault,
+            grant=grant,
+            decision="granted",
+            session=session,
+            note_refs=[str(dst)],
+            agent=agent,
+            model=model,
+            record=record,
+            clock=clock,
+        ),
+    )
+    return dst_path, "granted", block
+
+
+def patch_granted_note(
+    vault: Path,
+    grant: dict[str, Any],
+    *,
+    target: str,
+    patch: dict[str, Any],
+    session: str,
+    registry: dict[str, Any],
+    node_identity: dict[str, Any],
+    agent: str = "grant",
+    model: str = "local",
+    clock=None,
+) -> tuple[Path, str, dict[str, Any]]:
+    """Edit one note under a signed session grant, re-signing it.
+
+    Returns ``(note_path, decision, ledger_block)``. The patch is a single
+    ``old`` → ``new`` replacement applied to the note body — the frontmatter is
+    never part of the search space — and ``old`` must appear exactly once. The
+    patched body is re-signed with the user key so the note returns to ``valid``
+    instead of drifting to ``stale:content``, and the mutation lands as a
+    dual-signed ``grant_use`` block, the same envelope as a capture.
+    """
+    record, _ = _verified_grant(
+        vault, grant, registry=registry, node_identity=node_identity, session=session, clock=clock
+    )
+    rel = _safe_rel(target)
+    _target_within_scope(rel, grant, "patch")
+    note_path = vault / rel
+    if not note_path.is_file():
+        raise ProvenanceError(f"patch target does not exist: {rel!s}")
+    if not isinstance(patch, dict) or not isinstance(patch.get("old"), str) or not isinstance(patch.get("new"), str):
+        raise ProvenanceError("patch must be an object with string `old` and `new`")
+    old = patch["old"]
+    if not old.strip():
+        raise ProvenanceError("patch `old` cannot be empty")
+
+    frontmatter, body = split_note(note_path.read_bytes())
+    if body.count(old.encode("utf-8")) != 1:
+        raise ProvenanceError("patch `old` must match exactly one occurrence in the note body")
+    patched = body.replace(old.encode("utf-8"), patch["new"].encode("utf-8"), 1)
+    if not patched.strip():
+        raise ProvenanceError("refusing a patch that would empty the note")
+    note_path.write_bytes(sign_note(emit_note(frontmatter, patched), vault, agent=agent, model=model))
+    block = append_block(
+        vault,
+        build_grant_use_data(
+            vault=vault,
+            grant=grant,
+            decision="granted",
+            session=session,
+            note_refs=[str(rel)],
+            agent=agent,
+            model=model,
+            record=record,
+            clock=clock,
+        ),
+    )
+    return note_path, "granted", block
 
 
 # --- vault-wide verification ---------------------------------------------------
@@ -1642,6 +2088,33 @@ def main(argv: list[str] | None = None) -> int:
     p_append.add_argument("--agent", required=True)
     p_append.add_argument("--model", required=True)
 
+    p_grant = sub.add_parser(
+        "grant-write",
+        help="write a vault note under a signed session grant (fail-closed; offline)",
+    )
+    p_grant.add_argument(
+        "--grant",
+        type=Path,
+        required=True,
+        help="the signed grant artifact (sparknet-authz.py grant-mint)",
+    )
+    p_grant.add_argument("--target", required=True, help="vault-relative write path, e.g. 05_Knowledge/concepts/foo.md")
+    p_grant.add_argument("--body", help="note body text (one of --body / --body-file / stdin)")
+    p_grant.add_argument("--body-file", type=Path, help="note body from a file")
+    p_grant.add_argument("--session", required=True, help="the acting session id; a subagent passes its own child id")
+    p_grant.add_argument("--agent", default="grant")
+    p_grant.add_argument("--model", default="local")
+    p_grant.add_argument(
+        "--registry",
+        type=Path,
+        help="default: <vault>/manifests/node-authorizations.json",
+    )
+    p_grant.add_argument(
+        "--node-identity",
+        type=Path,
+        help="default: <vault>/manifests/node-identity.json",
+    )
+
     p_ingest = sub.add_parser("ingest", help="land one item in 01_Inbox/ as a pending note")
     p_ingest.add_argument(
         "path", nargs="?", default="-",
@@ -1731,6 +2204,36 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 f"appended {data['approval_id']} as block {block['block_id']} "
                 f"(hash {block['hash'][:16]}...)"
+            )
+            return 0
+        if args.command == "grant-write":
+            assert args.grant.is_file(), f"no such grant file: {args.grant}"
+            grant = json.loads(args.grant.read_text())
+            if args.body_file:
+                body = args.body_file.read_bytes()
+            elif args.body is not None:
+                body = args.body.encode("utf-8")
+            else:
+                body = sys.stdin.buffer.read()
+            registry_path = args.registry or vault / "manifests" / "node-authorizations.json"
+            identity_path = args.node_identity or vault / "manifests" / "node-identity.json"
+            registry = json.loads(registry_path.read_text())
+            identity = json.loads(identity_path.read_text())
+            note_path, outcome, block = write_granted_note(
+                vault,
+                grant,
+                target=args.target,
+                body=body,
+                session=args.session,
+                registry=registry,
+                node_identity=identity,
+                agent=args.agent,
+                model=args.model,
+            )
+            print(
+                f"{outcome}: {note_path.relative_to(vault)} "
+                f"(grant {grant['grant_id']}, session {args.session}, "
+                f"block {block['block_id']} hash {block['hash'][:16]}...)"
             )
             return 0
         if args.command == "shims":

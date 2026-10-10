@@ -89,16 +89,67 @@ def cluster():
     return {"members": members, "private": private}
 
 
-def _root(members, master: str, nonce: str = "nonce-1", clock=None, previous_root_id: str = "") -> dict:
-    return {
-        "version": "1.1",
+def _root(
+    members,
+    master: str,
+    nonce: str = "nonce-1",
+    clock=None,
+    previous_root_id: str = "",
+    version: str = "1.1",
+    epoch: int = 0,
+) -> dict:
+    root = {
+        "version": version,
         "nonce": nonce,
         "formed_at": (clock or _clock)().isoformat(),
         "members": members,
         "master_node_id": master,
         "master_pubkey": next(m["cluster_pubkey"] for m in members if m["node_id"] == master),
-        "previous_root_id": previous_root_id,
     }
+    if version != "1.0":
+        root["previous_root_id"] = previous_root_id
+    if version >= "1.2":
+        root["epoch"] = epoch
+    return root
+
+
+def _attested_proof(
+    consensus,
+    cluster,
+    removed: str,
+    parent_root_id: str,
+    survivors,
+    nonce: str = "rp-1",
+    signers=None,
+    clock=None,
+) -> dict:
+    """A removal proof signed by every survivor with its cluster key.
+
+    ``signers`` overrides the set that actually signs, which is how a test
+    forges a proof that omits a survivor.
+    """
+    proof = {
+        "removed_node_id": removed,
+        "parent_root_id": parent_root_id,
+        "kind": "attested",
+        "nonce": nonce,
+        "ts": (clock or _clock)().isoformat(),
+    }
+    for name in signers if signers is not None else survivors:
+        proof = consensus.sign_removal_proof(proof, name, cluster["private"][name])
+    return proof
+
+
+def _revocation_proof(consensus, cluster, removed: str, parent_root_id: str, author: str, nonce="rp-1"):
+    """A removal proof signed by the parent's elected Master alone."""
+    proof = {
+        "removed_node_id": removed,
+        "parent_root_id": parent_root_id,
+        "kind": "revocation",
+        "nonce": nonce,
+        "ts": _clock().isoformat(),
+    }
+    return consensus.sign_removal_proof(proof, author, cluster["private"][author])
 
 
 def _clock() -> datetime:
@@ -583,6 +634,194 @@ def test_a_chained_root_may_not_shrink_below_the_minimum(consensus, cluster):
     ok, reason = consensus.verify_root(lone, trust=first)
     assert ok is False
     assert consensus.REASON_UNCHAINED in reason, reason
+
+
+# --- reduced membership (1.2 removal proofs) ---------------------------------
+
+
+def _genesis_12(consensus, cluster, master: str = "beta", nonce: str = "genesis"):
+    return consensus.attach_root_signatures(
+        _root(cluster["members"], master, nonce=nonce, version="1.2", epoch=0),
+        cluster["private"],
+    )
+
+
+def _reduced(
+    consensus,
+    cluster,
+    genesis,
+    survivors,
+    master: str,
+    removal_proofs,
+    nonce: str = "reduced",
+    epoch: int = 1,
+    signers=None,
+):
+    child = _root(
+        survivors,
+        master,
+        nonce=nonce,
+        previous_root_id=consensus.root_id(genesis),
+        version="1.2",
+        epoch=epoch,
+    )
+    if removal_proofs is not None:
+        child["removal_proofs"] = removal_proofs
+    names = signers if signers is not None else [m["node_id"] for m in survivors]
+    return consensus.attach_root_signatures(
+        child, {name: cluster["private"][name] for name in names}
+    )
+
+
+def test_a_1_2_reduced_root_with_an_attested_proof_verifies(consensus, cluster):
+    """F2: N -> N-1 with every survivor attesting the drop.
+
+    The survivors form a chained child naming only themselves; the dropped
+    member is evidenced by a statement every survivor signed. Both the trust
+    path and the whole-chain path must accept it, and the child must name only
+    survivors.
+    """
+    genesis = _genesis_12(consensus, cluster)
+    survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
+    proof = _attested_proof(
+        consensus, cluster, "gamma", consensus.root_id(genesis), ["alpha", "beta"]
+    )
+    signed = _reduced(consensus, cluster, genesis, survivors, "beta", [proof])
+    assert consensus.verify_root(signed, trust=genesis) == (True, consensus.REASON_OK)
+    assert consensus.verify_chain([signed, genesis]) == (True, consensus.REASON_OK)
+    assert {m["node_id"] for m in signed["members"]} == {"alpha", "beta"}
+    assert signed["epoch"] == 1
+
+
+def test_a_1_2_reduced_root_with_a_revocation_proof_verifies(consensus, cluster):
+    """F2: the parent's Master may revoke instead, and that suffices.
+
+    The contract already lets the elected Master revoke a node unilaterally; a
+    `revocation` proof is that act made durable across the chain, signed with
+    the operational key the parent root authorises.
+    """
+    genesis = _genesis_12(consensus, cluster, master="beta")
+    survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
+    proof = _revocation_proof(
+        consensus, cluster, "gamma", consensus.root_id(genesis), "beta"
+    )
+    signed = _reduced(consensus, cluster, genesis, survivors, "beta", [proof])
+    assert consensus.verify_root(signed, trust=genesis) == (True, consensus.REASON_OK)
+    assert consensus.verify_chain([signed, genesis]) == (True, consensus.REASON_OK)
+
+
+def test_a_1_2_reduced_root_chains_to_a_1_1_parent(consensus, cluster):
+    """The migration seam: a legacy 1.1 parent is epoch 0, so the first 1.2
+    re-formation needs no re-election to be its child."""
+    parent = consensus.attach_root_signatures(
+        _root(cluster["members"], "beta", nonce="legacy-parent", version="1.1"),
+        cluster["private"],
+    )
+    survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
+    proof = _attested_proof(
+        consensus, cluster, "gamma", consensus.root_id(parent), ["alpha", "beta"]
+    )
+    signed = _reduced(consensus, cluster, parent, survivors, "beta", [proof], epoch=1)
+    assert consensus.verify_root(signed, trust=parent) == (True, consensus.REASON_OK)
+
+
+def test_a_reduced_root_without_a_removal_proof_is_refused(consensus, cluster):
+    genesis = _genesis_12(consensus, cluster)
+    survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
+    signed = _reduced(consensus, cluster, genesis, survivors, "beta", None)
+    ok, reason = consensus.verify_root(signed, trust=genesis)
+    assert ok is False
+    assert consensus.REASON_MISSING_REMOVAL_PROOF in reason, reason
+
+
+def test_a_reduced_root_naming_the_removed_member_is_refused(consensus, cluster):
+    """The child still names gamma but only the survivors signed: a knock-out
+    that keeps the member's name is not a lawful reduction."""
+    genesis = _genesis_12(consensus, cluster)
+    child = _root(
+        cluster["members"],
+        "beta",
+        nonce="reduced",
+        previous_root_id=consensus.root_id(genesis),
+        version="1.2",
+        epoch=1,
+    )
+    signatures = {
+        name: consensus.sign_root(child, name, cluster["private"][name])[name]
+        for name in ("alpha", "beta")
+    }
+    signed = dict(child, signatures=signatures)
+    ok, reason = consensus.verify_root(signed, trust=genesis)
+    assert ok is False
+    assert consensus.REASON_MISSING_SIGNATURE in reason, reason
+    assert "gamma" in reason, reason
+
+
+def test_a_proof_for_a_member_who_stays_is_refused(consensus, cluster):
+    """The dropped set must equal the evidenced set exactly: a proof for a
+    survivor is a forged drop record."""
+    genesis = _genesis_12(consensus, cluster)
+    survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
+    good = _attested_proof(
+        consensus, cluster, "gamma", consensus.root_id(genesis), ["alpha", "beta"]
+    )
+    extra = _attested_proof(
+        consensus,
+        cluster,
+        "beta",
+        consensus.root_id(genesis),
+        ["alpha", "beta"],
+        nonce="rp-2",
+    )
+    signed = _reduced(consensus, cluster, genesis, survivors, "beta", [good, extra])
+    ok, reason = consensus.verify_root(signed, trust=genesis)
+    assert ok is False
+    assert consensus.REASON_UNEXPECTED_REMOVAL_PROOF in reason, reason
+    assert "beta" in reason, reason
+
+
+def test_an_attested_proof_missing_a_survivor_is_refused(consensus, cluster):
+    genesis = _genesis_12(consensus, cluster)
+    survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
+    forged = _attested_proof(
+        consensus,
+        cluster,
+        "gamma",
+        consensus.root_id(genesis),
+        ["alpha", "beta"],
+        signers=["alpha"],
+    )
+    signed = _reduced(consensus, cluster, genesis, survivors, "beta", [forged])
+    ok, reason = consensus.verify_root(signed, trust=genesis)
+    assert ok is False
+    assert consensus.REASON_BAD_REMOVAL_PROOF in reason, reason
+    assert "beta" in reason, reason
+
+
+def test_a_proof_naming_the_wrong_parent_is_refused(consensus, cluster):
+    genesis = _genesis_12(consensus, cluster)
+    survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
+    proof = _attested_proof(consensus, cluster, "gamma", "0" * 64, ["alpha", "beta"])
+    signed = _reduced(consensus, cluster, genesis, survivors, "beta", [proof])
+    ok, reason = consensus.verify_root(signed, trust=genesis)
+    assert ok is False
+    assert consensus.REASON_BAD_REMOVAL_PROOF in reason, reason
+    assert "root in force" in reason, reason
+
+
+def test_a_reduced_root_with_the_wrong_epoch_is_refused(consensus, cluster):
+    genesis = _genesis_12(consensus, cluster)
+    survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
+    proof = _attested_proof(
+        consensus, cluster, "gamma", consensus.root_id(genesis), ["alpha", "beta"]
+    )
+    signed = _reduced(
+        consensus, cluster, genesis, survivors, "beta", [proof], epoch=5
+    )
+    ok, reason = consensus.verify_root(signed, trust=genesis)
+    assert ok is False
+    assert consensus.REASON_UNCHAINED in reason, reason
+    assert "epoch" in reason, reason
 
 
 def test_replaying_a_root_is_refused(consensus, cluster):

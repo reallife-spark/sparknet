@@ -35,6 +35,7 @@ import argparse
 import base64
 import hashlib
 import json
+import re
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -56,7 +57,15 @@ SCHEMA_VERSION = "1.0"
 
 #: Capability a node may hold. Anything not listed here is rejected.
 KNOWN_CAPABILITIES = frozenset(
-    {"telemetry", "p2p-sync", "push-receive", "guard-apply", "cluster-vote"}
+    {
+        "telemetry",
+        "p2p-sync",
+        "push-receive",
+        "guard-apply",
+        "cluster-vote",
+        "cluster-dispatch",
+        "cluster-serve",
+    }
 )
 
 # Identity fields that participate in the fingerprint. Deliberately excludes
@@ -422,6 +431,339 @@ def sign_authorization(
     return entry
 
 
+# --- cluster jobs ------------------------------------------------------------
+
+
+#: The ways a cluster job may divide a prompt. A closed set: a job naming any
+#: other mode is refused rather than guessed at, so a new mode cannot be
+#: introduced by a caller that skips the contract.
+CLUSTER_JOB_MODES = ("decompose", "shard", "best_of_n", "mixture")
+
+#: Fields of a cluster job covered by the initiator's (or the ratifying Master's)
+#: signature. `subtasks` is inside the signature for the same reason a registry
+#: entry's `capabilities` is: signing a job id alone would let anyone replay one
+#: job's signature over a different partition, prompt or recipient set.
+CLUSTER_JOB_FIELDS = (
+    "job_id",
+    "conversation_id",
+    "initiator_node_id",
+    "created_at",
+    "expires_at",
+    "mode",
+    "prompt",
+    "running_summary",
+    "context",
+    "budget",
+    "subtasks",
+)
+
+#: Fields a job must carry and fill before it can be canonicalised. The remaining
+#: CLUSTER_JOB_FIELDS (`running_summary`, `context`, `budget`) may legitimately be
+#: empty on a first turn, so they are projected as null rather than required.
+#: `subtasks` is validated separately, where its shape (a non-empty list) is known.
+CLUSTER_JOB_REQUIRED = (
+    "job_id",
+    "conversation_id",
+    "initiator_node_id",
+    "created_at",
+    "expires_at",
+    "mode",
+    "prompt",
+)
+
+
+def is_expired(value: Any, now: datetime) -> bool:
+    """True when an ISO-8601 timestamp is unparseable or in the past.
+
+    Fail-closed on purpose: a malformed expiry is treated as expired, so a bad
+    timestamp cannot become an unlimited-validity job. Uses the same parser as
+    registry expiry, so the two cannot disagree about what a valid stamp is.
+    """
+    parsed = _parse_ts(value)
+    return parsed is None or now > parsed
+
+
+def cluster_job_message(job: dict[str, Any]) -> bytes:
+    """Canonical bytes signed for a cluster job, projected to CLUSTER_JOB_FIELDS.
+
+    One projection rule, shared by the signer and every verifier. A second copy of
+    this rule is how `sign-guard-approval` and the guard diverged; the fix here is
+    to have the single implementation live where both sides must import it.
+
+    The projection is a fixed field list, so operational metadata added later
+    cannot silently join the signature, and it is serialised with sort_keys and
+    tight separators so the bytes do not depend on dict insertion order.
+    """
+    if not isinstance(job, dict):
+        raise AuthzError("cluster job must be an object")
+    missing = [f for f in CLUSTER_JOB_REQUIRED if not job.get(f)]
+    if missing:
+        raise AuthzError(f"cluster job missing required field(s): {', '.join(missing)}")
+    if job["mode"] not in CLUSTER_JOB_MODES:
+        raise AuthzError(
+            f"unknown cluster job mode {job['mode']!r}; expected one of {', '.join(CLUSTER_JOB_MODES)}"
+        )
+    subtasks = job["subtasks"]
+    if not isinstance(subtasks, list) or not subtasks:
+        raise AuthzError("cluster job subtasks must be a non-empty list")
+    projected = {field: job.get(field) for field in sorted(CLUSTER_JOB_FIELDS)}
+    return json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+# --- session grants ------------------------------------------------------------
+
+
+#: Fields of a signed session grant (contracts/identity-schema.json `grant`).
+#: The projection is a fixed field list, exactly like a registry entry's
+#: SIGNED_FIELDS: signing an id alone would let anyone replay one grant's
+#: signature over a different scope, user or conversation.
+GRANT_FIELDS = (
+    "grant_id",
+    "node_id",
+    "node_fingerprint",
+    "overlay_ipv4",
+    "capabilities",
+    "user_identity",
+    "conversation_key",
+    "vault_scope",
+    "issued_at",
+    "expires_at",
+    "nonce",
+    "parent_grant_id",
+)
+
+#: Fields a grant must carry non-empty before it can be canonicalised. The
+#: remaining GRANT_FIELDS (`overlay_ipv4`, `vault_scope`, `parent_grant_id`)
+#: may legitimately be empty, so they are projected as null/empty rather than
+#: required — empty `vault_scope` is the meaningful "node-level config only".
+GRANT_REQUIRED = (
+    "grant_id",
+    "node_id",
+    "node_fingerprint",
+    "capabilities",
+    "user_identity",
+    "conversation_key",
+    "issued_at",
+    "expires_at",
+    "nonce",
+)
+
+REASON_GRANT_UNKNOWN_NODE = "grant_unknown_node"
+REASON_GRANT_REVOKED = "grant_revoked"
+REASON_GRANT_CAPABILITY_WIDEN = "grant_would_widen_node"
+REASON_GRANT_EXPIRED = "grant_expired"
+REASON_GRANT_NOT_YET_VALID = "grant_not_yet_valid"
+REASON_GRANT_NONCE_REUSED = "grant_nonce_reused"
+REASON_GRANT_NODE_MISMATCH = "grant_node_mismatch"
+REASON_GRANT_MALFORMED = "grant_malformed"
+
+
+def grant_message(grant: dict[str, Any]) -> bytes:
+    """Canonical bytes a grant's signature covers, projected to GRANT_FIELDS.
+
+    One projection rule, shared by the signer and every verifier — the 
+    ``sign-guard-approval``/guard divergence happened because that rule had two
+    copies, so a grant deliberately has the single implementation both sides
+    import. Serialised with sort_keys and tight separators so the bytes do not
+    depend on dict insertion order.
+    """
+    if not isinstance(grant, dict):
+        raise AuthzError("grant must be an object")
+    missing = [f for f in GRANT_REQUIRED if not grant.get(f)]
+    if missing:
+        raise AuthzError(f"grant missing required field(s): {', '.join(missing)}")
+    if not isinstance(grant["capabilities"], list) or not grant["capabilities"]:
+        raise AuthzError("grant capabilities must be a non-empty list")
+    if not isinstance(grant.get("vault_scope", []), list):
+        raise AuthzError("grant vault_scope must be a list")
+    parent = grant.get("parent_grant_id")
+    if parent is not None and not isinstance(parent, str):
+        raise AuthzError("grant parent_grant_id must be a string or null")
+    projected = {field: grant.get(field) for field in GRANT_FIELDS}
+    return json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def mint_grant(
+    *,
+    node_identity: dict[str, Any],
+    grant_id: str,
+    user_identity: str,
+    conversation_key: str,
+    capabilities: list[str],
+    vault_scope: list[str],
+    ttl_minutes: int,
+    nonce: str,
+    master_private_key: Ed25519PrivateKey,
+    parent_grant_id: str | None = None,
+    registry: dict[str, Any] | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Mint a signed session grant. MASTER-SIDE OR OFFLINE OPERATOR ONLY.
+
+    Never called by a peer with operational intent: like `sign_authorization`,
+    this needs the private key. While the Master is unbuilt it is exactly what
+    `sparknet-authz.py grant-mint --master-key` runs, offline, with no Master
+    present.
+
+    The node fingerprint and overlay address come from the node's projected
+    identity, so a grant cannot be replayed onto a re-keyed node or moved to a
+    different overlay face. When `registry` is given, minting refuses to widen
+    the node (a grant cannot mint a node that is not in it); without it, only
+    unknown capabilities are refused and the verifier still enforces the
+    registry ceiling.
+    """
+    now = now or datetime.now(timezone.utc)
+    if not isinstance(capabilities, list) or not capabilities:
+        raise AuthzError("grant must carry at least one capability")
+    unknown = [c for c in capabilities if c not in KNOWN_CAPABILITIES]
+    if unknown:
+        raise AuthzError(f"unknown capability/capabilities: {', '.join(unknown)}")
+    for value, name in (
+        (grant_id, "grant_id"),
+        (user_identity, "user_identity"),
+        (conversation_key, "conversation_key"),
+        (nonce, "nonce"),
+    ):
+        if not isinstance(value, str) or not value:
+            raise AuthzError(f"grant {name} must be a non-empty string")
+    local_fp = fingerprint(node_identity)
+    if registry is not None:
+        entries = registry.get("authorizations")
+        if not isinstance(entries, list):
+            raise AuthzError("registry has no authorizations list")
+        entry = next((e for e in entries if isinstance(e, dict) and e.get("fingerprint") == local_fp), None)
+        if entry is None:
+            raise AuthzError("grant node is not in the registry — a grant cannot mint a node")
+        if entry.get("revoked"):
+            raise AuthzError("grant node is revoked in the registry")
+        granted = entry.get("capabilities")
+        if not isinstance(granted, list) or not granted:
+            raise AuthzError("registry entry has no capabilities")
+        widen = [c for c in capabilities if c not in granted]
+        if widen:
+            raise AuthzError(f"grant would widen the node: {', '.join(widen)}")
+
+    stamp = now.isoformat().replace("+00:00", "Z")
+    grant: dict[str, Any] = {
+        "grant_id": grant_id,
+        "node_id": str(node_identity.get("node_id")),
+        "node_fingerprint": local_fp,
+        "overlay_ipv4": node_identity.get("overlay_ipv4"),
+        "capabilities": sorted(set(capabilities)),
+        "user_identity": user_identity,
+        "conversation_key": conversation_key,
+        "vault_scope": sorted(set(vault_scope)) if vault_scope else [],
+        "issued_at": stamp,
+        "expires_at": (now + timedelta(minutes=ttl_minutes)).isoformat().replace("+00:00", "Z"),
+        "nonce": nonce,
+        "parent_grant_id": parent_grant_id,
+    }
+    grant["signature_b64"] = sign_bytes(master_private_key, grant_message(grant))
+    return grant
+
+
+def verify_grant(
+    grant: dict[str, Any],
+    *,
+    master_public_key: Ed25519PublicKey,
+    registry: dict[str, Any],
+    node_identity: dict[str, Any] | None,
+    consumed_nonces: set[str] | frozenset[str],
+    now: datetime | None = None,
+) -> Decision:
+    """Decide whether a session grant may be exercised, fail-closed.
+
+    The ordered checks are contracts/identity-schema.json `grant.
+    verification_order`, which restates guard-protocol.md's check order
+    unchanged — there is exactly one ordered verification path, not a second
+    crypto implementation:
+      signature first, then the registry is the ceiling (fingerprint, not
+      revoked, capabilities a subset), then expiry and nonce, then the name the
+      grant carries vs the identity presenting it.
+    """
+    now = now or datetime.now(timezone.utc)
+    if not isinstance(grant, dict):
+        return Decision(False, REASON_GRANT_MALFORMED, "")
+    node_fp = str(grant.get("node_fingerprint") or "")
+    if not re.fullmatch(r"[0-9a-f]{64}", node_fp):
+        return Decision(False, REASON_GRANT_MALFORMED, node_fp)
+
+    # 1. Signature (cheapest decisive disqualifier after shape).
+    try:
+        message = grant_message(grant)
+    except AuthzError:
+        return Decision(False, REASON_GRANT_MALFORMED, node_fp)
+    if not verify_signature(master_public_key, str(grant.get("signature_b64") or ""), message):
+        return Decision(False, REASON_BAD_SIGNATURE, node_fp)
+
+    # 2. The node the grant names must be in the Master-signed registry, and live.
+    entries = registry.get("authorizations")
+    if not isinstance(entries, list):
+        return Decision(False, REASON_GRANT_MALFORMED, node_fp)
+    entry = next((e for e in entries if isinstance(e, dict) and e.get("fingerprint") == node_fp), None)
+    if entry is None:
+        return Decision(False, REASON_GRANT_UNKNOWN_NODE, node_fp)
+    if entry.get("revoked"):
+        return Decision(False, REASON_GRANT_REVOKED, node_fp)
+    stored = entry.get("identity")
+    if not isinstance(stored, dict):
+        return Decision(False, REASON_GRANT_MALFORMED, node_fp)
+    try:
+        stored_match = fingerprint(stored) == node_fp
+    except AuthzError:
+        stored_match = False
+    if not stored_match:
+        return Decision(False, REASON_IDENTITY_MISMATCH, node_fp)
+    # The registry entry itself must be signed under the same key the grant is.
+    if not verify_signature(master_public_key, str(entry.get("signature_b64", "")), authorization_message(entry)):
+        return Decision(False, REASON_BAD_SIGNATURE, node_fp)
+
+    # 3. A grant cannot widen the node: registry capabilities are the ceiling.
+    granted = entry.get("capabilities")
+    if not isinstance(granted, list) or not granted:
+        return Decision(False, REASON_GRANT_MALFORMED, node_fp)
+    want = grant.get("capabilities")
+    if not isinstance(want, list) or not want:
+        return Decision(False, REASON_GRANT_MALFORMED, node_fp)
+    unknown = [c for c in want if c not in KNOWN_CAPABILITIES]
+    if unknown:
+        return Decision(False, REASON_UNKNOWN_CAPABILITY, node_fp)
+    widen = [c for c in want if c not in granted]
+    if widen:
+        return Decision(False, REASON_GRANT_CAPABILITY_WIDEN, node_fp)
+
+    # 4. Validity window, enforced locally — an unreachable issuer cannot
+    #    extend a grant, per identity-schema.json `expires_at.local_enforcement`.
+    expires = _parse_ts(grant.get("expires_at"))
+    issued = _parse_ts(grant.get("issued_at"))
+    if expires is None or now > expires:
+        return Decision(False, REASON_GRANT_EXPIRED, node_fp)
+    if issued is None or now < issued - timedelta(minutes=5):
+        return Decision(False, REASON_GRANT_NOT_YET_VALID, node_fp)
+
+    # 5. Nonce never seen on this node (the ledger is the retention store).
+    if str(grant.get("nonce") or "") in consumed_nonces:
+        return Decision(False, REASON_GRANT_NONCE_REUSED, node_fp)
+
+    # 6. The peer presenting the grant is the peer named in it.
+    if node_identity is not None:
+        try:
+            presenter_fp = fingerprint(node_identity)
+        except AuthzError:
+            return Decision(False, REASON_GRANT_MALFORMED, node_fp)
+        if presenter_fp != node_fp or str(node_identity.get("node_id")) != str(grant.get("node_id")):
+            return Decision(False, REASON_GRANT_NODE_MISMATCH, node_fp)
+
+    return Decision(
+        True,
+        REASON_OK,
+        node_fp,
+        capabilities=sorted(want),
+        overlay_ipv4=grant.get("overlay_ipv4") or stored.get("overlay_ipv4"),
+        identity=stored,
+    )
+
+
 # --- CLI ---------------------------------------------------------------------
 
 
@@ -462,6 +804,50 @@ def _main(argv: list[str] | None = None) -> int:
     sgn.add_argument("--ttl-days", type=int, default=365)
     sgn.add_argument("--out", type=Path, required=True)
 
+    gm = sub.add_parser(
+        "grant-mint",
+        help="MASTER-SIDE: mint a signed session grant offline; no Master needs to be running",
+    )
+    gm.add_argument("--node-identity", type=Path, required=True)
+    gm.add_argument("--master-key", type=Path, required=True)
+    gm.add_argument("--grant-id", required=True)
+    gm.add_argument("--user-identity", required=True)
+    gm.add_argument("--conversation-key", required=True)
+    gm.add_argument("--capabilities", required=True, help="comma-separated subset of what the registry grants the node")
+    gm.add_argument(
+        "--vault-scope",
+        default="",
+        help="comma-separated vault-relative path prefixes; empty means node-level config only, no knowledge access",
+    )
+    gm.add_argument("--ttl-minutes", type=int, default=480)
+    gm.add_argument("--nonce", required=True)
+    gm.add_argument("--parent-grant-id", help="the grant a subagent inherits, when delegating")
+    gm.add_argument(
+        "--registry",
+        type=Path,
+        help="when given, mint refuses to mint a grant that would widen the node",
+    )
+    gm.add_argument("--out", type=Path, required=True)
+
+    gv = sub.add_parser("grant-verify", help="verify a signed session grant fail-closed")
+    gv.add_argument("--grant", type=Path, required=True)
+    gv.add_argument(
+        "--master-pubkey",
+        type=Path,
+        help="the Master public key file; omitted, the key is read from the registry's master_public_key_b64",
+    )
+    gv.add_argument("--registry", type=Path, required=True)
+    gv.add_argument(
+        "--node-identity",
+        type=Path,
+        help="the presenting node's identity; enforces the presenter check (step 6)",
+    )
+    gv.add_argument(
+        "--used-nonces",
+        type=Path,
+        help="file of already-consumed grant nonces, one per line",
+    )
+
     args = parser.parse_args(argv)
 
     if args.cmd == "generate-keypair":
@@ -491,6 +877,53 @@ def _main(argv: list[str] | None = None) -> int:
         args.out.write_text(json.dumps(entry, indent=2) + "\n")
         print(f"wrote {args.out} (fingerprint {entry['fingerprint']})")
         return 0
+
+    if args.cmd == "grant-mint":
+        identity = json.loads(args.node_identity.read_text())
+        grant = mint_grant(
+            node_identity=identity,
+            grant_id=args.grant_id,
+            user_identity=args.user_identity,
+            conversation_key=args.conversation_key,
+            capabilities=[c for c in args.capabilities.split(",") if c],
+            vault_scope=[s for s in args.vault_scope.split(",") if s],
+            ttl_minutes=args.ttl_minutes,
+            nonce=args.nonce,
+            parent_grant_id=args.parent_grant_id,
+            registry=json.loads(args.registry.read_text()) if args.registry else None,
+            master_private_key=load_private_key(args.master_key),
+        )
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(grant, indent=2) + "\n")
+        print(
+            f"wrote grant {args.grant_id} for {grant['node_id']} "
+            f"(fingerprint {grant['node_fingerprint'][:16]}..., expires {grant['expires_at']})"
+        )
+        return 0
+
+    if args.cmd == "grant-verify":
+        grant = json.loads(args.grant.read_text())
+        registry = json.loads(args.registry.read_text())
+        if args.master_pubkey:
+            master_pubkey = load_public_key(args.master_pubkey)
+        else:
+            raw_b64 = str(registry.get("master_public_key_b64") or "")
+            if not raw_b64:
+                raise AuthzError("registry carries no master_public_key_b64 and no --master-pubkey was given")
+            master_pubkey = public_key_from_b64(raw_b64)
+        consumed: set[str] = set()
+        if args.used_nonces and args.used_nonces.is_file():
+            consumed = {line.strip() for line in args.used_nonces.read_text().splitlines() if line.strip()}
+        identity = json.loads(args.node_identity.read_text()) if args.node_identity else None
+        decision = verify_grant(
+            grant,
+            master_public_key=master_pubkey,
+            registry=registry,
+            node_identity=identity,
+            consumed_nonces=consumed,
+        )
+        print(json.dumps(decision.as_dict(), indent=2))
+        return 0 if decision.allowed else 1
 
     return 2
 

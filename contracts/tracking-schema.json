@@ -75,6 +75,13 @@
       "model": {"type": "string", "purpose": "the model that wrote the current body"},
       "approvals": {"type": "array", "items": "approval_id", "purpose": "ledger block ids; every id here must resolve to a block, or the note claims an approval that does not exist"},
       "signature": {"type": "object", "purpose": "the user-key signature over this note; see `signature`"}
+    },
+    "optional_fields": {
+      "grant": {
+        "type": "object",
+        "fields": ["grant_id", "parent_grant_id", "conversation_key", "session", "scope"],
+        "purpose": "the signed session grant that authorised this write (contracts/identity-schema.json `grant`). `session` is the acting child session when a parent grant was delegated, so audit trails to the child while authority traces to the parent. `scope` survives in the note so an offline verifier can see what the grant permitted without re-reading the issuer."
+      }
     }
   },
 
@@ -188,11 +195,19 @@
     "block_signature": "For these blocks the block-level `signature` equals data.signatures.node — the node's countersignature restated where the schema requires a signature. `hash` binds the whole block (including prev_hash and timestamp); data.signatures bind the record so it stays self-contained if copied out of the ledger.",
     "dual_control": "user consent and node countersignature are separate keys. A node that can write the ledger cannot mint user consent; a user key without the node key cannot place a block in the chain.",
     "event_vocabulary": {
-      "peer": ["approval", "report", "share", "inbox_acceptance"],
+      "peer": ["approval", "report", "share", "inbox_acceptance", "grant_use"],
       "master": ["election_outcome", "trust_root_formed", "trust_root_reformed", "trust_level_changed", "signature_issued", "share_ratified"],
       "rule": "the vocabularies are disjoint. `share` records a share this peer made; only a master may ratify one. A peer writing a master event, or the reverse, is a contract break."
     },
     "reports": "A generated export or digest is recorded as data.event = 'report' with the same signatures and a note_refs list naming its inputs, so a report is attributable like a note."
+  },
+
+  "grant": {
+    "authority": "contracts/identity-schema.json `grant` is the source of truth for the signed grant artifact. This section describes only its vault-side consequence.",
+    "where": "a ledger block with data.event = 'grant_use' is appended every time a grant is exercised — an in-scope knowledge write records decision 'granted', an out-of-scope attempt records 'quarantined' and the material lands in the `_raw/` quarantine so nothing is lost and nothing silently lands outside scope.",
+    "verification": "the peer verifies each grant before any write: signature under the registry's master public key, fingerprint in the Master-signed registry and not revoked, capabilities a subset of the registry's, expiry, nonce not previously recorded on this node, then the presenting identity. That is contracts/guard-protocol.md's check order unchanged; contracts/identity-schema.json `grant.verification_order` spells it once.",
+    "nonce_retention": "grant nonces are consumed by the ledger itself: a replayed grant is caught because its nonce already appears in a grant_use block. The ledger therefore retains nonces for the life of the chain, which is at least the longest grant lifetime contracts/identity-schema.json requires.",
+    "audit_finer_than_authority": "authority traces to the grant (and, for a delegation, to parent_grant_id — a subagent inherits its parent's grant unchanged). The ledger records the acting session separately in `session`, so audit is finer than authority."
   },
 
   "secret_index": {

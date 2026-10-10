@@ -9,7 +9,7 @@ of working code will be wrong about a security boundary:
 | Root formation and verification (`shared/sparknet-consensus.py`) | built, unit-tested |
 | Key separation (cluster / operational / identity) | built, unit-tested |
 | **The election itself** — who votes, and how a result becomes a root | **built** (fabric `PLAN.md` Step 11). `shared/sparknet-election.py` is the exchange: `serve` collects bids, ballots and root co-signatures on port 4210 and holds no private key — every signature is made by a member process holding its own cluster key. `peer-node/scripts/sparknet-election-request.sh` and `master-node/scripts/sparknet-election-approve.sh` run the member ceremony for each role. The listener is code, not a deployment: `contracts/ports.json` records 4210 `implemented` with runtime `not-listening` until a host actually runs it. See **Exchange** below. |
-| Re-formation when a member is dropped | **not built**, and unspecified — see below |
+| Re-formation when a member is dropped | **built** (fabric `PLAN.md` Step 21, schema 1.2) — policy B adopted: a chained root with a strict-subset membership, evidenced by a removal proof per dropped member — see below |
 
 The signer that consumes a root is built (`master-node/services/sparknet-signer.py`),
 but it deliberately has no way to make one. A signer pointed at a root that is not
@@ -162,7 +162,7 @@ cluster_trust_root = {
   version, nonce, formed_at,
   members: [ { node_id, fingerprint, wireguard_pubkey, cluster_pubkey } × n ],
   master_node_id, master_pubkey,
-  previous_root_id
+  previous_root_id, epoch
 }
 ```
 
@@ -172,14 +172,24 @@ the empty string for a cluster's first root, the held root's id for a
 re-formation. It is one of the signed fields, so ordering travels inside the
 very thing being ordered; the Re-formation section builds the chain on this.
 
+`epoch` is the signed, clock-free height of the root in its lineage: `0` for a
+genesis root, exactly `parent.epoch + 1` for a chained one. It entered the signed
+fields in schema **1.2**, and `verify_root` checks it on the trust path, so a root
+cannot claim a height it did not earn (a stale root replayed as fresh, or a forged
+forward jump). Because a *reduced* root and its parent share a lineage but not a
+membership, epoch—not `previous_root_id` alone—is what makes "the same lockstep
+again" distinguishable from a genuine next generation.
+
 **The signed-field set is version-aware.** `previous_root_id` entered the signed
-fields in schema 1.1. A **1.0** root (the schema before chained supersession)
-signed the same block *without* it, and such a root is still lawful: it is
-projected with the 1.0 field set, so it keeps verifying against its original
-bytes and keeps its id. A 1.1 root chains to a 1.0 parent by naming that
-parent's 1.0-computed `root_id` as its `previous_root_id` — the upgrade path is a
-forward re-formation, not a fresh election, and it does not void the live pair's
-existing co-signatures.
+fields in schema 1.1 and `epoch` in schema 1.2. A **1.0** root (the schema before
+chained supersession) signed the block *without* `previous_root_id`; a **1.1** root
+signed it *without* `epoch`. Both are still lawful: each is projected with its own
+version's field set, so it keeps verifying against its original bytes and keeps its
+id. A 1.1 root chains to a 1.0 parent by naming that parent's 1.0-computed
+`root_id` as its `previous_root_id`; a 1.2 root chains to a 1.1 parent by naming
+it and taking `epoch = 1` (the older parent is treated as height 0). The upgrade
+path is a forward re-formation, not a fresh election, and it does not void the live
+pair's existing co-signatures.
 
 Peers accept a root only when:
 
@@ -193,12 +203,25 @@ and, on the trust path (a peer that already holds a root), additionally:
 5. it names the held root as `previous_root_id` — it descends from the root in
    force. A well-signed root with a fresh nonce but no lineage is refused as
    `unchained_root`: supersession is a chain, not a free replacement.
+6. its `epoch` is exactly the held root's `epoch + 1` (a 1.2+ root only; a root
+   older than 1.2 predates the field and is treated as height 0). A root whose
+   epoch is not the held root plus one is refused as `unchained_root`.
+7. if its membership is a **strict subset** of the held root's — the reduced case
+   — the dropped set is *exactly* the set its **removal proofs** evidence: one
+   proof per dropped member, and no proof for a member that stays
+   (`missing_removal_proof` / `unexpected_removal_proof`). Each proof is
+   independently signed (see Re-formation), so it authenticates itself and is
+   carried alongside the root, **not** among the signed fields — the signed root
+   stays small and its co-signatures are unaffected by the evidence.
 
 Points 3 and 4 matter more than they look. Without 3, a root could name members
 and be signed by strangers. Without 4, a root could bind a master public key
 that no authority ever recognised. Without 5, a re-formed cluster could be
 replaced by a rival well-signed root that claims no descent, and the ordering
-of two roots would depend entirely on where history happens to live.
+of two roots would depend entirely on where history happens to live. Without 6,
+a stale root could be replayed as a fresh generation. Without 7, a colluding
+survivor majority could silently vanish an honest node and a pure verifier could
+not tell a lawful reduction from a forgery.
 
 The root is self-describing: it carries its own membership, so a peer joining
 later reads the membership from the root rather than from configuration that could
@@ -227,14 +250,16 @@ root already in force is refused as `root_replayed`, and the new root's
 `master_pubkey` is the only one the new root authorises.
 
 **The new root is chained, not free.** Every root carries `previous_root_id`,
-the id of the root it supersedes. On the trust path — a peer that already holds a
-root — `verify_root` refuses any candidate that does not name the held root as
-`previous_root_id`, as `unchained_root`, however well it is signed. This closes
-the old gap in which a pure verifier could not order two different roots: ordering
-is now signed into the root itself, so it survives offline and does not depend on
-where history lives. Membership under the chain may only replace the master or
-*shrink* — a chained root that adds a member is the join ceremony, which is a
-different contract — and may not fall below the cluster minimum of two.
+the id of the root it supersedes, and (from schema 1.2) an `epoch` one above its
+parent's. On the trust path — a peer that already holds a root — `verify_root`
+refuses any candidate that does not name the held root as `previous_root_id`, or
+whose epoch is not the held root's plus one, as `unchained_root`, however well it
+is signed. This closes the old gap in which a pure verifier could not order two
+different roots: ordering is now signed into the root itself, so it survives
+offline and does not depend on where history lives. Membership under the chain may
+only replace the master or *shrink* — a chained root that adds a member is the join
+ceremony, which is a different contract — and may not fall below the cluster
+minimum of two.
 
 **Supersession is still enforced where history lives, as the last line of
 defence.** The ledger records the `root_id` each signature was issued under.
@@ -254,36 +279,40 @@ The pull path is the existing share/registry channel; no new port, no new
 capability. *How far an offline peer may fall behind, and how the lineage is
 fetched, is the mode of exposure to be specified separately.*
 
-**Re-formation is also meant to be the escape from a blocked election.** If
-unanimity cannot be reached, the members that remain form a new root with a new
-membership — dropping the node that would not agree.
+**A reduction must be evidenced.** A chained root whose membership is a strict
+subset of its parent's carries one **removal proof** per dropped member,
+alongside the root (the proofs are independently signed, so they authenticate
+themselves and are not part of the signed root bytes). `verify_root` refuses a
+reduced root unless its dropped set — parent membership minus child membership —
+is *exactly* the set the proofs evidence: a dropped member with no proof is a
+silent eviction (`missing_removal_proof`), and a proof for a member that stays is
+a forged drop record (`unexpected_removal_proof`). Each proof names the parent
+root it belongs to, and two kinds are accepted:
 
-**That escape still does not exist, and the contract stays honest about it.** With
-unanimity required, a root needs every member to sign, so if one member is merely
-*unreachable* — powered off, disk failed, not hostile — the survivors cannot form
-a root either. "Reduce membership by re-formation, with unanimity among the
-survivors" is unsatisfiable: a full cluster losing one member leaves two, a pair
-losing one leaves one, and a lone node is not a cluster. The case where
-re-formation is needed is precisely the case where it is impossible.
-
-This is recorded rather than papered over, because the resolutions are policy
-choices, not implementation details, and each trades something real:
-
-| Option | Threshold after a member is lost | Cost |
+| Kind | Signed by | Meaning |
 |---|---|---|
-| **A** — keep the original count | stays n of n | a single failed disk requires manual recovery from backup. Highest integrity, lowest availability. |
-| **B** — majority to reduce, unanimity to grant | n−1 signatures to form a reduced root, n to form a full one | a Byzantine majority could remove an honest node. Needs a rule preventing colluding nodes from reaching authority. |
-| **C** — a member joins before any drop | unchanged at n of n | requires a join ceremony, which is also unspecified |
+| `revocation` | the **parent** root's elected Master, with its **operational** key | the contract's existing one-signature revoke, made durable as evidence the chain can check. The operator who may already revoke a node unilaterally hands the survivors the proof of it. |
+| `attested` | **every surviving** member, with its **cluster** key | majority-to-reduce (the n−1 survivors consent): a survivor-signed statement that the member is unreachable-and-departed. |
 
-Until one is chosen, the correct statement is: **a cluster cannot survive the
-loss of a member below its minimum of two, by design or by omission.** Everything
-built here — the chain, `verify_chain`, the monotonic `check_not_reverted` — makes
-a *chained, same-membership* re-formation (a master change) a defined, checked act.
-A *reduced*-membership root remains a document this contract does not yet define.
+A lone survivor has no cluster to form (below the minimum of two); it holds only
+the proof — a tombstone — and must re-witness a new member before a root can exist
+again. The floor is not relaxed. This is **option B made concrete**: the threshold
+drops to n−1 only to *reduce*, and only when every survivor signs (or the parent
+Master revokes), while forming a root over a membership still requires unanimity
+among the members of the *new* root. A Byzantine majority cannot silently remove
+an honest node: the removal itself is the very thing every survivor signs.
 
-**Re-formation is not a bypass.** Whatever threshold is chosen, it cannot install a
-Master without unanimity among the members of the *new* root, and a node removed by
-re-formation cannot re-form its way back in on its own.
+**This is the escape from a blocked election.** If a member is unreachable —
+powered off, disk failed, not hostile — the survivors form a new, chained root
+with a strict-subset membership, dropping the missing node, each survivor
+attesting the drop. The unsatisfiable case ("unanimity among survivors" where the
+missing node's signature is required) is resolved by moving the unanimity *down*
+to the survivors and proving the drop, rather than needing the absent node.
+
+**Re-formation is not a bypass.** Whatever the threshold, it cannot install a
+Master without unanimity among the members of the *new* root, and a node removed
+by re-formation cannot re-form its way back in on its own — its cluster key is
+not in the reduced root, and its removal is a signed fact in the chain.
 
 ## Isolation of the operational key
 

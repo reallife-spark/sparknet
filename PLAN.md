@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
-updated: 2026-10-09
-current: 21
+updated: 2026-10-10
+current: done
 ---
 
 # sparknet — Active Plan
@@ -659,7 +659,7 @@ in `GITHUB_PUSH_BLOCKER`.
 
 ## Step 21 — Reduced-membership re-formation (F2) and live cross-node root sync (F3)
 
-- [ ] **Step 21** — Step 16 built the chained-supersession *policy*, the signer's
+- [x] **Step 21** — Step 16 built the chained-supersession *policy*, the signer's
       monotonic adoption and `verify_chain`, but two halves stayed spec-only and
       were recorded as `DoD: confirm: user` on Step 16. Build them here; they are
       cross-role and contract-touching, so they belong at the fabric level.
@@ -688,8 +688,156 @@ in `GITHUB_PUSH_BLOCKER`.
         `keys-check`, `shims-check` green; live deploy to agx64/agx32 is
         `DoD: confirm: user` (operator authorizes it, as with the 2026-10-09
         deploy).
-      - **Status**: not started — spec-only as of Step 16 (`b0126ce`); the live
-        pair currently runs the Step 16 policy without a re-formation exercise.
+      - **Status**: complete 2026-10-10 (build + tests + docs), except live deploy.
+        Chose **option B full** (design-doc shape). Schema bumped to **1.2**:
+        `shared/sparknet-consensus.py` gains the signed `epoch` field, a
+        version-aware signed-field set (1.0 / 1.1 / 1.2 all verify against their
+        original bytes and ids), the removal-proof primitives
+        (`canonical_removal_proof` / `sign_removal_proof` /
+        `verify_removal_proof`, kinds `revocation` and `attested`), and the trust
+        path checks epoch (parent+1) and exact-removal (dropped set ==
+        evidenced set). `shared/sparknet-election.py` threads `previous_root_id`,
+        `epoch` and `removal_proofs` through `build_root` / `ElectionExchange` /
+        `serve` (new `--trust` / `--removal-proofs`), and a `_load_held_root`
+        helper. F2 tests drive a real N→N-1 re-formation through the exchange and
+        the accept path (both refusal directions: named-removed-member,
+        omitted-survivor, missing/extra/wrong-parent/forged proof, wrong epoch,
+        1.1→1.2 migration seam). F3 delivers the re-formed root to a **real peer
+        process** — the shipped `accept` subcommand in its own interpreter with
+        its own `shared/sparknet-consensus.py` — which adopts it and refuses both
+        a rollback to the parent and a stranger fork. Mutation-proven: breaking
+        the chain, subset, removal-proof-completeness or survivor-unanimity guard
+        each makes a named test fail. Docs reconciled: `contracts/consensus-protocol.md`
+        (§Re-formation rewritten to adopted policy B), `contracts/identity-schema.json`
+        (1.2 fields, `epoch`, expanded acceptance rules, `on_blocked_election`),
+        and `master-node/plans/PAIR_REFORMATION_DESIGN.md` (Q1 adopted and built).
+        Gates green: `make test-all` (fabric 700 passed/3 skipped; master 135;
+        peer 352/1; contract 70/1) EXIT=0, `make lint`, `make validate`,
+        `make contract-test`, `make keys-check`, `make shims-check`.
+        **`DoD: confirm: user`** — live deploy of a re-formation to agx64/agx32
+        (operator authorizes it, as with the 2026-10-09 deploy).
+
+## Step 22 — KDE Connect notifications
+
+- [x] **Step 22** — Add a KDE Connect notification plugin that alerts on agent questions, permission prompts, and session idle. The notification surfaces to paired, reachable devices so operators stay aware of prompts without blocking the terminal.
+      - **DoD**: (1) `scripts/plugins/kde-notify.ts` exists with hooks for `tool.execute.before`, `permission.ask`, and `session.idle`; it calls `kdeconnect-cli --ping-msg` via the BunShell API, uses dynamic device discovery via `kdeconnect-cli -a --id-only`, and supports optional env override `SPARKNET_KDE_DEVICES`; it is reachable only through `scripts/plugins/kde-notif.opencode.json` via `OPENCODE_CONFIG` (`make tui`) — **not** through `opencode.json` or `.opencode/plugin*/` auto-discovery, because opencode 1.18.35 hangs when it starts from a role worktree with any plugin in an inherited scope; (2) a guard test in `tests/test_plugin.py` verifies the plugin has all three handlers, uses kdeconnect-cli, hardcodes no secrets or vault paths, uses `.text()` on buffers, calls `.nothrow()`, passes, AND asserts the plugin stays out of every inherited scope plus an integration guard that `opencode agent list` returns from `peer-node/` and `master-node/` (no role-worktree hang); (3) `make lint`, `make validate`, `make keys-check`, `make shims-check`, `make wiki-preflight` and the fabric `tests/` suite green; `make test-all` to be re-run once per build gate (skipped on demand per operator instruction 2026-10-09); (4) manual verification: trigger a question and permission prompt while KDE Connect is running on raxxarMobile + Galaxy Tab A 2016, confirm both devices ping without session blocking.
+      - **Status**: complete 2026-10-10. DoD 1–3 were already in place (plugin + `kde-notif.opencode.json` + `tests/test_plugin.py`, 12 tests); this session closed **DoD 4 live**: both devices — raxxarMobile and Galaxy Tab A 2016 — are now **paired and reachable**, and the plugin's exact path (`kdeconnect-cli -a --id-only` discovery → `kdeconnect-cli -d <id> --ping-msg "sparknet: …"` notify) returned **rc=0 for both** (the Tab's pairing was accepted this session after a host-side `--pair` request). Non-blocking is by construction (`.nothrow()` + a swallowed catch), unit-locked. Gates: `tests/test_plugin.py` 12 passed; `make lint`, `make validate`, `make keys-check`, `make shims-check`, `make wiki-preflight` all rc=0. Cursor 22→23.
+      - **Notes**: notifications fire per-turn ("session complete" = turn yield), notify only when permission resolves to "ask", never block on failures. Root cause of the hang: opencode 1.18.35 busy-loops (~40% CPU, no output) activating a plugin for a nested location; content-independent (even a no-op plugin hangs). The handler paths are proven by the live device notification above (both IDs discovered, both pinged); the `question`/`permission.ask` trigger rides the same `notify()` call.
+
+## Step 23 — Second parallel pair + fresh election (node131/node133)
+
+- [x] **Step 23** — Stand up a second, fully independent sparknet pair from the current working tree and run the full deployment arc (overlay → roster → election → isolated signer → signed registry → bounded proof) on real hosts, without touching the existing live agx64/agx32 cluster.
+      - **DoD**: (1) a `make bundle ROLE=master` archive of the dirty working tree is installed on both fresh hosts under a private install dir (`~/sparknet-cluster2`) with a distinct state dir (`~/.local/state/sparknet/cluster2`); (2) the contract overlay (`wg1`, `10.100.0.1/32`↔`10.100.0.2/32`, userspace `wireguard-go`, listen 51820) handshakes and pings bidirectionally on real NICs; (3) `cluster-members.json` with 2 members (node_id/fingerprint/wireguard_pubkey/cluster_pubkey) and `make -C peer-node validate` green on both; (4) the election forms a 2/2 root with `previous_root_id ""`, node131 as Master, node133 a peer (`not_elected`); (5) a **distinct** system unit `sparknet-master-signer-c2.service` runs against the isolated state dir (root-id == formed root, capabilities `["sign"]`, restart-surviving) while the old `sparknet-master-signer.service` and `/root/…/trust-root.json` (agx64) stay untouched; (6) the isolated signer signs a registry entry for still-peer node133 and the peer verifies it by the root alone, while three master-side escalation refusals hold (loser key, unnamed node, tampered root); (7) node133 reaches the master over `wg1` with granted caps `telemetry,p2p-sync,push-receive` and holds no private Master key; (8) a dated transcript lands in `/mnt/log/` with a confirm-user checklist; the destructive Phase 9 legs are left documented-but-unexecuted, and every host-visible claim is `DoD: confirm: user`.
+      - **Status**: complete 2026-10-10. Executed live on 2026-10-09 (nodes 192.168.178.131/.133) — all phases 0–8 green; transcript `/mnt/log/sparknet-cluster2-2026-10-09.md`. The host-visible checklist (wg1 ping .1↔.2, `sparknet-master-signer-c2.service` active on .131, Phase 9 left unrun) was put to the operator, who could not confirm it directly but **directed 2026-10-10 to treat Step 23 as passed** ("assume all checks for step 23 passed"); the checks were **not independently re-verified** this session. Phase 9 deliberately not executed. This is a proof clone, not a promotion: no existing cluster state was repointed, and the temporary overlay must not run concurrently with the live cluster's `10.100.0.0/24`. Cursor 23→24.
+
+## Step 24 — Signed delegated-compute capability (design proposal)
+
+- [x] **Step 24** — Spec a `compute-serve` capability so a peer can execute a Master-signed compute task over the overlay and return an attested result, without gating a node's own (already-free) local compute.
+      - **DoD**: (1) a design proposal `COMPUTE_CAPABILITY_DESIGN.md` sits at the fabric root (design-proposal status — binds nothing) and states the tension it must resolve: local compute is already free and must **not** be gated, so the capability is `compute-serve` (accept signed delegated work), not `compute`; (2) it specifies the capability's two-place addition (`contracts/capabilities.json` + the hard-coded `KNOWN_CAPABILITIES` in `shared/sparknet-authz.py`, which `tests/test_contracts.py` proves equal), the Master's typed signer op `sign-compute-task` (modelled on `_sign_guard_approval`, never "sign bytes"), the task/result envelopes, the ordered fail-closed verification, the closed operation whitelist, the port decision, lifecycle (nonce/expiry/ledger/revocation), and a worked 2−2 round trip; (3) options considered are recorded with reasons; (4) **nothing is adopted** — no capability added, no port bound, no role changed — and a follow-on adoption plan is named with live deploy `DoD: confirm: user`; (5) `make validate`, `lint`, `contract-test`, `test-all` and the claims/layout suites stay green.
+      - **Status**: complete 2026-10-10 as a **design proposal** (spec written 2026-10-09, mirrors Step 17's status). `COMPUTE_CAPABILITY_DESIGN.md` at the fabric root carries all DoD sections (capability, `sign-compute-task` signer op, task/result envelopes, ordered fail-closed verification, closed operation whitelist, port decision, lifecycle, a worked 2−2 round trip, options considered, adoption plan). **Nothing is adopted**: `compute-serve` is absent from `contracts/capabilities.json` and `KNOWN_CAPABILITIES` (verified), the closed vocabulary is `telemetry, p2p-sync, push-receive, guard-apply, cluster-vote, cluster-dispatch, cluster-serve`, and no port or role changed. Adoption is a separate commit with live deploy `DoD: confirm: user`. Cursor 23→24.
+
+## Step 25 — Cluster inference design + reserved vocabulary (design proposal)
+
+- [x] **Step 25** — Spec the `sparknet-cluster` prompt: every node runs its own
+      model + Open WebUI, a prompt can be sent to a chosen node or fanned out to
+      the whole cluster, cluster jobs retrieve from the Master's shared vector DB
+      while local prompts use the local vault, and jobs are recorded in the
+      initiator's and Master's sessions.
+      - **DoD**: (1) `CLUSTER_INFERENCE_DESIGN.md` sits at the fabric root
+        (design-proposal status, precedent = `MCP_A2A_DESIGN.md` and
+        `COMPUTE_CAPABILITY_DESIGN.md`) and specifies the `sparknet.cluster-job`
+        / `cluster-result` envelopes, the four division modes
+        (`decompose`/`shard`/`best_of_n`/`mixture`), the reduce/contribution-map
+        re-forming rule, the mode-dependent authority (Master-ratified at n≥3,
+        direct signed initiator at n=2), the local-vs-shared knowledge split, the
+        Open WebUI cluster interface, session recording on initiator + Master +
+        participants, Docker packaging, and the security boundary (inference
+        auto-executes; actions stay guard/PPE-gated); (2) the two capability
+        **names** `cluster-dispatch` / `cluster-serve` are reserved in both
+        places (`contracts/capabilities.json` + the hard-coded
+        `KNOWN_CAPABILITIES` in `shared/sparknet-authz.py`) with `cluster-serve`
+        as the second `sensitive: true` capability after `guard-apply`; (3)
+        options considered are recorded with reasons (no multicast bus, no
+        Master-run remote execution, no tensor-parallel sharding in v1, no vector
+        DB replication); (4) **nothing beyond the vocabulary names is adopted** —
+        no port, service, signer op or role changed — and the adoption plan names
+        each follow-on with live deploy `DoD: confirm: user`; (5) `make
+        contract-test`, `make validate`, `tests/test_layout.py` and
+        `tests/test_claims.py` stay green.
+      - **Status**: complete 2026-10-10 as a **design proposal + reserved
+        vocabulary** (spec written 2026-10-09). `CLUSTER_INFERENCE_DESIGN.md` at
+        the fabric root carries all DoD sections (job/result envelopes, the four
+        division modes, the re-forming rule, mode-dependent authority, the
+        local-vs-shared knowledge split, the Open WebUI interface, session
+        recording, Docker packaging, the inference-auto-executes/actions-guarded
+        boundary, options, adoption plan). The two capability names are reserved
+        in **both** places — `cluster-dispatch` and `cluster-serve` in
+        `contracts/capabilities.json` (`cluster-serve` the second
+        `sensitive: true` after `guard-apply`) and in the hard-coded
+        `KNOWN_CAPABILITIES` in `shared/sparknet-authz.py` (verified) — inert
+        until the Master signs a registry entry carrying them. The envelopes,
+        services, ports and role behaviour are **not** adopted; the typed
+        `sign-cluster-job` signer op and the node AI stack are the separately
+        adopted increments (Steps 26 and 27). Adoption of the remainder rides the
+        design's "Where this lands" list, each in its own commit with live deploy
+        `DoD: confirm: user`. Cursor 24→25.
+
+## Step 26 — Typed `sign-cluster-job` signer operation
+
+- [x] **Step 26** — Build the typed signer operation a cluster job is ratified
+      with, and its single canonical projection in `shared/`, so the signer and
+      the future verifier cannot drift the way `sign-guard-approval` and the
+      guard did.
+      - **DoD**: (1) `shared/sparknet-authz.py` gains `CLUSTER_JOB_MODES`,
+        `CLUSTER_JOB_FIELDS`, `CLUSTER_JOB_REQUIRED`, `cluster_job_message()`
+        and `is_expired()` as the *one* canonicalisation of a job — a fixed
+        field projection (sort_keys + tight separators), refusing a missing
+        required field, an unknown mode and an empty partition, and
+        fail-closing an unparseable expiry; (2) `master-node/services/sparknet-signer.py`
+        answers the typed `sign-cluster-job` op (added to `SIGN_OPERATIONS`,
+        modelled on `_sign_guard_approval`), rebuilds the canonical envelope
+        itself and never signs caller-supplied bytes, refuses a missing job /
+        missing fields / empty partition / unknown mode / expired-or-unparseable
+        expiry, discards a caller-supplied signature, and records the signature
+        to the ledger; (3) `master-node/tests/test_signer_isolation.py` proves
+        the signature verifies over the canonical projection, that changing a
+        `subtask` invalidates it, and each refusal; (4) `CLUSTER_INFERENCE_DESIGN.md`
+        records the op + projection as the second adopted increment; (5) gates
+        green: `make contract-test`, `make validate`, `make lint` and the master
+        signer suite.
+      - **Status**: complete 2026-10-09. Adopted increment of the Step 25 design.
+        The op has **no caller yet** — it is the instrument the later cluster
+        client/reducer (design step 5) will use; nothing is dispatched by it and
+        no capability is granted by it. Cursor stays `22` (Step 22 still open).
+
+## Step 27 — Node AI stack (design item 3, slice A: own inference, declared)
+
+- [x] **Step 27** — The peer node's own AI stack as committed config, the
+      peer-side slice of the cluster design: every node runs its own model
+      server and its own chat surface, and the stack must not be able to reach
+      authority.
+      - **DoD**: (1) `peer-node/configs/ai-stack/docker-compose.yml` declares
+        exactly `ollama` (`:11434`, OpenAI-compatible at `/v1`) and
+        `open-webui` (`:8080`, `OLLAMA_BASE_URL` = the compose service
+        `http://ollama:11434`, `RAG_INGESTION_ENABLED=false`, `WEBUI_AUTH=true`,
+        signup disabled), both bound to `127.0.0.1` only, no GPU declared, the
+        vault named as the only knowledge base; (2) `peer-node/manifests/ai-stack.json`
+        declares the bound claims (loopback-only, own-server-only, no authority,
+        no key/signer/`SPARKNET_STATE_DIR` mount) and
+        `peer-node/tests/test_node_ai_stack.py` asserts them read off the files;
+        (3) `make ai-stack-config` validates via `docker compose config
+        --quiet` with no images pulled; (4) `make contract-test`, `validate`,
+        `lint`, the peer suite (215 passed/1 skipped) and `make bundle-verify
+        ROLE=peer` stay green with `configs/ai-stack/` and the test bundled; (5)
+        task ingress is deferred to design item 5 (cluster client + reducer) and
+        recorded, not silently dropped; (6) the running healthcheck (pull/run on
+        a target node, both surfaces answer with no GPU) stays
+        `DoD: confirm: user` and nothing is claimed as live.
+      - **Status**: complete 2026-10-10 for the composed/declared slice,
+        mirroring the admin-surface pattern (`master-node/configs/admin-surface`
+        + `manifests/admin-surface.json`). Declared, not deployed — no image
+        pulled, nothing binds 11434/8080. Tracks peer PLAN Step 9; cursor stays
+        `22` (Step 22 still open).
 
 ## Next
 
