@@ -1461,6 +1461,20 @@ def consumed_grant_nonces(vault: Path) -> set[str]:
     }
 
 
+def _consumed_except(vault: Path, grant: dict[str, Any], allow_reused_nonce: bool) -> set[str]:
+    """The spent-nonce set, optionally yielding the presenting grant's own nonce.
+
+    The one-shot rule is ``allow_reused_nonce=False``. The session-level
+    ``vault_access: all`` toggle passes ``True`` so a grant the operator made
+    reusable keeps working after its first mutation; no *other* grant's nonce is
+    ever discounted.
+    """
+    consumed = consumed_grant_nonces(vault)
+    if allow_reused_nonce:
+        consumed.discard(str(grant.get("nonce") or ""))
+    return consumed
+
+
 def build_grant_use_data(
     *,
     vault: Path,
@@ -1531,6 +1545,7 @@ def write_granted_note(
     agent: str = "grant",
     model: str = "local",
     clock=None,
+    allow_reused_nonce: bool = False,
 ) -> tuple[Path, str, dict[str, Any]]:
     """Write one note under a signed session grant. Fail-closed, in this order.
 
@@ -1572,7 +1587,7 @@ def write_granted_note(
         master_public_key=authz.public_key_from_b64(master_b64),
         registry=registry,
         node_identity=node_identity,
-        consumed_nonces=consumed_grant_nonces(vault),
+        consumed_nonces=_consumed_except(vault, grant, allow_reused_nonce),
         now=(clock or _now)(),
     )
     if not decision.allowed:
@@ -1649,6 +1664,7 @@ def _verified_grant(
     node_identity: dict[str, Any],
     session: str,
     clock=None,
+    allow_reused_nonce: bool = False,
 ) -> tuple[dict[str, Any], Any]:
     """The one fail-closed grant ladder every grant-scoped mutation shares.
 
@@ -1658,6 +1674,15 @@ def _verified_grant(
     walks identity-schema.json `grant.verification_order` with this node's
     ledger as the nonce store. A mutation that skipped one step of this ladder
     would be the second authority the fabric forbids.
+
+    ``allow_reused_nonce`` is the session-level "all vault tools" toggle
+    (``vault_access: all``): the *presenting* grant's own nonce is dropped from
+    the consumed set so a grant the operator explicitly made reusable for a
+    session keeps working after its first mutation. Every other grant's nonce
+    stays spent, the signature, registry, expiry, node identity and per-target
+    scope are still checked, and every mutation still appends a grant_use block.
+    The default (``False``) is the one-shot rule; only the bridge's session
+    toggle turns it on, and only for the grant that enabled it.
     """
     authz = _load_authz()
     if not isinstance(session, str) or not session:
@@ -1669,12 +1694,13 @@ def _verified_grant(
     record = parse_user_record(vault)
     if not user_is_filled(record):
         raise ProvenanceError("user record is unfilled; run `make user-init` first")
+    consumed = _consumed_except(vault, grant, allow_reused_nonce)
     decision = authz.verify_grant(
         grant,
         master_public_key=authz.public_key_from_b64(master_b64),
         registry=registry,
         node_identity=node_identity,
-        consumed_nonces=consumed_grant_nonces(vault),
+        consumed_nonces=consumed,
         now=(clock or _now)(),
     )
     if not decision.allowed:
@@ -1705,6 +1731,7 @@ def promote_granted_note(
     agent: str = "grant",
     model: str = "local",
     clock=None,
+    allow_reused_nonce: bool = False,
 ) -> tuple[Path, str, dict[str, Any]]:
     """Move one note to its final place under a signed session grant.
 
@@ -1719,7 +1746,13 @@ def promote_granted_note(
     naming the final place.
     """
     record, _ = _verified_grant(
-        vault, grant, registry=registry, node_identity=node_identity, session=session, clock=clock
+        vault,
+        grant,
+        registry=registry,
+        node_identity=node_identity,
+        session=session,
+        clock=clock,
+        allow_reused_nonce=allow_reused_nonce,
     )
     src = _safe_rel(source)
     dst = _safe_rel(target)
@@ -1775,6 +1808,7 @@ def patch_granted_note(
     agent: str = "grant",
     model: str = "local",
     clock=None,
+    allow_reused_nonce: bool = False,
 ) -> tuple[Path, str, dict[str, Any]]:
     """Edit one note under a signed session grant, re-signing it.
 
@@ -1786,7 +1820,13 @@ def patch_granted_note(
     dual-signed ``grant_use`` block, the same envelope as a capture.
     """
     record, _ = _verified_grant(
-        vault, grant, registry=registry, node_identity=node_identity, session=session, clock=clock
+        vault,
+        grant,
+        registry=registry,
+        node_identity=node_identity,
+        session=session,
+        clock=clock,
+        allow_reused_nonce=allow_reused_nonce,
     )
     rel = _safe_rel(target)
     _target_within_scope(rel, grant, "patch")

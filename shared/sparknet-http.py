@@ -63,7 +63,12 @@ import importlib.util
 import json
 import os
 import sys
-from collections.abc import Callable
+
+try:  # Python 3.9+
+    from collections.abc import Callable
+except ImportError:  # pragma: no cover - Python 3.8
+    from typing import Callable  # noqa: UP035
+
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path

@@ -30,7 +30,12 @@ import hashlib
 import importlib.util
 import json
 import sys
-from collections.abc import Callable
+
+try:  # Python 3.9+
+    from collections.abc import Callable
+except ImportError:  # pragma: no cover - Python 3.8
+    from typing import Callable  # noqa: UP035
+
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path

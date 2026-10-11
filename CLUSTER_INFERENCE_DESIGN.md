@@ -73,16 +73,35 @@ survives a redeploy instead of living in a human's memory.
 
 - `peer-node/configs/ai-stack/docker-compose.yml` (read by
   `peer-node/tests/test_node_ai_stack.py`) — the node's own inference slice of
-  adoption item 3: exactly `ollama` (`:11434`, OpenAI-compatible at `/v1`) and
-  `open-webui` (`:8080`, pointed at `http://ollama:11434` via compose service
-  name, `RAG_INGESTION_ENABLED=false`, `WEBUI_AUTH=true`, signup disabled), both
-  bound to `127.0.0.1` only, no GPU declared (GPU is a host-deployer device
-  reservation, never part of the committed file), `peer-node/manifests/ai-stack.json`
-  declaring the claims and the wiring tests asserting them read off the files.
-  **Declared, not deployed**: no image is pulled and nothing binds 11434/8080;
-  the running healthcheck is `DoD: confirm: user`. Task ingress is deliberately
-  absent here and lands with adoption item 5 (the cluster client + reducer), so
-  nothing in this file can yet be a vector for delegated inference.
+  adoption item 3: the `open-webui` chat surface standing on the node's **infra**
+  `ollama` (`http://host.docker.internal:11434`) and its **infra** ChromaDB
+  (`chromadb:8000` on the shared node network), `WEBUI_AUTH=true`, signup
+  disabled, published on `0.0.0.0:8181:8080`, no GPU declared (GPU is a
+  host-deployer device reservation, never part of the committed file),
+  `peer-node/manifests/ai-stack.json` declaring the claims and the wiring tests
+  asserting them read off the files. **Declared, not deployed**: no image is
+  pulled and nothing binds 8181; the running healthcheck is `DoD: confirm: user`.
+  Task ingress is deliberately absent here and lands with adoption item 5 (the
+  cluster client + reducer), so nothing in this file can yet be a vector for
+  delegated inference.
+
+**Operator decision (2026-10-10) — exposure and RAG.** The initial proposal bound
+the stack to `127.0.0.1` only. The operator instead wants each node's chat
+surface reachable on its LAN and overlay addresses, so the committed port is
+`0.0.0.0:8181`. Binding alone is no longer the confidentiality control, so the
+decision ships **with** a rule: a `SPARKNET-FW` host firewall (`iptables` +
+`ip6tables`) restricts `8181`/`11434`/`18000` to loopback, `192.168.178.0/24`,
+the `10.100.0.0/24` overlay, the Docker bridge subnets and link-local, and drops
+the rest — the fabric stays fully functional while public-internet reach is
+closed. This matters doubly on these hosts: both hold a global IPv6 address and
+`ip6tables` has no Docker chains, so a published port that Docker leaves open on
+v6 must be closed by hand. Two further decisions ride with it: Open WebUI RAG is
+**enabled** but scoped to a **structure-only** corpus (`scripts/sparknet-rag-corpus.py`
+allow-lists contracts, charters, taxonomy and design docs and never the vault's
+personal pages), and the per-session vault-tool toggle
+(`POST /session/:id/vault-access`) lets one grant work repeatedly in a session
+without changing scope, expiry, signature or the per-mutation audit.
+
 
 Reserving a name grants nothing and the signer operation authorises nothing on
 its own. A capability is inert until the Master signs a registry entry that
@@ -311,10 +330,13 @@ anchor sidecar; the stack's compose joins that base when it lands. Currently:
 
 - `ollama` with GPU passthrough, serving on the loopback/local overlay address
   the node chooses.
-- `open-webui`, pointed at that node's own `ollama`, with its built-in RAG store
-  **off** — the vault (local) and the Master's index (cluster) are the only
-  knowledge sources, consistent with the Master admin surface's
-  `RAG_INGESTION_ENABLED: "false"`.
+- `open-webui`, pointed at that node's own `ollama` and its own ChromaDB, with
+  RAG **on** but scoped to a **structure-only** corpus (the vault's own pages are
+  the local knowledge source; the personal pages never reach the vector store),
+  published on `0.0.0.0:8181` behind the `SPARKNET-FW` host firewall. (The Master
+  admin surface keeps its own `RAG_INGESTION_ENABLED: "false"`; the two surfaces
+  differ because they answer different questions — the admin panel is not a
+  knowledge surface.)
 - the **task ingress** that accepts signed subtasks, and the **cluster client**
   the Open WebUI plugin calls.
 

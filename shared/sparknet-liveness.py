@@ -29,7 +29,12 @@ see contracts/health-protocol.md for the full mapping):
 from __future__ import annotations
 
 import threading
-from collections.abc import Callable
+
+try:  # Python 3.9+
+    from collections.abc import Callable
+except ImportError:  # pragma: no cover - Python 3.8
+    from typing import Callable  # noqa: UP035
+
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
