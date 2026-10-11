@@ -4,9 +4,32 @@
 > The plan and its cursor live in `PLAN.md` — this file mirrors it, it does not
 > own it. Per-session detail belongs in `sessions/YYYY-MM-DD.md`.
 
-Updated: 2026-10-10
+Updated: 2026-10-11
 
 ## Standing State
+
+- **Step 12 workspace wired live on both cluster2 nodes (peer PLAN Step 12
+  Phase 1, closed 2026-10-11).** `.131` + `.133` Open WebUI now exposes a
+  complete per-admin surface: `sparknet-structure` KB mirror of the role vault
+  (36 pages, filed into the 8 numbered knowledge directories), 33 skills
+  imported, the dispatch bridge registered as the vault tool server
+  (`config.enable: true`, grant-gated `/v1/openapi.json` = 401 without / 200
+  with grant), default chat model `llama3.2:latest` (chat smoke: `sparknet-ok` /
+  `blue-team-ok`), and `sparknet-vault-provisioner.service` enabled (root,
+  idempotent, synchronous embed). Commits `ab4237e` + `b27f1da`, gates green:
+  397 passed / 1 skipped, lint + contract-test clean, bundle 365 entries /
+  33 skills bundle-verified standalone. **Open WebUI 0.12.0 live nuances now
+  pinned in code**: list endpoints are `{items,total}` envelopes; KB delete is
+  `/knowledge/{id}/delete`; `file/add` blocks content whose hash already exists
+  under a different file_id (`has_duplicate_content`) so rebuilds reuse the
+  global file record by sha256; `process=false` + sync `/retrieval/process/file`
+  kills the background-embed 400 race; `directory_id` is passed at add time;
+  a tool server needs `config.enable` to surface; `/configs/models` posts the
+  full body (`DEFAULT_PINNED_MODELS` is a string). **Known 0.12 bug**: KB delete
+  crashes (`'str' object has no attribute 'get'`, knowledge.py:1743) whenever any
+  model row has non-empty `meta.knowledge` — worked around on `.133` by deleting
+  the fresh per-user model row. Full power-cycle reboot of a node remains a
+  standing user-open item (Step 10 leg).
 
 - **Plan cursor**: root `PLAN.md` **`current: done`** (plan terminal, all steps
   1–27 `[x]`). Step 22 (KDE Connect notifications) closed 2026-10-10: both
