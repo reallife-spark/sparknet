@@ -50,6 +50,7 @@ EXPECTED_TOP_LEVEL = {
     "MCP_A2A_DESIGN.md",
     "COMPUTE_CAPABILITY_DESIGN.md",
     "CLUSTER_INFERENCE_DESIGN.md",
+    "PER_USER_VAULTS_DESIGN.md",
     # per-clone hooks (activated by `make hooks`) — pre-commit runs keys-check
     ".githooks",
     # curated navigation + the daily-update cache. index.md is hand-maintained,

@@ -140,6 +140,46 @@ def test_build_corpus_is_idempotent(tmp_path: Path) -> None:
     assert first == second
 
 
+# --- role charters do not collide ---------------------------------------------
+
+
+def test_role_charters_are_namespaced(tmp_path: Path) -> None:
+    vault = tmp_path / "vault"
+    _write(vault, "AGENTS.md", "root")
+    _write(vault, "peer-node/AGENTS.md", "peer")
+    _write(vault, "master-node/AGENTS.md", "master")
+    _write(vault, "peer-node/PLAN.md", "peer plan")
+    out = tmp_path / "corpus"
+
+    written = {str(p) for p in rag.build_corpus(vault, out)}
+    assert written == {
+        "AGENTS.md",
+        "peer-node__AGENTS.md",
+        "master-node__AGENTS.md",
+        "peer-node__PLAN.md",
+    }
+    assert (out / "peer-node__AGENTS.md").read_text() == "peer"
+    assert (out / "master-node__AGENTS.md").read_text() == "master"
+
+
+def test_the_corpus_has_no_duplicate_basenames(tmp_path: Path) -> None:
+    """Open WebUI flattens filenames, so no two corpus files may share one."""
+    vault = tmp_path / "vault"
+    _write(vault, "AGENTS.md")
+    _write(vault, "MISSION.md")
+    _write(vault, "README.md")
+    _write(vault, "peer-node/AGENTS.md")
+    _write(vault, "peer-node/MISSION.md")
+    _write(vault, "peer-node/README.md")
+    _write(vault, "master-node/AGENTS.md")
+    _write(vault, "master-node/MISSION.md")
+    _write(vault, "master-node/README.md")
+    out = tmp_path / "corpus"
+
+    names = [p.name for p in rag.build_corpus(vault, out)]
+    assert len(names) == len(set(names)), f"duplicate basenames: {names}"
+
+
 # --- the real repository ------------------------------------------------------
 
 

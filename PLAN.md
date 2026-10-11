@@ -1,6 +1,6 @@
 ---
 title: sparknet Plan
-updated: 2026-10-10
+updated: 2026-10-11
 current: done
 ---
 
@@ -872,3 +872,32 @@ wrong conclusion or a false green.
    stale archive from three days earlier and reported success.
 4. **A judgement no machine can make is `DoD: confirm: user`**, never a silent
    pass.
+
+## Step 28 — Per-user knowledge vaults (design) + cross-node admin channel
+
+- [x] **Step 28** — Record the per-user vault design at the fabric root and
+      reserve the cross-role surface it needs: each approved node user gets a
+      private `peer-<user_id>` knowledge-vault copy and an owned KB; the
+      Master's admin supervises all nodes' users/KBs over the fabric's signed
+      transport.
+      - **DoD**: (1) `PER_USER_VAULTS_DESIGN.md` exists at the fabric root and
+        records the three surfaces (peer copy, user KB, `master-<id>`), the
+        knowledge-vault slice rule, the approval trigger, the per-user KB grant
+        shape, and the exclusion list; (2) the design notes the **new
+        capability** the bridge admin channel needs (e.g. `admin-supervise`) as
+        *proposed, not adopted* — nothing in `contracts/` or
+        `shared/sparknet-authz.py` changes in this step; (3) the `master-<id>`
+        rule is recorded as **inactive** (elected-Master + admin signed in; not
+        met by `.131` in the cluster2 pair); (4) `make contract-test` and the
+        fabric suite stay green with only this design doc + plan edits.
+      - **Status**: in progress. Design doc written 2026-10-11; adoption of the
+        capability and the bridge admin route lands in its own commit after the
+        peer provisioner is live.
+
+## Next
+
+The split is the last structural step. After this, roadmap work is role-scoped:
+`master-node/plans/MASTER_BUILD_PLAN.md` for anything the Master must actually
+build, `peer-node/PLAN.md` for the peer. Fabric steps (Steps 10–14 above) are the
+exceptions — work that touches contracts and both roles at once belongs here.
+

@@ -133,17 +133,38 @@ def corpus_entries(vault: Path) -> list[Path]:
     return entries
 
 
+def materialized_path(rel: Path) -> Path:
+    """Return the corpus-relative path a source file is written to.
+
+    Role charter files are namespaced (``peer-node/AGENTS.md`` ->
+    ``peer-node__AGENTS.md``). Open WebUI flattens an ingested file to its
+    basename, so the two roles both shipping ``AGENTS.md``/``MISSION.md``/
+    ``README.md`` would collide in one knowledge base and show as duplicates.
+    The namespaced name keeps both charters distinct without dropping either.
+    """
+    if len(rel.parts) == 2 and rel.parts[0] in ROLES:
+        return Path(f"{rel.parts[0]}__{rel.parts[1]}")
+    return rel
+
+
 def build_corpus(vault: Path, out: Path) -> list[Path]:
-    """Materialize the corpus under ``out``; return the relative paths written."""
+    """Materialize the corpus under ``out``; return the paths written.
+
+    The returned paths are corpus-relative and already namespaced (see
+    ``materialized_path``), so they match what lands on disk.
+    """
     entries = corpus_entries(vault)
     if out.exists():
         shutil.rmtree(out)
+    written: list[Path] = []
     for rel in entries:
-        dest = out / rel
+        dest_rel = materialized_path(rel)
+        dest = out / dest_rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(vault / rel, dest)
-    (out / "INVENTORY.md").write_text(_inventory(entries), encoding="utf-8")
-    return entries
+        written.append(dest_rel)
+    (out / "INVENTORY.md").write_text(_inventory(written), encoding="utf-8")
+    return written
 
 
 def _inventory(entries: list[Path]) -> str:
