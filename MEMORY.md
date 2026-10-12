@@ -129,22 +129,20 @@ Updated: 2026-10-12
   the fresh per-user model row. Full power-cycle reboot of a node remains a
   standing user-open item (Step 10 leg).
 
-- **Plan cursor**: root `PLAN.md` **`current: 29`** (fabric Step 29 — cross-node
-  admin federation — opened 2026-10-12; Phases 0–4 landed as code + signed
-  plumbing, all gates green 2026-10-12; **Phase 5 — the live deploy — was executed
-  live 2026-10-12** (A/B/C/D/E/F verified on the cluster2 pair, including the
-  mutating E legs `approve`/`role`; procedure in
-  `contracts/admin-federation-runbook.md`, whose Phase D note was wrong and is now
-  fixed — bodyless unsigned `POST /admin/*` is **400 malformed**; the pre-Phase-E
-  precondition (provision the peer's `manifests/keys/master-ed25519.pub.b64` from
-  the trust root `master_pubkey`) and the Phase C `ENABLE_LOCAL_WEB_FETCH` note are
-  recorded; every live leg `DoD: confirm: user`**).
-  `peer-node/PLAN.md` **`current: 12`** (node admin
-  agent — code + gates complete, live deploy on cluster2 is `DoD: confirm:
-  user`; the signed cross-node route as fabric Step 29 Phase 2 is now code,
-  live binding still `DoD: confirm: user`).
-  `master-node` `current: 2` (Step 21 master admin console landed as code
-  2026-10-12, cursor unchanged — its DoD's live legs remain). Prior history stays
+- **Plan cursor**: root `PLAN.md` **`current: done`** — fabric Step 29 (cross-node
+  admin federation) was **completed 2026-10-12**: design + Phases 0–4 as code +
+  signed plumbing, then Phase 5 run live on the cluster2 pair (A/B/C/D/E/F with the
+  mutating `approve`/`role` legs and the KDE ping user-confirmed; procedure in
+  `contracts/admin-federation-runbook.md`). F1 + three host-only defects fixed.
+  The fabric roadmap is now **role-scoped** (the plan's “Next”): further work goes
+  to `master-node/plans/MASTER_BUILD_PLAN.md` or `peer-node/PLAN.md`.
+  `peer-node/PLAN.md` **`current: done`** — peer Step 12 (node admin agent) was
+  **completed 2026-10-12**: its live deploy on cluster2 is user-confirmed (agent
+  runs as `raxxar`, webhook + 0600 spool, Master read the feed over `/admin/*`).
+  `master-node` `current: 2` — the master plan cursor stays at Step 2 (open
+  knowledge/contract work); master Step 21 (admin console) landed as code and its
+  **live legs were verified 2026-10-12**, but it is **not closed**: DoD (3) — the
+  admin surface binding `10.100.0.1:8080` — is still open (Step 18's leg). Prior history stays
   durable in `log.md`: the terminal `1–27` plan,
   KDE Connect pairing (Step 22, closed 2026-10-10), Step 21 option-B-full
   re-formation, Steps 23–25 (proof pair / `compute-serve` + cluster-inference

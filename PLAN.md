@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
 updated: 2026-10-12
-current: 29
+current: done
 ---
 
 # sparknet — Active Plan
@@ -896,7 +896,7 @@ wrong conclusion or a false green.
 
 ## Step 29 — Cross-node admin federation (design → build)
 
-- [ ] **Step 29** — Make the Master the one place an administrator signs in and
+- [x] **Step 29** — Make the Master the one place an administrator signs in and
       supervises every node's Open WebUI users, privileges and activity over the
       signed fabric transport, with admin login impossible on a peer.
       - **DoD**: (1) `ADMIN_FEDERATION_DESIGN.md` exists at the fabric root and
@@ -913,28 +913,29 @@ wrong conclusion or a false green.
         the vocabulary rule requires; (4) the live legs (real pending signup,
         Master approval over the overlay, KDE push, no human admin on a peer)
         are `DoD: confirm: user`.
-      - **Status**: in progress. Phases 0–4 landed 2026-10-12 as code + signed
-        plumbing — the design page, compose + admin agent, the capability
+      - **Status**: **complete 2026-10-12** — cursor advanced to `done`; every DoD
+        item verified and the live legs user-confirmed. Phases 0–4 landed as code
+        + signed plumbing — the design page, compose + admin agent, the capability
         adoption (contracts + `shared/` + signer `sign-admin-request` + bridge
         `/admin/*` route, inert until the node's registry grants it), and the
         Master console (`master-node/services/sparknet-admin-console.py`) with
-        its `list_events` event feed and KDE `--ping` push, wired as
-        `make console`. Phase 5 (the live deploy on `.131`/`.133`, incl. the
-        loopback→overlay binding change that turns the overlay-reachable
-        `/admin/*` surface on) remains; every live leg is `DoD: confirm: user`.
-        The Phase 5 procedure is `contracts/admin-federation-runbook.md`
-        (2026-10-12); recon against the live cluster2 trees surfaced **F1** —
-        the binding change is not code-free. **F1 is now fixed in code**: the
-        bridge's plain handler guarded *every* non-loopback source (so the Master
-        could not reach `/admin/*`), and a naive open would have exposed the
-        env-profile-injecting routes. The fix names `LOCAL_ONLY_PREFIXES`
-        (OpenAI/session/vault loopback-only, overlay → `403 not-loopback` before
-        the request is read) and makes `--bind` repeatable so the bridge listens
-        on loopback *and* the overlay address; two regression tests in
-        `peer-node/tests/test_admin_supervise.py`. Host move: the two nodes
-        are now `agx64`=192.168.178.131 (`red-team`) and
-        `agx32`=192.168.178.133 (`blue-team`) on the `192.168.178.0/24` LAN;
-        the old `192.168.10.64`/`192.168.20.32` legs are retired.
+        its `list_events` event feed and KDE `--ping` push, wired as `make
+        console`. Phase 5 ran live on the cluster2 pair (`.131` Master / `.133`
+        peer) via `contracts/admin-federation-runbook.md`: the loopback→overlay
+        binding (F1, fixed in code — `LOCAL_ONLY_PREFIXES` + repeatable `--bind`,
+        regression tests in `peer-node/tests/test_admin_supervise.py`), a real
+        pending signup, the signed `approve`/`role` legs (200, `pending→user`,
+        `user`↔`admin`), the overlay event feed, and a KDE ping the operator
+        confirmed on both devices. Three host-only defects were found and fixed:
+        the agent ran `User=root` so its 0600 spool was unreadable by the
+        `raxxar` bridge; the webhook update used `PATCH` (Open WebUI wants `PUT`);
+        and the console CLI prepended the target node as the first entity field,
+        so `approve`/`role` sent `user_id="<node>"` and the peer refused
+        `USER_NOT_FOUND`. No human admin exists on a peer — its Open WebUI admin
+        is a service account; the Master holds the human one. Host move: the two
+        nodes are `agx64`=192.168.178.131 (`red-team`) and
+        `agx32`=192.168.178.133 (`blue-team`); the old `192.168.10.64`/
+        `192.168.20.32` legs are retired.
       - **Depends on**: Step 28 (per-user vaults + the proposed admin channel).
 
 ## Next
