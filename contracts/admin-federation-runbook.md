@@ -169,6 +169,17 @@ cd /home/raxxar/sparknet-cluster2 && make contract-test   # cross-role contract 
 The agent ingests the peer's own Open WebUI auth events to a 0600 spool and
 registers the webhooks. It holds no signing key and performs no mutation.
 
+**Precondition (found live 2026-10-12):** the peer's Open WebUI rejects any
+non-global URL unless `ENABLE_LOCAL_WEB_FETCH=true`
+(`open_webui/retrieval/web/utils.py` `_assert_addresses_allowed`). The agent
+registers a loopback webhook (`http://127.0.0.1:4130/events`), so without the flag
+`POST /api/v1/webhooks` returns `HTTP 400 The URL you provided is invalid` and the
+agent crash-loops. Set `ENABLE_LOCAL_WEB_FETCH: "true"` on the `sparknet-webui`
+service in `peer-node/configs/ai-stack/docker-compose.yml` and recreate the
+container (it runs `NetworkMode: host`, so the URL is reachable; only validation
+blocks it). This widens the WebUI's RAG web-fetch SSRF guard to allow loopback —
+an explicit operator decision, scoped to the loopback-webhook design.
+
 ```bash
 ssh agx32
 # install the unit + shim (the unit sets SPARKNET_WEBUI, the admin password file,
@@ -188,6 +199,16 @@ The AI stack must already run with signup enabled and pending role
 `DEFAULT_USER_ROLE: "pending"`, `AUDIT_LOG_LEVEL: "METADATA"`). If the compose
 changed in Phase A, recreate the webui container once.
 
+**The agent must run as the NODE's own user** — the same user that runs the
+dispatch bridge (here `raxxar`). The spool is written 0600 under the state dir and
+the bridge reads it to answer `list_events`/`feed`; if the agent runs as `root`
+the spool is `root:0600` and the bridge's read fails `HTTP 500 internal`. The
+committed unit sets `User=raxxar` for exactly this reason (found live 2026-10-12).
+
+The agent re-syncs its webhook on every start with `PUT
+/api/events/webhooks/<id>`; the create path is `POST /api/events/webhooks`
+(Open WebUI `main.py`; a `PATCH` on the id answers `405`).
+
 ## Phase D — expose `/admin/*` over the overlay (after F1)
 
 ```bash
@@ -201,7 +222,9 @@ sudo systemctl restart sparknet-dispatch-bridge.service
 # prove the local personality holds *from the overlay* (run on the Master, agx64):
 ssh agx64
 curl -s -o /dev/null -w '%{http_code}\n' http://10.100.0.2:4096/v1/chat/completions   # expect 403 (not-loopback)
-# and the admin route is NOT refused for being off-loopback (403 bad-signature is fine):
+# and the admin route is NOT refused for being off-loopback — a bodyless unsigned
+# POST reaches the handler as 400 malformed (a signed request is required), never
+# 403 not-loopback (verified live 2026-10-12):
 curl -s -o /dev/null -w '%{http_code}\n' -X POST http://10.100.0.2:4096/admin/list_users
 ```
 
@@ -235,16 +258,79 @@ make -C master-node console ARGS="--registry $REG role node133 <user_id> admin"
 `--dry-run` composes without signing; `--json` emits machine output. The signer
 socket defaults to `$SPARKNET_STATE_DIR/signer/signer.sock` (the cluster2 signer).
 
+**Preconditions (both found live 2026-10-12):**
+
+- The peer's `peer-node/manifests/keys/master-ed25519.pub.b64` must hold the trust
+  root's `master_pubkey` (`jq -r .master_pubkey
+  /home/raxxar/.local/state/sparknet/cluster2/trust-root.json`). If it still holds
+  the repo placeholder `I+8r6I3…`, every admin request fails `403 bad-signature`:
+  the bridge's `_master_public_key()` reads that file, **not** the registry's
+  `master_public_key_b64`. Provision it and the key is re-read per request (no
+  restart needed). (Same defect as 2026-10-07.)
+- Restart `sparknet-master-signer-c2.service` if it predates the current code;
+  otherwise it refuses with `unknown operation 'sign-admin-request'`.
+- Recreating the peer's `sparknet-webui` (Phase C) invalidates the bridge's cached
+  service-account token, so `/admin/*` then answers `401 webui-refused` until
+  `sparknet-dispatch-bridge.service` is restarted (the bridge mints its token once
+  at start). Restart the bridge after any WebUI recreate.
+- The console CLI used to prepend the **target node** as the first entity field, so
+  `approve node133 <id>` sent `user_id: "node133"` and the peer answered `400`
+  `{"detail": "We could not find what you're looking for :/"}` (`USER_NOT_FOUND`) —
+  every `user_id` action failed. Fixed live 2026-10-12: `main()` must call
+  `build_entity(action, args.entity)` (the target is the `spec`, not an entity
+  field). Update the Master's `master-node/services/sparknet-admin-console.py` if
+  it predates that fix.
+
+Note that a bare `feed` (no `--node`) polls **every** registry node, including the
+Master itself (`10.100.0.1:4096`), where no bridge runs → `Connection refused`. Use
+`feed --node node133`, or run a bridge on the Master.
+
 ## Phase F — KDE push
 
+The ping is sent by whatever host runs the console. If the Master *is* the
+operator's own machine with KDE Connect paired, set the device ids (or leave
+unset to discover) and go:
+
 ```bash
-# on the Master, with a paired device:
-export SPARKNET_KDE_DEVICES='<device-id>'   # or leave unset to discover via kdeconnect-cli
-make -C master-node console ARGS="--registry $REG feed --ping"
+# on a Master that itself holds the KDE Connect pairing:
+export SPARKNET_KDE_DEVICES='<id-a>,<id-b>'   # or leave unset to discover via kdeconnect-cli
+make -C master-node console ARGS="--registry $REG feed --node node133 --ping"
 ```
 
 A missing `kdeconnect-cli` is a silent no-op, exactly like
 `scripts/plugins/kde-notify.ts` — never a blocker.
+
+**Headless Master (the cluster2 pair, verified live 2026-10-12).** There the Master
+(`agx64`) has no KDE Connect; the paired devices live on the operator's
+workstation (`raxxar`, `192.168.178.126`). Forward the ping there — an
+`ssh`-to-workstation key, a `raxxar-kde` host alias, and a `kdeconnect-cli` shim
+on the Master that runs the real one inside the operator's session bus
+(`DBUS_SESSION_BUS_ADDRESS`; a non-interactive shell has no session bus):
+
+```bash
+# on the workstation once: authorize the Master's forwarder key
+cat agx64-kde-forwarder.pub >> ~/.ssh/authorized_keys
+
+# on the Master (agx64): host alias + forwarder shim (host-local; not committed)
+cat >> ~/.ssh/config <<'EOF'
+Host raxxar-kde
+    HostName 192.168.178.126
+    User raxxar
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+    BatchMode yes
+EOF
+sudo tee /usr/local/bin/kdeconnect-cli >/dev/null <<'SH'
+#!/bin/sh
+exec ssh -o BatchMode=yes raxxar-kde \
+  "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus /usr/bin/kdeconnect-cli $*"
+SH
+sudo chmod +x /usr/local/bin/kdeconnect-cli
+
+# device ids from the workstation (`kdeconnect-cli -a --id-only` there):
+export SPARKNET_KDE_DEVICES='ca366bd7…,0a45d061…'
+make -C master-node console ARGS="--registry $REG feed --node node133 --ping"   # => "notified": true
+```
 
 ## Live confirm checklist (`DoD: confirm: user`)
 
