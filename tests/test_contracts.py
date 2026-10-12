@@ -125,6 +125,33 @@ def test_guard_apply_is_present_and_marked_sensitive(capabilities: dict):
     assert set(capabilities["definitions"]) == set(capabilities["known_capabilities"])
 
 
+def test_admin_supervise_is_adopted_cross_role(authz: ModuleType, capabilities: dict):
+    """Admin supervision is a Master capability and inert until granted.
+
+    `admin-supervise` is what the signed `/admin/*` route checks for. Its
+    holder is the Master — a peer can never sign an admin request — and a node
+    only honours one once its own registry entry carries the capability, which
+    in practice means a signed grant from the Master. Until then the route must
+    answer `capability_missing`, not execute.
+    """
+    assert "admin-supervise" in authz.KNOWN_CAPABILITIES, (
+        "the shared signing grammar no longer knows admin-supervise"
+    )
+    assert "admin-supervise" in capabilities["known_capabilities"], (
+        "contracts/capabilities.json no longer lists admin-supervise"
+    )
+    definition = capabilities["definitions"]["admin-supervise"]
+    assert definition["holder"] == "master", (
+        "admin-supervise must be a Master-held capability; peers never sign it"
+    )
+    assert definition["sensitive"] is True
+    assert set(authz.ADMIN_REQUEST_ACTIONS), "the admin action vocabulary may not be empty"
+    assert "set_user_role" in authz.ADMIN_REQUEST_ACTIONS
+    assert set(authz.ADMIN_REQUEST_REQUIRED) <= set(authz.ADMIN_REQUEST_FIELDS), (
+        "an admin-request field is required but not projected"
+    )
+
+
 def test_signed_envelope_covers_everything_that_grants_power(identity_schema: dict):
     """`capabilities` and `revoked` must be inside the signature.
 
@@ -653,6 +680,32 @@ GOLDEN_AUTHORIZATION_MESSAGE = (
     b'"issued_at":1760000000,"overlay_ipv4":"10.77.0.11","revoked":false}'
 )
 
+GOLDEN_ADMIN_REQUEST = {
+    "request_id": "admin-req-0001",
+    "master_node_id": "master-fixture-01",
+    "target_node_id": "peer-fixture-01",
+    "target_fingerprint": GOLDEN_FINGERPRINT,
+    "issued_at": 1760000000,
+    "expires_at": 1760000600,
+    "nonce": "nonce-0001",
+    "action": "set_user_role",
+    "user_id": "user-07",
+    "user_email": "ana@example.test",
+    "role": "user",
+    "kb_id": None,
+    "chat_id": None,
+}
+
+GOLDEN_ADMIN_REQUEST_MESSAGE = (
+    b'{"action":"set_user_role","chat_id":null,"conversation_id":null,'
+    b'"expires_at":1760000600,"issued_at":1760000000,"kb_id":null,'
+    b'"master_node_id":"master-fixture-01","nonce":"nonce-0001",'
+    b'"request_id":"admin-req-0001","role":"user",'
+    b'"target_fingerprint":"140e0dc554e18b883922bd5164f576eee0c1d6d08ebf5f7d3c052948257c36c7",'
+    b'"target_node_id":"peer-fixture-01","user_email":"ana@example.test",'
+    b'"user_id":"user-07"}'
+)
+
 
 def test_golden_canonical_bytes(authz: ModuleType):
     """Fields sorted, tight separators, UTF-8 — exactly as the schema declares."""
@@ -688,6 +741,19 @@ def test_golden_authorization_message(authz: ModuleType):
     }
     assert authz.authorization_message(entry) == GOLDEN_AUTHORIZATION_MESSAGE, (
         "the bytes the Master signs changed shape — see above"
+    )
+
+
+def test_golden_admin_request_message(authz: ModuleType):
+    """The admin-request signature scope, pinned.
+
+    This is the envelope the Master signs for an admin action and the peer
+    re-hashes before verifying; a field added or dropped here changes what an
+    existing signature covers without any local test noticing.
+    """
+    assert authz.admin_request_message(GOLDEN_ADMIN_REQUEST) == GOLDEN_ADMIN_REQUEST_MESSAGE, (
+        "the admin-request envelope the Master signs changed shape — this is a "
+        "contract break, not a refactor"
     )
 
 

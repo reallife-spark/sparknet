@@ -65,6 +65,7 @@ KNOWN_CAPABILITIES = frozenset(
         "cluster-vote",
         "cluster-dispatch",
         "cluster-serve",
+        "admin-supervise",
     }
 )
 
@@ -507,6 +508,81 @@ def cluster_job_message(job: dict[str, Any]) -> bytes:
     if not isinstance(subtasks, list) or not subtasks:
         raise AuthzError("cluster job subtasks must be a non-empty list")
     projected = {field: job.get(field) for field in sorted(CLUSTER_JOB_FIELDS)}
+    return json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+# --- admin requests (admin-supervise) -----------------------------------------
+
+
+#: The closed set of administrative actions a Master may ask a peer to perform
+#: against the peer's own Open WebUI. A request naming any other action is
+#: refused rather than guessed at, exactly like CLUSTER_JOB_MODES.
+ADMIN_REQUEST_ACTIONS = (
+    "list_users",
+    "get_user",
+    "approve_user",
+    "set_user_role",
+    "list_knowledge",
+    "get_user_chats",
+)
+
+#: Fields of an admin-request covered by the Master's signature. `request_id` and
+#: `target_fingerprint` are inside the signature for the same reason a registry
+#: entry's `capabilities` is: signing an id alone would let anyone replay one
+#: request's signature against a different node, action or entity. The entity
+#: fields (`user_id`, `user_email`, `role`, `kb_id`, `chat_id`) are projected
+#: too, so altering who/what an approved action targets invalidates the signature.
+ADMIN_REQUEST_FIELDS = (
+    "request_id",
+    "conversation_id",
+    "master_node_id",
+    "target_node_id",
+    "target_fingerprint",
+    "issued_at",
+    "expires_at",
+    "nonce",
+    "action",
+    "user_id",
+    "user_email",
+    "role",
+    "kb_id",
+    "chat_id",
+)
+
+#: Fields a request must carry and fill before it can be canonicalised. The
+#: remaining ADMIN_REQUEST_FIELDS (`conversation_id`, and the entity fields) may
+#: legitimately be absent depending on the action, so they are projected as
+#: null/empty rather than required — the per-action entity requirement is the
+#: peer's to enforce with its execution whitelist.
+ADMIN_REQUEST_REQUIRED = (
+    "request_id",
+    "master_node_id",
+    "target_node_id",
+    "target_fingerprint",
+    "issued_at",
+    "expires_at",
+    "nonce",
+    "action",
+)
+
+
+def admin_request_message(request: dict[str, Any]) -> bytes:
+    """Canonical bytes signed for an admin-request, projected to ADMIN_REQUEST_FIELDS.
+
+    One projection rule, shared by the signer and every peer that executes the
+    request — the same anti-drift pattern as ``cluster_job_message``: a second
+    copy of this rule is exactly how signing and verifying diverged before.
+    """
+    if not isinstance(request, dict):
+        raise AuthzError("admin request must be an object")
+    missing = [f for f in ADMIN_REQUEST_REQUIRED if not request.get(f)]
+    if missing:
+        raise AuthzError(f"admin request missing required field(s): {', '.join(missing)}")
+    if request["action"] not in ADMIN_REQUEST_ACTIONS:
+        raise AuthzError(
+            f"unknown admin action {request['action']!r}; expected one of {', '.join(ADMIN_REQUEST_ACTIONS)}"
+        )
+    projected = {field: request.get(field) for field in sorted(ADMIN_REQUEST_FIELDS)}
     return json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 

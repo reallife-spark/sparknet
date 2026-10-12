@@ -4,9 +4,38 @@
 > The plan and its cursor live in `PLAN.md` — this file mirrors it, it does not
 > own it. Per-session detail belongs in `sessions/YYYY-MM-DD.md`.
 
-Updated: 2026-10-11
+Updated: 2026-10-12
 
 ## Standing State
+
+- **Admin federation open (fabric Step 29 / peer Step 12, opened 2026-10-12).**
+  `ADMIN_FEDERATION_DESIGN.md` at the fabric root records the operator
+  decisions: **signed federation** (Master supervises peers over the signed
+  transport, never a shared WebUI password), **signup+pending** (`ENABLE_SIGNUP`
+  true with `DEFAULT_USER_ROLE=pending`), **console feed + KDE push**, and
+  **successful logins only + full admin control**. The peer's WebUI admin becomes
+  a **machine service account** (password generated at deploy, 0600 site-local,
+  read only by the provisioner + admin agent) — no human admin signin on a peer.
+  `admin-supervise` (holder: master, sensitive) is **reserved and wired
+  cross-role (adopted-in-vocabulary, Phase 2 landed)**: `contracts/capabilities.
+  json` + `shared/sparknet-authz.py` carry it with `admin_request_message()`/
+  `ADMIN_REQUEST_*`; signer gains the typed `sign-admin-request` op; peer bridge
+  gains the `/admin/<action>` route on the plain loopback surface (Master-sig →
+  registry decision → node binding → capability gate → ReplayGuard reused by
+  path → closed action/entity whitelist → executes against the node's own WebUI
+  with the node's own service-account token; inert until the node's own registry
+  grants it). **Phase 1 landed**: ai-stack compose enables signup/pending +
+  `AUDIT_LOG_LEVEL=METADATA`; new `peer-node/services/sparknet-admin-agent.py` (stdlib-only)
+  ingests the node's auth-event webhooks (`auth.signup|login|logout|
+  password_changed`, `user.role_updated`) to a 0600 JSONL spool at
+  `$SPARKNET_STATE_DIR/admin-events/`, and registers them idempotently via
+  `POST /api/events/webhooks`; systemd unit + installer shim + Makefile target;
+  `tests/test_admin_agent.py` (11) + updated ai-stack manifest/tests. Gates:
+  test-all rc=0 (fabric 719/3skip, peer 412/1skip, master 135), lint clean,
+  contract-test, validate, keys-check, shims-check, bundle (368 entries) +
+  bundle-verify rc=0, peer precommit clean. **Phases 3–5 remain unbuilt**
+  (Master console, KDE/live-feed push, live deploy incl. the loopback→overlay
+  binding flip); live signup→pending→approve cycle = `DoD: confirm: user`.
 
 - **Step 12 workspace wired live on both cluster2 nodes (peer PLAN Step 12
   Phase 1, closed 2026-10-11).** `.131` + `.133` Open WebUI now exposes a
@@ -31,40 +60,22 @@ Updated: 2026-10-11
   the fresh per-user model row. Full power-cycle reboot of a node remains a
   standing user-open item (Step 10 leg).
 
-- **Plan cursor**: root `PLAN.md` **`current: done`** (plan terminal, all steps
-  1–27 `[x]`). Step 22 (KDE Connect notifications) closed 2026-10-10: both
-  devices (raxxarMobile + Galaxy Tab A 2016) paired and pinged live rc=0 via the
-  plugin's exact discovery+notify path.
-  **Step 21 (F2 reduced-membership re-formation + F3 live cross-node root sync)
-  closed 2026-10-10** as **option B full** (schema 1.2: signed `epoch`, removal
-  proofs, exact-removal trust path; F3 delivered to a real peer `accept`
-  subprocess; mutation-proven; docs reconciled) — only live deploy is
-  `DoD: confirm: user`. **Steps 23–25 closed 2026-10-10**: Step 23 (node131/133
-  proof pair) on the operator's direction to treat the host-visible checks as
-  passed (not independently re-verified); Steps 24 (`compute-serve` design) and
-  25 (cluster-inference design + reserved vocabulary) as their documentary DoD,
-  verified (`compute-serve` still absent; `cluster-dispatch`/`cluster-serve`
-  reserved in both places). New roadmap work gets a **new** step; this plan is
-  not reused. Step 14 (claims + `--help`)
-  closed 2026-10-08. **Hardening batch (2026-10-09) CLOSED as code and
-  DEPLOYED**: Step 15 `f1b790c` (timeouts + guard fixes), Step 20 `bc518d6`
-  (signer per-client read timeout + serialised key use, mutation-proven),
-  Step 16 `b0126ce` (consensus chained supersession, policy B), Step 17
-  `MCP_A2A_DESIGN.md` (fabric root, design-proposal status — MCP/A2A two
-  layers, unchanged until adopted in its own commit). `49b715a` adds the
-  version-aware 1.0/1.1 root canonical form (deploy precondition — else the
-  live 1.0 root fails the signer's startup `verify_root`);   `7fa03b9` fixes the
-  signer read deadline on Python 3.9 (see the live-signer bullet). **Step 21
-  CLOSED 2026-10-10**: F2 reduced-membership re-formation + F3 live cross-node root
-  sync — the two Step 16 halves that stayed spec-only — are now built as **option
-  B full** (schema 1.2, signed `epoch`, removal proofs, exact-removal trust path),
-  mutation-proven and doc-reconciled; only live deploy is `DoD: confirm: user`. R2 + R5 deferred by decision
-  (one line in `log.md`). **Pushed** this session: `main` at `4e276df` on
-  `origin/main` (`d901c8f..4e276df`), after the remote was corrected — it had
-  drifted to `reallife-spark/SparkNet-Node`, renamed back to
-  `reallife-spark/sparknet` by operator decision. `gh` lives at
-  `~/.local/bin/gh` (authenticated); it is only missing from a non-interactive
-  `PATH`.
+- **Plan cursor**: root `PLAN.md` **`current: 29`** (fabric Step 29 — cross-node
+  admin federation — opened 2026-10-12; Phases 0–2 landed as code +
+  signed plumbing, all gates green 2026-10-12; **Phases 3–5 — Master console,
+  notifications, live deploy — remain; every live leg `DoD: confirm: user`**).
+  `peer-node/PLAN.md` **`current: 12`** (node admin
+  agent — code + gates complete, live deploy on cluster2 is `DoD: confirm:
+  user`; the signed cross-node route as fabric Step 29 Phase 2 is now code,
+  live binding still `DoD: confirm: user`).
+  `master-node` `current: 2` (Step 21 master admin console recorded, not
+  started). Prior history stays durable in `log.md`: the terminal `1–27` plan,
+  KDE Connect pairing (Step 22, closed 2026-10-10), Step 21 option-B-full
+  re-formation, Steps 23–25 (proof pair / `compute-serve` + cluster-inference
+  design docs), Steps 14–16/20 hardening (f1b790c/b0126ce/bc518d6, 49b715a root
+  compat, 7fa03b9 py3.9 fix), and the `4e276df` push (`origin/main` re-pointed
+  `reallife-spark/sparknet`). `gh` lives at `~/.local/bin/gh` (authenticated);
+  PATH note below.
 - **A second, independent pair exists as a proof clone (2026-10-09, fabric
   PLAN Step 23; closed 2026-10-10 on operator direction — see the cursor
   bullet).** `node131` (.131) + `node133` (.133)

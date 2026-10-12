@@ -51,6 +51,7 @@ EXPECTED_TOP_LEVEL = {
     "COMPUTE_CAPABILITY_DESIGN.md",
     "CLUSTER_INFERENCE_DESIGN.md",
     "PER_USER_VAULTS_DESIGN.md",
+    "ADMIN_FEDERATION_DESIGN.md",
     # per-clone hooks (activated by `make hooks`) — pre-commit runs keys-check
     ".githooks",
     # curated navigation + the daily-update cache. index.md is hand-maintained,

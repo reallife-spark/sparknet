@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
-updated: 2026-10-11
-current: done
+updated: 2026-10-12
+current: 29
 ---
 
 # sparknet — Active Plan
@@ -893,6 +893,34 @@ wrong conclusion or a false green.
       - **Status**: in progress. Design doc written 2026-10-11; adoption of the
         capability and the bridge admin route lands in its own commit after the
         peer provisioner is live.
+
+## Step 29 — Cross-node admin federation (design → build)
+
+- [ ] **Step 29** — Make the Master the one place an administrator signs in and
+      supervises every node's Open WebUI users, privileges and activity over the
+      signed fabric transport, with admin login impossible on a peer.
+      - **DoD**: (1) `ADMIN_FEDERATION_DESIGN.md` exists at the fabric root and
+        records the signed-federation architecture, the operator decisions
+        (signed federation; signup+pending; console feed + KDE push; successful
+        logins only + full control), the `admin-supervise` capability as
+        adopted-in-vocabulary, and admin-only-on-master enforcement;
+        (2) Phase 1 lands: the node AI stack enables signup with
+        `DEFAULT_USER_ROLE=pending` and a node-local admin agent
+        (`peer-node/services/sparknet-admin-agent.py`) ingests the Open WebUI
+        auth-event webhooks to a 0600 spool, registered through the node's own
+        admin API; (3) `admin-supervise` adoption (contracts + `shared/` + bridge
+        `/admin/*` + signer `sign-admin-request`) lands in exactly one place as
+        the vocabulary rule requires; (4) the live legs (real pending signup,
+        Master approval over the overlay, KDE push, no human admin on a peer)
+        are `DoD: confirm: user`.
+      - **Status**: in progress. Phases 0–2 landed 2026-10-12 as code + signed
+        plumbing — design page, compose + admin agent, and the capability
+        adoption (contracts + `shared/` + signer `sign-admin-request` + bridge
+        `/admin/*` route, inert until the node's registry grants it). Phases 3–5
+        (Master console, KDE/live-feed notifications, live deploy on `.131`/`.133`
+        incl. the loopback→overlay binding change) remain; every live leg is
+        `DoD: confirm: user`.
+      - **Depends on**: Step 28 (per-user vaults + the proposed admin channel).
 
 ## Next
 

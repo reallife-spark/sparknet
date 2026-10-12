@@ -9,7 +9,8 @@
     "guard-apply",
     "cluster-vote",
     "cluster-dispatch",
-    "cluster-serve"
+    "cluster-serve",
+    "admin-supervise"
   ],
   "definitions": {
     "telemetry": {
@@ -50,6 +51,12 @@
       "holder": "peer",
       "sensitive": true,
       "note": "The second sensitive capability after guard-apply, sensitive in the confidentiality direction rather than the mutation direction: the holder lets delegated inference read its local knowledge and returns the result to the cluster. It generalises the compute-serve proposal (COMPUTE_CAPABILITY_DESIGN.md) from a closed operation whitelist to a signed prompt. A node running its own prompts is not gated by this \u2014 only delegated subtasks are \u2014 and any action a served answer triggers still passes the node's own guard."
+    },
+    "admin-supervise": {
+      "grants": "Submit signed admin-requests that make a peer perform Open WebUI administrative actions (list/approve users, change roles, read chats and Knowledge) against its own setup.",
+      "holder": "master",
+      "sensitive": true,
+      "note": "The cross-node administration capability (ADMIN_FEDERATION_DESIGN.md, fabric PLAN Step 29). holder: master — the authority to *issue* sits with the elected key holder; a peer holding this in its registry entry accepts Master-signed admin-requests in guard-protocol order and executes them against the peer's own Open WebUI with the peer's own service-account token, which never leaves the node. The bridge /admin/* route exists and verifies, but authorises nothing until the real registry carries a signed grant of this capability — the same inert posture as cluster-dispatch."
     }
   },
   "master_capabilities": {
