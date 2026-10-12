@@ -1,8 +1,11 @@
 # Deployment runbook — the real handoff (Step 13: agx64 + agx32)
 
-> Status: **Phase 0–1 complete; handoff being executed.** Routing to both hosts
-> was restored 2026-10-07 (NetworkManager profiles `agx64-link` /
-> `agx32-link` brought the 192.168.10.0/24 and 192.168.20.0/24 legs up), the
+> Status: **Phase 0–1 complete; handoff being executed.** The two nodes were
+> moved onto the `192.168.178.0/24` LAN on 2026-10-12; the old
+> `192.168.10.0/24` / `192.168.20.0/24` legs are retired. `agx64` (Master,
+> hostname `red-team`) is now `192.168.178.131` and `agx32` (peer, hostname
+> `blue-team`) is `192.168.178.133`, both with the `wg1` overlay up
+> (`10.100.0.1/32` ↔ `10.100.0.2/32`). The
 > bundle has shipped to both nodes and been extracted, Python 3.9 venv +
 > `cryptography 50.0.2` are provisioned on both, cluster/operational keys are
 > minted, and `wireguard-go` (userspace, no tegra kernel module) is installed on
@@ -27,7 +30,7 @@ rehearsal would silently fail.
 
 | Rehearsal (one box) | Real nodes (Step 13) |
 |---|---|
-| three node trees under `/tmp/opencode` | **two** physical hosts, `agx64` (192.168.10.64) and `agx32` (192.168.20.32), running as a 2-of-2 **pair** — one is elected Master, the other stays peer. (A three-node cluster stays lawful; Step 13 exercises the pair so that the elevate-to-master path is exactly the 2-of-2 unanimous vote, both peers deciding together.) |
+| three node trees under `/tmp/opencode` | **two** physical hosts, `agx64` (`red-team`, 192.168.178.131) and `agx32` (`blue-team`, 192.168.178.133), running as a 2-of-2 **pair** — one is elected Master, the other stays peer. (A three-node cluster stays lawful; Step 13 exercises the pair so that the elevate-to-master path is exactly the 2-of-2 unanimous vote, both peers deciding together.) |
 | exchange binds `127.0.0.1:4210`, ceremonies loopback | one host runs `serve` bound to its **overlay** address; ceremonies on each node dial `http://<exchange-overlay-ip>:4210` over the WireGuard overlay (`ports.json` 4210: `overlay_only: true`) |
 | cluster keys under `node-X/cluster-keys` in the scratch tree | cluster keys live in each node's **state dir** (`$SPARKNET_STATE_DIR/keys`), 0600, so they are not shipped with or backed up with the vault |
 | signer started as a background process | signer starts via `sparknet-master-signer.service`; the unit's `%h` paths resolve to the system manager's home (`/root` when no `User=` is set — the unit deliberately has none), so the master tree is installed at `/root` with config in `/root/.env` |

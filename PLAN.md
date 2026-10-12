@@ -922,6 +922,15 @@ wrong conclusion or a false green.
         `make console`. Phase 5 (the live deploy on `.131`/`.133`, incl. the
         loopback→overlay binding change that turns the overlay-reachable
         `/admin/*` surface on) remains; every live leg is `DoD: confirm: user`.
+        The Phase 5 procedure is `contracts/admin-federation-runbook.md`
+        (2026-10-12); recon against the live cluster2 trees surfaced **F1** —
+        the binding change is not code-free: the bridge declares no
+        local-personality route class (`loopback_only_routes = ()`), so the
+        overlay bind must land with a route-class change or it exposes the
+        env-profile-injecting routes to the fabric. Host move: the two nodes
+        are now `agx64`=192.168.178.131 (`red-team`) and
+        `agx32`=192.168.178.133 (`blue-team`) on the `192.168.178.0/24` LAN;
+        the old `192.168.10.64`/`192.168.20.32` legs are retired.
       - **Depends on**: Step 28 (per-user vaults + the proposed admin channel).
 
 ## Next

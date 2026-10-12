@@ -18,6 +18,7 @@ the tests then prove both roles still agree.
 | `share-protocol.md` | the peer↔peer sharing regime: offers, share types, the four clocks, trust levels, isolation, evidence |
 | `consensus-protocol.md` | how three nodes agree on who holds the signing key: election, the cluster trust root, re-formation |
 | `deployment-runbook.md` | the operational procedure for bringing the real three-node system up on actual hosts (Step 13): overlay, election, signer unit, registry, rollback |
+| `admin-federation-runbook.md` | the operational procedure for the Phase 5 live deploy of cross-node admin federation (fabric Step 29): hosts/addressing, the route-class binding change, the `admin-supervise` grant, the node agent, the console, the confirm checklist and rollback |
 | `tracking-schema.json` | the numbered vault layout, the per-note tracking block and its signature, the user record, the approval record, the secret index |
 | `provenance-protocol.md` | the narrative behind that schema: the accountability chain, stale-vs-invalid, ledger-only approvals, inbox dispatch policy, secret custody |
 

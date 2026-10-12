@@ -52,7 +52,21 @@ Updated: 2026-10-12
   contract-test, validate, keys-check, shims-check, bundle + bundle-verify rc=0,
   peer precommit clean. **Only Phase 5 remains** (live deploy on `.131`/`.133`
   incl. the loopback→overlay binding flip); live signup→pending→approve cycle =
-  `DoD: confirm: user`.
+  `DoD: confirm: user`. The Phase 5 procedure is
+  `contracts/admin-federation-runbook.md` (written 2026-10-12; registered in
+  `contracts/README.md`). Recon on 2026-10-12 surfaced **F1**: Phase 5 is **not**
+  a binding-only change — the peer bridge hard-codes
+  `server.loopback_only_routes = ()`, so binding it to the overlay as-is exposes
+  the env-profile-injecting OpenAI/session/vault routes to the fabric (violates
+  `ports.json` 4096 + its invariant). The overlay bind must land with a
+  route-class code change (declare the local personality; listen on loopback
+  *and* overlay, never wildcard). The live cluster2 trees predate Phases 1–4
+  (no admin agent, no console) so Phase 5 also ships the code first.
+  **Host move (2026-10-12)**: the two nodes are now on the flat
+  `192.168.178.0/24` LAN — `agx64`=`red-team`=`192.168.178.131` (Master,
+  `wg1 10.100.0.1/32`) and `agx32`=`blue-team`=`192.168.178.133` (peer,
+  `wg1 10.100.0.2/32`). The old `192.168.10.64`/`192.168.20.32` legs are
+  **retired**; `~/.ssh/config` points the aliases at the new IPs.
 
 - **Step 12 workspace wired live on both cluster2 nodes (peer PLAN Step 12
   Phase 1, closed 2026-10-11).** `.131` + `.133` Open WebUI now exposes a
@@ -80,7 +94,8 @@ Updated: 2026-10-12
 - **Plan cursor**: root `PLAN.md` **`current: 29`** (fabric Step 29 — cross-node
   admin federation — opened 2026-10-12; Phases 0–4 landed as code + signed
   plumbing, all gates green 2026-10-12; **only Phase 5 — the live deploy — remains;
-  every live leg `DoD: confirm: user`**).
+  procedure in `contracts/admin-federation-runbook.md` (F1: needs a route-class
+  code change, not just a binding flip); every live leg `DoD: confirm: user`**).
   `peer-node/PLAN.md` **`current: 12`** (node admin
   agent — code + gates complete, live deploy on cluster2 is `DoD: confirm:
   user`; the signed cross-node route as fabric Step 29 Phase 2 is now code,

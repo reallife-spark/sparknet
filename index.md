@@ -47,6 +47,7 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/provenance-protocol.md` | signed note chain and approvals |
 | `contracts/tracking-schema.json` | tracking envelope schema |
 | `contracts/deployment-runbook.md` | phased deployment guide (live on agx64+agx32) |
+| `contracts/admin-federation-runbook.md` | Phase 5 live deploy of cross-node admin federation |
 | `contracts/README.md` | the contract index — what each file governs |
 | `shared/sparknet-authz.py` | the one signing implementation — never copied |
 
