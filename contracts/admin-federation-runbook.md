@@ -51,41 +51,55 @@ deployment binding change, not a code one". Recon against the live cluster2 tree
 on 2026-10-12 shows that is **inaccurate**, and this runbook corrects it. Two
 facts stand in the way:
 
-1. `serve()` in `peer-node/services/sparknet-dispatch-bridge.py` hard-codes
-   `server.loopback_only_routes = ()` — it declares **no** local-personality
-   route class. The shared transport only protects a route that is *named* in
-   `loopback_only_routes` (`shared/sparknet-http.py`, `check_source_policy`).
-   So binding the bridge to the overlay as-is exposes the **entire** surface —
-   including the OpenAI proxy that "injects the user environment profile", and
-   the `/session/`, `/vault/` routes — to every overlay node. That violates the
-   `ports.json` 4096 note ("Local-only by design: it injects the user environment
-   profile, so it must not be exposed") and the invariant "Peer-side listeners
-   that inject local identity or accept mutations stay off the overlay."
+1. The bridge's plain handler (`_plain()` in
+   `peer-node/services/sparknet-dispatch-bridge.py`) enforced its own
+   `_loopback_guard()`, refusing **every** non-loopback source on the *entire*
+   plain surface — `/admin/*` included. As-is, a Master dialling
+   `10.100.0.2:4096/admin/...` over the overlay would be refused `403
+   off-loopback` before the signed ladder is ever reached, so Phase 5 cannot work
+   without a code change.
 2. Binding to a single address (`--bind 10.100.0.2`) drops the loopback listener,
-   so the bridge's own local consumers of port 4096 stop resolving.
+   so the bridge's own local consumers of port 4096 stop resolving. And a naive
+   fix that just opens the whole surface to the overlay exposes the OpenAI proxy
+   that "injects the user environment profile" plus `/session/`, `/vault/` —
+   violating the `ports.json` 4096 note ("Local-only by design: it injects the
+   user environment profile, so it must not be exposed") and the invariant
+   "Peer-side listeners that inject local identity or accept mutations stay off
+   the overlay."
 
 **Required minimal change, landed as code + test before Phase D:**
 
-- Declare the local personality. Add a module constant and use it:
+- Declare the local personality as a named route class and apply it in the plain
+  handler (the server attribute alone is *not* enough, because the plain handler
+  guarded itself):
   ```python
-  OPENAI_LOCAL_ONLY = ("/v1/models", "/v1/chat/completions", "/v1/openapi.json", "/session/", "/vault/")
+  LOCAL_ONLY_PREFIXES = ("/v1/models", "/v1/chat/completions", "/v1/openapi.json", "/session/", "/vault/")
   ...
-  server.loopback_only_routes = OPENAI_LOCAL_ONLY   # was: ()
+  # in Handler._plain(), replace self._loopback_guard():
+  source = bridge.http.source_kind(self.client_address)
+  reason = bridge.http.check_source_policy(path, source, LOCAL_ONLY_PREFIXES)
+  if reason is not None:
+      raise _HttpRequestError(403, reason, f"{path} is loopback-only; caller is from the {source} personality")
   ```
   `/admin/` and the signed `/v1/status` are then reachable from the fabric, and a
   request from an overlay source to any OpenAI/session/vault route is refused
-  `403 not-loopback` **before the request is read**.
+  `403 not-loopback` **before the request is read**. `_configure_server()` also
+  stamps `server.loopback_only_routes = LOCAL_ONLY_PREFIXES` so the shared signed
+  handler agrees (defense-in-depth; the signed routes themselves are unaffected).
 - Listen on **both** loopback and the overlay. Make `--bind` repeatable and run
-  one `ThreadingHTTPServer` per address (sharing one `Bridge`), or run a second
-  loopback listener beside the overlay one. **Never bind a wildcard (`0.0.0.0`)**:
-  that exposes the bridge to the LAN, which is worse than the overlay.
+  one `ThreadingHTTPServer` per address (sharing one `Bridge`). **Never bind a
+  wildcard (`0.0.0.0`)**: that exposes the bridge to the LAN, which is worse than
+  the overlay.
 - Add a regression test: an overlay-source request to `/v1/chat/completions`
   gets `403 not-loopback`; to `/admin/list_events` (bad signature is fine) does
   **not**.
 - Re-bundle so the change ships in Phase A.
 
-Do not skip F1. A runbook that only flips `--bind` ships the environment injector
-to the fabric.
+The F1 fix is **landed** (bridge + `peer-node/tests/test_admin_supervise.py`,
+two new tests). Live on the cluster2 trees it appears with Phase A.
+
+Do not skip F1. A runbook that only flips `--bind` either ships the environment
+injector to the fabric or dead-ends the Master at the source guard.
 
 ## Phase A — land the Phases 1–4 code on both cluster2 trees
 
@@ -184,11 +198,16 @@ sudo systemctl edit --full sparknet-dispatch-bridge.service   # or edit the file
 sudo systemctl daemon-reload
 sudo systemctl restart sparknet-dispatch-bridge.service
 
-# prove the local personality still holds (from the peer itself, both must 403):
-curl -s -o /dev/null -w '%{http_code}\n' http://10.100.0.2:4096/v1/chat/completions   # expect 403
-# and the admin route is NOT refused for being off-loopback (403 capability/bad-sig is fine):
+# prove the local personality holds *from the overlay* (run on the Master, agx64):
+ssh agx64
+curl -s -o /dev/null -w '%{http_code}\n' http://10.100.0.2:4096/v1/chat/completions   # expect 403 (not-loopback)
+# and the admin route is NOT refused for being off-loopback (403 bad-signature is fine):
 curl -s -o /dev/null -w '%{http_code}\n' -X POST http://10.100.0.2:4096/admin/list_users
 ```
+
+A loopback caller (the peer itself) still gets `401 missing-grant` on the local
+routes — that is the correct local behavior, not an overlay refusal. Only an
+overlay source sees `403 not-loopback`.
 
 From any non-overlay host the peer's 4096 must be unreachable; from the Master it
 must be reachable. That difference is the whole point of the overlay binding.

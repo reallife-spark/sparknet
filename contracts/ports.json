@@ -58,7 +58,7 @@
    "protocol": "tcp/http",
    "bound_by": "peer",
    "overlay_only": false,
-   "note": "OpenAI-compatible local proxy routing to domain agent ports. Local-only by design: it injects the user environment profile, so it must not be exposed.",
+   "note": "OpenAI-compatible local proxy routing to domain agent ports. The OpenAI/session/vault route class is local-only by design: it injects the user environment profile, so it stays loopback-only even when the bridge is bound to the overlay (`LOCAL_ONLY_PREFIXES`; an overlay source is refused `403 not-loopback` before the request is read). The `/admin/*` route is the exception: Master-signed, and from fabric Step 29 the one route class the overlay may reach.",
    "implementation_state": "implemented",
    "runtime": "not-listening",
    "runtime_why": "The listener is `peer-node/services/sparknet-dispatch-bridge.py --serve` (bind: localhost, port 4096) serving the signed /v1/status endpoint over shared/sparknet-http.py. Requests are signed with the node's own key from .state/keys; unsigned or stale traffic is refused with a JSON 401. The bridge's bind path is asserted end to end by tests/test_http_transport.py against a real loopback socket, but no daemon holds 4096 open on the development host, and none should be \u2014 `implemented` + `not-listening` is the honest pair: the code exists and binds when invoked.",

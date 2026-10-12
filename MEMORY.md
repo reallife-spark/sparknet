@@ -53,15 +53,20 @@ Updated: 2026-10-12
   peer precommit clean. **Only Phase 5 remains** (live deploy on `.131`/`.133`
   incl. the loopback→overlay binding flip); live signup→pending→approve cycle =
   `DoD: confirm: user`. The Phase 5 procedure is
-  `contracts/admin-federation-runbook.md` (written 2026-10-12; registered in
   `contracts/README.md`). Recon on 2026-10-12 surfaced **F1**: Phase 5 is **not**
-  a binding-only change — the peer bridge hard-codes
-  `server.loopback_only_routes = ()`, so binding it to the overlay as-is exposes
-  the env-profile-injecting OpenAI/session/vault routes to the fabric (violates
-  `ports.json` 4096 + its invariant). The overlay bind must land with a
-  route-class code change (declare the local personality; listen on loopback
-  *and* overlay, never wildcard). The live cluster2 trees predate Phases 1–4
-  (no admin agent, no console) so Phase 5 also ships the code first.
+  a binding-only change — the peer bridge's plain handler guarded *every*
+  non-loopback source (so the Master could not reach `/admin/*`), while a naive
+  open would expose the env-profile-injecting OpenAI/session/vault routes
+  (violates `ports.json` 4096 + its invariant). **F1 fixed in code 2026-10-12**:
+  a named `LOCAL_ONLY_PREFIXES` route class gates the OpenAI/session/vault routes
+  (overlay source → `403 not-loopback` before the request is read) while
+  `/admin/*` stays reachable, and `--bind` is repeatable so the bridge listens on
+  loopback *and* the overlay address (never wildcard); two regression tests in
+  `peer-node/tests/test_admin_supervise.py`. The live cluster2 trees predate
+  Phases 1–4
+  (no admin agent, no console) so Phase 5 also ships the code first. Landing the
+  F1 fix itself: peer tests 437/1skip, `make test-all` rc=0, lint/validate/
+  keys-check/shims-check clean, peer `bundle-verify` rc=0.
   **Host move (2026-10-12)**: the two nodes are now on the flat
   `192.168.178.0/24` LAN — `agx64`=`red-team`=`192.168.178.131` (Master,
   `wg1 10.100.0.1/32`) and `agx32`=`blue-team`=`192.168.178.133` (peer,

@@ -218,7 +218,7 @@ the approval decision is the Master's.
 | 2 | `admin-supervise` in `contracts/` + `shared/`; bridge `/admin/*` route; signer `sign-admin-request`. | `make contract-test`, master parity green. | **landed as code + signed plumbing 2026-10-12**; live legs (Phase 5) still carry the reachability change |
 | 3 | Master admin console; deploy the declared admin surface; service-account enforcement. | console serves; no human admin on peer (DoD: confirm: user). | **landed as code 2026-10-12** (`sparknet-admin-console.py`, `make console`); binding on `10.100.0.1:8080` is the Phase 5 live leg |
 | 4 | KDE Connect + live feed notifications. | plugin path proven against a paired device. | **landed as code 2026-10-12** (`feed --ping`); a real paired-device ping is a Phase 5 live leg |
-| 5 | Live deploy on `.131`/`.133` (turns the overlay-reachable surface on; bridge today binds loopback by design). | `DoD: confirm: user`. | **runbook written 2026-10-12** (`contracts/admin-federation-runbook.md`); live legs open. Recon surfaced **F1**: the binding change alone is unsafe — see below |
+| 5 | Live deploy on `.131`/`.133` (turns the overlay-reachable surface on; bridge today binds loopback by design). | `DoD: confirm: user`. | **runbook written 2026-10-12** (`contracts/admin-federation-runbook.md`); live legs open. Recon surfaced **F1**, now **fixed in code** (route-class source policy + repeatable `--bind`) — see below |
 | 6 | Full gates: `make test-all`, `contract-test`, `lint`, `validate`, `keys-check`, `shims-check`, `bundle-verify`, `precommit`. | green. | re-run whenever a phase lands |
 
 ## Boundaries — what this is not
@@ -239,12 +239,16 @@ code and signed plumbing; only the live legs (Phase 5) — a real signup landing
 `pending`, the Master console approving it over the overlay, a KDE push
 firing, and no human admin login succeeding on a peer — are `DoD: confirm: user`
 on the target nodes. The bridge deliberately binds loopback until Phase 5, and
-Phase 5 is **not** only a binding change: recon on 2026-10-12 (**F1**) found
-`serve()` hard-codes `server.loopback_only_routes = ()`, so binding the bridge to
-the overlay as-is would expose the env-profile-injecting OpenAI/session/vault
-routes to the whole fabric (against `ports.json` 4096 and its invariant). Phase 5
-therefore lands a small route-class code change (declare the local personality
-and listen on loopback *and* overlay) together with the binding flip — the exact
-procedure is `contracts/admin-federation-runbook.md`. As with the rest of this
+Phase 5 is **not** only a binding change: recon on 2026-10-12 (**F1**) found the
+bridge's plain handler (`_plain()`) refused *every* non-loopback source —
+including the Master reaching `/admin/*` — while a naive open to the overlay
+would expose the OpenAI/session/vault routes. **F1 is fixed in code**: a named
+`LOCAL_ONLY_PREFIXES` route class gates the OpenAI/session/vault routes (an
+overlay source gets `403 not-loopback` before the request is read) while
+`/admin/*` stays reachable, and `--bind` is repeatable so the bridge listens on
+loopback *and* the overlay address (never a wildcard). Two regression tests live
+in `peer-node/tests/test_admin_supervise.py`; the live deploy carries the fix
+with Phase A — the exact procedure is `contracts/admin-federation-runbook.md`.
+As with the rest of this
 fabric, committing declarative config proves the topology is coherent, never that
 a deployment held.
