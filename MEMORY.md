@@ -30,12 +30,29 @@ Updated: 2026-10-12
   password_changed`, `user.role_updated`) to a 0600 JSONL spool at
   `$SPARKNET_STATE_DIR/admin-events/`, and registers them idempotently via
   `POST /api/events/webhooks`; systemd unit + installer shim + Makefile target;
-  `tests/test_admin_agent.py` (11) + updated ai-stack manifest/tests. Gates:
-  test-all rc=0 (fabric 719/3skip, peer 412/1skip, master 135), lint clean,
-  contract-test, validate, keys-check, shims-check, bundle (368 entries) +
-  bundle-verify rc=0, peer precommit clean. **Phases 3–5 remain unbuilt**
-  (Master console, KDE/live-feed push, live deploy incl. the loopback→overlay
-  binding flip); live signup→pending→approve cycle = `DoD: confirm: user`.
+  `tests/test_admin_agent.py` (11) + updated ai-stack manifest/tests.
+  **Phases 3–4 landed as code (2026-10-12)**: the closed action vocabulary
+  gained `list_events`, and the peer bridge answers it from the node's own 0600
+  auth-event spool (`ADMIN_LOCAL_ACTIONS`, `_read_admin_events`, `ADMIN_EVENTS_MAX`
+  500) — no WebUI call, no token; `master-node/services/sparknet-admin-console.py`
+  (stdlib-only, wired as `make console`) composes an unsigned `admin-request`
+  (fresh request_id/nonce, 120 s TTL), signs it over the isolated signer's unix
+  socket (`root-id` → `sign-admin-request`), and posts it to
+  `<peer>/admin/<action>`; verbs `users|user|approve|role|knowledge|chats|
+  events|feed`, `--dry-run`, `--json`; target resolution from the registry
+  (`authorizations[]` → overlay_ipv4 → `http://<ip>:4096`); `feed` merges +
+  de-duplicates + time-orders events; `feed --ping` pages KDE devices via
+  `kdeconnect-cli -d <id> --ping-msg` (SPARKNET_KDE_DEVICES or discovery; missing
+  binary = no-op). `master-node/tests/test_admin_console.py` (20) proves compose
+  projects the shared field set, console `REQUIRED_ENTITY` == the peer bridge's
+  `ADMIN_ENTITY_FIELDS` (drift guard vs the peer's own source), the signer
+  round-trip verifies against the shared verifier, dispatch posts to
+  `/admin/<action>` and passes a peer 4xx through, feed dedup, KDE command shape.
+  Gates 2026-10-12: fabric 722/3skip, peer 435/1skip, master 162, lint clean,
+  contract-test, validate, keys-check, shims-check, bundle + bundle-verify rc=0,
+  peer precommit clean. **Only Phase 5 remains** (live deploy on `.131`/`.133`
+  incl. the loopback→overlay binding flip); live signup→pending→approve cycle =
+  `DoD: confirm: user`.
 
 - **Step 12 workspace wired live on both cluster2 nodes (peer PLAN Step 12
   Phase 1, closed 2026-10-11).** `.131` + `.133` Open WebUI now exposes a
@@ -61,15 +78,16 @@ Updated: 2026-10-12
   standing user-open item (Step 10 leg).
 
 - **Plan cursor**: root `PLAN.md` **`current: 29`** (fabric Step 29 — cross-node
-  admin federation — opened 2026-10-12; Phases 0–2 landed as code +
-  signed plumbing, all gates green 2026-10-12; **Phases 3–5 — Master console,
-  notifications, live deploy — remain; every live leg `DoD: confirm: user`**).
+  admin federation — opened 2026-10-12; Phases 0–4 landed as code + signed
+  plumbing, all gates green 2026-10-12; **only Phase 5 — the live deploy — remains;
+  every live leg `DoD: confirm: user`**).
   `peer-node/PLAN.md` **`current: 12`** (node admin
   agent — code + gates complete, live deploy on cluster2 is `DoD: confirm:
   user`; the signed cross-node route as fabric Step 29 Phase 2 is now code,
   live binding still `DoD: confirm: user`).
-  `master-node` `current: 2` (Step 21 master admin console recorded, not
-  started). Prior history stays durable in `log.md`: the terminal `1–27` plan,
+  `master-node` `current: 2` (Step 21 master admin console landed as code
+  2026-10-12, cursor unchanged — its DoD's live legs remain). Prior history stays
+  durable in `log.md`: the terminal `1–27` plan,
   KDE Connect pairing (Step 22, closed 2026-10-10), Step 21 option-B-full
   re-formation, Steps 23–25 (proof pair / `compute-serve` + cluster-inference
   design docs), Steps 14–16/20 hardening (f1b790c/b0126ce/bc518d6, 49b715a root

@@ -515,8 +515,11 @@ def cluster_job_message(job: dict[str, Any]) -> bytes:
 
 
 #: The closed set of administrative actions a Master may ask a peer to perform
-#: against the peer's own Open WebUI. A request naming any other action is
-#: refused rather than guessed at, exactly like CLUSTER_JOB_MODES.
+#: against the peer's own Open WebUI — plus `list_events`, which reads the node's
+#: own auth-event spool (the same 0600 file the node admin agent writes) so the
+#: Master's console can show a live, de-duplicated feed of signups and successful
+#: logins without reading any peer's database. A request naming any other action
+#: is refused rather than guessed at, exactly like CLUSTER_JOB_MODES.
 ADMIN_REQUEST_ACTIONS = (
     "list_users",
     "get_user",
@@ -524,6 +527,7 @@ ADMIN_REQUEST_ACTIONS = (
     "set_user_role",
     "list_knowledge",
     "get_user_chats",
+    "list_events",
 )
 
 #: Fields of an admin-request covered by the Master's signature. `request_id` and

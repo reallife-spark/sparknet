@@ -913,13 +913,15 @@ wrong conclusion or a false green.
         the vocabulary rule requires; (4) the live legs (real pending signup,
         Master approval over the overlay, KDE push, no human admin on a peer)
         are `DoD: confirm: user`.
-      - **Status**: in progress. Phases 0–2 landed 2026-10-12 as code + signed
-        plumbing — design page, compose + admin agent, and the capability
+      - **Status**: in progress. Phases 0–4 landed 2026-10-12 as code + signed
+        plumbing — the design page, compose + admin agent, the capability
         adoption (contracts + `shared/` + signer `sign-admin-request` + bridge
-        `/admin/*` route, inert until the node's registry grants it). Phases 3–5
-        (Master console, KDE/live-feed notifications, live deploy on `.131`/`.133`
-        incl. the loopback→overlay binding change) remain; every live leg is
-        `DoD: confirm: user`.
+        `/admin/*` route, inert until the node's registry grants it), and the
+        Master console (`master-node/services/sparknet-admin-console.py`) with
+        its `list_events` event feed and KDE `--ping` push, wired as
+        `make console`. Phase 5 (the live deploy on `.131`/`.133`, incl. the
+        loopback→overlay binding change that turns the overlay-reachable
+        `/admin/*` surface on) remains; every live leg is `DoD: confirm: user`.
       - **Depends on**: Step 28 (per-user vaults + the proposed admin channel).
 
 ## Next

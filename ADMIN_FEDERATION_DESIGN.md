@@ -1,12 +1,12 @@
 ---
 title: Sparknet admin federation — cross-node administration design
 updated: 2026-10-12
-status: design (adopted: vocabulary + signed transport; console and live deploy open)
+status: design (adopted as code: vocabulary + signed transport + console; live deploy open)
 ---
 
 # Sparknet admin federation
 
-**Adopted in vocabulary and signed transport; console and live deploy open.**
+**Adopted as code through the console; only the live deploy is open.**
 This page records the operator decisions and the build plan for one capability:
 a Master-side administrator who can see and supervise the Open WebUI users,
 privileges and activity of **every node in the fabric**, while nobody can log
@@ -14,9 +14,11 @@ in as an administrator on a peer node. The capability name it needs
 (`admin-supervise`) is **reserved and wired cross-role** (contracts +
 `shared/sparknet-authz.py`, fabric Step 29 phase 2): the Master's signer
 produces signed admin requests and the peer's bridge `/admin/*` route executes
-them, inert until the peer's own registry grants the capability. Phases 3–5
-(the Master console, notifications, and the live deploy that turns the
-overlay-reachable surface on) are still open and listed as unbuilt below.
+them, inert until the peer's own registry grants the capability. Phases 1–4
+(the node agent, the signed transport, and the Master console with its event
+feed and KDE push) are landed as code and tested; only Phase 5 (the live deploy
+that turns the overlay-reachable surface on) is open, and it is the one leg that
+is `DoD: confirm: user` on real hosts.
 
 Related, already-proposed surface: the per-user vaults design in
 [`PER_USER_VAULTS_DESIGN.md`](PER_USER_VAULTS_DESIGN.md) already names the
@@ -146,20 +148,43 @@ executes signed admin requests through this agent's `admin_api_call`/token
 client, so the execution path and the ingest path share one WebUI client and
 the node's service-account token stays on the node.
 
-## Master side — the admin console (Phase 3)
+## Master side — the admin console (Phase 3, landed as code)
 
-The Master's existing admin surface (`10.100.0.1:8080`, declared in
-[`contracts/ports.json`](contracts/ports.json) and
-[`master-node/configs/admin-surface/docker-compose.admin.yml`](master-node/configs/admin-surface/docker-compose.admin.yml))
-gains a console that:
+The console is [`master-node/services/sparknet-admin-console.py`](master-node/services/sparknet-admin-console.py),
+a stdlib-only service wired into the Master's Makefile as `make console`. It
+mirrors the peer bridge's shape rather than inventing a second one: the same
+line-JSON discipline, the same "load the one shared implementation by path"
+rule, and the same refusal vocabulary.
 
-- subscribes to each node's event feed (through the signed `/admin` route),
-  showing a live, de-duplicated view of signups, logins and role changes;
-- lists users across nodes, and can approve/deny, change roles, and inspect each
-  user's Knowledge, models and chats;
-- pages the operator over KDE Connect on signup/login, reusing the pattern in
-  [`scripts/plugins/kde-notify.ts`](scripts/plugins/kde-notify.ts)
-  (`kdeconnect-cli -d <id> --ping-msg`).
+- **Compose → sign → dispatch.** It builds an unsigned `admin-request` with a
+  fresh `request_id`/`nonce` and a short expiry (120 s default), asks the
+  **isolated signer** to sign it over its unix socket (`root-id` then
+  `sign-admin-request`), and posts the signed envelope to
+  `<peer>/admin/<action>`. The console holds **no key**: it can only ask.
+- **Verbs:** `users`, `user`, `approve`, `role`, `knowledge`, `chats`, `events`,
+  and `feed`. `--dry-run` composes without signing; `--json` emits machine output.
+- **Target resolution:** a node id, a fingerprint, or a bare URL. A node id or
+  fingerprint is resolved against the registry copy (`authorizations[]` →
+  `identity.overlay_ipv4` → `http://<ip>:4096`); the console refuses to invent an
+  address. The `request_id`/`target_fingerprint` are inside the signature, so a
+  URL-only target with no registry identity is refused rather than half-bound.
+- **The feed** fans `list_events` over nodes, merges and de-duplicates the
+  records, and time-orders them. `list_events` is the one action answered from
+  the peer's own 0600 auth-event spool rather than its WebUI, so no peer hands
+  over database access to be seen.
+- **KDE push (Phase 4, landed as code):** `--ping` pages paired KDE devices with
+  a feed summary via `kdeconnect-cli -d <id> --ping-msg`, reusing the exact
+  pattern in [`scripts/plugins/kde-notify.ts`](scripts/plugins/kde-notify.ts):
+  devices from `SPARKNET_KDE_DEVICES` or discovered dynamically, and a missing
+  binary is a silent no-op.
+
+`master-node/tests/test_admin_console.py` proves composition projects exactly the
+shared field set, that the console's per-action entity requirements equal the
+peer bridge's (`ADMIN_ENTITY_FIELDS`, asserted against the peer's own source so
+the two cannot drift), that the signer round-trip produces a signature the shared
+verifier accepts, that dispatch posts to `/admin/<action>` and hands a peer's 4xx
+through verbatim, and that the feed de-duplicates and the KDE push is a no-op
+without the binary.
 
 The console is an **admin-plane** surface, not an authority plane: a grant or
 approval still originates at the guard ports and is signed in the isolated
@@ -191,8 +216,8 @@ the approval decision is the Master's.
 | 0 | This design page; fabric `PLAN.md` step; peer and master plan pointers. | `make contract-test`, fabric suite green with only doc + plan edits. | **landed 2026-10-12** |
 | 1 | Compose: signup + `pending` + audit trail; `sparknet-admin-agent.py`; unit + installer; tests. | peer suite green; `--help` contract; relocatable. | **landed 2026-10-12** |
 | 2 | `admin-supervise` in `contracts/` + `shared/`; bridge `/admin/*` route; signer `sign-admin-request`. | `make contract-test`, master parity green. | **landed as code + signed plumbing 2026-10-12**; live legs (Phase 5) still carry the reachability change |
-| 3 | Master admin console; deploy the declared admin surface; service-account enforcement. | console serves; no human admin on peer (DoD: confirm: user). | open |
-| 4 | KDE Connect + live feed notifications. | plugin path proven against a paired device. | open |
+| 3 | Master admin console; deploy the declared admin surface; service-account enforcement. | console serves; no human admin on peer (DoD: confirm: user). | **landed as code 2026-10-12** (`sparknet-admin-console.py`, `make console`); binding on `10.100.0.1:8080` is the Phase 5 live leg |
+| 4 | KDE Connect + live feed notifications. | plugin path proven against a paired device. | **landed as code 2026-10-12** (`feed --ping`); a real paired-device ping is a Phase 5 live leg |
 | 5 | Live deploy on `.131`/`.133` (turns the overlay-reachable surface on; bridge today binds loopback by design). | `DoD: confirm: user`. | open |
 | 6 | Full gates: `make test-all`, `contract-test`, `lint`, `validate`, `keys-check`, `shims-check`, `bundle-verify`, `precommit`. | green. | re-run whenever a phase lands |
 
@@ -209,8 +234,8 @@ the approval decision is the Master's.
 
 ## Honest boundary
 
-Everything above is design until the phases land. Phases 0–2 are landed as
-code and signed plumbing; the live legs (Phase 3–5) — a real signup landing
+Everything above is design until the phases land. Phases 0–4 are landed as
+code and signed plumbing; only the live legs (Phase 5) — a real signup landing
 `pending`, the Master console approving it over the overlay, a KDE push
 firing, and no human admin login succeeding on a peer — are `DoD: confirm: user`
 on the target nodes. The bridge deliberately binds loopback until Phase 5: the

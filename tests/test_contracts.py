@@ -147,6 +147,10 @@ def test_admin_supervise_is_adopted_cross_role(authz: ModuleType, capabilities: 
     assert definition["sensitive"] is True
     assert set(authz.ADMIN_REQUEST_ACTIONS), "the admin action vocabulary may not be empty"
     assert "set_user_role" in authz.ADMIN_REQUEST_ACTIONS
+    assert "list_events" in authz.ADMIN_REQUEST_ACTIONS, (
+        "the console's event feed reads a node's spool through the signed route, "
+        "so list_events must be in the closed action vocabulary"
+    )
     assert set(authz.ADMIN_REQUEST_REQUIRED) <= set(authz.ADMIN_REQUEST_FIELDS), (
         "an admin-request field is required but not projected"
     )
