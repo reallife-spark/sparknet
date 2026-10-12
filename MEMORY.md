@@ -103,8 +103,8 @@ Updated: 2026-10-12
   `user.role_updated`) — after fixing a third live defect: the console CLI
   prepended the target node as the first entity field, so `approve`/`role` sent
   `user_id="node133"` and the peer refused `USER_NOT_FOUND` (fixed
-  `build_entity(action, args.entity)` + a regression test). A throwaway test
-  account remains on the peer as `role: user`. Details in `sessions/2026-10-12.md`.
+  `build_entity(action, args.entity)` + a regression test). The throwaway test
+  account was deleted after verification. Details in `sessions/2026-10-12.md`.
 
 - **Step 12 workspace wired live on both cluster2 nodes (peer PLAN Step 12
   Phase 1, closed 2026-10-11).** `.131` + `.133` Open WebUI now exposes a
