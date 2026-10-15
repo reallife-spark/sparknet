@@ -9,6 +9,7 @@
 #   ./sparknet-node-setup.sh                 # text node: nats vllm compute agent gpu
 #   ./sparknet-node-setup.sh --role master   # also start the control plane (:control)
 #   ./sparknet-node-setup.sh --profiles embed,webui
+#   ./sparknet-node-setup.sh --engine stub   # no GPU: CPU stub engine + sim telemetry
 #   ./sparknet-node-setup.sh up              # build step already done -> just run
 #
 # It writes exactly two host things: the node state under peer-node/.state (keys,
@@ -25,6 +26,7 @@ GOSPARK_DIR="${GOSPARK_DIR:-/mnt/knowledge/goSpark}"
 
 ROLE="${SPARKNET_ROLE:-peer}"
 PROFILES="${SPARK_PROFILES:-}"
+ENGINE="${SPARK_ENGINE:-vllm}"   # vllm (real GPU engine) | stub (CPU-only OpenAI-compatible stub)
 DO_BUILD=1
 ACTION="up"
 
@@ -47,6 +49,7 @@ Actions:
 
 Options:
   --role peer|master   node role (default peer; master also enables the control plane)
+  --engine vllm|stub   model engine (default vllm; stub = CPU-only OpenAI stub, no GPU/model)
   --profiles A,B,C     compose profiles to enable: kv control webui embed rerank audio
   --no-build           skip the bundle + image build (use the existing image)
   --gospark DIR        goSpark checkout (default /mnt/knowledge/goSpark)
@@ -58,6 +61,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     up|build|down|status|logs) ACTION="$1"; shift ;;
     --role)      ROLE="$2"; shift 2 ;;
+    --engine)    ENGINE="$2"; shift 2 ;;
     --profiles)  PROFILES="$2"; shift 2 ;;
     --no-build)  DO_BUILD=0; shift ;;
     --gospark)   GOSPARK_DIR="$2"; shift 2 ;;
@@ -65,6 +69,15 @@ while [ $# -gt 0 ]; do
     *) die "unknown argument: $1 (try --help)" ;;
   esac
 done
+
+case "$ENGINE" in
+  vllm|stub) ;;
+  *) die "--engine must be 'vllm' or 'stub' (got: $ENGINE)" ;;
+esac
+case "$ROLE" in
+  peer|master) ;;
+  *) die "--role must be 'peer' or 'master' (got: $ROLE)" ;;
+esac
 
 # --- preflight ---------------------------------------------------------------
 
@@ -88,7 +101,10 @@ compose() {
   [ "$ROLE" = master ] && pf+=(--profile control)
   local -a ef=()
   [ -f "$ENV_FILE" ] && ef=(--env-file "$ENV_FILE")
-  docker compose -f "$COMPOSE_FILE" "${ef[@]}" "${pf[@]}" "$@"
+  local -a files=(-f "$COMPOSE_FILE")
+  # CPU-only overlay: drops the GPU device reservations and runs the stub engine.
+  [ "$ENGINE" = stub ] && files+=(-f "$REPO/spark.compose.cpu.yml")
+  docker compose "${files[@]}" "${ef[@]}" "${pf[@]}" "$@"
 }
 
 # --- build the node image ----------------------------------------------------
@@ -120,6 +136,10 @@ render_env_file() {
   # One secret for the whole node, shared by compute/agent/control/kvrouter. It
   # lives in the host state dir and is passed to every service through the
   # env-file, so the containers cannot disagree about it.
+  # VLLM_SERVICE_CMD picks the engine the `vllm` service runs: `vllm` (real) or
+  # `vllm-stub` (CPU-only stub) — see --engine.
+  service_cmd="vllm"
+  [ "$ENGINE" = stub ] && service_cmd="vllm-stub"
   secret="$NODE_STATE/sparknet.shared.secret"
   if [ ! -s "$secret" ]; then
     head -c 32 /dev/urandom | base64 | tr -d '\n' > "$secret"
@@ -139,6 +159,7 @@ GOSPARK_DIR=$GOSPARK_DIR
 SPARKNET_IMAGE_TAG=${SPARKNET_IMAGE_TAG:-dev}
 VLLM_BASE=${VLLM_BASE:-nvcr.io/nvidia/vllm:26.04-py3}
 VLLM_MODEL=$model
+VLLM_SERVICE_CMD=$service_cmd
 VLLM_GPU_MEM_UTIL=${VLLM_GPU_MEM_UTIL:-0.85}
 VLLM_MAX_MODEL_LEN=${VLLM_MAX_MODEL_LEN:-65536}
 HF_CACHE_DIR=${HF_CACHE_DIR:-$HOME/.cache/huggingface}
@@ -147,6 +168,22 @@ SPARKNET_BIND_LOCAL=${SPARKNET_BIND_LOCAL:-127.0.0.1}
 EOF
   chmod 600 "$ENV_FILE"
   log "wrote $ENV_FILE (node=$id role=$role overlay=$overlay)"
+}
+
+# Stub engine: write a synthetic GPU fixture so the `gpu` sidecar reports
+# available=true on a host with no driver. Telemetry only, and only ever active
+# together with the CPU overlay (see spark.compose.cpu.yml).
+write_gpu_fixture() {
+  [ "$ENGINE" = stub ] || return 0
+  local out="$NODE_STATE/gpu-sim.json"
+  [ -s "$out" ] && return 0
+  if [ -x "$REPO/scripts/make-gpu-fixture.py" ]; then
+    "$REPO/scripts/make-gpu-fixture.py" -o "$out" >/dev/null
+    chmod 644 "$out"
+    log "wrote synthetic GPU fixture: $out"
+  else
+    warn "scripts/make-gpu-fixture.py missing; gpu sidecar will report unavailable"
+  fi
 }
 
 ensure_vault_env() {
@@ -166,6 +203,7 @@ ensure_vault_env() {
 act_build() {
   stage_bundle
   render_env_file
+  write_gpu_fixture
   ensure_vault_env
   log "building the node image (VLLM_BASE=${VLLM_BASE:-nvcr.io/nvidia/vllm:26.04-py3})"
   compose build
@@ -174,7 +212,8 @@ act_build() {
 act_up() {
   [ "$DO_BUILD" = 1 ] && act_build
   [ -f "$ENV_FILE" ] || { render_env_file; }
-  log "starting services (role=$ROLE profiles=${PROFILES:-none})"
+  write_gpu_fixture
+  log "starting services (role=$ROLE engine=${ENGINE} profiles=${PROFILES:-none})"
   compose up -d
   echo
   log "node up. Endpoints:"
@@ -182,6 +221,10 @@ act_up() {
   printf '    node gateway      http://%s:8080/v1\n' "${SPARKNET_BIND_API:-0.0.0.0}"
   [ "$ROLE" = master ] && printf '    control admin     http://127.0.0.1:8899/admin\n'
   case ",$PROFILES," in *,webui,*) printf '    Open WebUI        http://%s:3000\n' "${SPARKNET_BIND_API:-0.0.0.0}" ;; esac
+  if [ "$ENGINE" = stub ]; then
+    warn "engine=stub: :8000 answers from the CPU stub, not a real model;"
+    warn "the GPU sidecar reads a synthetic fixture (telemetry only)."
+  fi
   cat <<'EOF'
 
 Next steps:

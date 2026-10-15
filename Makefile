@@ -32,6 +32,7 @@ SCOPE ?= fabric
 
 .PHONY: help help-role layout tui validate test test-all test-peer test-master \
         contract-test lint lint-strict format-check shellcheck test-report ci \
+        container-test \
         render render-check sbom sbom-check drift-check \
         devtools chroma-dev chroma-init chroma-inspect \
         chroma-index chroma-query env-init wiki-sync wiki-verify \
@@ -96,6 +97,12 @@ test-peer: ## Run only the peer suite
 
 test-master: ## Run only the master's parity + spec suite
 	@$(MAKE) --no-print-directory -C master-node test
+
+# Opt-in, minutes-long, hardware-free: run the election arc and the CPU-only node
+# graph inside the built node image. Not part of `make ci`; skips cleanly when
+# docker or the image is absent.
+container-test: ## Run the containerised election + CPU-node smoke (needs docker + image)
+	@SPARKNET_CONTAINER_TESTS=1 $(PY) -m pytest tests/test_election_container.py tests/test_cpu_node_smoke.py -q
 
 contract-test: ## Prove the peer role still matches contracts/
 	@$(MAKE) --no-print-directory -C peer-node guard-contract

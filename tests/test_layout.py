@@ -63,6 +63,7 @@ EXPECTED_TOP_LEVEL = {
     # the host bring-up script. They sit at the fabric root because the image
     # build context IS the root (BuildKit named context gospark is separate).
     "spark.docker", "spark-entrypoint.sh", "spark.compose.yml",
+    "spark.compose.cpu.yml",
     "spark-precontext.py", "sparknet-node-setup.sh",
     # per-clone hooks (activated by `make hooks`) — pre-commit runs keys-check
     ".githooks",

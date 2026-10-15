@@ -4,17 +4,28 @@
 > The plan and its cursor live in `PLAN.md` — this file mirrors it, it does not
 > own it. Per-session detail belongs in `sessions/YYYY-MM-DD.md`.
 
-Updated: 2026-10-13
+Updated: 2026-10-15
 
 ## Standing State
 
-- **Review-adoption arc open — root `PLAN.md` `current: 40` (opened 2026-10-13).**
-  Adoption from the `rzfz-ai-service-stack` / `dify` comparison: Steps 37–41
-  (A quality gates, B SSOT→derived artifacts, C release, D structure). **Steps 37
-  (quality gates)**, **38 (one shared module loader)** and **39 (derived
-  artifacts from the SSOT)** are complete; **step 40 (split) is in progress**
-  and release (41) is pending. Decisions: **A3 (type checking) dropped**, **A5
-  (CI) is a local pre-merge gate only**, **C1 (licensing) deferred**. Step 39 deliverables:
+- **Root `PLAN.md` `current: done`** — the `rzfz-ai-service-stack` / `dify`
+  adoption arc (**Steps 37–41**), the DGX-Spark node image (**Step 42**,
+  complete 2026-10-14/15) and the **hardware-free verification harness**
+  (**Step 43**, complete 2026-10-15) are all closed. Step 42 shipped
+  `spark.docker` + `spark.compose.yml` + `spark-entrypoint.sh` +
+  `sparknet-node-setup.sh` + `spark-precontext.py` (vLLM serving the fabric
+  knowledge as chat-template precontext; multimodal opt-in profiles; goSpark
+  built via a BuildKit named context; image `sparknet-spark-node:dev` 19.5 GB;
+  commits `e2ab99b` + `a5a81c3`). Step 43 (2026-10-15) added the opt-in
+  synthetic GPU backend `internal/gputel/sim` and the pure-Go OpenAI-compatible
+  `cmd/stub-vllm`, the `spark.compose.cpu.yml` overlay (`!reset` drops the NVIDIA
+  reservations; `--engine stub`), `scripts/make-gpu-fixture.py` and
+  `scripts/sparknet-election-rehearsal-container.sh`, and `make container-test`; proven live here (rehearsal **51/51**
+  inside the image; CPU graph boots and the gateway answers through the stub;
+  `make ci` all green). **Step 42/43 uncommitted in fabric + goSpark as of
+  2026-10-15 — commit decision pending.** Decisions carried: **A3 (type
+  checking) dropped**, **A5 (CI) is a local pre-merge gate only**, **C1
+  (licensing) deferred**, **D11 (a `shared/sparknet/` package) dropped**. Step 39 deliverables:
   `scripts/sparknet-render.py [--check]` → `contracts/manifest.json` (the JSON
   contract SSOT by sha256 + projected capability/port tables); `make render` /
   `render-check` / `drift-check` (render-check + `wiki-verify` + `contract-test`);

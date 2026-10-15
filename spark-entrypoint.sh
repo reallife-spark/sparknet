@@ -40,6 +40,7 @@ Usage: spark-entrypoint <subcommand> [args...]
 
 Subcommands:
   vllm        serve the configured model with the fabric precontext template
+  vllm-stub   serve a CPU-only OpenAI-compatible stub (no GPU / no model)
   compute     run the Python compute-plane worker (infer / embed)
   kvrouter    run the KV-cache residency index daemon
   agent       run the goSpark node agent (verify signed task, execute, attest)
@@ -276,9 +277,18 @@ cmd_precontext() {
 
 # --- dispatch ----------------------------------------------------------------
 
+# --- vllm stub (CPU-only) -----------------------------------------------------
+cmd_vllm_stub() {
+  local model="${VLLM_MODEL:-Qwen/Qwen2.5-32B-Instruct}"
+  local port="${VLLM_PORT:-8000}"
+  log "vllm-stub serving $model on 0.0.0.0:$port"
+  exec stub-vllm -model "$model" -port "$port" -host 0.0.0.0
+}
+
 case "${1:-help}" in
   --help|-h|help|"") usage; exit 0 ;;
   vllm)       shift; cmd_vllm "$@" ;;
+  vllm-stub)  shift; cmd_vllm_stub "$@" ;;
   compute)    shift; cmd_compute "$@" ;;
   kvrouter)   shift; cmd_kvrouter "$@" ;;
   agent)      shift; cmd_agent "$@" ;;

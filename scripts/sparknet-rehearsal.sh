@@ -45,9 +45,14 @@ case "${1:-}" in
 esac
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PY="$REPO_ROOT/.venv/bin/python"
-ELECTION="$REPO_ROOT/shared/sparknet-election.py"
-SIGNER="$REPO_ROOT/master-node/services/sparknet-signer.py"
+# All three are overridable so the same rehearsal can run inside the node image
+# (scripts/sparknet-election-rehearsal-container.sh): the container supplies its
+# own interpreter and its own copy of the ceremony scripts, and may hand in a
+# pre-built master bundle instead of running `make bundle`.
+PY="${SPARKNET_PYTHON:-$REPO_ROOT/.venv/bin/python}"
+ELECTION="${SPARKNET_ELECTION_PY:-$REPO_ROOT/shared/sparknet-election.py}"
+SIGNER="${SPARKNET_SIGNER_PY:-$REPO_ROOT/master-node/services/sparknet-signer.py}"
+TGZ_OVERRIDE="${SPARKNET_REHEARSAL_TGZ:-}"
 
 WORK="${SPARKNET_REHEARSAL_DIR:-/tmp/opencode/rehearsal}"
 CAND="alpha"
@@ -114,12 +119,20 @@ cleanup() {
 trap cleanup EXIT
 
 step "build a fresh node bundle (the master bundle is the whole node)"
-if make -C "$REPO_ROOT" bundle ROLE=master >/dev/null 2>&1; then
+if [ -n "$TGZ_OVERRIDE" ]; then
+  # Caller (containerised rehearsal) supplies a pre-built master worktree bundle;
+  # the repository tree may be mounted read-only.
+  [ -f "$TGZ_OVERRIDE" ] || { bad "bundle override not found: $TGZ_OVERRIDE"; exit 1; }
+  TGZ="$TGZ_OVERRIDE"
+  ok "using supplied bundle $(basename "$TGZ")"
+elif make -C "$REPO_ROOT" bundle ROLE=master >/dev/null 2>&1; then
   ok "bundle build"
 else
   bad "bundle build"; exit 1
 fi
-TGZ="$(ls -t "$REPO_ROOT"/dist/sparknet-master-worktree-*.tar.gz | head -1)"
+if [ -z "${TGZ:-}" ]; then
+  TGZ="$(ls -t "$REPO_ROOT"/dist/sparknet-master-worktree-*.tar.gz | head -1)"
+fi
 step "extract three node trees from $(basename "$TGZ")"
 mkdir -p "$WORK"
 for n in "${NODES[@]}"; do

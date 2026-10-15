@@ -19,6 +19,7 @@ the tests then prove both roles still agree.
 | `consensus-protocol.md` | how three nodes agree on who holds the signing key: election, the cluster trust root, re-formation |
 | `deployment-runbook.md` | the operational procedure for bringing the real three-node system up on actual hosts (Step 13): overlay, election, signer unit, registry, rollback |
 | `admin-federation-runbook.md` | the operational procedure for the Phase 5 live deploy of cross-node admin federation (fabric Step 29): hosts/addressing, the route-class binding change, the `admin-supervise` grant, the node agent, the console, the confirm checklist and rollback |
+| `spark-node-runbook.md` | the operational procedure for the DGX Spark node image: what is provable without a GPU (CPU stub engine, simulated telemetry, the containerised election rehearsal) and the residual confirm-on-the-Spark list |
 | `tracking-schema.json` | the numbered vault layout, the per-note tracking block and its signature, the user record, the approval record, the secret index |
 | `provenance-protocol.md` | the narrative behind that schema: the accountability chain, stale-vs-invalid, ledger-only approvals, inbox dispatch policy, secret custody |
 | `proposal-schema.json` | the cross-user proposal workflow: the proposal/review/decision records, the draft→submitted→reviewed→decided lifecycle, and what a verified chain verifies |

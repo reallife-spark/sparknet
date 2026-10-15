@@ -50,6 +50,7 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/proposal-protocol.md` | the narrative behind the proposal workflow: fail-closed transitions, inline keys, why a verified chain is not an authority to write |
 | `contracts/deployment-runbook.md` | phased deployment guide (live on agx64+agx32) |
 | `contracts/admin-federation-runbook.md` | Phase 5 live deploy of cross-node admin federation |
+| `contracts/spark-node-runbook.md` | DGX Spark node image: CPU smoke, simulated telemetry, containerised election today; the confirm-on-the-Spark list |
 | `contracts/README.md` | the contract index — what each file governs |
 | `contracts/manifest.json` | generated inventory of the contract SSOT (capabilities, ports, per-file hashes) |
 | `shared/sparknet-authz.py` | the one signing implementation — never copied |

@@ -1516,5 +1516,50 @@ and has no forge on a node, so there is nowhere a workflow file would ever run.
         separate ceremony (`contracts/deployment-runbook.md`) and is not part of
         this step.
 
+### Step 43 — Hardware-free verification harness (GPU telemetry + election) — complete 2026-10-15
+
+- [x] **Step 43** — Shrink Step 42's residual `DoD: confirm: user` to the physics
+  that genuinely needs a Spark, by making the blocked legs runnable on any host:
+  an opt-in synthetic GPU backend, a CPU OpenAI-compatible engine stub, and the
+  election arc run *inside the built image*.
+      - **DoD**: (1) an opt-in sim GPU collector exists in goSpark and is never
+        on by default; (2) a CPU engine stub brings the whole node graph up
+        without a GPU and the agent↔vLLM↔compute path answers; (3) the election
+        arc runs inside `sparknet-spark-node:dev` and forms the trust root,
+        signs, and refuses escalations; (4) the remaining `confirm: user` items
+        are only physics; (5) all fabric + goSpark gates green.
+      - **Status (complete, 2026-10-15).** goSpark: new `internal/gputel/sim`
+        (opt-in via `SPARKNET_GPU_FIXTURE`/`SPARKNET_GPU_SIM_CFG` or the
+        `-sim-fixture` flag; telemetry only, never authority) with unit tests;
+        `cmd/stub-vllm` (pure-Go OpenAI-compatible `/health`, `/v1/models`,
+        `/v1/chat/completions`); `make build` now builds `stub-vllm`. Fabric:
+        `spark-entrypoint.sh` gains the `vllm-stub` subcommand; the image bakes
+        `stub-vllm` and `cryptography>=42` (the baked ceremony scripts need it);
+        `spark.compose.cpu.yml` drops the NVIDIA device reservations (with
+        `!reset`) and swaps in the stub + a synthetic telemetry fixture;
+        `sparknet-node-setup.sh --engine stub` wires the overlay and writes the
+        fixture; `scripts/make-gpu-fixture.py`; `scripts/sparknet-rehearsal.sh`
+        gains `SPARKNET_PYTHON`/`SPARKNET_ELECTION_PY`/`SPARKNET_SIGNER_PY`/
+        `SPARKNET_REHEARSAL_TGZ` overrides so the **same** script runs in the
+        image; new `scripts/sparknet-election-rehearsal-container.sh` + tests
+        (`tests/test_gpu_telemetry_hardware_free.py`,
+        `tests/test_election_container.py`, `tests/test_cpu_node_smoke.py`, all
+        `@pytest.mark.integration`, opt-in/skippable) and a `make container-test`
+        target. Verified on this host: the containerised election rehearsal is
+        **51 passed, 0 failed inside the image**; the CPU graph
+        (`nats vllm-stub compute agent gpu`) boots healthy with no host ports and
+        the gateway answers a real chat completion through the stub, while the
+        GPU sidecar reports `available=true` from the fixture. New docs:
+        `contracts/spark-node-runbook.md` (what is provable without a GPU vs the
+        residual confirm list). Gates green: `make ci` all steps PASS (fabric
+        **880 passed + 3 skipped**, peer **454 + 1**, contract + master);
+        `go vet ./...` + `go test ./...` clean.
+      - **Live legs — `DoD: confirm: user` (physics only)**: real `vllm serve` on
+        Blackwell (sm_121a) and the multimodal engines; NVML/DCGM reporting real
+        numbers from a driver (not the fixture); WireGuard on real NICs;
+        `sparknet-master-signer.service` surviving a reboot with exactly one
+        holder of the operational key; deployed containment; Phase 9's
+        deliberately-unexecuted destructive legs.
+
 ## Next
 

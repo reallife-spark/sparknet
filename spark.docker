@@ -128,10 +128,11 @@ RUN if [ "$INSTALL_DCGM" = "1" ]; then \
 # keeps the source out of the image and the Dockerfile small. glibc abi matches
 # because both ends are Ubuntu aarch64.
 COPY --from=gospark /bin/ /usr/local/bin/
-RUN chmod 0755 /usr/local/bin/sparknet-* \
+RUN chmod 0755 /usr/local/bin/sparknet-* /usr/local/bin/stub-vllm \
  && test -x /usr/local/bin/sparknet-control \
  && test -x /usr/local/bin/sparknet-agent \
- && test -x /usr/local/bin/sparknetctl
+ && test -x /usr/local/bin/sparknetctl \
+ && test -x /usr/local/bin/stub-vllm
 
 # --- compute plane + configs (from the same named context) -------------------
 COPY --from=gospark /compute/ /opt/sparknet/compute/
@@ -140,7 +141,8 @@ RUN rm -rf /opt/sparknet/compute/__pycache__ \
  && python3 -m venv "${SPARKNET_VENV}" \
  && "${SPARKNET_VENV}/bin/pip" install --no-cache-dir --upgrade pip \
  && "${SPARKNET_VENV}/bin/pip" install --no-cache-dir -r /opt/sparknet/compute/requirements.txt \
- && "${SPARKNET_VENV}/bin/python" -c "import fastapi, uvicorn, httpx"
+ && "${SPARKNET_VENV}/bin/pip" install --no-cache-dir 'cryptography>=42' \
+ && "${SPARKNET_VENV}/bin/python" -c "import fastapi, uvicorn, httpx, cryptography"
 
 # --- the sparknet node bundle ------------------------------------------------
 # Staged by `sparknet-node-setup.sh` (or `make -C peer-node dist` + copy) at

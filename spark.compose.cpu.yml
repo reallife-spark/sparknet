@@ -1,0 +1,41 @@
+# spark.compose.cpu.yml — CPU-only overlay: bring the whole node graph up on a
+# machine with no NVIDIA hardware, so the packaging and the agent<->vLLM<->compute
+# path can be smoked before a Spark is in hand.
+#
+# It does two things and nothing else:
+#   1. drops the NVIDIA device reservations (the base file reserves a GPU for the
+#      `vllm` and `gpu` services, which makes them fail to start without a driver);
+#   2. points `vllm` at the CPU-only OpenAI-compatible stub (`vllm-stub`) instead
+#      of the real engine, and feeds the `gpu` sidecar a synthetic telemetry
+#      fixture so it reports `available=true` rather than degrading.
+#
+# Use it with the base file; `sparknet-node-setup.sh --engine stub` does this for
+# you. Never use it on a host that has (or will have) real GPUs — the fixture is
+# telemetry theatre and must not be mistaken for a driver reading.
+#
+#   docker compose -f spark.compose.yml -f spark.compose.cpu.yml up -d
+#
+# The fixture path is written by `sparknet-node-setup.sh --engine stub`; if it is
+# missing, docker creates an empty directory there and the sidecar honestly
+# reports unavailable (a read error is a reason, not a crash).
+
+services:
+  vllm:
+    command: ["vllm-stub"]
+    deploy:
+      resources:
+        reservations:
+          devices: !reset null
+
+  gpu:
+    environment:
+      SPARKNET_GPU_FIXTURE: /srv/sparknet/gpu-sim.json
+    volumes:
+      - type: bind
+        source: ${SPARKNET_STATE_HOST:-./peer-node/.state}/gpu-sim.json
+        target: /srv/sparknet/gpu-sim.json
+        read_only: true
+    deploy:
+      resources:
+        reservations:
+          devices: !reset null

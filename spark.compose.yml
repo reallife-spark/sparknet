@@ -27,6 +27,14 @@
 # To run more than one multimodal profile at once, add them all:
 #   docker compose -f spark.compose.yml --profile embed --profile audio up -d
 #
+# No GPU at hand? Layer spark.compose.cpu.yml: it drops the NVIDIA device
+# reservations (the `vllm` and `gpu` services otherwise fail to start without a
+# driver) and runs the CPU-only OpenAI-compatible stub engine with a synthetic
+# telemetry fixture, so the *whole graph* can be smoked before a Spark arrives.
+# `sparknet-node-setup.sh --engine stub` sets this up for you:
+#
+#   docker compose -f spark.compose.yml -f spark.compose.cpu.yml up -d
+#
 # Everything here is variable-interpolated from the environment (docker compose
 # reads .env in this directory, or --env-file .state/spark.env). Nothing is
 # hard-coded: the same file brings up spark-01 text-only or a full multimodal
@@ -122,10 +130,17 @@ services:
   # The text LLM. Serves the fabric MASTERSPIKE precontext through a wrapper
   # chat template built at start from the baked context; exposed on the LAN so
   # the node's API is reachable, not just in-network.
+  #
+  # VLLM_SERVICE_CMD selects the engine without a second service (and therefore
+  # without a port/GPU conflict): default `vllm` (real engine, needs a GPU), or
+  # `vllm-stub` (CPU-only OpenAI-compatible stub, no model, no driver) so the
+  # whole node graph can be brought up and smoked on a machine with no NVIDIA
+  # hardware. Same service name and port either way, so agent/compute wiring is
+  # unchanged.
   vllm:
     <<: [*spark-node, *vllm-runtime, *gpu]
     container_name: sparknet-vllm
-    command: ["vllm"]
+    command: ["${VLLM_SERVICE_CMD:-vllm}"]
     environment:
       <<: *spark-env
       VLLM_PORT: "8000"
