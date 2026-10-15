@@ -484,6 +484,48 @@ def is_expired(value: Any, now: datetime) -> bool:
     return parsed is None or now > parsed
 
 
+# --- ledger blocks (provenance) -----------------------------------------------
+
+
+#: Block fields the node signature does *not* cover: the block's own
+#: self-references. Everything else — `block_id`, `prev_hash`, `timestamp`,
+#: `node_pubkey_b64` and `data` — is signed, so editing any of them (or moving
+#: the block in the chain) invalidates the header signature even if `hash` is
+#: recomputed to match.
+LEDGER_SIGNATURE_EXCLUDED = ("hash", "signature")
+
+
+def ledger_block_signable(block: dict[str, Any]) -> bytes:
+    """Canonical bytes the appending node key signs for one ledger block.
+
+    The signed unit is the whole *header*, not just `data`. That is the fix for
+    the gap where the block-level signature only restated `data.signatures.node`:
+    with the header unsigned, a `grant_use` block could be deleted and its nonce
+    replayed, because nothing bound the block's position or its payload to a key.
+    One implementation, imported by the writer and every verifier, so the three
+    copies cannot drift the way the earlier unsigned shape did.
+    """
+    if not isinstance(block, dict):
+        raise AuthzError("ledger block must be an object")
+    header = {k: v for k, v in block.items() if k not in LEDGER_SIGNATURE_EXCLUDED}
+    return json.dumps(header, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def ledger_block_hash(block: dict[str, Any]) -> str:
+    """The chain hash of a ledger block: SHA-256 over the block minus `hash`.
+
+    Includes the header signature, so the chain links on signed bytes: a block
+    cannot be swapped for one with the same data and a different timestamp, and
+    the next block's `prev_hash` commits to the whole signed predecessor.
+    """
+    if not isinstance(block, dict):
+        raise AuthzError("ledger block must be an object")
+    payload = {k: v for k, v in block.items() if k != "hash"}
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
 def cluster_job_message(job: dict[str, Any]) -> bytes:
     """Canonical bytes signed for a cluster job, projected to CLUSTER_JOB_FIELDS.
 

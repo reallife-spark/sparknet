@@ -1,6 +1,7 @@
 ---
 description: Vault maintenance agent for sparknet. Use for ingest, query, lint, capture, daily maintenance and plan/memory bookkeeping inside this vault or either role subvault.
 mode: primary
+model: agx64/qwen3.6-35b-262k-q8
 ---
 
 # Vault Agent — sparknet

@@ -58,14 +58,19 @@ carries a `tracking` block in its YAML frontmatter (hidden in previews) with
 `agent`, `model`, `approvals` and `signature`. The schema is closed:
 `sparknet-tracking/1` or the note is not one of ours.
 
-The signature covers three hashes, not the raw text: the body hash, the
+The signature covers four hashes, not the raw text: the body hash, the
 canonical hash of the frontmatter *outside* `tracking` (the compiler's field
-zone), and the canonical tracking hash with `signature` stripped — recorded in
-the envelope as `signed_body_sha256`, `signed_meta_sha256` and
-`signed_tracking_sha256`. The envelope also carries `signed_meta`, the metadata
-mapping itself, so a verifier can name *which* keys moved rather than merely
-observe that a hash differs. Recording what was signed is what makes "edited
-since signing" a *detectable* state rather than a guess.
+zone), the canonical tracking hash with `signature` stripped, and the RFC 6962
+root of the `conversation` entries — recorded in the envelope as
+`signed_body_sha256`, `signed_meta_sha256`, `signed_tracking_sha256` and
+`signed_conversation_root`, under the message domain `sparknet-note/2` (carried
+in the envelope as `note_version`). The envelope also carries `signed_meta`, the
+metadata mapping itself, so a verifier can name *which* keys moved rather than
+merely observe that a hash differs. Recording what was signed is what makes
+"edited since signing" a *detectable* state rather than a guess. The
+conversation root binds the who/when/which-model trail (`tracking.conversation`)
+to the note's own bytes: appending, editing or dropping a turn moves the root
+and the note fails verification until it is re-signed.
 
 ### stale is not invalid
 
@@ -90,6 +95,57 @@ delta, because a human reviewing a 40% rewrite wants to know.
 `--strict` promotes `stale:content` to failure and is what `make precommit`
 runs. The standing rule is in `00_System/alpha-agent.md`: whoever writes a note
 re-signs it and bumps `updated` in the same operation.
+
+## Co-signatures
+
+A note has one author, but accountability sometimes needs a second voice: a
+reviewer, on another node, attesting that the bytes are what the author signed.
+`sign_note` refuses a note whose `owner_id` differs, so a second user cannot
+re-sign without stealing authorship. A **co-signature** is how they attest
+instead, and it never rewrites the original author.
+
+A co-signature lives in `tracking.signature.co_signatures[]`, a sibling of the
+primary `sig`. Because the primary tracking hash is taken with the whole
+`signature` key removed, appending a co-signature **cannot** invalidate the
+primary signature: the note keeps its `owner_id` and still verifies `valid`. Each
+entry carries `alg`, `owner_id`, `owner_node`, `public_key_b64`,
+`key_fingerprint`, `sig` and `signed_at` — a user-record snapshot plus a
+signature.
+
+The co-signature's `sig` is over the **same** `sparknet-note/2` message the
+primary signature covers, rebuilt from the primary envelope's four recorded
+hashes. It therefore commits to the *identical* bytes; a co-signature over
+anything else does not verify. `add_co_signature` signs with this vault's user
+key, and re-running it from the same key replaces the entry rather than piling
+up.
+
+### The trust rule
+
+A signature proves a key; it does not say the key belongs to anyone in
+particular. A co-signature is only meaningful once the co-signer resolves to a
+known identity, and there are exactly two resolvers:
+
+1. **The Master-signed registry** (online) — the co-signer's `owner_node` names a
+   **non-revoked** authorization in `manifests/node-authorizations.json` whose
+   signature verifies under the registry's own master key. The Master has
+   attested the node, and the node's user key travels with the note.
+2. **The origin `user.md` snapshot** (offline fallback) — the entry's `owner_id`,
+   `owner_node` and `key_fingerprint` match a trusted user record the verifier
+   already holds. This is the user-key half of the origin node's
+   `00_System/user.md`; it needs no running service, exactly as note
+   verification does not.
+
+`verify_co_signatures` checks byte integrity first and trust second. It refuses a
+`key_fingerprint` that is not the fingerprint of the entry's own `public_key_b64`
+(a swapped key) and a `sig` that does not verify over the recorded hashes (a
+co-signature over different bytes) as `invalid`. An entry that is byte-intact
+but resolves through neither resolver is reported **`untrusted`** — the bytes are
+genuine, the signer is simply unknown here — so a reader can tell a forgery
+apart from a stranger.
+
+A co-signature attributes and attests; like the user key itself, it grants no
+capability. Authority still comes from the capability contract and key
+possession.
 
 ## The user record
 
@@ -122,8 +178,13 @@ key inline (so an offline verifier needs no local key material), and two
 signatures over the same payload: **user consent** and **node countersignature**.
 Separate keys, separate meanings — a node that can write the ledger cannot mint
 user consent, and a user key without the node key cannot place a block in the
-chain. The block-level `signature` restates the node's countersignature where
-the schema requires a signature; `hash` binds the whole block.
+chain. The block-level `signature` is a *second* signature by the appending
+node's key over the whole block **header** (the block minus `hash` and
+`signature`), not a restatement of the node countersignature; `hash` then binds
+the signed block. `verify_chain` checks that header signature against the
+block's own `node_pubkey_b64`, so a block whose timestamp, `prev_hash`, payload
+or position was edited is refused even if `hash` is recomputed — which is what
+stops a `grant_use` block being deleted to un-consume its nonce.
 
 Peer-written events are `approval`, `report`, `share`, `inbox_acceptance` and
 `grant_use`. Master events are the disjoint set in `tracking-schema.json`; a peer
@@ -151,6 +212,46 @@ like an approval and hash-chained, naming the grant, its parent (for a delegated
 subagent grant), the acting session and the note(s) written. An out-of-scope
 write is quarantined to `_raw/` and recorded as `decision: quarantined`, so
 authority is never widened by a signature and material is never silently lost.
+
+## Signed checkpoints and cross-node head anchoring
+
+A `checkpoint` ledger block is a peer's signed statement about its own head.
+Its `data` carries three numbers that name the head: `size` (the number of
+blocks in the chain), `head_hash` (the newest block's `hash`) and `root` — the
+RFC 6962 Merkle root, computed by `shared/sparknet-merkle.py`, of every block
+hash in the chain. Nothing is self-referential: `size` is the chain *before*
+the checkpoint is appended, so the block becomes the oldest block of the next
+snapshot and never hashes its own root. The block is signed by the node key
+like every block — the header signature is the whole commitment, there is no
+`data.signatures`, because there is no user consent to reproduce (unlike the
+approval/report/grant_use records above).
+
+`checkpoint` is a **peer** event, disjoint from the Master vocabulary: a
+checkpoint is a statement about a peer chain, and only the peer that owns the
+chain can sign it. No new port exists yet — the anchor/verify pair is
+exercised in-process and grows over the existing share ports (PLAN Step 36).
+
+A node that receives another node's signed checkpoint **anchors** it. Anchored
+state is kept in the receiver's state dir
+(`$SPARKNET_STATE_DIR/anchored-checkpoints.json`, mode 0600 — runtime state,
+never the vault), keyed by the signing node's public key, so each node's head
+is tracked independently:
+
+- the **first anchor** for a node establishes the baseline;
+- a checkpoint of **smaller size** than the anchor is a **rollback** and refused;
+- the **same size** must carry the **same root** — a different root is a
+  **fork** and refused;
+- **growth** must carry an RFC 6962 consistency proof
+  (`verify_consistency`, from `shared/sparknet-merkle.py`) from the anchored
+  root to the new root, with an advanced head.
+
+The consistency mechanism is what makes truncation and forked history
+*detectable* instead of merely editable: a node's history grows only by a
+proof that the new root extends the one an outsider already trusts, it can
+never be rolled back below what anyone has anchored, and two histories of the
+same height cannot both pass. The mutation legs (break the consistency proof,
+roll back the size, fork the root) are exercised in-process in the test suite;
+a live cross-node leg over the overlay is `DoD: confirm: user`.
 
 ## Inbox dispatch — a policy, not a pipeline
 

@@ -23,8 +23,17 @@ VENV_PY := $(VAULT_ROOT)/.venv/bin/python
 PY := $(if $(wildcard $(VENV_PY)),$(VENV_PY),python3)
 ROLE ?= peer
 
+# format-check is incremental: it checks the Python files this working tree has
+# changed against FORMAT_BASE, not the whole repo. The repo predates any pinned
+# ruff, so a whole-tree `ruff format --check` reports hundreds of pre-existing
+# differences that belong to a dedicated formatting commit, not to every change.
+FORMAT_BASE ?= HEAD
+SCOPE ?= fabric
+
 .PHONY: help help-role layout tui validate test test-all test-peer test-master \
-        contract-test lint devtools chroma-dev chroma-init chroma-inspect \
+        contract-test lint lint-strict format-check shellcheck test-report ci \
+        render render-check sbom sbom-check drift-check \
+        devtools chroma-dev chroma-init chroma-inspect \
         chroma-index chroma-query env-init wiki-sync wiki-verify \
         wiki-preflight bundle bundle-verify status-plan clean dist \
         keys-check shims-check hooks
@@ -55,8 +64,9 @@ layout: ## Show the repository layout
 	  "├── shared/              sparknet-authz.py — signed canonical form" \
 	  "├── peer-node/           the working node role        [IMPLEMENTED]" \
 	  "├── master-node/         the elected signing role    [BUILT]" \
-	  "├── scripts/             fabric-level tooling" \
+	  "├── scripts/             fabric-level tooling (incl. the sparknet CLI)" \
 	  "├── tests/               fabric + vendored-skill tests" \
+	  "├── sbom/                generated CycloneDX SBOM" \
 	  "└── .opencode/skills/    vendored wiki suite (33 skills: 32 vendored + 1 local)"
 
 validate: ## Validate every role that has an implementation
@@ -107,6 +117,69 @@ lint: ## Lint everything that is linted
 	@$(PY) -m ruff check shared scripts tests
 	@$(PY) -m ruff check peer-node/services peer-node/tests
 	@$(PY) -m ruff check master-node/services master-node/tests
+
+# Advisory, non-blocking: the wider rule set the fabric is migrating toward
+# (flake8-bugbear B, flake8-simplify SIM, Ruff-specific RUF, bandit S). It is
+# deliberately NOT part of the blocking gate yet — adopting it is a reviewable
+# change of its own, because a handful of the findings are in the consensus and
+# provenance paths where "simplify" and "chain this exception" change behaviour.
+lint-strict: ## Advisory: widened ruff rules (B, SIM, RUF, S); not yet the gate
+	-@"$(PY)" -m ruff check --select B,SIM,RUF,S \
+		--ignore S101,S603,S607,S310,S104,S105,S106,S107,S103,S108,S110,S311,S312,S313,S314,S501,S506 \
+		shared scripts tests peer-node master-node
+
+format-check: ## ruff format --check on Python files newly added vs FORMAT_BASE
+	@added="$$( { git -C "$(VAULT_ROOT)" diff --name-only --diff-filter=A $(FORMAT_BASE) -- '*.py'; \
+		git -C "$(VAULT_ROOT)" ls-files --others --exclude-standard -- '*.py'; } | sort -u )"; \
+	if [ -z "$$added" ]; then \
+		echo "format-check: no newly added Python files vs $(FORMAT_BASE)"; \
+		exit 0; \
+	fi; \
+	echo "format-check: $$(printf '%s\n' $$added | wc -l) new file(s) vs $(FORMAT_BASE)"; \
+	printf '%s\n' $$added | xargs "$(PY)" -m ruff format --check
+
+shellcheck: ## shellcheck tracked scripts (skipped, with a note, if not installed)
+	@if ! command -v shellcheck >/dev/null 2>&1; then \
+		echo "shellcheck: not installed — SKIPPED (install shellcheck to enable this gate)"; \
+		exit 0; \
+	fi; \
+	files="$$(git -C "$(VAULT_ROOT)" ls-files '*.sh' | grep -v '^\.opencode/skills/' || true)"; \
+	if [ -z "$$files" ]; then echo "shellcheck: no tracked shell scripts"; exit 0; fi; \
+	printf '%s\n' "$$files" | xargs shellcheck
+
+test-report: ## Write JUnit XML + summary.json (SCOPE=fabric|peer|master|all)
+	@./scripts/sparknet-test-report.sh "$(SCOPE)"
+
+ci: ## Run the local pre-merge gate (CI_QUICK=1 to skip the full suite)
+	@./scripts/pre-merge-gate.sh $(if $(filter 1,$(CI_QUICK)),--quick,)
+
+render: ## Regenerate contracts/manifest.json from the contract SSOT
+	@"$(PY)" scripts/sparknet-render.py
+
+render-check: ## Fail if contracts/manifest.json is stale vs contracts/*.json
+	@"$(PY)" scripts/sparknet-render.py --check
+
+sbom: ## Regenerate sbom/sparknet.cdx.json (CycloneDX) from VERSION/deps/skills
+	@"$(PY)" scripts/sparknet-sbom.py
+
+sbom-check: ## Fail if the SBOM is stale vs VERSION, requirements.txt or the skills
+	@"$(PY)" scripts/sparknet-sbom.py --check
+
+# The umbrella drift gate for everything *derived*: the rendered contract
+# manifest, the generated SBOM, the vendored wiki suite, and cross-role contract
+# parity. Each of these compares a generated or copied artifact against the
+# source it claims to come from; running them together is what "nothing has
+# silently drifted" means.
+drift-check: ## Fail if derived artifacts drifted (manifest, SBOM, skills, contracts)
+	@echo "drift-check: contract manifest"
+	@$(MAKE) --no-print-directory render-check
+	@echo "drift-check: software bill of materials"
+	@$(MAKE) --no-print-directory sbom-check
+	@echo "drift-check: vendored wiki skills"
+	@$(MAKE) --no-print-directory wiki-verify
+	@echo "drift-check: cross-role contract parity"
+	@$(MAKE) --no-print-directory contract-test
+	@echo "drift-check: all derived artifacts are in sync"
 
 devtools: ## Create .venv with cryptography, pytest and ruff (opt-in)
 	@if [ ! -x "$(VENV_PY)" ]; then python3 -m venv "$(VENV_PY)"; fi

@@ -1,0 +1,159 @@
+{
+  "contract": "sparknet-contract-manifest",
+  "contracts": [
+    {
+      "contract": "capabilities",
+      "file": "capabilities.json",
+      "schema_version": "1.0",
+      "sha256": "c60eeea238ffe0a638a123f2c4c60a9be1d12f14823237c729bd491fb51d0271"
+    },
+    {
+      "contract": "identity-schema",
+      "file": "identity-schema.json",
+      "schema_version": "1.0",
+      "sha256": "6d5b723d82eaddb8cb6d48522b9425073707670416d7dc0e551eb3b3cecb046f"
+    },
+    {
+      "contract": "overlay",
+      "file": "overlay.json",
+      "schema_version": "1.0",
+      "sha256": "0839155320ba5f7cfec8c2fbc1b54fb13cd394aeb9659aac5b68ce0371437487"
+    },
+    {
+      "contract": "ports",
+      "file": "ports.json",
+      "schema_version": "2.0",
+      "sha256": "500d557ddf43009206144c278daa684c55b8f8d0b76369244477946047975db9"
+    },
+    {
+      "contract": "proposal-schema",
+      "file": "proposal-schema.json",
+      "schema_version": 1,
+      "sha256": "223cd6772328658665ab10c6c4448859c02ae8cf4bcecdc30e8e1aa40cf40782"
+    },
+    {
+      "contract": "tracking-schema",
+      "file": "tracking-schema.json",
+      "schema_version": 1,
+      "sha256": "b18062ee19d620eee44c1430e2d68daee2eaad4e9701e2a4ba47bc2bf511bb62"
+    }
+  ],
+  "do_not_edit": true,
+  "generated_by": "scripts/sparknet-render.py",
+  "known_capabilities": [
+    "admin-supervise",
+    "cluster-dispatch",
+    "cluster-serve",
+    "cluster-vote",
+    "guard-apply",
+    "p2p-sync",
+    "push-receive",
+    "telemetry"
+  ],
+  "note": "Generated from contracts/*.json. Regenerate with `make render`.",
+  "ports": {
+    "4096": {
+      "bound_by": "peer",
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "dispatch-bridge"
+    },
+    "4097": {
+      "bound_by": "peer",
+      "implementation_state": "provisioned",
+      "runtime": "not-listening",
+      "service": "agent-engineering"
+    },
+    "4098": {
+      "bound_by": "peer",
+      "implementation_state": "provisioned",
+      "runtime": "not-listening",
+      "service": "agent-cyber"
+    },
+    "4100": {
+      "bound_by": "peer",
+      "implementation_state": "provisioned",
+      "runtime": "not-listening",
+      "service": "agent-vault-curator"
+    },
+    "4200": {
+      "bound_by": "peer",
+      "implementation_state": "spec-only",
+      "runtime": "not-listening",
+      "service": "opencode-serve"
+    },
+    "4201": {
+      "bound_by": "peer",
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "share-intake"
+    },
+    "4202": {
+      "bound_by": "peer",
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "session-transfer"
+    },
+    "4203": {
+      "bound_by": "master",
+      "implementation_state": "spec-only",
+      "runtime": "not-listening",
+      "service": "share-ratification"
+    },
+    "4210": {
+      "bound_by": "both",
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "cluster-election"
+    },
+    "4220": {
+      "bound_by": "master",
+      "implementation_state": "spec-only",
+      "runtime": "not-listening",
+      "service": "git-repo"
+    },
+    "4221": {
+      "bound_by": "master",
+      "implementation_state": "spec-only",
+      "runtime": "not-listening",
+      "service": "file-share"
+    },
+    "4222": {
+      "bound_by": "master",
+      "implementation_state": "spec-only",
+      "runtime": "not-listening",
+      "service": "nat-gateway"
+    },
+    "4223": {
+      "bound_by": "master",
+      "implementation_state": "spec-only",
+      "runtime": "not-listening",
+      "service": "vector-embed"
+    },
+    "51820": {
+      "bound_by": "both",
+      "implementation_state": "implemented",
+      "runtime": "not-verifiable-here",
+      "service": "wireguard"
+    },
+    "8080": {
+      "bound_by": "master",
+      "implementation_state": "provisioned",
+      "runtime": "not-verifiable-here",
+      "service": "admin-surface"
+    },
+    "8090": {
+      "bound_by": "master",
+      "implementation_state": "spec-only",
+      "runtime": "not-listening",
+      "service": "master-instant-push"
+    },
+    "9090": {
+      "bound_by": "peer",
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "guard"
+    }
+  },
+  "schema_version": "1.0"
+}

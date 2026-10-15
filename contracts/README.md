@@ -21,6 +21,9 @@ the tests then prove both roles still agree.
 | `admin-federation-runbook.md` | the operational procedure for the Phase 5 live deploy of cross-node admin federation (fabric Step 29): hosts/addressing, the route-class binding change, the `admin-supervise` grant, the node agent, the console, the confirm checklist and rollback |
 | `tracking-schema.json` | the numbered vault layout, the per-note tracking block and its signature, the user record, the approval record, the secret index |
 | `provenance-protocol.md` | the narrative behind that schema: the accountability chain, stale-vs-invalid, ledger-only approvals, inbox dispatch policy, secret custody |
+| `proposal-schema.json` | the cross-user proposal workflow: the proposal/review/decision records, the draft→submitted→reviewed→decided lifecycle, and what a verified chain verifies |
+| `proposal-protocol.md` | the narrative behind that schema: why a review is a first-class object, the fail-closed transitions, inline keys and integrity-vs-identity, and why a verified chain is not an authority to write |
+| `manifest.json` | **generated** — the machine-readable inventory of this directory: each JSON contract by hash (so an edit without a re-render is caught) plus the projected capability and port tables. Rendered by `scripts/sparknet-render.py`; never hand-edited. |
 
 ## Why this directory exists
 

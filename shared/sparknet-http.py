@@ -59,9 +59,7 @@ class rather than by what the caller claims.
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
-import os
 import sys
 
 try:  # Python 3.9+
@@ -75,6 +73,13 @@ from pathlib import Path
 from typing import Any
 from urllib import request as urlrequest
 from urllib.error import HTTPError, URLError
+
+# --- the one by-path loader (D10) --------------------------------------------
+# `shared/` is not on sys.path, so this module's own directory is added before
+# importing the fabric's single loader. These two lines are deliberately
+# identical in every shared module; tests/test_contracts.py pins them.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from sparknet_loader import load_shared  # noqa: E402
 
 VERSION_PREFIX = b"sparknet-http/1"
 DEFAULT_MAX_AGE_SECONDS = 300
@@ -101,40 +106,24 @@ LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1"})
 DEFAULT_SHARED_DIR = Path(__file__).resolve().parent
 
 
-def _env(name: str) -> str | None:
-    raw = os.environ.get(name, "").strip()
-    return raw or None
-
-
 def _load_authz(shared_dir: Path | None = None) -> Any:
     """Load sparknet-authz.py by path, never by import.
 
     Loading by path is what proves there is one implementation.  An import
     would let a role quietly end up with a private copy, and two crypto
     implementations that must agree byte-for-byte is a second trust boundary.
+    The resolve-and-cache mechanics live once in ``shared/sparknet_loader.py``.
     """
-    here = Path(shared_dir) if shared_dir else DEFAULT_SHARED_DIR
-    candidates = [here / "sparknet-authz.py"]
-    for env in ("SPARKNET_SHARED_DIR", "VAULT_PATH"):
-        raw = _env(env)
-        if raw:
-            candidates.append(Path(raw) / "shared" / "sparknet-authz.py")
-            candidates.append(Path(raw).parent / "shared" / "sparknet-authz.py")
-    for path in candidates:
-        if not path.is_file():
-            continue
-        if "sparknet_authz" in sys.modules:
-            return sys.modules["sparknet_authz"]
-        spec = importlib.util.spec_from_file_location("sparknet_authz", path)
-        if spec is None or spec.loader is None:
-            continue
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
-        return module
-    raise FileNotFoundError(
-        "cannot locate sparknet-authz.py; this transport refuses to reimplement "
-        "Ed25519, so it cannot proceed without the shared implementation"
+    dirs = [Path(shared_dir)] if shared_dir else None
+    return load_shared(
+        "sparknet-authz.py",
+        "sparknet_authz",
+        dirs=dirs,
+        error=FileNotFoundError,
+        message=(
+            "cannot locate sparknet-authz.py; this transport refuses to reimplement "
+            "Ed25519, so it cannot proceed without the shared implementation"
+        ),
     )
 
 

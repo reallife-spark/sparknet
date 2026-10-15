@@ -150,6 +150,30 @@ overwrite. A conflicting page is held for a human and flagged. Both directions
 are recorded, because a share that only reports what the receiver gained is not
 an audit trail.
 
+## The proposal exchange rides these ports
+
+The share ports also carry the **proposal exchange** — a sibling message family,
+not a share type. A proposal, a review and a decision
+(`contracts/proposal-schema.json`) travel as `proposal.submit`,
+`proposal.review` and `proposal.decide` on ports 4201 (`share-intake`) / 4202
+(`session-transfer`). No new port is opened, and `capabilities.share_types` stays
+closed: a share type states what a share *conveys* (a knowledge read or a copy),
+and a proposal conveys neither, so admitting one would put a member in the
+narrowing relation that cannot be ordered against `kb-view` or `session-handoff`.
+
+The two families share a transport but not a lifecycle. A share is clocked and
+ratified; a proposal is ordered and countersigned. The message carries a
+**bundle** — the ordered list of proposal/review/decision records exchanged so
+far — and each node appends only the records it authors (the proposal stays on
+the proposer's ledger, a review on its reviewer's, the decision on the owner's).
+`shared/sparknet-proposal.py` `verify_proposal_chain` checks the union, so a
+receiver verifies a chain whose records live on other nodes before it signs
+anything; a bundle that fails the ladder is refused and appends nothing.
+
+A verified proposal chain grants no authority, exactly as a share does not: an
+approved proposal records the owner's verdict and still needs a signed,
+grant-scoped write to change anything.
+
 ## What is not contracted here
 
 - **Delivery of the shared material.** Transport, encryption and compression are

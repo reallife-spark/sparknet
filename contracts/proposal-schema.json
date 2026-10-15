@@ -1,0 +1,149 @@
+{
+  "schema_name": "sparknet-proposal",
+  "schema_version": 1,
+  "description": "The cross-user proposal workflow: a proposal, the reviews it attracts, and the boss's decision. Three ledger records, one lifecycle (draft → submitted → reviewed → decided), fail-closed on an out-of-order transition. Committed to the ledger exactly like an approval: dual-control signed, appended, hash-chained.",
+
+  "why": "An agent that edits the vault can attribute its own work (a signed note), but there is no first-class object for 'here is a change I propose, here is what my peers think, and here is the owner's decision'. Without it a cross-user review is chat that leaves no auditable trace. This schema makes the proposal the unit of review: the originating agent's work, each reviewer's verdict attributed to a named agent and model, and the boss's approve/deny, each a signed ledger record whose order cannot be forged or rearranged.",
+
+  "scope": {
+    "role": "peer (a proposal is a peer's statement about its own vault)",
+    "events": ["proposal", "review", "decision"],
+    "disjoint_from": "the master vocabulary in contracts/tracking-schema.json. A peer proposes and reviews; a master does not. Adding these to the peer vocabulary and not the master's is what keeps the two disjoint.",
+    "transport": "see the `transport` section: the records ride the existing share ports 4201/4202 as a new message family, and a receiver verifies the bundle offline — no new port, and no new entry in capabilities.share_types."
+  },
+
+  "transport": {
+    "ports": [4201, 4202],
+    "message_types": ["proposal.submit", "proposal.review", "proposal.decide"],
+    "route": "The proposal exchange rides the existing share ports 4201 (share-intake) and 4202 (session-transfer) as a new message family. It is deliberately *not* a share type: capabilities.share_types stays closed because a proposal conveys no knowledge read or copy, and adding one would give the narrowing relation a member it cannot order. No new port is opened (contracts/ports.json records the route on the share stanza).",
+    "bundle": "A wire message carries `records`: the ordered list of proposal/review/decision records exchanged so far. It is a bundle, not a ledger: the proposal stays on the proposer's ledger, each review on its reviewer's, the decision on the owner's, so no node ever records a foreign author's block (which would fail that node's own ledger verification, where each record's user signature is checked against *this* node's user key). `verify_proposal_chain` checks the union, so a receiver verifies a chain whose records live on other nodes.",
+    "shared_ladder": "Both ends verify with the shared ladder — shared/sparknet-proposal.py `verify_proposal_chain` — *before* signing anything. A refused bundle appends nothing.",
+    "implementation": "peer-node/services/sparknet-proposal-exchange.py delivers a signed proposal and returns a signed review/decision; peer-node/services/sparknet-share-regime.py recognises the message family (`accepts_message` / `proposal_route`) and refuses to run if this contract is missing.",
+    "overlay_leg": "The live cross-node exchange over the overlay is `DoD: confirm: user`: the development host has no wireguard interface, so the round trip is proven with two in-process nodes and only the in-process leg is claimed."
+  },
+
+  "lifecycle": {
+    "states": ["draft", "submitted", "reviewed", "decided"],
+    "transitions": {
+      "draft → submitted": "`submit_proposal` signs the draft and appends the `proposal` block. A proposal that is not a `draft`, or that was already signed, is refused — the transition happens once.",
+      "submitted → reviewed": "`review_proposal` appends a `review` block. Refused unless the proposal block is already on the chain and no `decision` block exists yet.",
+      "reviewed → decided": "`decide_proposal` appends a `decision` block. Refused unless at least one `review` block precedes it and no `decision` block exists yet."
+    },
+    "fail_closed": "Every transition re-reads the ledger and refuses out of order: a review with no proposal, a decision with no review, a second decision, or a review after a decision is refused before anything is appended. verify_proposal_chain re-derives the same order from a bare list of records, so a received chain is checked the same way a local one is.",
+    "draft_is_local": "`draft` is the un-appended record: `build_proposal` returns it, `submit_proposal` consumes it. Only `submitted`, `reviewed` and `decided` ever appear on the chain, because the chain records commitments, not intentions."
+  },
+
+  "records": {
+    "proposal": {
+      "event": "proposal",
+      "id_field": "proposal_id",
+      "id_pattern": "PRO-YYYY-MM-DD-NNN",
+      "required_fields": {
+        "event": "proposal",
+        "proposal_id": "PRO-YYYY-MM-DD-NNN, assigned at submission",
+        "stage": "submitted (the draft stage never reaches the chain)",
+        "owner_id": "the proposing user's number (contracts/tracking-schema.json `owner_id`)",
+        "owner_node": "the node that recorded it",
+        "title": "what is being proposed, one line",
+        "summary": "the originating agent's work, in prose",
+        "agent": "the agent that produced the proposal",
+        "model": "the model that produced the proposal",
+        "conversation": "the conversation entries that produced it (the tracking.conversation shape: id, turn, agent, model, at)",
+        "conversation_root": "the RFC 6962 root of `conversation` (shared/sparknet-merkle.py), so the who/when/which-model trail is committed by the signature",
+        "node_pubkey_b64": "the appending node's identity public key, inline",
+        "user_public_key_b64": "the proposing user's public key, inline so an offline verifier needs no local key material",
+        "user_key_fingerprint": "sha256 of the raw 32-byte user public key, the label form `sha256:<64 hex>`; must equal the fingerprint of user_public_key_b64",
+        "signatures": {"user": "base64, the user key over proposal_signable(record) — consent", "node": "base64, the node identity key over the same bytes — attestation"},
+        "recorded_at": "ISO8601 UTC"
+      }
+    },
+    "review": {
+      "event": "review",
+      "id_field": "review_id",
+      "id_pattern": "REV-YYYY-MM-DD-NNN",
+      "required_fields": {
+        "event": "review",
+        "review_id": "REV-YYYY-MM-DD-NNN",
+        "proposal_id": "the proposal this review answers",
+        "verdict": "approve | reject | request_changes",
+        "reason": "the reviewer's stated reason, verbatim",
+        "agent": "the reviewing agent (attribution)",
+        "model": "the reviewing model (attribution)",
+        "owner_id": "the reviewing user's number",
+        "owner_node": "the node that recorded it",
+        "conversation": "the conversation entries that produced the review",
+        "conversation_root": "the RFC 6962 root of `conversation`",
+        "node_pubkey_b64": "the appending node's identity public key, inline",
+        "user_public_key_b64": "the reviewing user's public key, inline",
+        "user_key_fingerprint": "sha256 label of user_public_key_b64",
+        "signatures": {"user": "the user key — consent", "node": "the node identity key — attestation"},
+        "recorded_at": "ISO8601 UTC"
+      }
+    },
+    "decision": {
+      "event": "decision",
+      "id_field": "decision_id",
+      "id_pattern": "DEC-YYYY-MM-DD-NNN",
+      "required_fields": {
+        "event": "decision",
+        "decision_id": "DEC-YYYY-MM-DD-NNN",
+        "proposal_id": "the proposal being decided",
+        "decision": "approved | denied",
+        "reason": "the owner's stated reason, verbatim",
+        "agent": "the agent that recorded the decision (attribution)",
+        "model": "the model that recorded it (attribution)",
+        "owner_id": "the deciding owner's number (the boss)",
+        "owner_node": "the node that recorded it",
+        "conversation": "the conversation entries that produced the decision (may be empty)",
+        "conversation_root": "the RFC 6962 root of `conversation`",
+        "node_pubkey_b64": "the appending node's identity public key, inline",
+        "user_public_key_b64": "the deciding user's public key, inline",
+        "user_key_fingerprint": "sha256 label of user_public_key_b64",
+        "signatures": {"user": "the user key — consent", "node": "the node identity key — attestation"},
+        "recorded_at": "ISO8601 UTC"
+      }
+    }
+  },
+
+  "vocabularies": {
+    "verdicts": {
+      "approve": "the reviewer accepts the proposal as it stands",
+      "reject": "the reviewer rejects it",
+      "request_changes": "the reviewer wants changes before a decision"
+    },
+    "decisions": {
+      "approved": "the owner accepts the proposal",
+      "denied": "the owner rejects it"
+    },
+    "closed": true
+  },
+
+  "signature": {
+    "algorithm": "ed25519",
+    "dual_control": "Every record carries two signatures over the same bytes: the user key (consent / attribution) and the node identity key (attestation that this node recorded it). This is the same dual-control envelope an approval carries — shared/sparknet-provenance.py's `dual_sign`, not a new scheme. The `append_block` step then adds a *third*, independent node signature over the whole block header, and `hash` binds that signed block into the chain.",
+    "message": "proposal_signable(record) = canonical JSON (sort_keys, separators (\",\", \":\"), UTF-8) of the record with the `signatures` key removed — identical to approval_signable.",
+    "inline_keys": "Both public keys travel inline (node_pubkey_b64, user_public_key_b64 + user_key_fingerprint) so a received record verifies with no local key material. Integrity is not identity: like a co-signature, a byte-intact record proves the bytes and the attestation, not yet who the signer is — the caller resolves identity against the registry or user.md. A record is therefore `verified` (internal consistency + order) and separately `trusted` (identity resolved), and this schema only owns the former."
+  },
+
+  "verify_proposal_chain": {
+    "input": "an ordered list of proposal/review/decision records (the `data` of each ledger block, or a received bundle)",
+    "checks": [
+      "each record is an object whose `event` is one of proposal|review|decision, with its required fields present",
+      "each record's `conversation` re-roots to its `conversation_root` (a tampered conversation is caught)",
+      "each record's `user_key_fingerprint` is the fingerprint of its `user_public_key_b64` (a swapped key is caught)",
+      "each record's `signatures.user` verifies under `user_public_key_b64` and `signatures.node` verifies under `node_pubkey_b64` over proposal_signable(record) (a forged record is caught)",
+      "exactly one `proposal`, and it is the first record; every other record references that `proposal_id`",
+      "at most one `decision`; every `review` follows the proposal; a `decision` follows at least one `review`; no `review` follows the `decision`"
+    ],
+    "outcome": "a list of problem strings; empty means a well-formed, in-order, signed chain. A forged signature, a swapped key, a tampered conversation, a missing proposal, a second decision, a decision before any review, or a review after the decision each yield a problem.",
+    "not_authority": "A verified chain is not an executed change. A proposal records an intention, a review records an opinion and a decision records the owner's verdict; none of them edits a note or grants a capability. Acting on an approved proposal is a separate, grant-scoped write."
+  },
+
+  "implementation": {
+    "shared": "shared/sparknet-proposal.py",
+    "reuses": "shared/sparknet-provenance.py loaded by path (which in turn loads shared/sparknet-authz.py and shared/sparknet-merkle.py by path) — this adds no Ed25519, no canonicalisation, no Merkle math and no key parsing. `dual_sign`, `append_block`, `canonical_json` and `build_conversation_root` come from there.",
+    "records_are_ledger_blocks": "a proposal/review/decision is appended with shared/sparknet-provenance.py `append_block`, so it is a normal v2 block: header-signed by the node identity key, hash-chained, and checked by `verify_chain` like any other. The proposal events live in the peer vocabulary (contracts/tracking-schema.json).",
+    "cli": "shared/sparknet-proposal.py: `propose`, `submit`, `review`, `decide`, `verify` (and `list`)",
+    "transport": "peer-node/services/sparknet-proposal-exchange.py carries the round trip as a bundle over the share ports 4201/4202 (see the `transport` section); live cross-node exchange over the overlay is `DoD: confirm: user`."
+  }
+}

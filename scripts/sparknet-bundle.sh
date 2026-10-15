@@ -37,6 +37,43 @@ AGENTS_DIR="$REPO_ROOT/.opencode/agents"
 
 die() { printf 'sparknet-bundle: %s\n' "$1" >&2; exit 1; }
 
+# --- integrity manifest -------------------------------------------------------
+# The bundle ships a SHA256SUMS so a node can prove the bytes it received are the
+# bytes the build host assembled — a tarball corrupted or tampered with in transit
+# fails the check before anything runs. A node has coreutils (`sha256sum`) or macOS
+# `shasum`; pick whichever is present so generation and verification agree.
+sha256_tool() {
+  if command -v sha256sum >/dev/null 2>&1; then printf 'sha256sum'
+  elif command -v shasum >/dev/null 2>&1; then printf 'shasum'
+  else printf ''; fi
+}
+sha256_of() {  # file -> hex digest
+  case "$(sha256_tool)" in
+    sha256sum) sha256sum "$1" | cut -d' ' -f1 ;;
+    shasum)    shasum -a 256 "$1" | cut -d' ' -f1 ;;
+    *)         return 1 ;;
+  esac
+}
+sha256_check() {  # run `-c` against a sums file, from inside its directory
+  case "$(sha256_tool)" in
+    sha256sum) sha256sum -c "$1" ;;
+    shasum)    shasum -a 256 -c "$1" ;;
+    *)         return 1 ;;
+  esac
+}
+
+write_sums() {  # <bundle-root>: write SHA256SUMS over every file but itself
+  local root="$1" rel
+  (
+    cd "$root" || exit 1
+    find . -type f | LC_ALL=C sort | while IFS= read -r f; do
+      rel="${f#./}"
+      [ "$rel" = "SHA256SUMS" ] && continue
+      printf '%s  %s\n' "$(sha256_of "$f")" "$rel"
+    done
+  ) > "$root/SHA256SUMS"
+}
+
 # --- verify: prove an extracted bundle actually runs --------------------------
 # The claim this script exists to support is "a node can run this on its own".
 # That claim is only worth something if it is executed, not asserted, so
@@ -66,6 +103,17 @@ verify_bundle() {
   step() { printf '  → %s\n' "$*"; }
   ok()   { printf '    ✓ %s\n' "$*"; }
   bad()  { printf '    ✗ %s\n' "$*"; fail=1; }
+
+  step "integrity manifest matches the archive"
+  sumfile="$root/SHA256SUMS"
+  if [ ! -f "$sumfile" ]; then
+    bad "SHA256SUMS missing — not assembled by this script's build step?"
+  elif ( cd "$root" && sha256_check "$sumfile" ) >/dev/null 2>&1; then
+    ok "$(grep -c . "$sumfile") files verified"
+  else
+    bad "SHA256SUMS does not match the extracted tree"
+    ( cd "$root" && sha256_check "$sumfile" 2>&1 | grep -v ': OK$' | head -8 | sed 's/^/      /' )
+  fi
 
   step "vendored skills present"
   n="$(find "$root/.opencode/skills" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)"
@@ -208,7 +256,8 @@ Options:
 
 The bundle reproduces the repository layout (role subvault + contracts/ +
 shared/ + .opencode/ + opencode.json), because a role subvault alone is not a
-deployment.
+deployment. A SHA256SUMS over the whole tree is written at build time and
+checked by --verify, so a corrupted or tampered archive fails before it runs.
 USAGE
 }
 
@@ -356,6 +405,15 @@ make test                                 # the role's suite
 Then start opencode inside `<role>-node/` and use `/wiki-status`, `/wiki-ingest`,
 `/wiki-query` — they resolve this role's vault from the `.env` just written.
 
+## Prove the bytes
+
+`SHA256SUMS` covers every file in this bundle. After extracting, verify it before
+deploying:
+
+```bash
+sha256sum -c SHA256SUMS        # or: shasum -a 256 -c SHA256SUMS
+```
+
 ## Deliberately absent
 
 - **Secrets.** No private keys, no tokens. The master's state dir lives outside the
@@ -375,6 +433,12 @@ EOF
 # step. Record that, so nobody wonders where it went.
 printf '\n.env is not bundled (machine-local paths); run sparknet-env-init.sh after extracting.\n' \
   >> "$target/BUNDLE.md"
+
+# Hash the finished tree last, so BUNDLE.md and every copied file are covered.
+# Deliberately the final build action before tar: a manifest written earlier
+# would silently omit whatever was added after it.
+write_sums "$target"
+printf '  hashed   SHA256SUMS (%s files)\n' "$(grep -c . "$target/SHA256SUMS")"
 
 mkdir -p "$out_root"
 archive="$out_root/$name.tar.gz"

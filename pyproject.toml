@@ -35,6 +35,16 @@ addopts = "-q --strict-markers"
 # The suite must never touch the real blockchain/ledger.json; tests that need a
 # ledger copy it into tmp_path themselves.
 norecursedirs = [".venv", ".state", ".cache", "references", "node_modules"]
+# The tier vocabulary, registered so `--strict-markers` accepts it and
+# `pytest -m <marker>` can select a tier once tests carry the marks. Registering
+# without applying is safe: `-m` merely deselects unmarked tests.
+markers = [
+    "unit: fast, isolated tests with no subprocesses or sockets",
+    "integration: tests that spawn processes, bind ports or write the filesystem",
+    "contract: cross-role contract conformance (see `make contract-test`)",
+    "layout: repository structure, claims and hygiene invariants",
+    "slow: tests that take noticeably long (measurable on a Spark node)",
+]
 
 [tool.ruff]
 line-length = 120

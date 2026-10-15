@@ -72,8 +72,13 @@ ch role can do |
 | `make validate` | both roles' charters, plans and manifests |
 | `make test-all` | **every** suite: contract, fabric, peer, master |
 | `make contract-test` | the peer still matches `contracts/` |
-| `make wiki-sync` / `make wiki-verify` | re-vendor the wiki suit
-e / prove no drift |
+| `make ci` / `make ci CI_QUICK=1` | the local pre-merge gate (`scripts/pre-merge-gate.sh`): keys, shims, lint, format-check, shellcheck, validate, contract-test, render-check; `CI_QUICK=1` skips the full suite |
+| `make format-check` / `make shellcheck` | incremental `ruff format --check` (new files only) / shellcheck gate (skips with a note if the binary is absent) |
+| `make lint` / `make lint-strict` | blocking ruff (`E,F,I,UP`) / advisory widened rules (`B,SIM,RUF,S`) |
+| `make test-report SCOPE=fabric\|peer\|master\|all` | JUnit XML + `.state/reports/summary.json` |
+| `make render` / `make render-check` | regenerate `contracts/manifest.json` from the contract SSOT / fail if it is stale |
+| `make drift-check` | fail if anything *derived* drifted: `render-check` + `wiki-verify` + `contract-test` |
+| `make wiki-sync` / `make wiki-verify` | re-vendor the wiki suite / prove no drift |
 | `make wiki-preflight` | prove the skills resolve *this* vault |
 | `make tui` | launch the TUI from the fabric root **with** KDE notifications (`OPENCODE_CONFIG=…kde-notif.opencode.json`) — roles launch plugin-free with plain `opencode` |
 | `make bundle ROLE=peer\|master` | build a standalone node bundle in `dist/` |

@@ -35,7 +35,6 @@ Normative: `contracts/consensus-protocol.md`. The endpoint shapes live in its
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import secrets
 import sys
@@ -53,6 +52,13 @@ from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+
+# --- the one by-path loader (D10) --------------------------------------------
+# `shared/` is not on sys.path, so this module's own directory is added before
+# importing the fabric's single loader. These two lines are deliberately
+# identical in every shared module; tests/test_contracts.py pins them.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from sparknet_loader import load_by_path as _load_by_path_impl  # noqa: E402
 
 DEFAULT_SHARED_DIR = Path(__file__).resolve().parent
 
@@ -121,22 +127,15 @@ def _load_by_path(name: str, path: Path) -> Any:
     """Load a hyphen-named sibling module, once.
 
     `sparknet-consensus.py` cannot be imported by name (the hyphen), so it is
-    loaded by path and registered in `sys.modules` *before* execution:
-    dataclasses resolves its own module through `sys.modules`, and a module
-    registered afterwards raises an AttributeError that names neither the cause
-    nor the file. The registry check stops a second call from executing a second
-    copy — two instances would be two `isinstance` targets and two independent
-    loader caches.
+    loaded by path and registered in `sys.modules` *before* execution. The
+    resolve-and-cache mechanics live once in ``shared/sparknet_loader.py``; this
+    wrapper only translates the loader's ``ImportError`` into this module's own
+    refusal vocabulary.
     """
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, path)
-    if spec is None or spec.loader is None:
-        raise ElectionError(REASON_MALFORMED, f"cannot load {path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
+    try:
+        return _load_by_path_impl(name, path)
+    except ImportError:
+        raise ElectionError(REASON_MALFORMED, f"cannot load {path}") from None
 
 
 def load_consensus(shared_dir: Path | None = None) -> Any:

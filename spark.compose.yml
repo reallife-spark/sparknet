@@ -1,0 +1,342 @@
+# spark.compose.yml — the DGX Spark node as one image, many services.
+#
+# Every service below is the SAME image (spark.docker), started with a different
+# dispatcher subcommand (spark-entrypoint.sh). Open WebUI is the only foreign
+# image. That is deliberate: the node is one artifact, and a service is a process
+# in it, so "change the vLLM base" is one rebuild that moves every service
+# together.
+#
+# Bring it up (the setup script does this, this is the manual path):
+#
+#   make -C peer-node dist
+#   cp dist/sparknet-peer.tar.gz peer-node/container/context/sparknet-peer.tar.gz
+#   docker compose -f spark.compose.yml --env-file .state/spark.env build
+#   docker compose -f spark.compose.yml --env-file .state/spark.env up -d
+#
+# Profiles keep the default node text-only and cheap; the multimodal halves are
+# opt-in, so a first bring-up never downloads four models before it can answer:
+#
+#   default         nats vllm compute agent gpu      (text LLM + telemetry)
+#   --profile kv    + kvrouter                        (KV-residency index)
+#   --profile control + control                       (this node holds the Master key)
+#   --profile webui + webui                           (Open WebUI on :3000)
+#   --profile embed + vllm-embed                      (embeddings, for the RAG corpus)
+#   --profile rerank + vllm-rerank                    (cross-encoder reranker)
+#   --profile audio + vllm-audio                      (speech/audio model)
+#
+# To run more than one multimodal profile at once, add them all:
+#   docker compose -f spark.compose.yml --profile embed --profile audio up -d
+#
+# Everything here is variable-interpolated from the environment (docker compose
+# reads .env in this directory, or --env-file .state/spark.env). Nothing is
+# hard-coded: the same file brings up spark-01 text-only or a full multimodal
+# node by changing variables only.
+
+name: sparknet-spark
+
+# --- shared fragments --------------------------------------------------------
+
+x-spark-node: &spark-node
+  image: sparknet-spark-node:${SPARKNET_IMAGE_TAG:-dev}
+  build:
+    context: .
+    dockerfile: spark.docker
+    additional_contexts:
+      # The host's `make -C goSpark build build-gpu` output. A named context,
+      # not a COPY, so the goSpark source never enters this build context.
+      gospark: ${GOSPARK_DIR:-/mnt/knowledge/goSpark}
+    args:
+      VLLM_BASE: ${VLLM_BASE:-nvcr.io/nvidia/vllm:26.04-py3}
+      OPENCODE_VERSION: ${OPENCODE_VERSION:-1.18.35}
+      NATS_VERSION: ${NATS_VERSION:-2.14.2}
+      INSTALL_DCGM: ${INSTALL_DCGM:-0}
+  restart: unless-stopped
+
+# Environment every node service shares. The shared secret is the SAME string in
+# every container because the setup script generates it once into --env-file and
+# into the host state dir; the dispatcher then just persists/reads it.
+x-spark-env: &spark-env
+  SPARKNET_NODE_ID: ${SPARKNET_NODE_ID:-spark-01}
+  SPARKNET_ROLE: ${SPARKNET_ROLE:-peer}
+  SPARKNET_OVERLAY_IPV4: ${SPARKNET_OVERLAY_IPV4:-10.100.0.2}
+  SPARKNET_STATE_DIR: /srv/sparknet/peer-node/.state
+  SPARKNET_BUS_URL: nats://nats:4222
+  SPARKNET_SHARED_SECRET: ${SPARKNET_SHARED_SECRET:-}
+  VLLM_MODEL: ${VLLM_MODEL:-Qwen/Qwen2.5-32B-Instruct}
+  TZ: ${TZ:-UTC}
+
+# .state is a HOST bind mount, never a named volume: keys and the signed ledger
+# survive recreation and never enter an image layer. Same path and contract as
+# the base node container.
+x-state-volume: &state-volume
+  type: bind
+  source: ${SPARKNET_STATE_HOST:-./peer-node/.state}
+  target: /srv/sparknet/peer-node/.state
+
+# GPU reservation. Harmless on a host without a driver (the service simply
+# fails to start); required on DGX Spark.
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+# vLLM wants a large shared-memory segment and host IPC for its workers.
+x-vllm-runtime: &vllm-runtime
+  ipc: host
+  shm_size: ${VLLM_SHM_SIZE:-16gb}
+  ulimits:
+    memlock: -1
+    stack: 67108864
+
+# --- services ----------------------------------------------------------------
+
+services:
+  # The goSpark bus. Run as the upstream NATS image so a first bring-up does not
+  # need the (large) node image just to have a bus; the node image also bakes a
+  # pinned nats-server for `spark-entrypoint nats` and for tests. JetStream
+  # persists under the host state dir so a restart does not lose the stream (the
+  # ledger lives in .state; losing the stream would orphan it).
+  nats:
+    image: nats:${NATS_IMAGE_TAG:-2.11-alpine}
+    container_name: sparknet-nats
+    command: ["-js", "-a", "0.0.0.0", "-p", "4222", "-m", "8222", "-sd", "/data"]
+    volumes:
+      - type: bind
+        source: ${SPARKNET_STATE_HOST:-./peer-node/.state}/nats
+        target: /data
+    ports:
+      - "${SPARKNET_BIND_LOCAL:-127.0.0.1}:4222:4222"
+      - "${SPARKNET_BIND_LOCAL:-127.0.0.1}:8222:8222"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8222/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # The text LLM. Serves the fabric MASTERSPIKE precontext through a wrapper
+  # chat template built at start from the baked context; exposed on the LAN so
+  # the node's API is reachable, not just in-network.
+  vllm:
+    <<: [*spark-node, *vllm-runtime, *gpu]
+    container_name: sparknet-vllm
+    command: ["vllm"]
+    environment:
+      <<: *spark-env
+      VLLM_PORT: "8000"
+      VLLM_GPU_MEM_UTIL: ${VLLM_GPU_MEM_UTIL:-0.85}
+      VLLM_MAX_MODEL_LEN: ${VLLM_MAX_MODEL_LEN:-65536}
+      VLLM_EXTRA_ARGS: ${VLLM_EXTRA_ARGS:-}
+      SPARKNET_MULTIMODAL: ${SPARKNET_MULTIMODAL:-}
+      SPARKNET_MM_LIMIT: ${SPARKNET_MM_LIMIT:-}
+    volumes:
+      - *state-volume
+      - type: bind
+        source: ${HF_CACHE_DIR:-${HOME}/.cache/huggingface}
+        target: /root/.cache/huggingface
+    ports:
+      - "${SPARKNET_BIND_API:-0.0.0.0}:8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 600s
+
+  # The Python compute plane beside the GPU: /v1/execute (infer/embed) with
+  # X-Sparknet-Auth, forwarding to vLLM.
+  compute:
+    <<: [*spark-node]
+    container_name: sparknet-compute
+    command: ["compute"]
+    depends_on:
+      vllm:
+        condition: service_started
+    environment:
+      <<: *spark-env
+      COMPUTE_LISTEN_HOST: 0.0.0.0
+      COMPUTE_LISTEN_PORT: "9090"
+      VLLM_ENDPOINT: http://vllm:8000/v1/chat/completions
+      SPARKNET_REQUIRE_VLLM: ${SPARKNET_REQUIRE_VLLM:-1}
+      # Set by the embed profile; empty => the worker's local hashed embedder.
+      SPARKNET_EMBED_ENDPOINT: ${SPARKNET_EMBED_ENDPOINT:-}
+      SPARKNET_EMBED_MODEL: ${SPARKNET_EMBED_MODEL:-sparknet-embed-hash}
+    volumes:
+      - *state-volume
+    ports:
+      - "${SPARKNET_BIND_LOCAL:-127.0.0.1}:9090:9090"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9090/v1/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # The KV-residency index (RadixAttention prefixes). In the node, always
+  # reachable to the agent; opt-in only so a minimal node skips it.
+  kvrouter:
+    <<: [*spark-node]
+    profiles: ["kv"]
+    container_name: sparknet-kvrouter
+    command: ["kvrouter"]
+    depends_on:
+      vllm:
+        condition: service_started
+    environment:
+      <<: *spark-env
+      KV_LISTEN_HOST: 0.0.0.0
+      KV_LISTEN_PORT: "9100"
+    volumes:
+      - *state-volume
+
+  # The goSpark node: verifies Master-signed tasks, executes, attests. Its
+  # gateway fronts vLLM; the compute endpoint is the worker above.
+  agent:
+    <<: [*spark-node]
+    container_name: sparknet-agent
+    command: ["agent"]
+    depends_on:
+      nats:
+        condition: service_healthy
+      compute:
+        condition: service_started
+    environment:
+      <<: *spark-env
+      GOSPARK_GATEWAY_LISTEN: 0.0.0.0:8080
+      GOSPARK_GATEWAY_UPSTREAM: http://vllm:8000
+      GOSPARK_COMPUTE_ENDPOINT: http://compute:9090
+      GOSPARK_KV_ENDPOINT: http://kvrouter:9100
+      SPARKNET_MASTER_PUB: ${SPARKNET_MASTER_PUB:-}
+    volumes:
+      - *state-volume
+    ports:
+      - "${SPARKNET_BIND_API:-0.0.0.0}:8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # The control plane. Only on the node that holds the Master signing key, so
+  # it is a profile, never default.
+  control:
+    <<: [*spark-node]
+    profiles: ["control"]
+    container_name: sparknet-control
+    command: ["control"]
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      <<: *spark-env
+      SPARKNET_ROLE: master
+      GOSPARK_ADMIN_LISTEN: 0.0.0.0:8899
+      GOSPARK_METRICS_LISTEN: 0.0.0.0:9180
+      GOSPARK_GATEWAY_LISTEN: 0.0.0.0:8081
+    volumes:
+      - *state-volume
+    ports:
+      - "${SPARKNET_BIND_LOCAL:-127.0.0.1}:8899:8899"
+      - "${SPARKNET_BIND_API:-0.0.0.0}:8081:8081"
+
+  # The GPU-telemetry sidecar. Degrades to available=false with a reason when
+  # there is no driver/DCGM — never a hard failure, by contract.
+  gpu:
+    <<: [*spark-node, *gpu]
+    container_name: sparknet-gpu
+    command: ["gpu"]
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      <<: *spark-env
+      SPARKNET_GPU_INTERVAL: ${SPARKNET_GPU_INTERVAL:-30s}
+    volumes:
+      - *state-volume
+
+  # Open WebUI, the only foreign image, pointing at the node's own gateway.
+  webui:
+    image: ghcr.io/open-webui/open-webui:${WEBUI_TAG:-main}
+    profiles: ["webui"]
+    container_name: sparknet-webui
+    depends_on:
+      agent:
+        condition: service_started
+    environment:
+      OPENAI_API_BASE_URL: ${WEBUI_API_BASE:-http://agent:8080/v1}
+      OPENAI_API_KEY: ${SPARKNET_SHARED_SECRET:-sparknet-local}
+      WEBUI_AUTH: ${WEBUI_AUTH:-false}
+      ENABLE_OLLAMA_API: "false"
+    volumes:
+      - type: bind
+        source: ${SPARKNET_STATE_HOST:-./peer-node/.state}/webui
+        target: /app/backend/data
+    ports:
+      - "${SPARKNET_BIND_API:-0.0.0.0}:3000:8080"
+    restart: unless-stopped
+
+  # --- multimodal profile services (opt-in) ----------------------------------
+
+  # Embeddings. A dedicated vLLM pooling server; point the compute worker at it
+  # with SPARKNET_EMBED_ENDPOINT=http://vllm-embed:8001/v1/embeddings.
+  vllm-embed:
+    <<: [*spark-node, *vllm-runtime, *gpu]
+    profiles: ["embed"]
+    container_name: sparknet-vllm-embed
+    command: ["vllm"]
+    environment:
+      <<: *spark-env
+      VLLM_MODEL: ${VLLM_EMBED_MODEL:-BAAI/bge-m3}
+      VLLM_PORT: "8001"
+      SPARKNET_PRECONTEXT: "0"
+      SPARKNET_PREFIX_CACHING: "0"
+      VLLM_EXTRA_ARGS: "--task embed --gpu-memory-utilization ${VLLM_EMBED_GPU_MEM_UTIL:-0.15} ${VLLM_EMBED_EXTRA_ARGS:-}"
+    volumes:
+      - *state-volume
+      - type: bind
+        source: ${HF_CACHE_DIR:-${HOME}/.cache/huggingface}
+        target: /root/.cache/huggingface
+
+  # Cross-encoder reranker.
+  vllm-rerank:
+    <<: [*spark-node, *vllm-runtime, *gpu]
+    profiles: ["rerank"]
+    container_name: sparknet-vllm-rerank
+    command: ["vllm"]
+    environment:
+      <<: *spark-env
+      VLLM_MODEL: ${VLLM_RERANK_MODEL:-BAAI/bge-reranker-v2-m3}
+      VLLM_PORT: "8002"
+      SPARKNET_PRECONTEXT: "0"
+      SPARKNET_PREFIX_CACHING: "0"
+      VLLM_EXTRA_ARGS: "--task score --gpu-memory-utilization ${VLLM_RERANK_GPU_MEM_UTIL:-0.10} ${VLLM_RERANK_EXTRA_ARGS:-}"
+    volumes:
+      - *state-volume
+      - type: bind
+        source: ${HF_CACHE_DIR:-${HOME}/.cache/huggingface}
+        target: /root/.cache/huggingface
+
+  # Speech / audio (ASR + audio understanding). A separate server so the text
+  # model stays resident and cheap.
+  vllm-audio:
+    <<: [*spark-node, *vllm-runtime, *gpu]
+    profiles: ["audio"]
+    container_name: sparknet-vllm-audio
+    command: ["vllm"]
+    environment:
+      <<: *spark-env
+      VLLM_MODEL: ${VLLM_AUDIO_MODEL:-openai/whisper-large-v3}
+      VLLM_PORT: "8003"
+      SPARKNET_PRECONTEXT: "0"
+      VLLM_EXTRA_ARGS: "--gpu-memory-utilization ${VLLM_AUDIO_GPU_MEM_UTIL:-0.15} ${VLLM_AUDIO_EXTRA_ARGS:-}"
+    volumes:
+      - *state-volume
+      - type: bind
+        source: ${HF_CACHE_DIR:-${HOME}/.cache/huggingface}
+        target: /root/.cache/huggingface

@@ -1,0 +1,195 @@
+# syntax=docker/dockerfile:1
+#
+# spark.docker — the DGX Spark node image.
+#
+# This is NOT the base peer-node image (peer-node/container/Dockerfile, which is
+# deliberately CUDA-free). This is the *inference* node: a DGX Spark image that
+# runs the SparkNet environment end to end — the vLLM engine, the goSpark
+# control/service plane, the Python compute plane, the sparknet node bundle, and
+# the fabric knowledge distilled into the model's precontext.
+#
+# One image, many services. `spark.compose.yml` runs this same image with a
+# different subcommand per service (see spark-entrypoint.sh); Open WebUI is the
+# only foreign image. That is what makes "all three bases" a one-argument
+# rebuild: change VLLM_BASE, rebuild, and every service moves together.
+#
+# Build (from the sparknet repo root; BuildKit named context gives the image the
+# prebuilt goSpark binaries and the Python compute plane):
+#
+#   docker build -f spark.docker \
+#     --build-context gospark=/mnt/knowledge/goSpark \
+#     -t sparknet-spark-node:dev .
+#
+# The goSpark binaries must already be built on the host:
+#
+#   make -C /mnt/knowledge/goSpark build build-gpu
+#
+# `sparknet-node-setup.sh` does all of the above; this header is the manual path.
+#
+# --- Base image --------------------------------------------------------------
+#
+# DGX Spark is GB10 (Blackwell sm_121a, ARM64/aarch64, 128 GB unified LPDDR5x).
+# Upstream stable vLLM does not support GB10, so the base MUST be a CUDA-13-era
+# build. Three that work, all selectable with --build-arg VLLM_BASE=...:
+#
+#   * nvcr.io/nvidia/vllm:26.04-py3        (default) vLLM 0.19, CUDA 13.2,
+#                                          de-facto stable DGX Spark NGC image.
+#   * vllm/vllm-openai:cu130-nightly       newest arch + DFlash; moves, so pin a
+#                                          digest for anything you depend on.
+#   * ghcr.io/timothystewart6/vllm-gb10    community image built+verified on GB10.
+#
+# All three are Ubuntu-based with vLLM + transformers importable. We override
+# the image ENTRYPOINT with our dispatcher and always invoke `vllm serve`
+# ourselves, so the two entrypoint conventions (NGC pass-through vs upstream
+# `vllm serve`) stop mattering.
+ARG VLLM_BASE=nvcr.io/nvidia/vllm:26.04-py3
+FROM ${VLLM_BASE}
+
+# --- pins --------------------------------------------------------------------
+# Pinned, never `latest`: a mutating tag defeats the point of a node image.
+ARG OPENCODE_VERSION=1.18.35
+ARG NATS_VERSION=2.14.2
+# Optional DCGM runtime for the cgo GPU sidecar's health half. Default off so
+# the build is deterministic on any base; the sidecar degrades to
+# available=false with a reason when libdcgm.so.4 is absent. Set to 1 to pull
+# NVIDIA's DCGM from the CUDA apt repo for this base's Ubuntu codename.
+ARG INSTALL_DCGM=0
+# Set by BuildKit per --platform.
+ARG TARGETARCH
+
+LABEL org.opencontainers.image.title="sparknet DGX Spark node" \
+      org.opencontainers.image.description="SparkNet node image: vLLM + goSpark + sparknet bundle + KB precontext (DGX Spark / GB10, ARM64)." \
+      org.opencontainers.image.source="https://github.com/reallife-spark/goSpark" \
+      org.opencontainers.image.licenses="MIT"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    SPARKNET_FABRIC_ROOT=/srv/sparknet \
+    SPARKNET_NODE_DIR=/srv/sparknet/peer-node \
+    SPARKNET_OPT=/opt/sparknet \
+    SPARKNET_VENV=/opt/sparknet/venv \
+    SPARKNET_CONTEXT_DIR=/opt/sparknet/context \
+    SPARKNET_STATE_DIR=/srv/sparknet/peer-node/.state \
+    VLLM_MODEL=Qwen/Qwen2.5-32B-Instruct \
+    VLLM_PORT=8000 \
+    NATS_PORT=4222
+
+# --- runtime tooling ---------------------------------------------------------
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates curl tini python3-venv jq \
+ && rm -rf /var/lib/apt/lists/*
+
+# --- NATS server (the goSpark bus) -------------------------------------------
+RUN case "$TARGETARCH" in \
+      amd64) asset=amd64 ;; \
+      arm64) asset=arm64 ;; \
+      *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+ && curl -fsSL "https://github.com/nats-io/nats-server/releases/download/v${NATS_VERSION}/nats-server-v${NATS_VERSION}-linux-${asset}.tar.gz" -o /tmp/nats.tar.gz \
+ && tar -xzf /tmp/nats.tar.gz -C /tmp \
+ && install -m 0755 "/tmp/nats-server-v${NATS_VERSION}-linux-${asset}/nats-server" /usr/local/bin/nats-server \
+ && rm -rf /tmp/nats.tar.gz "/tmp/nats-server-v${NATS_VERSION}-linux-${asset}" \
+ && nats-server --version
+
+# --- opencode (the node's agent surface; same pin as the base node image) -----
+RUN case "$TARGETARCH" in \
+      amd64) asset=x64 ;; \
+      arm64) asset=arm64 ;; \
+      *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+ && curl -fsSL "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-${asset}.tar.gz" -o /tmp/opencode.tar.gz \
+ && tar -xzf /tmp/opencode.tar.gz -C /usr/local/bin opencode \
+ && chmod 0755 /usr/local/bin/opencode \
+ && rm /tmp/opencode.tar.gz \
+ && opencode --version
+
+# --- optional DCGM runtime (health half of the GPU sidecar) ------------------
+# NVML metrics need only the driver's libnvidia-ml.so, which the NVIDIA
+# container runtime mounts. DCGM health needs libdcgm.so.4. Kept opt-in: the
+# repository's own contract is that a GPU reading is telemetry that degrades to
+# `available=false` with a reason, never a hard failure.
+RUN if [ "$INSTALL_DCGM" = "1" ]; then \
+      codename="$(. /etc/os-release && printf '%s' "${VERSION_CODENAME:-jammy}")" ; \
+      ( curl -fsSL "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu${codename}-sbsa/cuda-keyring_1.1-1_all.deb" -o /tmp/cuda-keyring.deb \
+        && dpkg -i /tmp/cuda-keyring.deb \
+        && apt-get update \
+        && ( apt-get install -y --no-install-recommends datacenter-gpu-manager-4-cuda13 \
+             || apt-get install -y --no-install-recommends datacenter-gpu-manager ) \
+        && ldconfig ) \
+        || echo "WARN: DCGM install skipped — sparknet-gpu will report libdcgm.so.4 not found" ; \
+      rm -rf /tmp/cuda-keyring.deb /var/lib/apt/lists/* ; \
+    else \
+      echo "DCGM not installed (INSTALL_DCGM=0); NVML metrics still work via the driver" ; \
+    fi
+
+# --- goSpark control/service plane (prebuilt host binaries, named context) ----
+# The cgo GPU sidecar links NVML/DCGM; building it in-image would drag the
+# nvlib/dcgm source mirrors in. COPYing the host's `make build build-gpu` output
+# keeps the source out of the image and the Dockerfile small. glibc abi matches
+# because both ends are Ubuntu aarch64.
+COPY --from=gospark /bin/ /usr/local/bin/
+RUN chmod 0755 /usr/local/bin/sparknet-* \
+ && test -x /usr/local/bin/sparknet-control \
+ && test -x /usr/local/bin/sparknet-agent \
+ && test -x /usr/local/bin/sparknetctl
+
+# --- compute plane + configs (from the same named context) -------------------
+COPY --from=gospark /compute/ /opt/sparknet/compute/
+COPY --from=gospark /configs/ /opt/sparknet/gospark-configs/
+RUN rm -rf /opt/sparknet/compute/__pycache__ \
+ && python3 -m venv "${SPARKNET_VENV}" \
+ && "${SPARKNET_VENV}/bin/pip" install --no-cache-dir --upgrade pip \
+ && "${SPARKNET_VENV}/bin/pip" install --no-cache-dir -r /opt/sparknet/compute/requirements.txt \
+ && "${SPARKNET_VENV}/bin/python" -c "import fastapi, uvicorn, httpx"
+
+# --- the sparknet node bundle ------------------------------------------------
+# Staged by `sparknet-node-setup.sh` (or `make -C peer-node dist` + copy) at
+# peer-node/container/context/sparknet-peer.tar.gz — the one artifact the repo
+# root .dockerignore lets through, exactly as the base node image does. This is
+# the same bundle a node ships, so the repo, the archive and the image stay one
+# code path.
+ARG BUNDLE_TARBALL=peer-node/container/context/sparknet-peer.tar.gz
+COPY ${BUNDLE_TARBALL} /tmp/sparknet-peer.tar.gz
+RUN mkdir -p /tmp/bundle /srv/sparknet \
+ && tar -xzf /tmp/sparknet-peer.tar.gz -C /tmp/bundle \
+ && cp -a /tmp/bundle/sparknet-peer/. /srv/sparknet/ \
+ && rm -rf /tmp/bundle /tmp/sparknet-peer.tar.gz \
+ && test -f /srv/sparknet/peer-node/scripts/sparknet-env.sh \
+ && test -d /srv/sparknet/contracts \
+ && test -d /srv/sparknet/shared \
+ && test -f /srv/sparknet/peer-node/manifests/masterspike/vllm-system-prompt.md
+
+# --- the fabric as precontext ------------------------------------------------
+# Two baked artifacts, both generated from the bundle, never hand-written:
+#   1. the MASTERSPIKE system prompt (the llm-wiki *format*, generated from
+#      .opencode/skills/llm-wiki/SKILL.md by peer-node/scripts/sparknet-masterspike.py);
+#   2. a compact fabric digest built from contracts/ (capabilities, ports,
+#      identity fields) so the model knows the vocabulary it is reasoning about.
+# Both are injected into every completion through a wrapper chat template built
+# at container start by spark-precontext.py (the model's own HF template, with a
+# system precontext prepended — see that script).
+COPY spark-precontext.py /opt/sparknet/spark-precontext.py
+RUN mkdir -p "${SPARKNET_CONTEXT_DIR}" \
+ && cp /srv/sparknet/peer-node/manifests/masterspike/vllm-system-prompt.md \
+       "${SPARKNET_CONTEXT_DIR}/masterspike-system-prompt.md" \
+ && python3 /opt/sparknet/spark-precontext.py digest \
+      --contracts /srv/sparknet/contracts \
+      --out "${SPARKNET_CONTEXT_DIR}/fabric-digest.md" \
+ && python3 /srv/sparknet/scripts/sparknet-rag-corpus.py /srv/sparknet \
+      --out "${SPARKNET_CONTEXT_DIR}/rag-corpus" \
+ && test -s "${SPARKNET_CONTEXT_DIR}/fabric-digest.md"
+
+# --- entrypoint + dispatcher -------------------------------------------------
+COPY spark-entrypoint.sh /usr/local/bin/spark-entrypoint
+RUN chmod 0755 /usr/local/bin/spark-entrypoint \
+ && ln -sf /opt/sparknet/venv/bin/python /usr/local/bin/sparknet-python \
+ && /usr/local/bin/spark-entrypoint help >/dev/null
+
+WORKDIR /srv/sparknet/peer-node
+
+# The dispatcher picks the service from its first argument (vllm, compute,
+# agent, ...). Nothing here bakes a vault path or a secret: .env is regenerated
+# at boot, keys live in the host-mounted .state, and the shared secret arrives
+# from the environment.
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/spark-entrypoint"]
+CMD ["vllm"]

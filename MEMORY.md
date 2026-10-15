@@ -4,9 +4,53 @@
 > The plan and its cursor live in `PLAN.md` — this file mirrors it, it does not
 > own it. Per-session detail belongs in `sessions/YYYY-MM-DD.md`.
 
-Updated: 2026-10-12
+Updated: 2026-10-13
 
 ## Standing State
+
+- **Review-adoption arc open — root `PLAN.md` `current: 40` (opened 2026-10-13).**
+  Adoption from the `rzfz-ai-service-stack` / `dify` comparison: Steps 37–41
+  (A quality gates, B SSOT→derived artifacts, C release, D structure). **Steps 37
+  (quality gates)**, **38 (one shared module loader)** and **39 (derived
+  artifacts from the SSOT)** are complete; **step 40 (split) is in progress**
+  and release (41) is pending. Decisions: **A3 (type checking) dropped**, **A5
+  (CI) is a local pre-merge gate only**, **C1 (licensing) deferred**. Step 39 deliverables:
+  `scripts/sparknet-render.py [--check]` → `contracts/manifest.json` (the JSON
+  contract SSOT by sha256 + projected capability/port tables); `make render` /
+  `render-check` / `drift-check` (render-check + `wiki-verify` + `contract-test`);
+  `scripts/sparknet-bundle.sh` now writes a `SHA256SUMS` (verified by `--verify`,
+  tamper fails). **B2 (`env-changes.json`) dropped after inspection** — sparknet
+  *regenerates* `.env` from `.env.example`, it does not migrate; the real
+  invariant (all three templates share one key set) is gated by
+  `tests/test_layout.py::test_env_example_templates_share_one_key_set`. New root
+  targets: `make ci [CI_QUICK=1]` (pre-merge gate, now incl. `render-check`),
+  `format-check`, `shellcheck`, `lint-strict`, `render`, `render-check`,
+  `drift-check`, `test-report SCOPE=…` (JUnit + `.state/reports/summary.json`);
+  pytest markers (`unit/integration/contract/layout/slow`) registered in
+  `pyproject.toml`.** Step 40 (D11–D13)**: **D11 (a `shared/sparknet/` package
+  with kebab shims) was dropped by decision** — it would touch ~103 call sites
+  and add a second name per module, against the by-path / one-copy / relocatable
+  discipline (`test_only_one_authz_implementation_exists`,
+  `test_shared_modules_share_one_loader_bootstrap`); behavior-preserving splits
+  instead. **D12a done**: the YAML-subset parser + emitter + the
+  `ProvenanceError`/`FrontmatterError` pair moved out of
+  `shared/sparknet-provenance.py` (2952→2603 lines) into new
+  `shared/sparknet-yaml.py`, loaded **by path** via `shared/sparknet_loader.py`
+  and re-exported from provenance so no caller changes (incl.
+  `tests/test_contracts.py::provenance.parse_yaml_subset`). The error pair lives
+  in the lower module because `FrontmatterError` must stay a `ProvenanceError`
+  subclass for the many `except ProvenanceError` handlers (identity proven).
+  **D13a done**: the pinned `GOLDEN_*` vectors + their six tests moved out of
+  `tests/test_contracts.py` (1451→1168 lines) into new
+  `tests/test_authz_golden.py`; the five module fixtures (`overlay`,
+  `capabilities`, `identity_schema`, `ports`, `authz`) moved to
+  `tests/conftest.py` (auto-discovered — importing a fixture by name trips
+  ruff F401/F811) and the constants + `load()` to new
+  `tests/contract_helpers.py`. Test-only, so no bundle applies. All gates green
+  2026-10-13 (lint/format-check/contract-test/validate/drift-check/keys-check/
+  shims-check; `make test-all` fabric 846 passed + 3 skipped, peer 454/1 skip;
+  `ci CI_QUICK=1`), collected `tests/` count unchanged (849). Cursor stays `40`;
+  further splits of the still-large modules/tests remain.
 
 - **Admin federation open (fabric Step 29 / peer Step 12, opened 2026-10-12).**
   `ADMIN_FEDERATION_DESIGN.md` at the fabric root records the operator
@@ -70,7 +114,7 @@ Updated: 2026-10-12
   **Host move (2026-10-12)**: the two nodes are now on the flat
   `192.168.178.0/24` LAN — `agx64`=`red-team`=`192.168.178.131` (Master,
   `wg1 10.100.0.1/32`) and `agx32`=`blue-team`=`192.168.178.133` (peer,
-  `wg1 10.100.0.2/32`). The old `192.168.10.64`/`192.168.20.32` legs are
+  `wg1 10.100.0.2/32`). The old `192.168.178.131`/`192.168.20.32` legs are
   **retired**; `~/.ssh/config` points the aliases at the new IPs.
   **Phase 5 executed live 2026-10-12 (A/B/D/E-read/F green; C blocked).** Phase A
   landed the master+peer bundles on both hosts (live manifests backed up; signed
@@ -129,13 +173,131 @@ Updated: 2026-10-12
   the fresh per-user model row. Full power-cycle reboot of a node remains a
   standing user-open item (Step 10 leg).
 
-- **Plan cursor**: root `PLAN.md` **`current: done`** — fabric Step 29 (cross-node
-  admin federation) was **completed 2026-10-12**: design + Phases 0–4 as code +
-  signed plumbing, then Phase 5 run live on the cluster2 pair (A/B/C/D/E/F with the
-  mutating `approve`/`role` legs and the KDE ping user-confirmed; procedure in
-  `contracts/admin-federation-runbook.md`). F1 + three host-only defects fixed.
-  The fabric roadmap is now **role-scoped** (the plan's “Next”): further work goes
-  to `master-node/plans/MASTER_BUILD_PLAN.md` or `peer-node/PLAN.md`.
+- **Plan cursor**: root `PLAN.md` **`current: done`** — the fabric arc
+  **Steps 30–36** (signed-ledger hardening, cross-user proposal/review/
+  countersignature, and the document round-trip transport) was opened
+  2026-10-12 on operator decision, returning fabric-level scope, and is now
+  **complete** (Step 36 done 2026-10-13). New roadmap work gets a new step. **Step 30 is
+  done (2026-10-13)**: block *headers* are now the signed unit
+  (`ledger_block_signable`/`ledger_block_hash` in `shared/sparknet-authz.py`,
+  imported by provenance + master-ledger + signer), `verify_chain` enforces the
+  header signature, `block_id == index` and `genesis_hash`, both ledgers are
+  `version 2.0`, and 8 mutation-proven tamper tests hold — closing F1 (the
+  `grant_use`-delete/replay vector), F3, F4, F5. **Step 32 is done
+  (2026-10-13)**: `shared/sparknet-merkle.py` implements the RFC 6962 primitive
+  (leaf/interior/root + inclusion/consistency proofs) with RFC 9162 verifiers,
+  signed tree headers handled purely by delegation to `sparknet-authz.py`
+  (`_load_authz` by path), pinned to the canonical transparency-dev/merkle
+  corpus — roots sizes 0..8 (7-leaf root **`ddb89be4…`**, correcting the plan's
+  `9d56…`), reference inclusion/consistency proofs, the §2.1.5 worked example,
+  and the negative corpus writebacks, 46 tests. **Step 31 is done (2026-10-13)**:
+  `shared/sparknet-provenance.py` gains a signed `checkpoint` block (tree size =
+  chain length *before* the checkpoint, `head_hash` = newest block hash, RFC 6962
+  `root` of every block hash; header-signed by the node key, no
+  `data.signatures`), `verify_checkpoint`/`anchor`, and CLI `append-checkpoint` /
+  `anchor-checkpoint`; anchors persist per sender pubkey in
+  `$SPARKNET_STATE_DIR/anchored-checkpoints.json` (0600, atomic) and refuse a
+  rollback (size below anchor) and a fork (same size, different root), demanding
+  an RFC 6962 `verify_consistency` proof + advanced head for growth, fail-closed
+  on a corrupt store — closing F2/G4. `contracts/tracking-schema.json` adds
+  `checkpoint` to the **peer** vocabulary (master untouched, still disjoint) with
+  a pinned checkpoint section;   `contracts/provenance-protocol.md` documents it;
+  `tests/test_checkpoints.py` (12, two in-process nodes). Live cross-node
+  anchoring over the overlay stays `DoD: confirm: user` (Step 36 carries the
+  exchange over the share ports). **Step 35 is done
+  (2026-10-13)**: the signed note message is now `sparknet-note/2` — domain +
+  **four** hashes, the fourth being the RFC 6962 `conversation_root` of the
+  canonical `tracking.conversation` entries (`build_conversation_root`);
+  `sign_note` records `signature.note_version` + `signature.
+  signed_conversation_root` and `verify_note` recomputes the root, so an edited
+  conversation entry (or a swapped body) is `stale:content` and an unknown
+  `note_version` is `invalid`. A latent emitter bug (a list of dicts emitted one
+  indent too shallow to re-parse) was fixed; all 8 signed peer notes were
+  re-signed under `/2` (clean break, envelope-only diff; no `sparknet-note/1`
+  note remains). Gates 2026-10-13: contract-test 72+1, test-all fabric 791+3 /
+  peer 437+1 / master 163, lint, validate, keys-check, shims-check, peer
+  precommit, bundle-verify peer/master. **Step 34 is done (2026-10-13)**:
+  `contracts/tracking-schema.json` now defines `signature.co_signatures[]` plus a
+  `co_signature` section, and `shared/sparknet-provenance.py` gains
+  `CO_SIGNATURE_FIELDS`, `add_co_signature` (a second user's key signs the
+  **primary** envelope's four recorded hashes and the entry is appended as a
+  sibling under `signature`, replacing a same-`key_fingerprint` entry; the
+  primary `sig`/`key_id`/`owner_id` and the recorded hashes are never touched, so
+  the original author and its `valid` verdict survive — the primary tracking hash
+  is taken with the whole `signature` key removed) and
+  `verify_co_signatures(frontmatter, *, trusted_users, registry)` (byte integrity
+  first — `key_fingerprint` must match `public_key_b64`, `sig` must verify over
+  the recorded hashes — then trust via the Master-signed registry resolving the
+  co-signer's `owner_node`, with the origin `user.md` snapshot as the offline
+  fallback; a byte-intact entry resolving through neither is `untrusted`, not
+  `invalid`). CLI `co-sign` / `verify-co-signatures`; protocol documented in
+  `contracts/provenance-protocol.md`; both `00_System/schema.yaml` note the array.
+  Tests +7 provenance (append-without-rewriting/idempotent, unknown signer
+  `untrusted`, over-different-bytes refused, swapped key refused, body tamper →
+  `stale:content`, Master registry resolves incl. revoked/tampered refused, CLI
+  round trip) + 1 contract pin. Gates 2026-10-13: contract-test 73+1, test-all
+  fabric 799+3 / peer 437+1 / master 163, lint, validate, keys-check,
+  shims-check, peer precommit, bundle-verify peer/master. Cursor `34 → 33`.
+  **Step 33 is done (2026-10-13)**: `contracts/proposal-schema.json` +
+  `contracts/proposal-protocol.md` define the `proposal`/`review`/`decision`
+  records (originating agent's work; each reviewer's verdict with agent+model+
+  reason; the boss's approve/deny), the `draft → submitted → reviewed → decided`
+  lifecycle with fail-closed transitions, and the closed vocabularies;
+  `contracts/tracking-schema.json` gains the three events in the **peer**
+  vocabulary (master untouched, still disjoint). `shared/sparknet-proposal.py`
+  loads `sparknet-provenance.py` by path (no crypto of its own; provenance gained
+  public aliases `dual_sign`/`node_id`/`node_public_b64`/`now`/`iso`):
+  `build_proposal` returns a local unsigned draft; `submit_proposal`/
+  `review_proposal`/`decide_proposal` sign with the shared dual-control envelope
+  and append a `proposal`/`review`/`decision` block, each re-reading the ledger
+  and refusing out of order before appending; `verify_proposal_chain` re-checks
+  each record's conversation root, key fingerprint and both signatures plus the
+  logical order against a bare record list (integrity + order only — identity is
+  resolved separately, as with a co-signature; a verified chain grants nothing).
+  CLI `propose`/`submit`/`review`/`decide`/`verify`/`list`. Tests +23
+  (`tests/test_proposal.py`): round trip, state derivation, every transition
+  refusal, every chain refusal (forged sig, swapped key ± fingerprint, tampered
+  conversation, reorder, decision-before-review, missing/duplicate proposal,
+  duplicate decision, foreign id, empty chain), block-edit breaks the ledger
+  chain, contract pins, CLI round trip. Gates 2026-10-13: contract-test 73+1,
+  test-all fabric 824+3 / peer 437+1 / master 163, lint, validate, keys-check,
+  shims-check, peer precommit, bundle-verify peer/master. Cursor
+  `33 → 36`. **Step 36 is done (2026-10-13)** — the proposal exchange over the
+  share regime, and the arc is complete (`current: done`). Operator chose a
+  **new message family on the existing share ports** (not a
+  `capabilities.share_types` member — a proposal conveys no knowledge read or
+  copy, so it is a sibling family `proposal.submit`/`proposal.review`/
+  `proposal.decide` on 4201/4202) and a **dedicated service** (not
+  dispatch-bridge routes). `contracts/proposal-schema.json` gains a structured
+  `transport` section; `contracts/ports.json` moves 4201/4202 off `spec-only` to
+  `implemented` + `not-listening` (a `runtime_why`, since the engines are
+  in-process and open no socket) while the Master's 4203 and the other unbuilt
+  surfaces stay spec-only; `contracts/share-protocol.md` + `proposal-protocol.md`
+  document it. `peer-node/services/sparknet-share-regime.py` now loads
+  `proposal-schema.json` (missing contract refuses construction) and adds
+  `accepts_message`/`proposal_route`. `shared/sparknet-proposal.py` gains
+  `review_bundle`/`decide_bundle` — verify a received bundle with the shared
+  ladder, check the lifecycle against the **bundle** (a proposal lives on its
+  origin's ledger, not the receiver's), append only the local record;
+  `review_proposal`/`decide_proposal` refactored over `_finalize_review`/
+  `_finalize_decision`. New `peer-node/services/sparknet-proposal-exchange.py`
+  (loads the proposal module + regime by path, no crypto of its own;
+  `submit`/`receive`/`verify`/`review`/`decide`; CLI `verify`/`ports`; no
+  socket). The load-bearing rule: `verify_approval_blocks` checks each block's
+  `data.signatures.user` against the **local** user key, so no node may mirror a
+  foreign author's record — a bundle is the union, each node appends only its own.
+  `peer-node/tests/test_proposal_exchange.py` (13, incl. the authorship split
+  proven against each ledger's `verify_approval_blocks`) + `tests/test_contracts.py`'s
+  share-plane pin updated to the honest split. Gates 2026-10-13: contract-test
+  73+1, test-all exit 0 (fabric 824+3 / peer 454+1 / master 163), lint, validate,
+  keys-check, shims-check, peer precommit, bundle-verify peer/master. **`DoD:
+  confirm: user`**: the live overlay round trip (no wireguard interface on the
+  dev host). Step 29
+  (cross-node admin federation) was **completed 2026-10-12**: design + Phases 0–4
+  as code + signed plumbing, then Phase 5 run live on the cluster2 pair (A/B/C/D/E/F
+  with the mutating `approve`/`role` legs and the KDE ping user-confirmed;
+  procedure in `contracts/admin-federation-runbook.md`). F1 + three host-only
+  defects fixed.
   `peer-node/PLAN.md` **`current: done`** — peer Step 12 (node admin agent) was
   **completed 2026-10-12**: its live deploy on cluster2 is user-confirmed (agent
   runs as `raxxar`, webhook + 0600 spool, Master read the feed over `/admin/*`).
@@ -605,4 +767,4 @@ Updated: 2026-10-12
   `.env` preserved because it looked configured. `make bundle-verify` does this.
 - **Provenance keeps old vocabulary.** `references/` and `plans/` may still say
   "worker" and may hard-code host paths, correctly — they record what was true.
-  Current surfaces must not; `tests/test_layout.py` enforces the difference.
+  Current surfaces must not; `tests/test_layout.py` enforces the difference.- 2026-10-13: Step 40 DONE (D11 dropped; D12a YAML → sparknet-yaml.py; D13a golden vectors → test_authz_golden.py + conftest fixtures + contract_helpers; test-only split, collected 849 unchanged, all gates green). Further splits deferred, moved to Step 41. Step 41 DONE: VERSION 0.1.0, sparknet-sbom.py → sbom/sparknet.cdx.json (CycloneDX, deterministic, 33 skills + cryptography), make sbom/sbom-check wired into drift-check + pre-merge-gate, scripts/sparknet CLI, tests/test_release.py (18), all gates green (fabric 864+3 skip). PLAN current: done.

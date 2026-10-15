@@ -15,7 +15,7 @@ the two physical hosts, prove the live legs, and keep every live leg
 ## Hosts and addressing
 
 The two nodes were moved onto the flat `192.168.178.0/24` LAN on **2026-10-12**.
-The old `192.168.10.64` / `192.168.20.32` legs are **retired** and no longer
+The old `192.168.178.131` / `192.168.178.133` legs are **retired** and no longer
 resolve; do not use them. `~/.ssh/config` carries the current aliases.
 
 | Role | SSH alias | Hostname | LAN | Overlay `wg1` | Node id | Cluster tree | State dir |

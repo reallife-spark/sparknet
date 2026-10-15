@@ -13,6 +13,7 @@ node's keys and cannot leak one.
 
 from __future__ import annotations
 
+import base64
 import importlib.util
 import json
 import re
@@ -328,8 +329,13 @@ def test_an_approval_lands_dual_signed_and_verifies(
     assert data["approval_id"].startswith("APL-")
     block = provenance.append_block(vault, data)
 
-    assert block["signature"] == data["signatures"]["node"], (
-        "the block-level signature must restate the node countersignature"
+    authz = provenance._load_authz()
+    node_pub = authz.public_key_from_b64(block["node_pubkey_b64"])
+    assert authz.verify_signature(
+        node_pub, block["signature"], provenance.block_header_signable(block)
+    ), "the block header signature must verify against the block's own node key"
+    assert block["signature"] != data["signatures"]["node"], (
+        "the block-level signature signs the header; it no longer restates the node countersignature"
     )
     ok, detail = provenance.verify_chain(provenance.load_ledger(vault / "blockchain" / "ledger.json"))
     assert ok, detail
@@ -395,6 +401,98 @@ def test_approval_ids_are_unique_per_ledger(vault: Path, provenance: ModuleType)
         seen.add(data["approval_id"])
         provenance.append_block(vault, data)
     assert len(seen) == 3
+
+
+# --- ledger tamper resistance: the block header is signed -----------------------
+
+
+def _two_block_ledger(vault: Path, provenance: ModuleType) -> Path:
+    record = provenance.parse_user_record(vault)
+    for question in ("first?", "second?"):
+        data = provenance.build_approval_data(
+            vault=vault,
+            question=question,
+            decision="approved",
+            note_refs=[],
+            agent="tester",
+            model="none",
+            record=record,
+        )
+        provenance.append_block(vault, data)
+    return vault / "blockchain" / "ledger.json"
+
+
+def test_a_two_block_ledger_verifies_and_links_on_signed_bytes(
+    vault: Path, provenance: ModuleType
+):
+    path = _two_block_ledger(vault, provenance)
+    ledger = provenance.load_ledger(path)
+    ok, detail = provenance.verify_chain(ledger)
+    assert ok, detail
+    blocks = ledger["blocks"]
+    assert blocks[1]["prev_hash"] == blocks[0]["hash"], "the chain must link on the block hash"
+    for block in blocks:
+        assert block["node_pubkey_b64"], "each block carries its own node key"
+        assert block["signature"] != block["data"]["signatures"]["node"], (
+            "the header signature is its own value, not a restatement of the countersignature"
+        )
+
+
+def test_deleting_a_block_is_detected(vault: Path, provenance: ModuleType):
+    """A deleted block — the grant_use replay vector — must not verify."""
+    path = _two_block_ledger(vault, provenance)
+    ledger = provenance.load_ledger(path)
+    del ledger["blocks"][0]
+    ok, detail = provenance.verify_chain(ledger)
+    assert not ok, "a ledger missing a block verified"
+    assert "block_id" in detail or "links to" in detail, detail
+
+
+def test_reordering_blocks_is_detected(vault: Path, provenance: ModuleType):
+    path = _two_block_ledger(vault, provenance)
+    ledger = provenance.load_ledger(path)
+    ledger["blocks"].reverse()
+    ok, detail = provenance.verify_chain(ledger)
+    assert not ok, "a reordered ledger verified"
+    assert detail
+
+
+def test_backdating_a_timestamp_is_detected(vault: Path, provenance: ModuleType):
+    path = _two_block_ledger(vault, provenance)
+    ledger = provenance.load_ledger(path)
+    ledger["blocks"][0]["timestamp"] = "1970-01-01T00:00:00Z"
+    ok, detail = provenance.verify_chain(ledger)
+    assert not ok, "an edited timestamp verified"
+    assert "header signature" in detail or "re-hash" in detail, detail
+
+
+def test_rewriting_a_block_id_is_detected(vault: Path, provenance: ModuleType):
+    path = _two_block_ledger(vault, provenance)
+    ledger = provenance.load_ledger(path)
+    ledger["blocks"][1]["block_id"] = "00000042"
+    ok, detail = provenance.verify_chain(ledger)
+    assert not ok, "a block whose id is not its index verified"
+    assert "block_id" in detail, detail
+
+
+def test_blanking_the_header_signature_is_detected(vault: Path, provenance: ModuleType):
+    path = _two_block_ledger(vault, provenance)
+    ledger = provenance.load_ledger(path)
+    ledger["blocks"][0]["signature"] = ""
+    ok, detail = provenance.verify_chain(ledger)
+    assert not ok, "an unsigned block verified"
+    assert "no signature" in detail, detail
+
+
+def test_a_block_signed_by_a_foreign_key_is_refused(vault: Path, provenance: ModuleType):
+    path = _two_block_ledger(vault, provenance)
+    ledger = provenance.load_ledger(path)
+    authz = provenance._load_authz()
+    _, other_pub = authz.generate_keypair()
+    ledger["blocks"][0]["node_pubkey_b64"] = other_pub
+    ok, detail = provenance.verify_chain(ledger)
+    assert not ok, "a block whose key does not match its signature verified"
+    assert "header signature" in detail, detail
 
 
 def test_the_vault_verifies_when_its_ledger_is_absent(vault: Path, provenance: ModuleType):
@@ -477,6 +575,7 @@ def test_the_frontmatter_subset_round_trips(vault: Path, provenance: ModuleType)
         "draft": False,
         "nothing": None,
         "nested": {"inner": "value", "list": [1, 2]},
+        "rows": [{"id": "c1", "turn": 1, "agent": "chat"}, {"id": "c2", "turn": 2}],
         "tracking": {"schema": "sparknet-tracking/1"},
     }
     emitted = provenance.emit_note(original, b"body\n")
@@ -544,8 +643,100 @@ def test_the_shipped_source_captures_parse(provenance: ModuleType):
 def test_the_signed_message_is_versioned_so_a_future_envelope_cannot_verify_old_signatures(
     provenance: ModuleType,
 ):
-    hashes = {"body": "0" * 64, "meta": "1" * 64, "tracking": "2" * 64}
-    assert provenance.note_message(hashes).startswith(b"sparknet-note/1\n")
+    hashes = {
+        "body": "0" * 64,
+        "meta": "1" * 64,
+        "tracking": "2" * 64,
+        "conversation": "3" * 64,
+    }
+    assert provenance.note_message(hashes).startswith(b"sparknet-note/2\n")
+
+
+def test_the_conversation_root_is_order_and_content_sensitive(provenance: ModuleType):
+    """The root commits to the trail: reordering or editing a turn moves it."""
+    entries = [
+        {"id": "c1", "turn": 1, "agent": "chat", "model": "llama3.2"},
+        {"id": "c1", "turn": 2, "agent": "plan", "model": "llama3.2"},
+    ]
+    root = provenance.build_conversation_root(entries)
+    assert len(root) == 64 and root == root.lower()
+    assert provenance.build_conversation_root(list(reversed(entries))) != root
+    edited = [dict(entries[0], model="other"), entries[1]]
+    assert provenance.build_conversation_root(edited) != root
+    assert provenance.build_conversation_root([]) == provenance._load_merkle().EMPTY_TREE_ROOT
+
+
+def test_a_conversation_entry_is_bound_to_the_note_signature(
+    vault: Path, provenance: ModuleType
+):
+    """Editing, adding or dropping a turn is stale:content, like editing the body."""
+    tracking = {
+        "schema": "sparknet-tracking/1",
+        "owner_id": "",
+        "owner_node": "",
+        "owner_ref": "00_System/user.md",
+        "validity": {"state": "unsigned"},
+        "conversation": [
+            {
+                "id": "c1",
+                "turn": 1,
+                "agent": "chat",
+                "model": "llama3.2",
+                "at": "2026-10-13T00:00:00Z",
+            }
+        ],
+        "shares": [],
+        "agent": "tester",
+        "model": "none",
+        "approvals": [],
+    }
+    raw = provenance.emit_note(
+        {"title": "conversation bound", "updated": "2026-10-13", "tracking": tracking},
+        b"# the body\n\ncontent\n",
+    )
+    path = vault / "01_Inbox" / "conversation-bound.md"
+    path.write_bytes(raw)
+    sign(provenance, vault, path)
+    assert verify(provenance, vault, path)[0] == "valid"
+
+    # The envelope records the root and the version tag.
+    frontmatter, body = provenance.split_note(path.read_bytes())
+    signature = frontmatter["tracking"]["signature"]
+    assert signature["note_version"] == "sparknet-note/2"
+    assert signature["signed_conversation_root"] == provenance.build_conversation_root(
+        frontmatter["tracking"]["conversation"]
+    )
+
+    # Edit the conversation entry without re-signing: still authentic (the
+    # signature covers the recorded root), but no longer fresh.
+    frontmatter["tracking"]["conversation"][0]["model"] = "gpt-4o"
+    path.write_bytes(provenance.emit_note(frontmatter, body))
+    outcome, detail = verify(provenance, vault, path)
+    assert outcome == "stale:content"
+    assert "conversation" in detail
+
+    # Re-sign clears it, and swapping the body then fails the same way.
+    sign(provenance, vault, path)
+    assert verify(provenance, vault, path)[0] == "valid"
+    frontmatter, _ = provenance.split_note(path.read_bytes())
+    path.write_bytes(provenance.emit_note(frontmatter, b"# a swapped body\n\ncontent\n"))
+    outcome, detail = verify(provenance, vault, path)
+    assert outcome == "stale:content"
+    assert "body" in detail
+
+
+def test_an_envelope_from_an_unknown_note_domain_is_invalid(
+    vault: Path, provenance: ModuleType
+):
+    path = vault / "01_Inbox" / "old-envelope.md"
+    path.write_bytes(note("old envelope", state="unsigned").encode())
+    sign(provenance, vault, path)
+    frontmatter, body = provenance.split_note(path.read_bytes())
+    frontmatter["tracking"]["signature"]["note_version"] = "sparknet-note/1"
+    path.write_bytes(provenance.emit_note(frontmatter, body))
+    outcome, detail = verify(provenance, vault, path)
+    assert outcome == "invalid"
+    assert "note_version" in detail
 
 
 # --- inbox intake -------------------------------------------------------------
@@ -620,3 +811,228 @@ def test_the_ingest_cli_reads_a_file_and_reports_an_empty_one(
         ["--vault", str(vault), "ingest", str(empty), "--source", "peer-node"]
     ) == 1
     assert "empty" in capsys.readouterr().err
+
+
+# --- co-signatures ------------------------------------------------------------
+
+COSIGNER_ID = "U-33007"
+
+
+def _fill_vault(provenance: ModuleType, root: Path, owner_id: str, node_id: str) -> Path:
+    """A self-contained vault: user key and node key under <root>/.state."""
+    (root / "00_System").mkdir(parents=True)
+    (root / "01_Inbox").mkdir()
+    (root / "blockchain").mkdir()
+    (root / "manifests").mkdir()
+    write(root / "00_System" / "user.md", user_record_template())
+    write(root / "manifests" / "node-identity.json", json.dumps({"node_id": node_id}))
+    provenance.user_init(root, owner_id=owner_id)
+    authz = provenance._load_authz()
+    private_b64, _ = authz.generate_keypair()
+    node_key = root / ".state" / "keys" / "ed25519-node.key.b64"
+    node_key.write_text(private_b64 + "\n")
+    node_key.chmod(0o600)
+    return root
+
+
+@pytest.fixture()
+def federated(
+    tmp_path: Path, provenance: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Path]:
+    """Two vaults, each resolving its state from <vault>/.state (no shared env)."""
+    monkeypatch.delenv("SPARKNET_STATE_DIR", raising=False)
+    alpha = _fill_vault(provenance, tmp_path / "alpha", OWNER_ID, "sparknet-node-0001")
+    bravo = _fill_vault(provenance, tmp_path / "bravo", COSIGNER_ID, "sparknet-node-0002")
+    return alpha, bravo
+
+
+def _master_registry(provenance: ModuleType, node_id: str, *, revoked: bool = False) -> dict:
+    """A Master-signed registry naming one node, built through the shared tool."""
+    authz = provenance._load_authz()
+    master_private, master_public = authz.generate_keypair()
+    identity = {
+        "node_id": node_id,
+        "role": "peer",
+        "wireguard_public_key_b64": "d2dwdWJsaWNrZXk=",
+        "overlay_ipv4": "10.100.0.9",
+        "requested_capabilities": ["telemetry"],
+    }
+    entry = authz.sign_authorization(
+        identity, authz.private_key_from_b64(master_private), ["telemetry"]
+    )
+    entry["revoked"] = revoked
+    if revoked:
+        entry["signature_b64"] = base64.b64encode(
+            authz.private_key_from_b64(master_private).sign(
+                authz.authorization_message(entry)
+            )
+        ).decode("ascii")
+    return {"master_public_key_b64": master_public, "authorizations": [entry]}
+
+
+def test_a_co_signature_appends_without_rewriting_the_author(
+    federated: tuple[Path, Path], provenance: ModuleType
+):
+    alpha, bravo = federated
+    path = write(alpha / "01_Inbox" / "hello.md", note())
+    sign(provenance, alpha, path)
+    before = provenance.split_note(path.read_bytes())[0]["tracking"]
+    primary_sig = before["signature"]["sig"]
+    recorded = provenance._recorded_from_signature(before["signature"])
+
+    path.write_bytes(provenance.add_co_signature(path.read_bytes(), bravo))
+
+    after = provenance.split_note(path.read_bytes())[0]["tracking"]
+    # The author is untouched: same owner, same primary signature, same hashes.
+    assert after["owner_id"] == OWNER_ID
+    assert after["signature"]["sig"] == primary_sig
+    assert provenance._recorded_from_signature(after["signature"]) == recorded
+    # ...and the note still verifies valid, strict or not.
+    assert verify(provenance, alpha, path)[0] == "valid"
+
+    entries = after["signature"]["co_signatures"]
+    assert len(entries) == 1
+    assert entries[0]["owner_id"] == COSIGNER_ID
+    assert entries[0]["owner_node"] == "sparknet-node-0002"
+    assert set(entries[0]) == set(provenance.CO_SIGNATURE_FIELDS)
+
+    # Trusted via the origin user.md snapshot: the offline fallback.
+    frontmatter, _ = provenance.split_note(path.read_bytes())
+    assert provenance.verify_co_signatures(
+        frontmatter, trusted_users=[provenance.parse_user_record(bravo)]
+    ) == []
+
+    # Re-signing from the same key replaces the entry rather than piling up.
+    path.write_bytes(provenance.add_co_signature(path.read_bytes(), bravo))
+    assert len(provenance.split_note(path.read_bytes())[0]["tracking"]["signature"]["co_signatures"]) == 1
+
+
+def test_an_unknown_or_foreign_co_signer_is_untrusted(
+    federated: tuple[Path, Path], provenance: ModuleType
+):
+    alpha, bravo = federated
+    path = write(alpha / "01_Inbox" / "hello.md", note())
+    sign(provenance, alpha, path)
+    path.write_bytes(provenance.add_co_signature(path.read_bytes(), bravo))
+    frontmatter, _ = provenance.split_note(path.read_bytes())
+
+    # No resolver at all: the bytes are genuine, the signer is unknown here.
+    problems = provenance.verify_co_signatures(frontmatter)
+    assert problems and "untrusted" in problems[0]
+
+    # The author's own record does not vouch for the co-signer.
+    problems = provenance.verify_co_signatures(
+        frontmatter, trusted_users=[provenance.parse_user_record(alpha)]
+    )
+    assert problems and "untrusted" in problems[0]
+
+
+def test_a_co_signature_over_different_bytes_is_refused(
+    federated: tuple[Path, Path], provenance: ModuleType
+):
+    alpha, bravo = federated
+    path = write(alpha / "01_Inbox" / "hello.md", note())
+    sign(provenance, alpha, path)
+    path.write_bytes(provenance.add_co_signature(path.read_bytes(), bravo))
+    frontmatter, _ = provenance.split_note(path.read_bytes())
+
+    # The co-signer produced a signature over a *different* message: same key,
+    # same key_fingerprint, so integrity passes, but the commit does not match.
+    authz = provenance._load_authz()
+    user_key = authz.load_private_key(bravo / ".state" / "keys" / "user.ed25519")
+    lying = provenance.note_message(
+        {"body": "00" * 32, "meta": "11" * 32, "tracking": "22" * 32, "conversation": "33" * 32}
+    )
+    frontmatter["tracking"]["signature"]["co_signatures"][0]["sig"] = authz.sign_bytes(
+        user_key, lying
+    )
+    problems = provenance.verify_co_signatures(
+        frontmatter, trusted_users=[provenance.parse_user_record(bravo)]
+    )
+    assert problems and "does not verify over the recorded hashes" in problems[0]
+
+
+def test_a_swapped_co_signer_key_is_refused(
+    federated: tuple[Path, Path], provenance: ModuleType
+):
+    alpha, bravo = federated
+    path = write(alpha / "01_Inbox" / "hello.md", note())
+    sign(provenance, alpha, path)
+    path.write_bytes(provenance.add_co_signature(path.read_bytes(), bravo))
+    frontmatter, _ = provenance.split_note(path.read_bytes())
+
+    authz = provenance._load_authz()
+    _, fresh_public = authz.generate_keypair()
+    entry = frontmatter["tracking"]["signature"]["co_signatures"][0]
+    entry["public_key_b64"] = fresh_public  # same fingerprint, different key
+    problems = provenance.verify_co_signatures(
+        frontmatter, trusted_users=[provenance.parse_user_record(bravo)]
+    )
+    assert problems and "key_fingerprint does not match public_key_b64" in problems[0]
+
+
+def test_tampering_the_body_after_co_signing_is_stale_content(
+    federated: tuple[Path, Path], provenance: ModuleType
+):
+    alpha, bravo = federated
+    path = write(alpha / "01_Inbox" / "hello.md", note())
+    sign(provenance, alpha, path)
+    path.write_bytes(provenance.add_co_signature(path.read_bytes(), bravo))
+
+    write(alpha / "01_Inbox" / "hello.md", path.read_text().replace("body text", "body text!"))
+    assert verify(provenance, alpha, path)[0] == "stale:content"
+    # The co-signature still commits to the recorded bytes; the note, not the
+    # co-signature, is what went stale.
+    frontmatter, _ = provenance.split_note(path.read_bytes())
+    assert provenance.verify_co_signatures(
+        frontmatter, trusted_users=[provenance.parse_user_record(bravo)]
+    ) == []
+
+
+def test_the_master_registry_resolves_a_co_signer(
+    federated: tuple[Path, Path], provenance: ModuleType
+):
+    alpha, bravo = federated
+    path = write(alpha / "01_Inbox" / "hello.md", note())
+    sign(provenance, alpha, path)
+    path.write_bytes(provenance.add_co_signature(path.read_bytes(), bravo))
+    frontmatter, _ = provenance.split_note(path.read_bytes())
+
+    # The online resolver: the Master has attested the co-signer's node.
+    registry = _master_registry(provenance, "sparknet-node-0002")
+    assert provenance.verify_co_signatures(frontmatter, registry=registry) == []
+
+    # A revoked node does not resolve, and an unsigned entry does not either.
+    revoked = _master_registry(provenance, "sparknet-node-0002", revoked=True)
+    problems = provenance.verify_co_signatures(frontmatter, registry=revoked)
+    assert problems and "revoked" in problems[0]
+
+    tampered = _master_registry(provenance, "sparknet-node-0002")
+    tampered["authorizations"][0]["capabilities"] = ["guard-apply"]
+    problems = provenance.verify_co_signatures(frontmatter, registry=tampered)
+    assert problems and "not signed by the master key" in problems[0]
+
+
+def test_the_co_sign_cli_appends_and_verifies(
+    federated: tuple[Path, Path], provenance: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    alpha, bravo = federated
+    path = write(alpha / "01_Inbox" / "hello.md", note())
+    sign(provenance, alpha, path)
+
+    assert provenance.main(["--vault", str(bravo), "co-sign", str(path)]) == 0
+    assert verify(provenance, alpha, path)[0] == "valid"
+
+    code = provenance.main(
+        [
+            "--vault", str(alpha), "verify-co-signatures", str(path),
+            "--trusted-user", str(bravo / "00_System" / "user.md"),
+        ]
+    )
+    assert code == 0
+    assert "co-signatures ok" in capsys.readouterr().out
+
+    code = provenance.main(["--vault", str(alpha), "verify-co-signatures", str(path)])
+    assert code == 1
+    assert "untrusted" in capsys.readouterr().out
+

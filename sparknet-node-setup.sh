@@ -1,0 +1,209 @@
+#!/usr/bin/env bash
+# sparknet-node-setup.sh — bring up a DGX Spark SparkNet node end to end.
+#
+# One command from a clean checkout to a running node: build the sparknet bundle,
+# stage it for the image, mint the shared secret, write the compose env-file,
+# build the node image, and `docker compose up` the services. Idempotent: run it
+# again and it reuses everything already in place.
+#
+#   ./sparknet-node-setup.sh                 # text node: nats vllm compute agent gpu
+#   ./sparknet-node-setup.sh --role master   # also start the control plane (:control)
+#   ./sparknet-node-setup.sh --profiles embed,webui
+#   ./sparknet-node-setup.sh up              # build step already done -> just run
+#
+# It writes exactly two host things: the node state under peer-node/.state (keys,
+# secret, env-file — gitignored, mode 0600/0700) and the staged bundle tarball at
+# peer-node/container/context/sparknet-peer.tar.gz. Nothing else on the host is
+# touched, and no secret ever enters an image layer.
+set -euo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NODE_STATE="$REPO/peer-node/.state"
+ENV_FILE="$NODE_STATE/spark.env"
+COMPOSE_FILE="$REPO/spark.compose.yml"
+GOSPARK_DIR="${GOSPARK_DIR:-/mnt/knowledge/goSpark}"
+
+ROLE="${SPARKNET_ROLE:-peer}"
+PROFILES="${SPARK_PROFILES:-}"
+DO_BUILD=1
+ACTION="up"
+
+log()  { printf '\033[1;36m[setup]\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*" >&2; }
+die()  { printf '\033[1;31m[error]\033[0m %s\n' "$*" >&2; exit 1; }
+
+usage() {
+  cat <<'EOF'
+sparknet-node-setup.sh — bring up a DGX Spark SparkNet node.
+
+Usage: sparknet-node-setup.sh [action] [options]
+
+Actions:
+  up        (default) build everything needed, then start the services
+  build     build the bundle + image only, do not start
+  down      stop the services
+  status    show service status
+  logs      tail the services
+
+Options:
+  --role peer|master   node role (default peer; master also enables the control plane)
+  --profiles A,B,C     compose profiles to enable: kv control webui embed rerank audio
+  --no-build           skip the bundle + image build (use the existing image)
+  --gospark DIR        goSpark checkout (default /mnt/knowledge/goSpark)
+  -h, --help           this text
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    up|build|down|status|logs) ACTION="$1"; shift ;;
+    --role)      ROLE="$2"; shift 2 ;;
+    --profiles)  PROFILES="$2"; shift 2 ;;
+    --no-build)  DO_BUILD=0; shift ;;
+    --gospark)   GOSPARK_DIR="$2"; shift 2 ;;
+    -h|--help)   usage; exit 0 ;;
+    *) die "unknown argument: $1 (try --help)" ;;
+  esac
+done
+
+# --- preflight ---------------------------------------------------------------
+
+preflight() {
+  command -v docker >/dev/null || die "docker not found"
+  docker compose version >/dev/null 2>&1 || die "'docker compose' (v2 plugin) not found"
+  [ -f "$COMPOSE_FILE" ] || die "compose file missing: $COMPOSE_FILE"
+  if [ "$DO_BUILD" = 1 ]; then
+    [ -d "$GOSPARK_DIR" ] || die "goSpark not found at $GOSPARK_DIR (use --gospark DIR)"
+    for b in sparknet-agent sparknet-control sparknet-gpu sparknetctl; do
+      [ -x "$GOSPARK_DIR/bin/$b" ] \
+        || die "missing $GOSPARK_DIR/bin/$b — run: make -C $GOSPARK_DIR build build-gpu"
+    done
+  fi
+}
+
+compose() {
+  local -a pf=()
+  local p
+  for p in ${PROFILES//,/ }; do [ -n "$p" ] && pf+=(--profile "$p"); done
+  [ "$ROLE" = master ] && pf+=(--profile control)
+  local -a ef=()
+  [ -f "$ENV_FILE" ] && ef=(--env-file "$ENV_FILE")
+  docker compose -f "$COMPOSE_FILE" "${ef[@]}" "${pf[@]}" "$@"
+}
+
+# --- build the node image ----------------------------------------------------
+
+stage_bundle() {
+  log "building the sparknet peer bundle"
+  make -C "$REPO/peer-node" dist
+  local tarball
+  tarball="$(ls -t "$REPO"/dist/sparknet-peer-*.tar.gz 2>/dev/null | head -1)"
+  [ -n "$tarball" ] || die "no bundle produced under dist/"
+  mkdir -p "$REPO/peer-node/container/context"
+  cp "$tarball" "$REPO/peer-node/container/context/sparknet-peer.tar.gz"
+  log "staged bundle: $(basename "$tarball")"
+}
+
+# --- env-file + state --------------------------------------------------------
+
+render_env_file() {
+  mkdir -p "$NODE_STATE"
+  chmod 700 "$NODE_STATE" 2>/dev/null || true
+
+  local id role overlay model secret
+  id="${SPARKNET_NODE_ID:-$(hostname)}"
+  role="$ROLE"
+  if [ -n "${SPARKNET_OVERLAY_IPV4:-}" ]; then overlay="$SPARKNET_OVERLAY_IPV4"
+  elif [ "$role" = master ]; then overlay="10.100.0.1"; else overlay="10.100.0.2"; fi
+  model="${VLLM_MODEL:-Qwen/Qwen2.5-32B-Instruct}"
+
+  # One secret for the whole node, shared by compute/agent/control/kvrouter. It
+  # lives in the host state dir and is passed to every service through the
+  # env-file, so the containers cannot disagree about it.
+  secret="$NODE_STATE/sparknet.shared.secret"
+  if [ ! -s "$secret" ]; then
+    head -c 32 /dev/urandom | base64 | tr -d '\n' > "$secret"
+    chmod 600 "$secret"
+  fi
+  local secret_val; secret_val="$(cat "$secret")"
+
+  umask 077
+  cat > "$ENV_FILE" <<EOF
+# Generated by sparknet-node-setup.sh — do not commit ($(date -Iseconds)).
+SPARKNET_NODE_ID=$id
+SPARKNET_ROLE=$role
+SPARKNET_OVERLAY_IPV4=$overlay
+SPARKNET_SHARED_SECRET=$secret_val
+SPARKNET_STATE_HOST=$NODE_STATE
+GOSPARK_DIR=$GOSPARK_DIR
+SPARKNET_IMAGE_TAG=${SPARKNET_IMAGE_TAG:-dev}
+VLLM_BASE=${VLLM_BASE:-nvcr.io/nvidia/vllm:26.04-py3}
+VLLM_MODEL=$model
+VLLM_GPU_MEM_UTIL=${VLLM_GPU_MEM_UTIL:-0.85}
+VLLM_MAX_MODEL_LEN=${VLLM_MAX_MODEL_LEN:-65536}
+HF_CACHE_DIR=${HF_CACHE_DIR:-$HOME/.cache/huggingface}
+SPARKNET_BIND_API=${SPARKNET_BIND_API:-0.0.0.0}
+SPARKNET_BIND_LOCAL=${SPARKNET_BIND_LOCAL:-127.0.0.1}
+EOF
+  chmod 600 "$ENV_FILE"
+  log "wrote $ENV_FILE (node=$id role=$role overlay=$overlay)"
+}
+
+ensure_vault_env() {
+  if [ ! -f "$REPO/peer-node/.env" ]; then
+    if [ -x "$REPO/scripts/sparknet-env-init.sh" ]; then
+      log "initializing the node vault .env"
+      "$REPO/scripts/sparknet-env-init.sh" "$REPO/peer-node" >/dev/null
+    else
+      warn "no scripts/sparknet-env-init.sh; the image regenerates .env at start"
+    fi
+  fi
+  mkdir -p "$NODE_STATE/nats" "$NODE_STATE/webui"
+}
+
+# --- actions -----------------------------------------------------------------
+
+act_build() {
+  stage_bundle
+  render_env_file
+  ensure_vault_env
+  log "building the node image (VLLM_BASE=${VLLM_BASE:-nvcr.io/nvidia/vllm:26.04-py3})"
+  compose build
+}
+
+act_up() {
+  [ "$DO_BUILD" = 1 ] && act_build
+  [ -f "$ENV_FILE" ] || { render_env_file; }
+  log "starting services (role=$ROLE profiles=${PROFILES:-none})"
+  compose up -d
+  echo
+  log "node up. Endpoints:"
+  printf '    vLLM OpenAI API   http://%s:8000/v1\n' "${SPARKNET_BIND_API:-0.0.0.0}"
+  printf '    node gateway      http://%s:8080/v1\n' "${SPARKNET_BIND_API:-0.0.0.0}"
+  [ "$ROLE" = master ] && printf '    control admin     http://127.0.0.1:8899/admin\n'
+  case ",$PROFILES," in *,webui,*) printf '    Open WebUI        http://%s:3000\n' "${SPARKNET_BIND_API:-0.0.0.0}" ;; esac
+  cat <<'EOF'
+
+Next steps:
+  * List models:      curl -s http://127.0.0.1:8080/v1/models
+  * Node logs:        ./sparknet-node-setup.sh logs
+  * Stop:             ./sparknet-node-setup.sh down
+  * Fabric election (choose a Master, sign the trust root) is a separate
+    ceremony — see contracts/deployment-runbook.md. This script only stands a
+    node up; it does not elect or sign.
+EOF
+}
+
+# --- main --------------------------------------------------------------------
+
+# down/status/logs never need a build or the goSpark checkout.
+case "$ACTION" in down|status|logs) DO_BUILD=0 ;; esac
+
+preflight
+case "$ACTION" in
+  build)  act_build ;;
+  up)     act_up ;;
+  down)   compose down ;;
+  status) compose ps ;;
+  logs)   compose logs -f --tail=100 ;;
+esac

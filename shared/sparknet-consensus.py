@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import importlib.util
 import json
 import sys
 
@@ -40,6 +39,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+# --- the one by-path loader (D10) --------------------------------------------
+# `shared/` is not on sys.path, so this module's own directory is added before
+# importing the fabric's single loader. These two lines are deliberately
+# identical in every shared module; tests/test_contracts.py pins them.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from sparknet_loader import load_shared  # noqa: E402
 
 SCHEMA_VERSION = "1.2"
 
@@ -64,44 +70,19 @@ def _load_authz(shared_dir: Path | None = None) -> Any:
     Loading by path is what proves there is one implementation. An import would
     let a role quietly end up with a private copy, and two crypto
     implementations that must agree byte-for-byte is a second trust boundary.
+    The resolve-and-cache mechanics live once in ``shared/sparknet_loader.py``.
     """
-    here = Path(shared_dir) if shared_dir else DEFAULT_SHARED_DIR
-    candidates = [here / "sparknet-authz.py"]
-    for env in ("SPARKNET_SHARED_DIR", "VAULT_PATH"):
-        raw = _env(env)
-        if raw:
-            candidates.append(Path(raw) / "shared" / "sparknet-authz.py")
-            candidates.append(Path(raw).parent / "shared" / "sparknet-authz.py")
-    for path in candidates:
-        if not path.is_file():
-            continue
-        if "sparknet_authz" in sys.modules:
-            # Already loaded — return the cached module rather than executing a
-            # second copy. Re-executing would build a module object that is not
-            # the one in sys.modules, and its @dataclass would fail to resolve its
-            # own module. Same guard as peer-node/services/sparknet-guard-d.py:316.
-            return sys.modules["sparknet_authz"]
-        spec = importlib.util.spec_from_file_location("sparknet_authz", path)
-        if spec is None or spec.loader is None:
-            continue
-        module = importlib.util.module_from_spec(spec)
-        # Register before exec_module: dataclasses resolves its own module through
-        # sys.modules, so skipping this raises an AttributeError about __dict__
-        # that says nothing about the real cause.
-        sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
-        return module
-    raise ConsensusError(
-        "cannot locate sparknet-authz.py; this module refuses to reimplement "
-        "Ed25519, so it cannot proceed without the shared implementation"
+    dirs = [Path(shared_dir)] if shared_dir else None
+    return load_shared(
+        "sparknet-authz.py",
+        "sparknet_authz",
+        dirs=dirs,
+        error=ConsensusError,
+        message=(
+            "cannot locate sparknet-authz.py; this module refuses to reimplement "
+            "Ed25519, so it cannot proceed without the shared implementation"
+        ),
     )
-
-
-def _env(name: str) -> str | None:
-    import os
-
-    value = os.environ.get(name)
-    return value if value else None
 
 
 class ConsensusError(Exception):

@@ -7,10 +7,12 @@ This is the one implementation of the accountability chain described in
 
 * **Notes** in ``01_Inbox``..``07_Archives`` carry a ``tracking`` block whose
   signature envelope records what was signed — the body hash, the metadata hash
-  with the metadata itself, and the tracking hash. Recording the inputs is what
-  lets a verifier separate three things that would otherwise look identical:
-  a routine compiler rewrite (``stale:metadata``), an edit nobody re-signed
-  (``stale:content``), and a forgery (``invalid``).
+  with the metadata itself, the tracking hash, and the RFC 6962 root of the
+  conversation entries (so the who/when/which-model trail cannot be edited
+  without invalidating the note). Recording the inputs is what lets a verifier
+  separate three things that would otherwise look identical: a routine compiler
+  rewrite (``stale:metadata``), an edit nobody re-signed (``stale:content``),
+  and a forgery (``invalid``).
 * **Approvals** live only in ``blockchain/ledger.json``, as hash-chained blocks
   carrying two signatures over one payload: user consent and node
   countersignature. There is no approvals.md and nothing may be coded to one.
@@ -38,7 +40,6 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
-import importlib.util
 import json
 import os
 import re
@@ -49,11 +50,21 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+# --- the one by-path loader (D10) --------------------------------------------
+# `shared/` is not on sys.path, so this module's own directory is added before
+# importing the fabric's single loader. These two lines are deliberately
+# identical in every shared module; tests/test_contracts.py pins them.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from sparknet_loader import load_shared  # noqa: E402
+
 DEFAULT_SHARED_DIR = Path(__file__).resolve().parent
 
 #: Domain separator for note signatures. Versioned so a future envelope change
 #: cannot silently verify against old signatures — they would simply not match.
-NOTE_DOMAIN = b"sparknet-note/1"
+#: `sparknet-note/2` appends the conversation root as a fourth hashed line, so
+#: the who/when/which-model trail is bound to the note's own bytes.
+NOTE_VERSION = "sparknet-note/2"
+NOTE_DOMAIN = NOTE_VERSION.encode("ascii")
 
 #: A node-scoped user number: U- plus five digits.
 OWNER_ID_RE = re.compile(r"^U-[0-9]{5}$")
@@ -103,12 +114,29 @@ _PATTERNS = (
 _SCAN_EXEMPT = frozenset({"shared/sparknet-provenance.py"})
 
 
-class ProvenanceError(Exception):
-    """A refusal with a message the caller can act on."""
+# --- the one frontmatter implementation (loaded by path, D10/Step 40) ---------
+# The YAML-subset parser and emitter live in sparknet-yaml.py so the note format
+# is one loadable unit. ProvenanceError and FrontmatterError are defined there
+# too — FrontmatterError subclasses ProvenanceError, and the many handlers below
+# that catch ProvenanceError must keep catching a malformed note — and are
+# re-exported here so `provenance.ProvenanceError` still names the same class.
+# Loading by path is the same one-copy rule the crypto modules follow.
+_yaml = load_shared(
+    "sparknet-yaml.py",
+    "sparknet_yaml",
+    error=ImportError,
+    message=(
+        "cannot find shared/sparknet-yaml.py; the fabric carries exactly one "
+        "frontmatter implementation and this tool does not carry a fallback. "
+        "Set SPARKNET_SHARED_DIR."
+    ),
+)
 
-
-class FrontmatterError(ProvenanceError):
-    """The note is not in the frontmatter subset this tool can parse."""
+ProvenanceError = _yaml.ProvenanceError
+FrontmatterError = _yaml.FrontmatterError
+parse_yaml_subset = _yaml.parse_yaml_subset
+emit_yaml = _yaml.emit_yaml
+_split_frontmatter = _yaml._split_frontmatter
 
 
 # --- loading the one crypto implementation -----------------------------------
@@ -120,32 +148,38 @@ def _load_authz() -> Any:
     Loading by path is what proves there is one implementation. An import would
     let a role quietly end up with a private copy, and two crypto
     implementations that must agree byte-for-byte is a second trust boundary.
+    The resolve-and-cache mechanics live once in ``shared/sparknet_loader.py``.
     """
-    if "sparknet_authz" in sys.modules:
-        return sys.modules["sparknet_authz"]
-    candidates = [DEFAULT_SHARED_DIR / "sparknet-authz.py"]
-    for env in ("SPARKNET_SHARED_DIR", "VAULT_PATH"):
-        raw = os.environ.get(env)
-        if raw:
-            candidates.append(Path(raw) / "shared" / "sparknet-authz.py")
-            candidates.append(Path(raw).parent / "shared" / "sparknet-authz.py")
-    for path in candidates:
-        if not path.is_file():
-            continue
-        spec = importlib.util.spec_from_file_location("sparknet_authz", path)
-        if spec is None or spec.loader is None:
-            continue
-        module = importlib.util.module_from_spec(spec)
-        # Register before exec_module: dataclasses resolves its own module via
-        # sys.modules, so skipping this raises an AttributeError that names
-        # neither the cause nor the file.
-        sys.modules["sparknet_authz"] = module
-        spec.loader.exec_module(module)
-        return module
-    raise ProvenanceError(
-        "cannot find shared/sparknet-authz.py; set SPARKNET_SHARED_DIR. "
-        "There is exactly one signing implementation and this tool does not "
-        "carry a fallback."
+    return load_shared(
+        "sparknet-authz.py",
+        "sparknet_authz",
+        error=ProvenanceError,
+        message=(
+            "cannot find shared/sparknet-authz.py; set SPARKNET_SHARED_DIR. "
+            "There is exactly one signing implementation and this tool does not "
+            "carry a fallback."
+        ),
+    )
+
+
+def _load_merkle() -> Any:
+    """Load sparknet-merkle.py by path, never by import.
+
+    Same loader and same reasoning as ``_load_authz``: the RFC 6962 integrity
+    math (the checkpoint root and the conversation root both rest on it) lives
+    in its own shared module so there is exactly one implementation, and a test
+    fails if this tool ever starts carrying a private copy. The
+    resolve-and-cache mechanics live once in ``shared/sparknet_loader.py``.
+    """
+    return load_shared(
+        "sparknet-merkle.py",
+        "sparknet_merkle",
+        error=ProvenanceError,
+        message=(
+            "cannot find shared/sparknet-merkle.py; set SPARKNET_SHARED_DIR. "
+            "The checkpoint and note roots come from the one integrity module; "
+            "this tool does not carry a fallback."
+        ),
     )
 
 
@@ -216,375 +250,9 @@ def _iso(moment: datetime) -> str:
     return moment.isoformat().replace("+00:00", "Z")
 
 
-# --- frontmatter: a documented YAML subset ------------------------------------
-#
-# There is no YAML library in this fabric (third-party imports are
-# `cryptography` only — peer-node/tests/test_services.py enforces it), and a
-# signature must be reproducible, so the parser cannot be a guess. This is a
-# deliberately small subset: nested mappings, sequences, quoted and plain
-# scalars, flow lists of scalars. Block scalars (`|`, `>`) and tabs are refused
-# with a message rather than approximated. `sign-note` always writes through the
-# emitter below, so anything it signs parses back to the same mapping.
-
-
-class _Line:
-    __slots__ = ("indent", "text")
-
-    def __init__(self, indent: int, text: str) -> None:
-        self.indent = indent
-        self.text = text
-
-
-def _split_frontmatter(raw: bytes) -> tuple[bytes, bytes]:
-    """Split a note into (frontmatter_bytes, body_bytes)."""
-    if not raw.startswith(b"---\n"):
-        raise FrontmatterError("note does not start with a '---' frontmatter fence")
-    end = raw.find(b"\n---\n", 3)
-    if end == -1:
-        raise FrontmatterError("frontmatter is not closed by a '---' fence")
-    return raw[4:end], raw[end + 5:]
-
-
-#: `key: |`, `key: >-`, … — a block scalar. Expanded *before* the line filter
-#: runs, because inside a block scalar a blank line is a blank line and a `#`
-#: is content: the filter that drops both would otherwise silently change the
-#: bytes every signature hashes.
-_BLOCK_SCALAR = re.compile(r"^(?P<key>[^:#]+?):[ \t]*(?P<ind>[|>][+-]?)[ \t]*$")
-
-
-def _fold_block(content: list[str], indicator: str) -> str:
-    """Turn collected block-scalar lines into the scalar's string value."""
-    style, chomp = indicator[0], indicator[1:]
-    if style == "|":
-        text = "\n".join(content)
-    else:
-        parts: list[str] = []
-        for index, line in enumerate(content):
-            if index == 0:
-                parts.append(line)
-            elif not line:
-                parts.append("\n")
-            elif not content[index - 1]:
-                parts.append(line)
-            else:
-                parts.append(" " + line)
-        text = "".join(parts)
-    if chomp == "-":
-        return text.rstrip("\n")
-    if chomp == "+":
-        return text
-    return text.rstrip("\n") + ("\n" if text.strip() else "")
-
-
-def _expand_block_scalars(text: str) -> str:
-    """Replace `key: >-`/`|` blocks with one quoted line each.
-
-    The rest of the parser only ever sees `key: "…"`, so a block scalar cannot
-    smuggle in an indent the subset would reject. Content keeps its relative
-    indentation (deeper lines stay deeper), which is what makes a literal
-    block round-trip.
-    """
-    lines = text.split("\n")
-    out: list[str] = []
-    i = 0
-    while i < len(lines):
-        match = _BLOCK_SCALAR.match(lines[i])
-        if match is None:
-            out.append(lines[i])
-            i += 1
-            continue
-        key_indent = len(lines[i]) - len(lines[i].lstrip())
-        content: list[str] = []
-        pending_blanks: list[str] = []
-        content_indent: int | None = None
-        j = i + 1
-        while j < len(lines):
-            line = lines[j]
-            if not line.strip():
-                pending_blanks.append("")
-                j += 1
-                continue
-            indent = len(line) - len(line.lstrip())
-            if indent <= key_indent:
-                break
-            if content_indent is None:
-                content_indent = indent
-            content.extend(pending_blanks)
-            pending_blanks = []
-            content.append(
-                line[content_indent:] if indent >= content_indent else line.lstrip()
-            )
-            j += 1
-        # Trailing blank lines belong to the block under `+` chomping; under
-        # the default clip and under `-` they are stripped off again below.
-        content.extend(pending_blanks)
-        value = _fold_block(content, match.group("ind"))
-        out.append(f"{match.group('key')}: {json.dumps(value, ensure_ascii=False)}")
-        i = j
-    return "\n".join(out)
-
-
-def parse_yaml_subset(text: str) -> dict[str, Any]:
-    lines: list[_Line] = []
-    text = _expand_block_scalars(text)
-    for number, raw in enumerate(text.splitlines(), start=1):
-        if not raw.strip() or raw.lstrip().startswith("#"):
-            continue
-        indent_text = raw[: len(raw) - len(raw.lstrip())]
-        if "\t" in indent_text:
-            raise FrontmatterError(f"line {number}: tabs are not allowed in frontmatter")
-        stripped = raw.strip()
-        if stripped[:1] in ("|", ">") and stripped[:2] not in ("|-", ">-", "|+", ">+"):
-            raise FrontmatterError(
-                f"line {number}: block scalars are outside the frontmatter subset; "
-                f"use a quoted single-line string"
-            )
-        lines.append(_Line(len(indent_text), stripped))
-    if not lines:
-        return {}
-    value, next_index = _parse_block(lines, 0, lines[0].indent)
-    if next_index != len(lines):
-        raise FrontmatterError(f"unparsed frontmatter at {lines[next_index].text!r}")
-    if not isinstance(value, dict):
-        raise FrontmatterError("frontmatter must be a mapping at the top level")
-    return value
-
-
-def _is_seq_item(text: str) -> bool:
-    return text == "-" or text.startswith("- ")
-
-
-def _split_entry(text: str) -> tuple[str, str] | None:
-    """Split `key: value` / `key:` on the first colon YAML treats as an entry."""
-    if text.startswith(('"', "'")):
-        return None
-    match = re.match(r"^([^:]+?):(\s.*|\s*)$", text)
-    if not match:
-        return None
-    return match.group(1).strip(), match.group(2).strip()
-
-
-def _parse_block(lines: list[_Line], start: int, indent: int) -> tuple[Any, int]:
-    if start >= len(lines):
-        return None, start
-    if lines[start].indent != indent:
-        raise FrontmatterError(f"unexpected indent at {lines[start].text!r}")
-    if _is_seq_item(lines[start].text):
-        return _parse_seq(lines, start, indent)
-    return _parse_map(lines, start, indent)
-
-
-def _parse_seq(lines: list[_Line], start: int, indent: int) -> tuple[list[Any], int]:
-    items: list[Any] = []
-    i = start
-    while i < len(lines) and lines[i].indent == indent and _is_seq_item(lines[i].text):
-        content = lines[i].text[1:].lstrip()
-        if not content:
-            if i + 1 < len(lines) and lines[i + 1].indent > indent:
-                value, i = _parse_block(lines, i + 1, lines[i + 1].indent)
-                items.append(value)
-            else:
-                items.append(None)
-                i += 1
-            continue
-        if _split_entry(content) is None:
-            items.append(_scalar(content))
-            i += 1
-            continue
-        # The item is itself a mapping: rewrite this line at the item's content
-        # column, then parse the item as a map. Lines still indented deeper than
-        # the sequence belong to this item and no further.
-        item_lines = [_Line(indent + 2, content)]
-        j = i + 1
-        while j < len(lines) and lines[j].indent > indent:
-            item_lines.append(lines[j])
-            j += 1
-        value, consumed = _parse_block(item_lines, 0, item_lines[0].indent)
-        if consumed != len(item_lines):
-            raise FrontmatterError(
-                f"unparsed content in sequence item: {item_lines[consumed].text!r}"
-            )
-        items.append(value)
-        i = j
-    return items, i
-
-
-def _parse_map(lines: list[_Line], start: int, indent: int) -> tuple[dict[str, Any], int]:
-    out: dict[str, Any] = {}
-    i = start
-    while i < len(lines) and lines[i].indent == indent:
-        if _is_seq_item(lines[i].text):
-            break
-        entry = _split_entry(lines[i].text)
-        if entry is None:
-            raise FrontmatterError(f"expected 'key: value', got {lines[i].text!r}")
-        key, rest = entry
-        if rest:
-            out[key] = _scalar(rest)
-            i += 1
-        elif i + 1 < len(lines) and lines[i + 1].indent > indent:
-            value, i = _parse_block(lines, i + 1, lines[i + 1].indent)
-            out[key] = value
-        elif (
-            i + 1 < len(lines)
-            and lines[i + 1].indent == indent
-            and _is_seq_item(lines[i + 1].text)
-        ):
-            # YAML allows a sequence at the same indent as its key.
-            value, i = _parse_seq(lines, i + 1, indent)
-            out[key] = value
-        else:
-            out[key] = None
-            i += 1
-    if i < len(lines) and lines[i].indent > indent:
-        raise FrontmatterError(f"unexpected indent at {lines[i].text!r}")
-    return out, i
-
-
-def _scalar(text: str) -> Any:
-    if text.startswith('"'):
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError as exc:
-            raise FrontmatterError(f"unterminated quoted string: {text!r}") from exc
-    if text.startswith("'"):
-        if not text.endswith("'") or len(text) < 2:
-            raise FrontmatterError(f"unterminated quoted string: {text!r}")
-        return text[1:-1].replace("''", "'")
-    if text == "{}":
-        return {}
-    if text.startswith("[") and text.endswith("]"):
-        inner = text[1:-1].strip()
-        if not inner:
-            return []
-        parts: list[str] = []
-        depth = 0
-        quote = ""
-        current = ""
-        for char in inner:
-            if quote:
-                current += char
-                if char == quote:
-                    quote = ""
-                continue
-            if char in "\"'":
-                quote = char
-                current += char
-                continue
-            if char in "[{":
-                depth += 1
-            elif char in "]}":
-                depth -= 1
-            if char == "," and depth == 0:
-                parts.append(current.strip())
-                current = ""
-                continue
-            current += char
-        if current.strip():
-            parts.append(current.strip())
-        return [_scalar(part) for part in parts]
-    lowered = text.lower()
-    if lowered in ("null", "~"):
-        return None
-    if lowered == "true":
-        return True
-    if lowered == "false":
-        return False
-    if re.fullmatch(r"-?\d+", text):
-        return int(text)
-    if re.fullmatch(r"-?\d+\.\d+", text):
-        return float(text)
-    return text
-
-
-#: Words the parser reads as something other than the string they spell.
-_PLAIN_UNSAFE_WORDS = frozenset({"null", "~", "true", "false", "yes", "no", "on", "off"})
-
-#: A scalar the parser would hand back as a number rather than as the string.
-_PLAIN_UNSAFE_NUMBER = re.compile(r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?")
-
-#: Leading characters YAML reserves for indicators; a plain scalar may not start
-#: with one without being read as a sequence item, a comment, a tag and so on.
-_PLAIN_UNSAFE_LEAD = frozenset("-?:,[]{}#&*!|>'\"%@`")
-
-#: Patterns that make a plain value ambiguous to a reader outside this subset:
-#: a `key: value` pair hiding in a value, a trailing comment, or a stray quote.
-_PLAIN_UNSAFE_INNER = (": ", " #", '"', "'", "\n", "\t")
-
-
-def _fmt_str(value: str) -> str:
-    """Quote only what needs quoting.
-
-    Quoting everything would be safe and unreadable — these files are knowledge
-    pages a human opens, and `title: "the vault"` in every frontmatter is noise.
-    The rule is therefore narrow: emit plain when re-parsing the plain form
-    yields exactly this string and no YAML reader could take it otherwise.
-    """
-    needs_quotes = (
-        value == ""
-        or value.strip() != value
-        or value.lower() in _PLAIN_UNSAFE_WORDS
-        or _PLAIN_UNSAFE_NUMBER.fullmatch(value) is not None
-        or value[0] in _PLAIN_UNSAFE_LEAD
-        or any(pattern in value for pattern in _PLAIN_UNSAFE_INNER)
-    )
-    if needs_quotes:
-        return json.dumps(value, ensure_ascii=False)
-    return value
-
-
-def _fmt_scalar(value: Any) -> str:
-    if value is None:
-        return "null"
-    if value is True:
-        return "true"
-    if value is False:
-        return "false"
-    if isinstance(value, int | float):
-        return str(value)
-    if isinstance(value, str):
-        return _fmt_str(value)
-    if isinstance(value, list):
-        return "[" + ", ".join(_fmt_scalar(item) for item in value) + "]"
-    raise FrontmatterError(f"cannot emit value of type {type(value).__name__}")
-
-
-def emit_yaml(data: dict[str, Any]) -> str:
-    """Serialize back through the subset, so what is signed is what parses."""
-    return "\n".join(_emit_map(data, 0)) + "\n"
-
-
-def _emit_map(data: dict[str, Any], indent: int) -> list[str]:
-    pad = "  " * indent
-    out: list[str] = []
-    for key, value in data.items():
-        if not re.fullmatch(r"[A-Za-z0-9_.\-]+", str(key)):
-            raise FrontmatterError(f"frontmatter key {key!r} is outside the subset")
-        if isinstance(value, dict):
-            if not value:
-                out.append(f"{pad}{key}: {{}}")
-            else:
-                out.append(f"{pad}{key}:")
-                out.extend(_emit_map(value, indent + 1))
-        elif isinstance(value, list):
-            if not value:
-                out.append(f"{pad}{key}: []")
-            elif any(isinstance(item, dict | list) for item in value):
-                out.append(f"{pad}{key}:")
-                for item in value:
-                    if not isinstance(item, dict):
-                        raise FrontmatterError(
-                            "nested sequences are outside the frontmatter subset"
-                        )
-                    sub = _emit_map(item, indent + 1)
-                    item_pad = "  " * (indent + 1)
-                    out.append(f"{pad}  - {sub[0][len(item_pad):]}")
-                    out.extend(sub[1:])
-            else:
-                out.append(f"{pad}{key}: " + _fmt_scalar(value))
-        else:
-            out.append(f"{pad}{key}: {_fmt_scalar(value)}")
-    return out
+# --- frontmatter: the documented YAML subset lives in sparknet-yaml.py --------
+# The subset parser and emitter are re-exported above from the one shared copy;
+# `split_note`/`emit_note` are the note-level wrappers the rest of this module uses.
 
 
 def split_note(raw: bytes) -> tuple[dict[str, Any], bytes]:
@@ -616,21 +284,35 @@ def unsigned_tracking(tracking: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in tracking.items() if k != "signature"}
 
 
+def build_conversation_root(conversation: Any) -> str:
+    """The RFC 6962 root of the canonical `tracking.conversation` entries.
+
+    One leaf per entry, the entry's canonical JSON bytes, so the root commits to
+    the who/when/which-model trail the same way a checkpoint commits to the
+    ledger. An empty (or absent) conversation is the empty tree's root, not an
+    error: a note written before any turn is still signable.
+    """
+    entries = conversation if isinstance(conversation, list) else []
+    return _load_merkle().merkle_root([canonical_json(entry) for entry in entries])
+
+
 def note_hashes(meta: dict[str, Any], tracking: dict[str, Any], body: bytes) -> dict[str, str]:
     return {
         "body": sha256_hex(body),
         "meta": sha256_hex(canonical_json(meta)),
         "tracking": sha256_hex(canonical_json(unsigned_tracking(tracking))),
+        "conversation": build_conversation_root(tracking.get("conversation")),
     }
 
 
 def note_message(hashes: dict[str, str]) -> bytes:
-    """What the user key signs over: domain, then the three hashes, LF-joined."""
+    """What the user key signs over: domain, then the four hashes, LF-joined."""
     return (
         NOTE_DOMAIN + b"\n"
         + hashes["body"].encode("ascii") + b"\n"
         + hashes["meta"].encode("ascii") + b"\n"
-        + hashes["tracking"].encode("ascii")
+        + hashes["tracking"].encode("ascii") + b"\n"
+        + hashes["conversation"].encode("ascii")
     )
 
 
@@ -782,12 +464,14 @@ def sign_note(raw: bytes, vault: Path, agent: str | None = None, model: str | No
 
     signature = {
         "alg": "ed25519",
+        "note_version": NOTE_VERSION,
         "sig": authz.sign_bytes(private_key, note_message(hashes)),
         "key_id": owner_id,
         "key_fingerprint": fingerprint_label_of_public_b64(public_b64),
         "signed_body_sha256": hashes["body"],
         "signed_meta_sha256": hashes["meta"],
         "signed_tracking_sha256": hashes["tracking"],
+        "signed_conversation_root": hashes["conversation"],
         # The metadata itself, not just its hash: when only allowlisted fields
         # changed, a verifier must be able to say *which* keys moved. An
         # aggregate hash can tell that the metadata changed and nothing more.
@@ -860,9 +544,20 @@ def verify_note(
     signed_body = str(signature.get("signed_body_sha256") or "")
     signed_meta = str(signature.get("signed_meta_sha256") or "")
     signed_tracking = str(signature.get("signed_tracking_sha256") or "")
-    recorded = {"body": signed_body, "meta": signed_meta, "tracking": signed_tracking}
+    signed_conversation = str(signature.get("signed_conversation_root") or "")
+    recorded = {
+        "body": signed_body,
+        "meta": signed_meta,
+        "tracking": signed_tracking,
+        "conversation": signed_conversation,
+    }
     if not all(re.fullmatch(r"[0-9a-f]{64}", value) for value in recorded.values()):
-        return "invalid", "envelope does not record three 64-hex hashes"
+        return "invalid", "envelope does not record four 64-hex hashes"
+    if signature.get("note_version") != NOTE_VERSION:
+        return "invalid", (
+            f"envelope carries note_version {signature.get('note_version')!r}, "
+            f"this verifier knows {NOTE_VERSION!r}"
+        )
 
     authz = _load_authz()
     # 1. authenticity: the signature covers the recorded inputs, so it stays
@@ -883,6 +578,8 @@ def verify_note(
 
     if current["body"] != recorded["body"]:
         return "stale:content", "body changed since signing — re-sign to clear"
+    if current["conversation"] != recorded["conversation"]:
+        return "stale:content", "conversation changed since signing — re-sign to clear"
     if current["tracking"] != recorded["tracking"]:
         return "stale:content", "tracking block changed since signing — re-sign to clear"
 
@@ -903,6 +600,230 @@ def changed_meta_keys(current: dict[str, Any], signed: dict[str, Any]) -> set[st
         for key in set(current) | set(signed)
         if current.get(key) != signed.get(key)
     }
+
+
+# --- co-signatures ------------------------------------------------------------
+#
+# A second user attests a note's bytes without rewriting the original author.
+# `sign_note` refuses a note whose owner_id differs, so a reviewer could never
+# countersign (the G3 gap). A co-signature is appended under
+# `tracking.signature.co_signatures[]`, a sibling of the primary `sig`. The
+# primary tracking hash is taken with the whole `signature` key removed, so
+# appending a co-signature never invalidates the primary signature: the note
+# keeps its owner_id and still verifies `valid`.
+
+#: The fields every co-signature entry carries. `alg`/`signed_at` are bookkeeping
+#: the primary envelope also keeps; the five the contract names are the ones a
+#: verifier resolves on.
+CO_SIGNATURE_FIELDS = (
+    "alg",
+    "owner_id",
+    "owner_node",
+    "public_key_b64",
+    "key_fingerprint",
+    "sig",
+    "signed_at",
+)
+
+#: The four recorded-hash fields the primary envelope carries; a co-signature
+#: signs the same message, rebuilt from exactly these.
+_RECORDED_HASH_FIELDS = ("body", "meta", "tracking", "conversation")
+
+
+def _recorded_from_signature(signature: dict[str, Any]) -> dict[str, str] | None:
+    """The primary envelope's four recorded hashes, or None if it is malformed.
+
+    A co-signature commits to the *identical* bytes the primary signature
+    recorded, so it is built over these hashes — not over the note's current
+    bytes — which is what keeps the two signatures over one message.
+    """
+    recorded = {
+        "body": str(signature.get("signed_body_sha256") or ""),
+        "meta": str(signature.get("signed_meta_sha256") or ""),
+        "tracking": str(signature.get("signed_tracking_sha256") or ""),
+        "conversation": str(signature.get("signed_conversation_root") or ""),
+    }
+    if not all(re.fullmatch(r"[0-9a-f]{64}", value) for value in recorded.values()):
+        return None
+    return recorded
+
+
+def _user_record_matches(entry: dict[str, Any], record: dict[str, Any]) -> bool:
+    """Does a co-signature entry resolve to this user record (user.md snapshot)?
+
+    The record is the user-key half of a node's ``00_System/user.md`` — the
+    offline fallback the trust rule names. The record's fingerprint may be
+    spelled at the top level (``key_fingerprint``) or under ``key.fingerprint``
+    as user.md carries it.
+    """
+    key = record.get("key") if isinstance(record.get("key"), dict) else {}
+    record_fingerprint = str(record.get("key_fingerprint") or key.get("fingerprint") or "")
+    return (
+        str(entry.get("owner_id")) == str(record.get("owner_id"))
+        and str(entry.get("owner_node")) == str(record.get("owner_node"))
+        and bool(record_fingerprint)
+        and str(entry.get("key_fingerprint")) == record_fingerprint
+    )
+
+
+def _registry_admits_node(registry: dict[str, Any], owner_node: str) -> tuple[bool, str]:
+    """Does the Master-signed registry name this node as a live member?
+
+    The online half of the trust rule. The entry's signature is checked with the
+    one canonicalisation (`sparknet-authz.py authorization_message`) under the
+    registry's own master key, so a forged or edited entry does not admit a node.
+    """
+    authz = _load_authz()
+    master_b64 = str((registry or {}).get("master_public_key_b64") or "")
+    if not master_b64:
+        return False, "registry carries no master_public_key_b64"
+    try:
+        master = authz.public_key_from_b64(master_b64)
+    except Exception as exc:  # noqa: BLE001 - any parse failure is a refusal
+        return False, f"registry master key unusable: {exc}"
+    entries = registry.get("authorizations")
+    if not isinstance(entries, list):
+        return False, "registry has no authorizations list"
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        identity = entry.get("identity")
+        if not isinstance(identity, dict) or str(identity.get("node_id") or "") != owner_node:
+            continue
+        if entry.get("revoked"):
+            return False, f"node {owner_node!r} is revoked in the registry"
+        try:
+            message = authz.authorization_message(entry)
+        except Exception as exc:  # noqa: BLE001
+            return False, f"registry entry for {owner_node!r} is malformed: {exc}"
+        if not authz.verify_signature(master, str(entry.get("signature_b64") or ""), message):
+            return False, f"registry entry for {owner_node!r} is not signed by the master key"
+        return True, "registry names the node"
+    return False, f"node {owner_node!r} is not in the registry"
+
+
+def add_co_signature(raw: bytes, vault: Path) -> bytes:
+    """Append this vault user's co-signature to a note, leaving the primary intact.
+
+    Signs the *primary envelope's* four recorded hashes with this vault's user
+    key, so the co-signature commits to the identical bytes. The primary
+    ``signature`` — its ``sig``, ``key_id`` and recorded hashes — is never
+    touched, and ``tracking.owner_id`` is untouched, so the note still verifies
+    `valid` under its original author. A co-signature from the same key replaces
+    the existing entry (idempotent re-sign) rather than piling up.
+    """
+    authz = _load_authz()
+    record = parse_user_record(vault)
+    if not user_is_filled(record):
+        raise ProvenanceError("user record is unfilled; run `make user-init` first")
+    frontmatter, body = split_note(raw)
+    tracking = tracking_of(frontmatter)
+    signature = tracking.get("signature")
+    if not isinstance(signature, dict):
+        raise ProvenanceError("cannot co-sign a note with no primary signature to attest")
+    recorded = _recorded_from_signature(signature)
+    if recorded is None:
+        raise ProvenanceError("the primary envelope does not record four 64-hex hashes")
+
+    key_path = _user_key_path(vault)
+    if not key_path.is_file():
+        raise ProvenanceError(f"user private key not found at {key_path}; run `make user-init`")
+    _refuse_loose_key(key_path)
+    private_key = authz.load_private_key(key_path)
+    public_b64 = authz.public_key_b64(private_key.public_key())
+    fingerprint = fingerprint_label_of_public_b64(public_b64)
+
+    entry = {
+        "alg": "ed25519",
+        "owner_id": str(record.get("owner_id")),
+        "owner_node": str(record.get("owner_node") or _node_id(vault)),
+        "public_key_b64": public_b64,
+        "key_fingerprint": fingerprint,
+        "sig": authz.sign_bytes(private_key, note_message(recorded)),
+        "signed_at": _iso(_now()),
+    }
+    existing = signature.get("co_signatures")
+    cosignatures = [e for e in existing if isinstance(e, dict)] if isinstance(existing, list) else []
+    cosignatures = [e for e in cosignatures if str(e.get("key_fingerprint")) != fingerprint]
+    cosignatures.append(entry)
+    signature["co_signatures"] = cosignatures
+    tracking["signature"] = signature
+    frontmatter["tracking"] = tracking
+    return emit_note(frontmatter, body)
+
+
+def verify_co_signatures(
+    frontmatter: dict[str, Any],
+    *,
+    trusted_users: Any = (),
+    registry: dict[str, Any] | None = None,
+) -> list[str]:
+    """Problems, one per co-signature that is not both byte-intact and trusted.
+
+    Each entry is checked in three steps: it must be well-formed, its
+    ``key_fingerprint`` must be the fingerprint of its own ``public_key_b64`` (a
+    swapped key fails), and its ``sig`` must verify over the primary envelope's
+    four recorded hashes with that key (a co-signature over different bytes
+    fails). A byte-intact entry is then *trusted* when it resolves through either
+    resolver: the Master-signed ``registry`` naming its node, or a ``trusted_users``
+    record (the origin ``user.md`` snapshot) matching its owner_id, owner_node and
+    fingerprint. An intact entry that resolves through neither is reported
+    ``untrusted`` — the bytes are genuine, the signer is simply unknown here.
+    """
+    authz = _load_authz()
+    problems: list[str] = []
+    tracking = tracking_of(frontmatter)
+    signature = tracking.get("signature")
+    if not isinstance(signature, dict):
+        return problems
+    entries = signature.get("co_signatures")
+    if not isinstance(entries, list) or not entries:
+        return problems
+    recorded = _recorded_from_signature(signature)
+    if recorded is None:
+        return ["co-signatures exist but the primary envelope records no four hashes"]
+
+    for index, entry in enumerate(entries):
+        label = f"co-signature[{index}]"
+        if not isinstance(entry, dict):
+            problems.append(f"{label}: not a mapping")
+            continue
+        owner_id = str(entry.get("owner_id") or "")
+        owner_node = str(entry.get("owner_node") or "")
+        fingerprint = str(entry.get("key_fingerprint") or "")
+        public_b64 = str(entry.get("public_key_b64") or "")
+        if entry.get("alg") != "ed25519":
+            problems.append(f"{label} ({owner_id or '?'}): alg is not ed25519")
+            continue
+        if not OWNER_ID_RE.fullmatch(owner_id):
+            problems.append(f"{label}: owner_id {owner_id!r} is not a U-##### number")
+            continue
+        if not FINGERPRINT_RE.fullmatch(fingerprint):
+            problems.append(f"{label} ({owner_id}): key_fingerprint is not sha256:<64 hex>")
+            continue
+        try:
+            public_key = authz.public_key_from_b64(public_b64)
+        except Exception as exc:  # noqa: BLE001
+            problems.append(f"{label} ({owner_id}): public_key_b64 unusable: {exc}")
+            continue
+        if fingerprint != fingerprint_label_of_public_b64(public_b64):
+            problems.append(f"{label} ({owner_id}): key_fingerprint does not match public_key_b64")
+            continue
+        if not authz.verify_signature(public_key, str(entry.get("sig") or ""), note_message(recorded)):
+            problems.append(f"{label} ({owner_id}): signature does not verify over the recorded hashes")
+            continue
+        if any(_user_record_matches(entry, rec) for rec in trusted_users if isinstance(rec, dict)):
+            continue
+        if registry is not None:
+            admitted, detail = _registry_admits_node(registry, owner_node)
+            if admitted:
+                continue
+            problems.append(f"{label} ({owner_id}): untrusted — {detail}")
+            continue
+        problems.append(
+            f"{label} ({owner_id}): untrusted — no registry and no matching user.md snapshot"
+        )
+    return problems
 
 
 # --- the user record ----------------------------------------------------------
@@ -1170,15 +1091,24 @@ def ingest_note(
 
 
 def block_hash(block: dict[str, Any]) -> str:
-    """sha256 over the block minus its own `hash`.
+    """The chain hash of a block: sha256 over everything except the hash itself.
 
-    Identical to master-node's `block_hash`, on purpose: writer and verifier must
-    agree byte-for-byte or the chain verifies nowhere. Excluding nothing else
-    matters — a field not covered by the hash is freely editable, which would
-    make the chain decorative.
+    Delegates to the one implementation in shared/sparknet-authz.py so the peer,
+    the Master's ledger verifier and the signer all hash identically. A second
+    copy is how the two ledger shapes diverged once already.
     """
-    payload = {k: v for k, v in block.items() if k != "hash"}
-    return sha256_hex(canonical_json(payload))
+    return _load_authz().ledger_block_hash(block)
+
+
+def block_header_signable(block: dict[str, Any]) -> bytes:
+    """The bytes the appending node key signs: the whole block header.
+
+    `data`, `prev_hash`, `timestamp`, `block_id` and `node_pubkey_b64` are all
+    covered. A block whose header was edited, or which was moved to another
+    position, fails this signature even if `hash` is recomputed — which is what
+    makes a deleted `grant_use` block (and its spent nonce) detectable.
+    """
+    return _load_authz().ledger_block_signable(block)
 
 
 def load_ledger(path: Path) -> dict[str, Any]:
@@ -1191,22 +1121,49 @@ def load_ledger(path: Path) -> dict[str, Any]:
 
 
 def verify_chain(ledger: dict[str, Any]) -> tuple[bool, str]:
-    """Walk the chain and check every link. Returns (ok, detail)."""
+    """Walk the chain and check every link. Returns (ok, detail).
+
+    v2 checks, in order, each fail-closed: the required fields are present, the
+    block's `block_id` is its own zero-padded index, a non-empty signature is
+    present, `prev_hash` links to the previous block's hash (the ledger's
+    `genesis_hash` for the first block), the header signature verifies against
+    the block's own `node_pubkey_b64`, and the block re-hashes. An unsigned or
+    header-edited block therefore cannot pass, and a deleted or reordered block
+    breaks the link.
+    """
+    authz = _load_authz()
     required = contract()["ledger_block"]["required"]
     blocks = ledger.get("blocks")
     if not isinstance(blocks, list):
         return False, "ledger has no blocks array"
-    previous = ""
+    previous = str(ledger.get("genesis_hash", ""))
     for index, block in enumerate(blocks):
         if not isinstance(block, dict):
             return False, f"block {index} is not an object"
         missing = [f for f in required if f not in block]
         if missing:
             return False, f"block {index} missing {', '.join(missing)}"
+        expected_id = f"{index:08d}"
+        if block["block_id"] != expected_id:
+            return False, (
+                f"block {index} has block_id {block['block_id']!r}, expected "
+                f"{expected_id!r}: the chain has been reordered or a block removed"
+            )
+        if not str(block["signature"] or ""):
+            return False, f"block {index} ({block['block_id']}) carries no signature"
         if block["prev_hash"] != previous:
             return False, (
                 f"block {index} ({block['block_id']}) links to {block['prev_hash']!r}, "
                 f"expected {previous!r}"
+            )
+        try:
+            node_pub = authz.public_key_from_b64(str(block["node_pubkey_b64"] or ""))
+        except Exception as exc:  # noqa: BLE001 - any key-parse failure is a bad block
+            return False, f"block {index} ({block['block_id']}) has an unusable node_pubkey_b64: {exc}"
+        if not authz.verify_signature(node_pub, str(block["signature"]), block_header_signable(block)):
+            return False, (
+                f"block {index} ({block['block_id']}) header signature does not verify: "
+                f"the block was edited, reordered or forged"
             )
         if "hash" in block and block["hash"] != block_hash(block):
             return False, (
@@ -1258,6 +1215,36 @@ def _dual_sign(vault: Path, record: dict[str, Any], data: dict[str, Any]) -> dic
     }
 
 
+def dual_sign(vault: Path, record: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
+    """Public entry point for the one dual-control signing path.
+
+    A proposal/review/decision carries the same two signatures an approval does
+    (shared/sparknet-proposal.py consumes this), so the envelope is defined once.
+    """
+    return _dual_sign(vault, record, data)
+
+
+def node_id(vault: Path) -> str:
+    """This vault's node id, 'unknown' when manifests/node-identity.json is absent."""
+    return _node_id(vault)
+
+
+def node_public_b64(vault: Path) -> str:
+    """This vault's node identity public key, inline for a self-contained record."""
+    return _node_public_b64(vault)
+
+
+def now():
+    """The one clock (UTC) so a proposal record and an approval share a format."""
+    return _now()
+
+
+def iso(moment) -> str:
+    """The one timestamp formatter (`...+00:00` → `...Z`)."""
+    return _iso(moment)
+
+
+
 def build_approval_data(
     *,
     vault: Path,
@@ -1272,9 +1259,10 @@ def build_approval_data(
     """Assemble an approval payload and sign it with the user key and the node key.
 
     Two keys, two meanings: the user's signature is consent, the node's is
-    attestation that this node recorded it. Neither alone places a block — the
-    block-level signature restates the node's countersignature over the same
-    payload, and `hash` binds the whole block into the chain.
+    attestation that this node recorded it, both over the payload. Neither alone
+    places a block: `append_block` adds a *second*, independent node signature
+    over the whole block header, and `hash` binds that signed block into the
+    chain.
     """
     if decision not in ("approved", "rejected", "clarified"):
         raise ProvenanceError(f"decision must be approved|rejected|clarified, got {decision!r}")
@@ -1306,22 +1294,37 @@ def build_approval_data(
 
 
 def append_block(vault: Path, data: dict[str, Any]) -> dict[str, Any]:
-    """Append one canonical block to this vault's ledger and write it atomically."""
+    """Append one signed, hash-chained block to this vault's ledger.
+
+    The block header — every field except `hash` and `signature` — is signed by
+    this node's identity key, and the node's public key travels inline in the
+    block so an offline verifier needs no local key material. `data.signatures`
+    (for approvals and `grant_use`) still bind the record separately; the header
+    signature binds the block's position and payload, so a deleted, reordered or
+    edited block is detectable.
+    """
     ledger_path = vault / "blockchain" / "ledger.json"
     if ledger_path.is_file():
         ledger = load_ledger(ledger_path)
     else:
-        ledger = {"version": "1.0", "genesis_hash": "", "blocks": []}
+        ledger = {"version": "2.0", "genesis_hash": "", "blocks": []}
     blocks = ledger.setdefault("blocks", [])
-    previous = blocks[-1]["hash"] if blocks else ledger.get("genesis_hash", "")
+    previous = blocks[-1]["hash"] if blocks else str(ledger.get("genesis_hash", ""))
     index = len(blocks)
+    authz = _load_authz()
+    node_path = _node_key_path(vault)
+    if not node_path.is_file():
+        raise ProvenanceError(f"{node_path} not found (run `make keys`)")
+    _refuse_loose_key(node_path)
+    node_key = authz.load_private_key(node_path)
     block: dict[str, Any] = {
         "block_id": f"{index:08d}",
         "prev_hash": previous,
         "timestamp": _iso(_now()),
+        "node_pubkey_b64": _node_public_b64(vault),
         "data": data,
-        "signature": data.get("signatures", {}).get("node", ""),
     }
+    block["signature"] = authz.sign_bytes(node_key, block_header_signable(block))
     block["hash"] = block_hash(block)
     blocks.append(block)
 
@@ -1360,6 +1363,12 @@ def verify_approval_blocks(vault: Path, record: dict[str, Any] | None = None) ->
         data = block.get("data") or {}
         if data.get("event") not in peer_events:
             continue
+        if data.get("event") == "checkpoint":
+            # Header-signed only: there is no data.signatures to reproduce, and
+            # verify_chain above already checked the header signature and the
+            # re-hash. The checkpoint payload is a statement about the chain,
+            # not a record of consent.
+            continue
         approval_id = data.get("approval_id") or data.get("event")
         signatures = data.get("signatures")
         if not isinstance(signatures, dict):
@@ -1375,8 +1384,10 @@ def verify_approval_blocks(vault: Path, record: dict[str, Any] | None = None) ->
             continue
         if not authz.verify_signature(node_pub, str(signatures.get("node") or ""), message):
             problems.append(f"{approval_id}: node countersignature does not verify")
-        if block.get("signature") != signatures.get("node"):
-            problems.append(f"{approval_id}: block signature does not restate the node countersignature")
+        # The block-level signature now covers the whole header and is checked by
+        # verify_chain above; it is no longer a restatement of the node
+        # countersignature. The record's own dual signatures are still checked
+        # here so a block stays self-contained if copied out of the ledger.
         for ref in data.get("note_refs", []):
             if not (vault / str(ref)).is_file():
                 problems.append(f"{approval_id}: note_refs points at a missing note: {ref}")
@@ -1394,6 +1405,214 @@ def approval_ids_in_ledger(vault: Path) -> set[str]:
         if isinstance(block, dict) and isinstance(block.get("data"), dict)
         and block["data"].get("approval_id")
     }
+
+
+# --- signed checkpoints and cross-node head anchoring ---------------------------
+
+
+def build_checkpoint_data(*, vault: Path, clock=None) -> dict[str, Any]:
+    """A checkpoint payload over this ledger's current head.
+
+    Three numbers name the head: ``size`` (the number of blocks in the chain),
+    ``head_hash`` (the newest block's ``hash``) and ``root`` (the RFC 6962
+    Merkle root, via ``shared/sparknet-merkle.py``, of every block hash in the
+    chain). The tree is the ledger *before* this checkpoint is appended, so
+    ``size`` is what the root covers, and nothing is self-referential: the
+    block hashes its own payload only through the next snapshot, never its own
+    root.
+    """
+    ledger_path = vault / "blockchain" / "ledger.json"
+    if not ledger_path.is_file():
+        raise ProvenanceError("cannot checkpoint a ledger that does not exist")
+    ledger = load_ledger(ledger_path)
+    blocks = ledger.get("blocks")
+    if not isinstance(blocks, list) or not blocks:
+        raise ProvenanceError("cannot checkpoint an empty chain: append a block first")
+    moment = (clock or _now)()
+    hashes = [str(block.get("hash")) for block in blocks]
+    return {
+        "event": "checkpoint",
+        "size": len(hashes),
+        "head_hash": hashes[-1],
+        "root": _load_merkle().merkle_root(hashes),
+        "node_pubkey_b64": _node_public_b64(vault),
+        "recorded_at": _iso(moment),
+    }
+
+
+def checkpoint(vault: Path, clock=None) -> dict[str, Any]:
+    """Append a signed checkpoint block to this vault's ledger.
+
+    Signed by the node key like every block — the header signature is the whole
+    commitment. Once appended, the checkpoint block becomes a leaf of the next
+    checkpoint's tree, which is why ``size`` counts the chain it snapshots, not
+    the chain it joins.
+    """
+    return append_block(vault, build_checkpoint_data(vault=vault, clock=clock))
+
+
+def _anchored_checkpoints_path(vault: Path) -> Path:
+    """This node's view of other nodes' heads: runtime state, never the vault."""
+    return _state_dir(vault) / "anchored-checkpoints.json"
+
+
+def load_anchored(vault: Path) -> dict[str, dict[str, Any]]:
+    """The per-node anchored heads, keyed by the signing node's public key.
+
+    A corrupt store is a refusal, not a reset: silently forgetting the anchors
+    would quietly convert every incoming rollback or fork into "first anchor".
+    """
+    path = _anchored_checkpoints_path(vault)
+    if not path.is_file():
+        return {}
+    try:
+        store = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        raise ProvenanceError(f"{path} is not valid JSON: {exc}") from exc
+    if not isinstance(store, dict):
+        raise ProvenanceError(f"{path} is not a mapping of anchored nodes")
+    return {k: v for k, v in store.items() if isinstance(v, dict)}
+
+
+def save_anchored(vault: Path, store: dict[str, dict[str, Any]]) -> None:
+    path = _anchored_checkpoints_path(vault)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(store, indent=2, sort_keys=True) + "\n")
+    tmp.chmod(0o600)
+    os.replace(tmp, path)
+
+
+def _checkpoint_block_problems(block: Any) -> str | None:
+    """The block-level checks every checkpoint must pass before any anchor.
+
+    Returns a refusal reason, or None when the block itself is sound: it is a
+    well-formed checkpoint whose header signature verifies against its own
+    ``node_pubkey_b64`` and whose ``hash`` re-hashes when present.
+    """
+    if not isinstance(block, dict):
+        return "checkpoint is not an object"
+    data = block.get("data")
+    if not isinstance(data, dict) or data.get("event") != "checkpoint":
+        return "not a checkpoint block (data.event != 'checkpoint')"
+    for field in ("size", "head_hash", "root"):
+        if field not in data:
+            return f"checkpoint data missing {field!r}"
+    size = data["size"]
+    if isinstance(size, bool) or not isinstance(size, int) or size < 1:
+        return "checkpoint size must be a positive integer"
+    for field in ("head_hash", "root"):
+        value = data[field]
+        if not isinstance(value, str) or len(value) != 64:
+            return f"checkpoint {field} must be a 64-hex hash"
+        try:
+            bytes.fromhex(value)
+        except ValueError:
+            return f"checkpoint {field} must be a 64-hex hash"
+    authz = _load_authz()
+    try:
+        node_pub = authz.public_key_from_b64(str(block.get("node_pubkey_b64") or ""))
+    except Exception as exc:  # noqa: BLE001 - any key-parse failure is a bad block
+        return f"unusable node_pubkey_b64: {exc}"
+    if not authz.verify_signature(node_pub, str(block.get("signature") or ""), block_header_signable(block)):
+        return "checkpoint header signature does not verify"
+    if "hash" in block and block["hash"] != block_hash(block):
+        return "checkpoint does not re-hash to its recorded hash"
+    return None
+
+
+def verify_checkpoint(
+    block: dict[str, Any],
+    anchored: dict[str, Any] | None = None,
+    proof: list[str] | None = None,
+) -> tuple[bool, str]:
+    """Does this signed checkpoint advance what this node already anchors?
+
+    Checks, in order, fail-closed:
+
+    - the block itself: a well-formed checkpoint whose header signature
+      verifies (the "signed like every block" commitment) and that re-hashes;
+    - against a prior anchor for the same node: a size *below* the anchored
+      size is a rollback and refused; the same size must carry the same root
+      (a different root is a fork and refused); a size *above* must carry an
+      RFC 6962 consistency proof — ``sparknet-merkle.verify_consistency`` from
+      the anchored root to the new root — and an advanced head.
+
+    A checkpoint from an unknown node (``anchored`` is None) is accepted on
+    the signature alone: the first anchor establishes the baseline every later
+    one is measured against.
+    """
+    err = _checkpoint_block_problems(block)
+    if err:
+        return False, err
+    data = block["data"]
+    size = int(data["size"])
+    root = data["root"]
+    if anchored is None:
+        return True, "first anchor for this node"
+    anchored_size = int(anchored["size"])
+    if size < anchored_size:
+        return False, (
+            f"rollback: this node already anchors size {anchored_size}, but the "
+            f"incoming checkpoint claims {size}"
+        )
+    if size == anchored_size:
+        if root == anchored.get("root"):
+            return True, "same head re-anchored (no change)"
+        return False, (
+            "fork: same size but a different root — this node already anchors "
+            f"root {anchored['root'][:16]}... for size {size}"
+        )
+    if not proof:
+        return False, (
+            "a growing checkpoint needs an RFC 6962 consistency proof from the "
+            "anchored root to the new root"
+        )
+    if data["head_hash"] == anchored.get("head_hash"):
+        return False, "growth claimed, but the head did not advance"
+    if not _load_merkle().verify_consistency(
+        anchored_size, size, anchored.get("root"), root, proof
+    ):
+        return False, (
+            "consistency: the new root does not prove a pure extension of the "
+            "anchored root"
+        )
+    return True, f"anchored growth from size {anchored_size} to {size}"
+
+
+def anchor(
+    vault: Path,
+    block: dict[str, Any],
+    proof: list[str] | None = None,
+) -> tuple[bool, str, dict[str, Any] | None]:
+    """Verify a signed checkpoint from another node and record the high-water mark.
+
+    The store is keyed by the checkpoint's ``node_pubkey_b64`` — the node that
+    signed it — so each node's head is anchored independently. A refused
+    checkpoint changes nothing.
+    """
+    store = load_anchored(vault)
+    if not isinstance(block, dict) or not isinstance(block.get("data"), dict):
+        return False, "malformed checkpoint block", None
+    key = str(block["data"].get("node_pubkey_b64") or "")
+    if not key:
+        return False, "no node_pubkey_b64 in checkpoint data", None
+    anchored = store.get(key)
+    ok, detail = verify_checkpoint(block, anchored=anchored, proof=proof)
+    if not ok:
+        return ok, detail, anchored
+    data = block["data"]
+    record = {
+        "size": int(data["size"]),
+        "head_hash": data["head_hash"],
+        "root": data["root"],
+        "node_pubkey_b64": key,
+        "recorded_at": data.get("recorded_at", ""),
+        "last_anchored_at": _iso(_now()),
+    }
+    store[key] = record
+    save_anchored(vault, store)
+    return True, detail, record
 
 
 # --- signed session grants -----------------------------------------------------
@@ -2107,6 +2326,31 @@ def main(argv: list[str] | None = None) -> int:
     p_verify = sub.add_parser("verify-note", help="verify one note against the user record")
     p_verify.add_argument("note", type=Path)
 
+    p_cosign = sub.add_parser(
+        "co-sign",
+        help="append this vault user's co-signature to a note, leaving the primary intact",
+    )
+    p_cosign.add_argument("note", type=Path)
+
+    p_cosign_verify = sub.add_parser(
+        "verify-co-signatures",
+        help="verify a note's co-signatures against a registry and/or user.md snapshots",
+    )
+    p_cosign_verify.add_argument("note", type=Path)
+    p_cosign_verify.add_argument(
+        "--registry",
+        type=Path,
+        help="Master-signed node registry; default: <vault>/manifests/node-authorizations.json",
+    )
+    p_cosign_verify.add_argument(
+        "--trusted-user",
+        type=Path,
+        action="append",
+        default=[],
+        dest="trusted_users",
+        help="a user.md snapshot to trust offline (repeatable)",
+    )
+
     p_vault = sub.add_parser("verify", help="verify notes, the ledger and approvals for a vault")
     p_vault.add_argument("--strict", action="store_true", help="treat stale:content as failure")
 
@@ -2127,6 +2371,27 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_append.add_argument("--agent", required=True)
     p_append.add_argument("--model", required=True)
+
+    sub.add_parser(
+        "append-checkpoint",
+        help="append a signed checkpoint block (chain size, head hash, RFC 6962 root)",
+    )
+
+    p_anchor = sub.add_parser(
+        "anchor-checkpoint",
+        help="verify a signed checkpoint from another node and record the anchor",
+    )
+    p_anchor.add_argument(
+        "--block",
+        type=Path,
+        required=True,
+        help="the checkpoint block JSON, exactly as the other node sent it",
+    )
+    p_anchor.add_argument(
+        "--proof",
+        type=Path,
+        help="consistency-proof JSON (a list of hash hex) for a growing checkpoint",
+    )
 
     p_grant = sub.add_parser(
         "grant-write",
@@ -2187,6 +2452,33 @@ def main(argv: list[str] | None = None) -> int:
             return {"valid": 0, "pending": 0, "stale:metadata": 0, "stale:content": 2, "invalid": 1}[
                 outcome
             ]
+        if args.command == "co-sign":
+            note = args.note if args.note.is_absolute() else Path.cwd() / args.note
+            signed = add_co_signature(note.read_bytes(), vault)
+            note.write_bytes(signed)
+            print(f"co-signed: {note}")
+            return 0
+        if args.command == "verify-co-signatures":
+            note = args.note if args.note.is_absolute() else Path.cwd() / args.note
+            frontmatter, _ = split_note(note.read_bytes())
+            registry = None
+            registry_path = args.registry or (vault / "manifests" / "node-authorizations.json")
+            if registry_path.is_file():
+                registry = json.loads(registry_path.read_text())
+            elif args.registry is not None:
+                raise ProvenanceError(f"registry not found: {registry_path}")
+            trusted_users = []
+            for path in args.trusted_users:
+                raw_path = path if path.is_absolute() else Path.cwd() / path
+                record_fm, _ = split_note(raw_path.read_bytes())
+                trusted_users.append(record_fm)
+            problems = verify_co_signatures(frontmatter, trusted_users=trusted_users, registry=registry)
+            if not problems:
+                print(f"co-signatures ok: {note}")
+                return 0
+            for problem in problems:
+                print(f"  {problem}")
+            return 1
         if args.command == "verify":
             code, text = verify_vault(vault, strict=args.strict)
             print(text)
@@ -2246,6 +2538,23 @@ def main(argv: list[str] | None = None) -> int:
                 f"(hash {block['hash'][:16]}...)"
             )
             return 0
+        if args.command == "append-checkpoint":
+            block = checkpoint(vault)
+            data = block["data"]
+            print(
+                f"appended checkpoint as block {block['block_id']}: "
+                f"size {data['size']} head {data['head_hash'][:16]}... "
+                f"root {data['root'][:16]}..."
+            )
+            return 0
+        if args.command == "anchor-checkpoint":
+            block = json.loads(args.block.read_text())
+            proof = json.loads(args.proof.read_text()) if args.proof else None
+            if proof is not None and not isinstance(proof, list):
+                raise ProvenanceError("--proof must name a JSON list of hashes")
+            ok, detail, _ = anchor(vault, block, proof=proof)
+            print(f"{'anchored' if ok else 'refused'}: {detail}")
+            return 0 if ok else 1
         if args.command == "grant-write":
             assert args.grant.is_file(), f"no such grant file: {args.grant}"
             grant = json.loads(args.grant.read_text())

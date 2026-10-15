@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# sparknet — one entry point for the fabric's operations.
+#
+# The Makefile is the single source of truth for *what* each gate does; this is
+# only a name-to-target router so a person (or a script) does not have to
+# remember which target lives where. Every command below execs `make`, so it
+# inherits the Makefile's venv/py selection and needs no logic of its own —
+# which is also why there is nothing here to get subtly out of step with it.
+#
+# Usage:
+#   sparknet <command> [args]
+#
+# Set SPARKNET_DRY=1 to print the make invocation instead of running it; the
+# test suite uses that to assert the dispatch without executing a suite.
+set -euo pipefail
+
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+
+usage() {
+  cat <<'EOF'
+sparknet — the fabric's unified command line
+
+Usage:
+  sparknet <command> [args]
+
+Commands:
+  version        print the fabric version (VERSION)
+  validate       validate every role
+  test           run every suite (make test-all)
+  contract-test  prove the peer still matches contracts/
+  lint           ruff over everything linted
+  format-check   ruff format --check on newly added files
+  render         regenerate contracts/manifest.json
+  render-check   fail if the manifest is stale
+  drift-check    fail if any derived artifact drifted
+  sbom           regenerate sbom/sparknet.cdx.json
+  sbom-check     fail if the SBOM is stale
+  keys-check     no tracked key material
+  shims-check    every legacy name is still a symlink
+  wiki-verify    the vendored wiki suite matches its pinned upstream
+  bundle <role>  build a standalone node bundle (role: peer|master)
+  layout         show the repository layout
+  help           this help
+
+Environment:
+  SPARKNET_DRY=1  print the make invocation instead of running it
+
+Each command is a thin wrapper over `make`, so the Makefile stays the single
+source of truth for what every gate does.
+EOF
+}
+
+_dry() { [ "${SPARKNET_DRY:-}" = "1" ]; }
+
+# run_make <target> [make args…] — exec the target, or print it under SPARKNET_DRY.
+run_make() {
+  if _dry; then
+    printf 'make -C %s %s\n' "$ROOT" "$*"
+    return 0
+  fi
+  exec make -C "$ROOT" "$@"
+}
+
+cmd="${1:-}"
+case "$cmd" in
+  ""|-h|--help|help) usage; exit 0 ;;
+esac
+shift
+
+case "$cmd" in
+  version)
+    if _dry; then printf 'cat %s\n' "$ROOT/VERSION"; exit 0; fi
+    exec cat "$ROOT/VERSION" ;;
+  validate)     run_make validate ;;
+  test)         run_make test-all ;;
+  contract-test) run_make contract-test ;;
+  lint)         run_make lint ;;
+  format-check) run_make format-check ;;
+  render)       run_make render ;;
+  render-check) run_make render-check ;;
+  drift-check)  run_make drift-check ;;
+  sbom)         run_make sbom ;;
+  sbom-check)   run_make sbom-check ;;
+  keys-check)   run_make keys-check ;;
+  shims-check)  run_make shims-check ;;
+  wiki-verify)  run_make wiki-verify ;;
+  layout)       run_make layout ;;
+  bundle)
+    role="${1:-}"
+    case "$role" in
+      peer|master) ;;
+      *) printf 'sparknet: bundle needs a role: peer|master\n' >&2; exit 2 ;;
+    esac
+    run_make bundle "ROLE=$role" ;;
+  *)
+    printf 'sparknet: unknown command: %s\n\n' "$cmd" >&2
+    usage >&2
+    exit 2 ;;
+esac

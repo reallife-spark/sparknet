@@ -1,6 +1,7 @@
 ---
 description: Read-only Q&A agent over the sparknet vault. Use for answering questions about knowledge, ideas and notes in the vault or either role subvault, with page citations. Never writes, edits, plans or runs commands.
 mode: primary
+model: agx64/qwen3.6-35b-262k-q8
 permission:
   edit: deny
   bash: deny

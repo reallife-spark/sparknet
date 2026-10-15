@@ -42,6 +42,12 @@ EXPECTED_TOP_LEVEL = {
     "AGENTS.md", "MEMORY.md", "MISSION.md", "PLAN.md", "README.md", "log.md",
     "Makefile", "pyproject.toml", "requirements.txt", "requirements-dev.txt",
     ".env.example", ".gitignore", "opencode.json", ".vault-config",
+    # the release surface (fabric PLAN Step 41): VERSION is the single source of
+    # truth for the fabric version; sbom/ holds the generated CycloneDX SBOM.
+    "VERSION", "sbom",
+    # shellcheck options for the whole tree, read from the repo root by
+    # `make shellcheck` (fabric PLAN Step 37, track A)
+    ".shellcheckrc",
     # the node image build context is the repo root, so what the image may
     # receive is governed by a tracked .dockerignore (peer PLAN Step 2/Step 9)
     ".dockerignore",
@@ -52,6 +58,12 @@ EXPECTED_TOP_LEVEL = {
     "CLUSTER_INFERENCE_DESIGN.md",
     "PER_USER_VAULTS_DESIGN.md",
     "ADMIN_FEDERATION_DESIGN.md",
+    # the DGX Spark node image surface: the image Dockerfile, the one dispatcher
+    # every service runs, the compose orchestration, the precontext baker, and
+    # the host bring-up script. They sit at the fabric root because the image
+    # build context IS the root (BuildKit named context gospark is separate).
+    "spark.docker", "spark-entrypoint.sh", "spark.compose.yml",
+    "spark-precontext.py", "sparknet-node-setup.sh",
     # per-clone hooks (activated by `make hooks`) — pre-commit runs keys-check
     ".githooks",
     # curated navigation + the daily-update cache. index.md is hand-maintained,
@@ -60,8 +72,11 @@ EXPECTED_TOP_LEVEL = {
 }
 
 # Machine-local or generated: never tracked, so never part of the design.
+# `__pycache__` appears at the root whenever a test imports a root-level module
+# (spark-precontext.py is one: the image build context is the root).
 UNTRACKED_TOP_LEVEL = {".venv", ".git", ".state", ".cache", "dist",
-                       ".env", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
+                       ".env", ".pytest_cache", ".ruff_cache", ".mypy_cache",
+                       "__pycache__"}
 
 # Files that record what one machine looked like, rather than describing the
 # system. A captured environment profile legitimately contains absolute host
@@ -249,6 +264,41 @@ def test_env_example_uses_placeholders_not_real_paths():
         assert not re.search(r"/mnt/knowledge/", text), (
             f"{example.relative_to(REPO_ROOT)} hard-codes a host path; a fresh "
             f"checkout writes it verbatim into .env"
+        )
+
+
+def test_env_example_templates_share_one_key_set():
+    """Every `.env.example` must expose the same knobs.
+
+    `sparknet-env-init.sh` regenerates a vault's `.env` from its own example,
+    and the wiki skills read one vocabulary (`VAULT_PATH`, `VAULT_CATEGORIES`,
+    `WIKI_STAGED_WRITES` …) in every vault. If a role's template gains or loses
+    a key, that role silently loses a knob the skills expect — a drift nothing
+    else catches, because the *values* differ by design (each template names its
+    own vault). This is the `env-changes` gate for a tree that regenerates its
+    env rather than migrating it.
+    """
+    def keys(path):
+        return {
+            m.group(1)
+            for line in path.read_text().splitlines()
+            if (m := re.match(r"\s*([A-Za-z_][A-Za-z0-9_]*)\s*=", line))
+        }
+
+    examples = sorted(
+        p for p in REPO_ROOT.rglob(".env.example")
+        if not (SKIP_DIR_PARTS & set(p.parts))
+    )
+    assert len(examples) >= 3, (
+        f"expected at least the root and both roles' templates, found: {examples}"
+    )
+    reference = examples[0]
+    ref_keys = keys(reference)
+    for path in examples[1:]:
+        assert keys(path) == ref_keys, (
+            f"{path.relative_to(REPO_ROOT)} and "
+            f"{reference.relative_to(REPO_ROOT)} disagree on env keys: "
+            f"{sorted(keys(path) ^ ref_keys)}"
         )
 
 

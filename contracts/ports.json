@@ -107,11 +107,12 @@
     "bound_by": "peer",
     "overlay_only": true,
     "binds_to": "the peer's own overlay address only",
-    "note": "Receives share offers and countersigned share grants from a sibling peer. Overlay-only because every request here must arrive over the fabric, carrying a grant naming the sender's fingerprint.",
+    "note": "Receives share offers and countersigned share grants from a sibling peer. It also carries the proposal-exchange message family (proposal.submit/review/decision, contracts/proposal-schema.json `transport`) \u2014 a route on this port, not a new port and not a share type, because a proposal conveys no knowledge read or copy. Overlay-only because every request here must arrive over the fabric, carrying a grant naming the sender's fingerprint.",
     "transport_personality": "Peer personality only: the shared transport (shared/sparknet-http.py) classifies the caller by source address, and a loopback-only route class is refused 403 before the request is read. The share stanza has no local face; only a sibling on the overlay may dial it.",
-    "implementation_state": "spec-only",
+    "implementation_state": "implemented",
     "runtime": "not-listening",
-    "status": "SPEC ONLY \u2014 no listener. Tracked in peer-node/PLAN.md Step 8."
+    "runtime_why": "The engine is peer-node/services/sparknet-share-regime.py \u2014 a contract-driven, in-process share state machine that opens no sockets \u2014 and the proposal route is served by peer-node/services/sparknet-proposal-exchange.py, likewise in-process. Both bind no port by design and are exercised as an in-process node pair (peer-node/tests/test_share_regime.py, peer-node/tests/test_proposal_exchange.py), so `implemented` + `not-listening` is the honest pair: the code exists and routes when invoked, yet nothing holds 4201 open on this host.",
+    "status": "IMPLEMENTED, NOT RUNNING HERE \u2014 the share regime (peer-node/services/sparknet-share-regime.py) drives the share conversation and recognises the proposal message family; peer-node/services/sparknet-proposal-exchange.py serves that route. Neither opens a socket: the listeners are the deployment's concern and the overlay leg is `DoD: confirm: user`. Share lifecycle tracked in peer-node/PLAN.md Step 8; the proposal route in Step 36."
    },
   "4202": {
    "service": "session-transfer",
@@ -119,10 +120,11 @@
    "bound_by": "peer",
    "overlay_only": true,
    "binds_to": "the peer's own overlay address only",
-   "note": "Carries a handoff payload. Separate from share-intake so that granting conversation passing does not implicitly grant knowledge sharing: two ports, two independent grants.",
-   "implementation_state": "spec-only",
+   "note": "Carries a handoff payload. Separate from share-intake so that granting conversation passing does not implicitly grant knowledge sharing: two ports, two independent grants. The proposal-exchange family is reachable on either share port (contracts/proposal-schema.json `transport.ports`), since a proposal is not a share type and is not gated by the knowledge/conversation split.",
+   "implementation_state": "implemented",
    "runtime": "not-listening",
-   "status": "SPEC ONLY \u2014 no listener. Tracked in peer-node/PLAN.md Step 6."
+   "runtime_why": "Peer-node/services/sparknet-proposal-exchange.py serves the proposal route in-process and opens no socket; the session-transfer lifecycle engine is peer-node/services/sparknet-share-regime.py, also in-process. The pair is driven as two nodes in peer-node/tests/test_proposal_exchange.py, so the honest pair is `implemented` + `not-listening`: the code exists and routes when invoked, yet nothing holds 4202 open here.",
+   "status": "IMPLEMENTED, NOT RUNNING HERE \u2014 peer-node/services/sparknet-proposal-exchange.py carries the proposal round trip on this port; the handoff lifecycle is peer-node/services/sparknet-share-regime.py. No daemon binds 4202; the overlay leg is `DoD: confirm: user`. Tracked in peer-node/PLAN.md Step 6 (handoff) and Step 36 (proposal route)."
   },
   "4203": {
    "service": "share-ratification",

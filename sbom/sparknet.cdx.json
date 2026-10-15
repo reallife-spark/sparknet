@@ -1,0 +1,865 @@
+{
+  "bomFormat": "CycloneDX",
+  "components": [
+    {
+      "bom-ref": "vendored-wiki-skill:computer-user",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "65437642e504efd8c13fcd82948b6b388ea39db0ff0747550e7a67a3bc85f325"
+        }
+      ],
+      "name": "computer-user",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/computer-user/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:cross-linker",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9ca4176c4a20922880ec5e4e325fc00d4b197100b931ca41e288fea24e83aa3c"
+        }
+      ],
+      "name": "cross-linker",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/cross-linker/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "pkg:pypi/cryptography",
+      "name": "cryptography",
+      "properties": [
+        {
+          "name": "sparknet:declared-constraint",
+          "value": ">=42"
+        },
+        {
+          "name": "sparknet:declared-in",
+          "value": "requirements.txt"
+        }
+      ],
+      "purl": "pkg:pypi/cryptography",
+      "scope": "required",
+      "type": "library"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:daily-update",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "d2ef2fad3752a2e8baa1a38b8f8a78a48765bbeaeee35f08811e2f24886f0de4"
+        }
+      ],
+      "name": "daily-update",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/daily-update/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:defuddle",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "10673a4dc70a0a057612d443243ab7a5aa4abdd4a0fadc3f6eec5fd71ad5a971"
+        }
+      ],
+      "name": "defuddle",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/defuddle/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:graph-colorize",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ffeb49a573cb5e19b32f3f53f679c560b940786ba9db92ac29403d40ef6de48d"
+        }
+      ],
+      "name": "graph-colorize",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/graph-colorize/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:impl-validator",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "31d2548ec1b144515ebefd30d74c51fb9938709d268750f83b4fd7f260c66ff5"
+        }
+      ],
+      "name": "impl-validator",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/impl-validator/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:json-canvas",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c1a882f60344a92a6c265c36b91e93810f64a277c6eb12fa53b12b923cc51dad"
+        }
+      ],
+      "name": "json-canvas",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/json-canvas/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:llm-wiki",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7eeaf83ba02beafceec9480f6a0b683188da3a06400237c673059b93682ac233"
+        }
+      ],
+      "name": "llm-wiki",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/llm-wiki/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:orchestrator-bases",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9c9878863589d56f60599bb5f43f7e81b8c985e66bb06984e2618bf9492f7ef7"
+        }
+      ],
+      "name": "orchestrator-bases",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/orchestrator-bases/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:orchestrator-cli",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "52215d4fded41ad31024043543729fc575f0faa1e25ba4c583172cee2523138d"
+        }
+      ],
+      "name": "orchestrator-cli",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/orchestrator-cli/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:orchestrator-markdown",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "6fd1db113af6a1ec857aba96621a9b989beb6f51ad34f86d323f2e37f76770ac"
+        }
+      ],
+      "name": "orchestrator-markdown",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/orchestrator-markdown/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:skill-creator",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "dcd4803e61e913e6fc27294184cd3a71f09f5e924ff20c8a9a20173e7b3c2bcf"
+        }
+      ],
+      "name": "skill-creator",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/skill-creator/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:tag-taxonomy",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "a6da38e031591e5a6d2a4d990e628c9bf640a1ab91229b275fe89c4416341aae"
+        }
+      ],
+      "name": "tag-taxonomy",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/tag-taxonomy/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:vault-skill-factory",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "bcd8f55a46a63d3c00ab1474ef3b1e2e23d757c922436f4303f4e28e576d0cf6"
+        }
+      ],
+      "name": "vault-skill-factory",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/vault-skill-factory/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-audit",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "306f301bcb2491d4ebcd1807db358059186e2df989b2a55559dcec1e6aefd249"
+        }
+      ],
+      "name": "wiki-audit",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-audit/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-capture",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "f04d441ad11ae8db34e004a58e1477185480cf326572d98a2f197faa0d8c12ac"
+        }
+      ],
+      "name": "wiki-capture",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-capture/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-context-pack",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "6b508d708f3c5369cfbba5e16acb6e3d3d5e23e4ec8af1d246725253c4dba1c2"
+        }
+      ],
+      "name": "wiki-context-pack",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-context-pack/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-dashboard",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "20d36eec9a277ae3a5e3e71ceb9703943c16c20d8dafd6a0000da89906c37e08"
+        }
+      ],
+      "name": "wiki-dashboard",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-dashboard/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-dedup",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7577bf1af1aa4a3e07a6c823e5100e94470e455145544709b8ed2022e7034781"
+        }
+      ],
+      "name": "wiki-dedup",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-dedup/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-digest",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7680fb6c27d790155ec4920c0cf3599f45c44f252d8bdffe86d27c291af1ae00"
+        }
+      ],
+      "name": "wiki-digest",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-digest/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-export",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "4c5f7b351eed20b4bb97ea6228b8bcd4ac6c0726ec9b914bae3eb478acb84bef"
+        }
+      ],
+      "name": "wiki-export",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-export/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-import",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c5cf0b4fb8ad066d27035ebedff798580ec3fa32966f58827d0140ebcfdee16f"
+        }
+      ],
+      "name": "wiki-import",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-import/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-ingest",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "53a9d17e7c8268dd3ad1645447ad54e398cf41a2f17e04dec87471d805770990"
+        }
+      ],
+      "name": "wiki-ingest",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-ingest/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-lint",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9157a9f19941ebb5f3cdcfb90cd17a0be362a5982efa9b3309e70fb1cdda55f4"
+        }
+      ],
+      "name": "wiki-lint",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-lint/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-query",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c471f12759c7c773344abc67ca211c3cbbfa1d148cf10ad788eb7a78c26e7569"
+        }
+      ],
+      "name": "wiki-query",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-query/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-rebuild",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "09727113b894420bc681b0ee160c3a7f71cff4ffb1acb73f1b0cb6970072fa4e"
+        }
+      ],
+      "name": "wiki-rebuild",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-rebuild/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-research",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "6f456e84426f972739e0478f8c57f3385c66fdf33426fadfde128b7ba5c93b43"
+        }
+      ],
+      "name": "wiki-research",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-research/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-setup",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "f67dafd387e07b2735350774d625765bcb8c9bb78a97f563964596d543b24e36"
+        }
+      ],
+      "name": "wiki-setup",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-setup/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-stage-commit",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "e20460d8d41ea469ccb953ae10eb011048ef7a708cbf2024b2f5dc79e236dc94"
+        }
+      ],
+      "name": "wiki-stage-commit",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-stage-commit/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-status",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "981df5f16e2bbf44b43b7014e8a96b74c62f58ecbba0b91e3fd42c241b607540"
+        }
+      ],
+      "name": "wiki-status",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-status/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-switch",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "73e546ca8b04c00b4de2b61150330c0ac1d3566bc67c2198254a7bc9a793d830"
+        }
+      ],
+      "name": "wiki-switch",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-switch/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-synthesize",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "94087803bbf1545a927acb6ea8152b185fd10d48a773a1a0cf35c6bea84b0748"
+        }
+      ],
+      "name": "wiki-synthesize",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-synthesize/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "vendored-wiki-skill:wiki-update",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "05f6e7b28bb3b9fc5f12e685e90285b283eb43f8926c248f11085c7f67b5d443"
+        }
+      ],
+      "name": "wiki-update",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/wiki-update/SKILL.md"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "MIT"
+        }
+      ],
+      "type": "data"
+    }
+  ],
+  "metadata": {
+    "component": {
+      "bom-ref": "sparknet@0.1.0",
+      "description": "The sparknet fabric: cross-role contracts, a peer node and an elected signing master.",
+      "name": "sparknet",
+      "type": "application",
+      "version": "0.1.0"
+    },
+    "tools": [
+      {
+        "name": "sparknet-sbom.py",
+        "vendor": "sparknet",
+        "version": "1.0"
+      }
+    ]
+  },
+  "specVersion": "1.5",
+  "version": 1
+}

@@ -1,6 +1,7 @@
 ---
 description: Node orchestrator for sparknet. Use as the entry point when a request spans several agents, needs subagents worked in parallel, or needs a conversation handed between vault, plan and build. Resolves the vault and role first, then delegates.
 mode: primary
+model: agx64/qwen3.6-35b-262k-q8
 ---
 
 # Node Orchestrator — sparknet

@@ -1,0 +1,15 @@
+# shellcheck options for the sparknet tree.
+#
+# shellcheck reads the first `.shellcheckrc` it finds walking up from the
+# current directory, and `make shellcheck` runs from the repo root, so this file
+# applies to every script under scripts/, peer-node/ and master-node/.
+#
+# `external-sources` lets `source scripts/sparknet-wiki-env.sh` resolve, which
+# is how the fabric shares its env bootstrap; without it every consumer warned
+# SC1091 about a file shellcheck would not follow.
+external-sources=true
+
+# Sourced siblings are resolved by path at run time and may live outside the
+# directory being checked (e.g. a role sourcing the fabric's env library), so
+# the follow hint stays off even with external sources enabled.
+disable=SC1091

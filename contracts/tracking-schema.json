@@ -101,28 +101,38 @@
     "algorithm": "ed25519",
     "key_scope": "user",
     "key_role": "the fourth key scope, distinct from cluster, operational and identity; signs notes, never authorises anything",
-    "message": "b\"sparknet-note/1\\n\" + body_sha256_hex + b\"\\n\" + meta_sha256_hex + b\"\\n\" + tracking_sha256_hex — four ASCII-escaped lines, LF-joined: domain, then the three hashes, nothing else",
+    "message": "b\"sparknet-note/2\\n\" + body_sha256_hex + b\"\\n\" + meta_sha256_hex + b\"\\n\" + tracking_sha256_hex + b\"\\n\" + conversation_root — five ASCII-escaped lines, LF-joined: domain, then the four hashes, nothing else",
     "body": "the note's file bytes after the closing `---` of the frontmatter block, verbatim",
     "meta": "everything in the frontmatter except the `tracking` key — the compiler's own field zone (title, tags, updated, …), canonicalised the same way",
     "meta_sha256": "sha256 of the canonical JSON of the meta mapping (sort_keys, separators (\",\", \":\"), UTF-8)",
     "tracking_sha256": "sha256 of the canonical JSON of the tracking block with the `signature` key removed — the same canonical form shared/sparknet-authz.py uses for identities",
+    "conversation_root": "the RFC 6962 Merkle root (shared/sparknet-merkle.py) of the canonical `tracking.conversation` entries, each entry's canonical JSON as one leaf; the empty conversation is the empty tree's root. Appending, editing or dropping an entry moves the root, and the root is a line of the signed message, so the who/when/which-model trail cannot be edited without invalidating the note",
     "envelope": {
       "alg": "ed25519",
+      "note_version": "the signed-message domain tag this envelope was produced under; a verifier refuses an envelope it does not know (`sparknet-note/2`)",
       "sig": "base64 signature",
       "key_id": "the owner_id whose user key signed it",
       "key_fingerprint": "sha256 hex of the raw 32-byte public key, so a key swap is visible without re-reading user.md",
       "signed_body_sha256": "the body hash at signing time",
       "signed_meta_sha256": "the meta hash at signing time",
       "signed_tracking_sha256": "the tracking hash at signing time",
+      "signed_conversation_root": "the RFC 6962 conversation root at signing time; recomputing it from the current `tracking.conversation` is how an edited conversation is caught",
       "signed_meta": "the meta mapping itself, verbatim at signing time, so a verifier can name *which* keys changed — an aggregate hash can only say that something did",
       "signed_at": "ISO8601 UTC"
     },
-    "envelope_integrity": "signed_meta re-hashes to signed_meta_sha256; a mismatch is `invalid`, because the metadata half of the envelope was edited after signing",
+    "co_signatures": {
+      "type": "array",
+      "items": {
+        "fields": ["alg", "owner_id", "owner_node", "public_key_b64", "key_fingerprint", "sig", "signed_at"],
+        "purpose": "a second user's attestation over the identical note bytes. The primary `signature` — its `sig`, `key_id`, `owner_id` and recorded hashes — is never touched; a co-signature is appended, never substituted, so the original author remains the owner. Appending one cannot invalidate the primary signature because the primary tracking hash is taken with the whole `signature` key removed. See the `co_signature` section for the entry shape and the trust rule."
+      }
+    },
+    "envelope_integrity": "signed_meta re-hashes to signed_meta_sha256, and the current `tracking.conversation` re-roots to signed_conversation_root; a mismatch is `invalid`, because the metadata or conversation half of the envelope was edited after signing",
     "why_both_hashes": "Recording what was signed is what makes 'edited since signing' detectable. Without them a verifier can only say 'this signature does not match this file', which cannot distinguish a routine compiler rewrite from a forgery.",
     "verify_outcomes": {
       "valid": {"condition": "current hashes equal the signed_* values and the signature verifies against the user public key in user.md", "exit": 0},
       "stale:metadata": {"condition": "hashes differ, and the changed keys are confined to `compiler_allowlist` (body unchanged)", "meaning": "an expected LLM-wiki compiler rewrite; the changed keys are read out of `signed_meta` vs the current meta; report it, do not fail", "exit": 0},
-      "stale:content": {"condition": "the body changed, or a tracking field outside the allowlist changed, since signing", "meaning": "the writer did not re-sign; re-sign to clear", "exit": 2},
+      "stale:content": {"condition": "the body changed, the conversation root changed, or a tracking field outside the allowlist changed, since signing", "meaning": "the writer did not re-sign; re-sign to clear", "exit": 2},
       "invalid": {"condition": "the signature does not verify, key_id/key_fingerprint are not the ones in user.md, owner_id mismatches, or a note that requires a signature has none", "meaning": "tamper or forgery", "exit": 1},
       "pending": {"condition": "an 01_Inbox item awaiting acceptance, before countersignature", "exit": 0}
     },
@@ -132,6 +142,26 @@
     "delta_reporting": "The report also prints a body-delta percentage for context. Classification is allowlist-based, never percentage-based: a numeric threshold is gameable by an attacker editing a little at a time, while producing a valid signature at all requires the private key.",
     "re_sign_rule": "Whoever writes a note re-signs it in the same operation and bumps `updated`. alpha-agent.md states this; provenance-verify enforces it.",
     "unit_of_verification": "one note, one signature. A note whose signature verifies but whose approvals[] is empty is still valid as a note; approvals are verified separately against the ledger."
+  },
+
+  "co_signature": {
+    "what": "A second user attests that a note's bytes are what the primary signature recorded, without rewriting the original author. Closes the G3 gap: `sign_note` refuses a note whose owner_id differs, so a reviewer could never countersign.",
+    "where": "inside `tracking.signature.co_signatures[]`, a sibling of the primary `sig`. The primary tracking hash is taken with the whole `signature` key removed, so appending a co-signature never invalidates the primary signature: the note keeps its owner_id and still verifies `valid`.",
+    "message": "the same `sparknet-note/2` message the primary signature covers, rebuilt from the primary envelope's four recorded hashes (`signed_body_sha256`, `signed_meta_sha256`, `signed_tracking_sha256`, `signed_conversation_root`) — so a co-signature commits to the identical bytes. A co-signature over any other bytes does not verify.",
+    "entry_fields": {
+      "alg": "ed25519",
+      "owner_id": "the co-signing user's number (may differ from the primary owner_id)",
+      "owner_node": "the co-signer's node",
+      "public_key_b64": "the co-signer's user public key, inline so an offline verifier needs no local key material",
+      "key_fingerprint": "sha256 of the raw 32-byte public key, the label form `sha256:<64 hex>`; must equal the fingerprint of public_key_b64, so a swapped key is visible",
+      "sig": "base64, the co-signer's user key over the `sparknet-note/2` message of the primary envelope's four recorded hashes",
+      "signed_at": "ISO8601 UTC"
+    },
+    "add_rule": "`add_co_signature` signs with this vault's user key over the primary envelope's recorded hashes and appends an entry, replacing any existing entry from the same key_fingerprint (idempotent re-sign). It never edits `signature.sig`, `signature.key_id`, `tracking.owner_id` or the recorded hashes.",
+    "trust_rule": "A co-signature is trusted when the co-signer resolves to a known identity, by one of two resolvers. (1) The Master-signed registry: the co-signer's owner_node names a non-revoked authorization whose signature verifies under the registry's master key — the online authority, the Master's attestation of the node. (2) The origin `user.md` snapshot: the entry's owner_id + owner_node + key_fingerprint match a trusted user record the verifier holds — the offline fallback, needing no running service. A co-signature that is byte-intact but resolves through neither is `untrusted`, not `invalid`: the bytes are genuine, the signer is simply unknown here.",
+    "refusals": "verify_co_signatures refuses (a) an entry whose key_fingerprint is not the fingerprint of its public_key_b64 (a swapped key); (b) a sig that does not verify over the primary recorded hashes (a co-signature over different bytes); (c) an entry that resolves through neither resolver (untrusted).",
+    "implementation": "shared/sparknet-provenance.py `add_co_signature` / `verify_co_signatures`; CLI `co-sign` and `verify-co-signatures`.",
+    "not_authority": "A co-signature attributes and attests; like the user key itself it grants no capability. Authority still comes from the capability contract and key possession."
   },
 
   "user_record": {
@@ -161,14 +191,19 @@
   },
 
   "ledger_block": {
-    "required": ["block_id", "prev_hash", "timestamp", "signature", "data"],
+    "schema_version": "2.0",
+    "required": ["block_id", "prev_hash", "timestamp", "node_pubkey_b64", "signature", "data"],
     "optional": ["hash"],
-    "block_id": "zero-padded index of the block in the chain, f\"{index:08d}\"",
+    "block_id": "zero-padded index of the block in the chain, f\"{index:08d}\"; a verifier refuses a block whose block_id is not its own index, so a reorder or a deleted middle block is caught before the signature check",
     "timestamp": "ISO8601 UTC with Z suffix",
-    "prev_hash": "the previous block's `hash`; empty string for the genesis block",
-    "hash": "sha256 of the canonical JSON of the block with `hash` removed (sort_keys, separators (\",\", \":\")); when present it must re-hash exactly, and the chain links on it",
-    "canonical_definition_note": "The same envelope the guard and the isolated signer already write. This contract restates it so tests/test_contracts.py can pin both role copies (peer-node/blockchain/ledger.schema.json and master-node's REQUIRED_FIELDS) against one source instead of against each other.",
-    "append": "only through shared/sparknet-provenance.py (the `append-approval` command and its `make provenance-append` wrapper). No service, script or bridge may build a block: the dispatch bridge once carried its own `--test-approval` builder with a different shape (index/payload/block_hash, a stub signature), which is how the two ledger shapes diverged in the first place. The flag is deleted, and peer-node/tests/test_services.py asserts the bridge cannot write the ledger in any mode."
+    "prev_hash": "the previous block's `hash`; the ledger's `genesis_hash` for the genesis block",
+    "node_pubkey_b64": "the appending node's identity public key, inline so an offline verifier needs no local key material and can check the header signature from the block alone",
+    "data": "the record payload; for approval and grant_use events its own `signatures` bind the record separately so a block stays self-contained if copied out of the ledger. A `checkpoint` event carries none — the block header signature is the whole commitment and there is no consent to reproduce",
+    "signature": "the appending node's identity key over `canonical_json(block minus hash minus signature)` — the whole header (block_id, prev_hash, timestamp, node_pubkey_b64, data), not a restatement of data.signatures. A header edit (timestamp, prev_hash, data or block_id) fails this signature even if `hash` is recomputed, and a deleted or reordered block breaks the chain.",
+    "hash": "sha256 of the canonical JSON of the block with `hash` removed (sort_keys, separators (\",\", \":\")); when present it must re-hash exactly, and the chain links on it. Because the header signature is itself covered by the hash, the chain links on signed bytes.",
+    "header_signing_rule": "One canonical form, implemented once in shared/sparknet-authz.py (`ledger_block_signable` / `ledger_block_hash`) and imported by shared/sparknet-provenance.py, master-node/services/sparknet-ledger.py and master-node/services/sparknet-signer.py. Three writers/verifiers, one rule, so a diverged copy is a test failure rather than a chain that verifies on one node and not another. This is the fix for the previous shape, where the block-level `signature` merely restated `data.signatures.node` and the header was unsigned — which let a `grant_use` block be deleted so its nonce left `consumed_grant_nonces` and a spent grant replayed.",
+    "canonical_definition_note": "This contract is authoritative for the block shape. tests/test_contracts.py pins both role copies (peer-node/blockchain/ledger.schema.json and master-node's REQUIRED_FIELDS) and the shared implementation's `contract()[\"ledger_block\"][\"required\"]` against one source instead of against each other.",
+    "append": "only through shared/sparknet-provenance.py (the `append-approval` command and its `make provenance-append` wrapper) on a peer, and through the isolated signer's `record_signature` on a Master (the signer holds the key, so only it may append there). No service, script or bridge may build a block: the dispatch bridge once carried its own `--test-approval` builder with a different shape (index/payload/block_hash, a stub signature), which is how the two ledger shapes diverged in the first place. The flag is deleted, and peer-node/tests/test_services.py asserts the bridge cannot write the ledger in any mode."
   },
 
   "approval": {
@@ -192,14 +227,29 @@
       },
       "recorded_at": "ISO8601 UTC"
     },
-    "block_signature": "For these blocks the block-level `signature` equals data.signatures.node — the node's countersignature restated where the schema requires a signature. `hash` binds the whole block (including prev_hash and timestamp); data.signatures bind the record so it stays self-contained if copied out of the ledger.",
+    "block_signature": "For these blocks the block-level `signature` is the appending node's identity key over the whole block *header* (the block minus `hash` and `signature`) — see `ledger_block.signature`, and it is no longer a restatement of data.signatures.node. The header signature binds the block's position, timestamp, prev_hash and payload; `hash` then binds the signed block; data.signatures bind the record so it stays self-contained if copied out of the ledger. `verify_chain` checks the header signature against the block's own `node_pubkey_b64`, so a deleted or reordered block fails even though data.signatures would still verify in isolation.",
     "dual_control": "user consent and node countersignature are separate keys. A node that can write the ledger cannot mint user consent; a user key without the node key cannot place a block in the chain.",
     "event_vocabulary": {
-      "peer": ["approval", "report", "share", "inbox_acceptance", "grant_use"],
+      "peer": ["approval", "report", "share", "inbox_acceptance", "grant_use", "checkpoint", "proposal", "review", "decision"],
       "master": ["election_outcome", "trust_root_formed", "trust_root_reformed", "trust_level_changed", "signature_issued", "share_ratified"],
-      "rule": "the vocabularies are disjoint. `share` records a share this peer made; only a master may ratify one. A peer writing a master event, or the reverse, is a contract break."
+      "rule": "the vocabularies are disjoint. `share` records a share this peer made; only a master may ratify one. A peer writing a master event, or the reverse, is a contract break. `proposal`/`review`/`decision` are the cross-user review workflow (contracts/proposal-schema.json): a peer proposes and reviews, a master does not."
     },
     "reports": "A generated export or digest is recorded as data.event = 'report' with the same signatures and a note_refs list naming its inputs, so a report is attributable like a note."
+  },
+
+  "checkpoint": {
+    "where": "a ledger block with data.event = 'checkpoint' records this node's own head at append time; a peer appends one whenever it wants the outside world to be able to anchor its history",
+    "data_fields": {
+      "event": "checkpoint",
+      "size": "the number of blocks in the chain at append time — the tree size the root covers. The checkpoint block itself is the oldest block of the *next* snapshot, so the payload never hashes its own root",
+      "head_hash": "the `hash` of the newest block at append time",
+      "root": "the RFC 6962 Merkle root (shared/sparknet-merkle.py `merkle_root`) of the hashes of every block in the chain",
+      "node_pubkey_b64": "the appending node's public key, inline so an offline verifier needs no local key material",
+      "recorded_at": "ISO8601 UTC"
+    },
+    "signature": "the block header signature only — a checkpoint carries no `data.signatures`, because there is no user consent to reproduce; the node key's header signature is the whole commitment and `verify_chain` checks it like any other block",
+    "anchor_rule": "a node that receives another node's signed checkpoint anchors it (peer vocabulary: both roles agree a checkpoint is a peer statement about a peer chain). The first anchor for a node establishes the baseline in the receiver's state dir; afterwards a smaller size is a rollback and refused, the same size must carry the same root (a different root is a fork and refused), and growth must carry an RFC 6962 consistency proof (`verify_consistency`) from the anchored root to the new root with an advanced head",
+    "transport": "there is no checkpoint route yet: anchoring is exercised in-process and grows over the existing share ports (Step 36). Live cross-node anchoring over the overlay is `DoD: confirm: user`."
   },
 
   "grant": {

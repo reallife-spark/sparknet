@@ -22,3 +22,14 @@ node_modules
 # transient.
 peer-node/container/context/*
 !peer-node/container/context/sparknet-peer.tar.gz
+
+# Personal/raw vault content never enters a build context. Nothing COPYs it —
+# the node image takes the curated bundle tarball only — but a build context is
+# uploaded to the (possibly remote) BuildKit builder, so keep it off the wire.
+sessions
+_raw
+_staging
+_archives
+user.md
+secrets-index.json
+**/*.ed25519

@@ -46,9 +46,12 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/health-protocol.md` | peer liveness and eviction (probe rhythm, activity-trumps-eviction) |
 | `contracts/provenance-protocol.md` | signed note chain and approvals |
 | `contracts/tracking-schema.json` | tracking envelope schema |
+| `contracts/proposal-schema.json` | the proposal/review/decision records and the draft→submitted→reviewed→decided lifecycle |
+| `contracts/proposal-protocol.md` | the narrative behind the proposal workflow: fail-closed transitions, inline keys, why a verified chain is not an authority to write |
 | `contracts/deployment-runbook.md` | phased deployment guide (live on agx64+agx32) |
 | `contracts/admin-federation-runbook.md` | Phase 5 live deploy of cross-node admin federation |
 | `contracts/README.md` | the contract index — what each file governs |
+| `contracts/manifest.json` | generated inventory of the contract SSOT (capabilities, ports, per-file hashes) |
 | `shared/sparknet-authz.py` | the one signing implementation — never copied |
 
 ## The two roles
@@ -115,3 +118,14 @@ silently write into a different vault.
 | `make lint` | ruff over everything linted |
 | `make bundle ROLE=…` | build a standalone node bundle |
 | `make bundle-verify ROLE=…` | extract it elsewhere and prove it runs |
+
+## Release surface
+
+The unified `scripts/sparknet` CLI routes each command to its `make` target
+(`sparknet version`, `sparknet test`, `sparknet bundle peer`, …).
+
+| Path | Holds |
+|---|---|
+| `VERSION` | the fabric version — the single source of truth for `pyproject.toml` and the SBOM |
+| `sbom/sparknet.cdx.json` | generated CycloneDX SBOM (`make sbom`; `make sbom-check` gates drift) |
+| `scripts/sparknet-sbom.py` | the deterministic SBOM generator (mirrors `scripts/sparknet-render.py`) |
