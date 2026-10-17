@@ -13,3 +13,28 @@ external-sources=true
 # directory being checked (e.g. a role sourcing the fabric's env library), so
 # the follow hint stays off even with external sources enabled.
 disable=SC1091
+
+# Advisory findings this gate deliberately does not block on. shellcheck's
+# `severity` option only works as a command-line flag, not in this file, so the
+# waivers are listed explicitly: a new shellcheck release that starts reporting
+# something new will fail `make shellcheck` and force a conscious decision,
+# rather than being swallowed by a severity floor.
+#
+#   SC2015  `A && B || C` is not if-then-else. Used as the fabric's reporting
+#           idiom (`cmd && ok "$x" || bad "$x"`), where the middle call is a
+#           logger that cannot fail.
+#   SC2016  Expressions in single quotes. Deliberate: several scripts build
+#           templates whose `$VAR` must expand at deploy time, not now.
+#   SC2012  `ls` to pick a file. The paths involved are dist artefacts whose
+#           names the fabric itself writes.
+#   SC2001  sed where ${var//} would do. Readability, not a defect.
+#   SC2006  Backtick command substitution. Pre-existing style.
+#   SC2295  ${var,,} expansion quoting. Style.
+#   SC2317  "Command appears unreachable" — the entrypoint and shims are
+#           dispatch tables: functions are reached by name from another shell.
+#
+# Warnings stay blocking, and there are currently none (SC2034's dead
+# --capabilities flag, two dead key paths, a dead --verbose and two masked
+# export return values were fixed rather than waived; SC1090 is handled by a
+# directive at its one site).
+disable=SC2001,SC2006,SC2012,SC2015,SC2016,SC2295,SC2317

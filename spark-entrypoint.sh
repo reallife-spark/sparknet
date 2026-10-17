@@ -144,8 +144,12 @@ master_pub() {
 
 export_gospark_env() {
   # Config.Load("") + GOSPARK_* env is the whole config: no file to drift.
-  export GOSPARK_NODE_ID="$(node_id)"
-  export GOSPARK_OVERLAY_IPV4="$(node_overlay)"
+  # Assigned then exported, so a failure in node_id/node_overlay aborts here
+  # instead of exporting an empty value (the entrypoint is fail-closed).
+  GOSPARK_NODE_ID="$(node_id)"
+  export GOSPARK_NODE_ID
+  GOSPARK_OVERLAY_IPV4="$(node_overlay)"
+  export GOSPARK_OVERLAY_IPV4
   export GOSPARK_BUS_URL="${GOSPARK_BUS_URL:-${SPARKNET_BUS_URL:-nats://nats:4222}}"
   export GOSPARK_GATEWAY_LISTEN="${GOSPARK_GATEWAY_LISTEN:-0.0.0.0:8080}"
   export GOSPARK_GATEWAY_UPSTREAM="${GOSPARK_GATEWAY_UPSTREAM:-http://vllm:8000}"

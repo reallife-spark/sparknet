@@ -150,8 +150,13 @@ if [ "$_env_file" != "$_expected_env" ]; then
 fi
 
 # --- 4. Read the config out of the .env ---------------------------------------
+# The path is resolved at run time, so shellcheck cannot follow it (SC1090);
+# note the directive has to sit on the sourcing line itself — above a
+# `a; b; c` line it would only cover `a`.
+set -a
 # shellcheck disable=SC1090
-set -a; . "$_env_file"; set +a
+. "$_env_file"
+set +a
 
 SPARKNET_WIKI_ENV_FILE="$_env_file"
 : "${VAULT_PATH:=$SPARKNET_VAULT_ROOT}"
