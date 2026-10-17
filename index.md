@@ -1,6 +1,6 @@
 ---
 title: sparknet Knowledge Index
-updated: 2026-10-08
+updated: 2026-10-17
 ---
 
 # sparknet — Knowledge Index
@@ -23,6 +23,10 @@ This repository is a fabric. Each vault has its own categories and its own
 ## Start here
 
 - [[AGENTS]] — agent charter: the fabric, layout, Memory/Plan Protocol, boundaries
+- [[CONTRIBUTING]] — setup, the gate (`make ci`), and the atomic cross-role rule
+- [[SECURITY]] — how to report, and the fail-closed authority model it protects
+- [[STYLE_GUIDE]] — how work is written here (Python, shell, commits, secrets, CI)
+- [[CHANGELOG]] — releases; `VERSION` is the source of truth
 - [[MISSION]] — what this vault is for and what "done" looks like
 - [[PLAN]] — authoritative plan cursor
 - [[MEMORY]] — standing-state memory
@@ -80,7 +84,9 @@ Three distilled pages: `[[activity-trumps-eviction]]`,
 ### Skills
 
 ### References
-One reference: `[[pair-architecture-review]]`.
+Two references: `[[pair-architecture-review]]` (NVIDIA Personal-AI-Router)
+and `[[nvidia-dsx-standard-practice]]` (the 14-repo dsx/EleutherAI inventory
+behind PLAN Steps 45–52).
 
 ### Synthesis
 One synthesis page: [[what-pair-membership-implies-for-sparknet-reformation]].
@@ -117,6 +123,7 @@ silently write into a different vault.
 | `make test-all` | every suite: contract, fabric, peer, master |
 | `make contract-test` | the peer still matches `contracts/` |
 | `make lint` | ruff over everything linted |
+| `make nv-search q="…"` | resource-first: NVIDIA's catalog before our own build |
 | `make bundle ROLE=…` | build a standalone node bundle |
 | `make bundle-verify ROLE=…` | extract it elsewhere and prove it runs |
 

@@ -79,9 +79,7 @@ class _Serve:
             public_key=public_key,
             now=now,
         )
-        self._thread = threading.Thread(
-            target=self._server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True
-        )
+        self._thread = threading.Thread(target=self._server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
         self._thread.start()
 
     @property
@@ -184,7 +182,7 @@ def test_signed_request_roundtrip(http, authz, keypair):
 
 
 def test_unsigned_request_is_refused(http, keypair):
-    priv, pub = keypair
+    _priv, pub = keypair
     server = _Serve(http, _echo_router, pub)
     try:
         import urllib.error
@@ -226,7 +224,7 @@ def _non_loopback_ipv4() -> str | None:
     """
     probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        probe.connect(("10.255.255.255", 1))  # NOQA - no packet is sent
+        probe.connect(("10.255.255.255", 1))
         return probe.getsockname()[0]
     except OSError:
         return None
@@ -353,6 +351,7 @@ def test_dispatch_bridge_serves_signed_status(http, authz):
     finally:
         server.close()
 
+
 # --- timeouts and 500 hygiene -------------------------------------------------
 
 
@@ -362,6 +361,7 @@ def test_router_exceptions_do_not_leak_internals(http, keypair, capsys):
     The exception can mention file paths, key material or internals the caller
     has no right to see; it goes to stderr instead, where an operator reads it.
     """
+
     def _boom(method, path, body, identity):
         raise RuntimeError("SECRET_TRANSPORT_DETAIL")
 

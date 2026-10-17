@@ -33,7 +33,7 @@ from typing import Any
 # importing the fabric's single loader. These two lines are deliberately
 # identical in every shared module; tests/test_contracts.py pins them.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from sparknet_loader import load_shared  # noqa: E402
+from sparknet_loader import load_shared
 
 DEFAULT_SHARED_DIR = Path(__file__).resolve().parent
 
@@ -505,7 +505,7 @@ def _record_problems(record: Any) -> list[str]:
             problems.append("user_key_fingerprint does not match user_public_key_b64")
         try:
             user_pub = authz.public_key_from_b64(user_public)
-        except Exception:  # noqa: BLE001 - any key-parse failure is a bad record
+        except Exception:
             user_pub = None
 
     message = proposal_signable(record)
@@ -517,7 +517,7 @@ def _record_problems(record: Any) -> list[str]:
 
     try:
         node_pub = authz.public_key_from_b64(str(record.get("node_pubkey_b64") or ""))
-    except Exception:  # noqa: BLE001
+    except Exception:
         node_pub = None
     if node_pub is None:
         problems.append("node_pubkey_b64 is not a usable Ed25519 public key")

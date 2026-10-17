@@ -58,7 +58,7 @@ from typing import Any
 # importing the fabric's single loader. These two lines are deliberately
 # identical in every shared module; tests/test_contracts.py pins them.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from sparknet_loader import load_by_path as _load_by_path_impl  # noqa: E402
+from sparknet_loader import load_by_path as _load_by_path_impl
 
 DEFAULT_SHARED_DIR = Path(__file__).resolve().parent
 
@@ -157,9 +157,7 @@ def load_authz(shared_dir: Path | None = None) -> Any:
     cached = sys.modules.get("sparknet_authz")
     if cached is not None:
         return cached
-    return load_consensus(shared_dir)._load_authz(  # noqa: SLF001
-        Path(shared_dir) if shared_dir else None
-    )
+    return load_consensus(shared_dir)._load_authz(Path(shared_dir) if shared_dir else None)
 
 
 def load_http(shared_dir: Path | None = None) -> Any:
@@ -210,7 +208,7 @@ def read_keypair(key_dir: Path, name: str, authz: Any) -> tuple[str, str]:
     private_b64 = private_path.read_text().strip()
     try:
         key = authz.private_key_from_b64(private_b64)
-    except Exception as exc:  # noqa: BLE001 - surface the real cause
+    except Exception as exc:
         raise ElectionError(REASON_MALFORMED, f"{private_path} is not a usable key: {exc}") from exc
     public_b64 = authz.public_key_b64(key.public_key())
     public_path = key_path(key_dir, name, private=False)
@@ -308,7 +306,7 @@ def sign_request(
     try:
         key = authz.private_key_from_b64(cluster_private_b64)
         signature_b64 = authz.sign_bytes(key, canonical_request(request))
-    except Exception as exc:  # noqa: BLE001 - surface the real cause
+    except Exception as exc:
         raise ElectionError(REASON_MALFORMED, f"cannot sign election request: {exc}") from exc
     return {**request, "signature_b64": signature_b64}
 
@@ -333,13 +331,13 @@ def verify_request(
         public_key = authz.public_key_from_b64(member["cluster_pubkey"])
         if not authz.verify_signature(public_key, request["signature_b64"], message):
             return False, REASON_BAD_SIGNATURE
-    except Exception:  # noqa: BLE001 - any failure here is a bad bid
+    except Exception:
         return False, REASON_BAD_SIGNATURE
     try:
         # The bid exists to name a usable operational key, so reject one that
         # will not parse now rather than all signatures later.
         authz.public_key_from_b64(request["operational_pubkey_b64"])
-    except Exception:  # noqa: BLE001
+    except Exception:
         return False, REASON_MALFORMED
     return True, "ok"
 
@@ -589,7 +587,7 @@ class ElectionExchange:
                     signature_b64,
                     self.consensus.root_bytes(self.root),
                 )
-            except Exception:  # noqa: BLE001 - an unusable key is a bad signature
+            except Exception:
                 valid = False
             if not valid:
                 raise ElectionError(
@@ -661,7 +659,7 @@ class _Handler(_HTTP.TimeoutHandler):
     server_version = "sparknet-election/1"
     exchange: ElectionExchange
 
-    def log_message(self, fmt: str, *args: Any) -> None:  # noqa: A002
+    def log_message(self, fmt: str, *args: Any) -> None:
         return  # loopback service; a poll every 50 ms would drown any log
 
     def _read_json(self) -> Any:
@@ -690,7 +688,7 @@ class _Handler(_HTTP.TimeoutHandler):
             code = HTTP_BAD_REQUEST
         self._send(code, exc.payload())
 
-    def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's name
+    def do_GET(self) -> None:
         exchange = self.server.exchange  # type: ignore[attr-defined]
         if self.path in ("/election/status", "/election/root"):
             try:
@@ -705,7 +703,7 @@ class _Handler(_HTTP.TimeoutHandler):
             return
         self._send(404, {"ok": False, "reason": REASON_MALFORMED, "detail": self.path})
 
-    def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's name
+    def do_POST(self) -> None:
         exchange = self.server.exchange  # type: ignore[attr-defined]
         try:
             body = self._read_json()
@@ -730,7 +728,7 @@ class _Handler(_HTTP.TimeoutHandler):
         except ElectionError as exc:
             self._refuse(exc)
             return
-        except Exception as exc:  # noqa: BLE001 - never leak a traceback to a member
+        except Exception as exc:
             # The reason stays stable; the exception names internals a member
             # has no right to see. Log it where only an operator will read it.
             print(f"[election] internal error on {self.path}: {exc!r}", file=sys.stderr)
@@ -1035,7 +1033,7 @@ def accept_root(
         raise ElectionError(REASON_ROOT_UNUSABLE, detail)
     try:
         authz.public_key_from_b64(root["master_pubkey"])
-    except Exception as exc:  # noqa: BLE001 - an unusable key is an unusable root
+    except Exception as exc:
         raise ElectionError(REASON_ROOT_UNUSABLE, f"root's master_pubkey does not parse: {exc}") from exc
 
     node_id = identity.get("node_id")

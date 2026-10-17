@@ -37,13 +37,30 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 #: Mirrors `tests/test_layout.py::PROVENANCE_DIRS`; duplicated rather than
 #: imported so the two files can evolve independently.
 PROVENANCE_DIRS = {
-    "references", "plans", "sessions", "journal", "_raw", "_archives",
-    "01_Inbox", "02_Daily", "03_Sources", "07_Archives",
+    "references",
+    "plans",
+    "sessions",
+    "journal",
+    "_raw",
+    "_archives",
+    "01_Inbox",
+    "02_Daily",
+    "03_Sources",
+    "07_Archives",
 }
 
 SKIP_DIRS = PROVENANCE_DIRS | {
-    "__pycache__", ".git", ".venv", "dist", "node_modules", ".pytest_cache",
-    ".ruff_cache", ".mypy_cache", ".opencode", "tests", "_staging",
+    "__pycache__",
+    ".git",
+    ".venv",
+    "dist",
+    "node_modules",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".mypy_cache",
+    ".opencode",
+    "tests",
+    "_staging",
 }
 
 #: Files excluded by name (not directory), each with the reason it is exempt.
@@ -58,10 +75,10 @@ SKIP_FILES = {
 #: was found on a live surface during the 2026-10-08 review; the Step 14 DoD
 #: names the first three.
 FORBIDDEN_PHRASES = (
-    "signs nothing yet",          # disproven by the 2026-10-07 election
-    "holds no usable",            # the signer has run live since 2026-10-07
-    "no usable signing key",      # same claim, other phrasing
-    "isolated signer is Step",    # Steps 15–18 are done and deployed
+    "signs nothing yet",  # disproven by the 2026-10-07 election
+    "holds no usable",  # the signer has run live since 2026-10-07
+    "no usable signing key",  # same claim, other phrasing
+    "isolated signer is Step",  # Steps 15-18 are done and deployed
     "One peer, no master, no second node",  # disproven by the 2/2 live pair
     "Nothing above is live-verified",
     "No `scripts/`, `services/` or `systemd/` directory exists yet",
@@ -95,10 +112,7 @@ def live_surfaces() -> list[Path]:
 
 def shipped_skill_count() -> int:
     """Skill directories that actually ship — counted from disk, not claimed."""
-    return sum(
-        1 for p in SKILLS_DIR.iterdir()
-        if p.is_dir() and (p / "SKILL.md").is_file()
-    )
+    return sum(1 for p in SKILLS_DIR.iterdir() if p.is_dir() and (p / "SKILL.md").is_file())
 
 
 def test_the_suite_really_has_the_expected_shape():
@@ -149,10 +163,7 @@ def test_no_live_surface_carries_a_forbidden_phrase():
         for phrase in FORBIDDEN_PHRASES:
             if phrase in text:
                 hits.append(f"{path.relative_to(REPO_ROOT)}: {phrase!r}")
-    assert not hits, (
-        "live surfaces carry claims the 2026-10-07/08 verification disproved:\n  "
-        + "\n  ".join(hits)
-    )
+    assert not hits, "live surfaces carry claims the 2026-10-07/08 verification disproved:\n  " + "\n  ".join(hits)
 
 
 def test_index_names_every_contract_file():

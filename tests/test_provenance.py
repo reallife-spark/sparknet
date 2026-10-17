@@ -66,7 +66,7 @@ def corrupt_signature(text: str) -> str:
     sig = match.group(1)
     flipped = "A" if sig[5] != "A" else "B"
     corrupted = sig[:5] + flipped + sig[6:]
-    return text[: match.start(1)] + corrupted + text[match.end(1):]
+    return text[: match.start(1)] + corrupted + text[match.end(1) :]
 
 
 def user_record_template() -> str:
@@ -170,9 +170,7 @@ def test_user_init_fills_once_and_then_refuses(vault: Path, provenance: ModuleTy
     assert rekeyed["key"]["fingerprint"] != fingerprint
 
 
-def test_a_record_whose_fingerprint_is_not_its_keys_digest_is_not_filled(
-    vault: Path, provenance: ModuleType
-):
+def test_a_record_whose_fingerprint_is_not_its_keys_digest_is_not_filled(vault: Path, provenance: ModuleType):
     record = provenance.parse_user_record(vault)
     record["key"]["fingerprint"] = "sha256:" + "0" * 64
     assert not provenance.user_is_filled(record)
@@ -193,9 +191,7 @@ def test_the_record_holds_public_material_only(vault: Path, provenance: ModuleTy
 # --- signing and the state machine --------------------------------------------
 
 
-def test_sign_then_verify_is_valid_and_the_envelope_matches_the_contract(
-    vault: Path, provenance: ModuleType
-):
+def test_sign_then_verify_is_valid_and_the_envelope_matches_the_contract(vault: Path, provenance: ModuleType):
     path = write(vault / "01_Inbox" / "hello.md", note())
     sign(provenance, vault, path)
 
@@ -211,15 +207,10 @@ def test_sign_then_verify_is_valid_and_the_envelope_matches_the_contract(
     assert envelope["key_fingerprint"].startswith("sha256:")
     assert frontmatter["tracking"]["validity"]["state"] == "signed"
     # signed_meta must hash to its recorded hash, or the envelope is editable.
-    assert (
-        provenance.sha256_hex(provenance.canonical_json(envelope["signed_meta"]))
-        == envelope["signed_meta_sha256"]
-    )
+    assert provenance.sha256_hex(provenance.canonical_json(envelope["signed_meta"])) == envelope["signed_meta_sha256"]
 
 
-def test_a_compiler_bump_is_stale_metadata_not_invalid(
-    vault: Path, provenance: ModuleType
-):
+def test_a_compiler_bump_is_stale_metadata_not_invalid(vault: Path, provenance: ModuleType):
     path = write(vault / "01_Inbox" / "hello.md", note())
     sign(provenance, vault, path)
 
@@ -247,9 +238,7 @@ def test_a_body_edit_is_stale_content(vault: Path, provenance: ModuleType):
     assert code == 1, "--strict promotes the soft failure to a hard one"
 
 
-def test_a_metadata_edit_outside_the_allowlist_is_stale_content(
-    vault: Path, provenance: ModuleType
-):
+def test_a_metadata_edit_outside_the_allowlist_is_stale_content(vault: Path, provenance: ModuleType):
     path = write(vault / "01_Inbox" / "hello.md", note())
     sign(provenance, vault, path)
     set_field(path, "title", "hijacked")
@@ -277,18 +266,14 @@ def test_tampering_with_the_envelope_is_invalid(vault: Path, provenance: ModuleT
     assert "signed_meta" in detail
 
 
-def test_a_note_attributed_to_another_owner_is_refused_at_signing(
-    vault: Path, provenance: ModuleType
-):
+def test_a_note_attributed_to_another_owner_is_refused_at_signing(vault: Path, provenance: ModuleType):
     path = write(vault / "01_Inbox" / "hello.md", note())
     path.write_text(path.read_text().replace('owner_id: ""', "owner_id: U-99999"))
     with pytest.raises(provenance.ProvenanceError, match="re-attribute"):
         provenance.sign_note(path.read_bytes(), vault)
 
 
-def test_an_unsigned_note_outside_the_inbox_is_invalid_but_in_the_inbox_is_pending(
-    vault: Path, provenance: ModuleType
-):
+def test_an_unsigned_note_outside_the_inbox_is_invalid_but_in_the_inbox_is_pending(vault: Path, provenance: ModuleType):
     inbox = write(vault / "01_Inbox" / "raw.md", note("untouched capture"))
     system = write(vault / "00_System" / "rules.md", note("must be signed"))
     assert verify(provenance, vault, inbox) == ("pending", "inbox item awaiting acceptance")
@@ -307,9 +292,7 @@ def test_signing_a_note_without_a_user_key_is_refused(tmp_path: Path, provenance
 # --- the ledger ----------------------------------------------------------------
 
 
-def test_an_approval_lands_dual_signed_and_verifies(
-    vault: Path, provenance: ModuleType
-):
+def test_an_approval_lands_dual_signed_and_verifies(vault: Path, provenance: ModuleType):
     path = write(vault / "01_Inbox" / "hello.md", note())
     sign(provenance, vault, path)
 
@@ -331,9 +314,9 @@ def test_an_approval_lands_dual_signed_and_verifies(
 
     authz = provenance._load_authz()
     node_pub = authz.public_key_from_b64(block["node_pubkey_b64"])
-    assert authz.verify_signature(
-        node_pub, block["signature"], provenance.block_header_signable(block)
-    ), "the block header signature must verify against the block's own node key"
+    assert authz.verify_signature(node_pub, block["signature"], provenance.block_header_signable(block)), (
+        "the block header signature must verify against the block's own node key"
+    )
     assert block["signature"] != data["signatures"]["node"], (
         "the block-level signature signs the header; it no longer restates the node countersignature"
     )
@@ -359,9 +342,7 @@ def test_a_fabricated_approval_id_is_reported(vault: Path, provenance: ModuleTyp
     assert "APL-1999-01-01-001" in report
 
 
-def test_editing_a_recorded_approval_breaks_the_chain(
-    vault: Path, provenance: ModuleType
-):
+def test_editing_a_recorded_approval_breaks_the_chain(vault: Path, provenance: ModuleType):
     record = provenance.parse_user_record(vault)
     data = provenance.build_approval_data(
         vault=vault,
@@ -422,9 +403,7 @@ def _two_block_ledger(vault: Path, provenance: ModuleType) -> Path:
     return vault / "blockchain" / "ledger.json"
 
 
-def test_a_two_block_ledger_verifies_and_links_on_signed_bytes(
-    vault: Path, provenance: ModuleType
-):
+def test_a_two_block_ledger_verifies_and_links_on_signed_bytes(vault: Path, provenance: ModuleType):
     path = _two_block_ledger(vault, provenance)
     ledger = provenance.load_ledger(path)
     ok, detail = provenance.verify_chain(ledger)
@@ -569,7 +548,7 @@ def test_the_secret_index_schema_has_no_value_field(vault: Path, provenance: Mod
 def test_the_frontmatter_subset_round_trips(vault: Path, provenance: ModuleType):
     """What is signed must be what parses — an emitter drift is a stale note."""
     original = {
-        "title": "a title with: colons and \"quotes\"",
+        "title": 'a title with: colons and "quotes"',
         "tags": ["alpha", "beta"],
         "count": 3,
         "draft": False,
@@ -666,9 +645,7 @@ def test_the_conversation_root_is_order_and_content_sensitive(provenance: Module
     assert provenance.build_conversation_root([]) == provenance._load_merkle().EMPTY_TREE_ROOT
 
 
-def test_a_conversation_entry_is_bound_to_the_note_signature(
-    vault: Path, provenance: ModuleType
-):
+def test_a_conversation_entry_is_bound_to_the_note_signature(vault: Path, provenance: ModuleType):
     """Editing, adding or dropping a turn is stale:content, like editing the body."""
     tracking = {
         "schema": "sparknet-tracking/1",
@@ -725,9 +702,7 @@ def test_a_conversation_entry_is_bound_to_the_note_signature(
     assert "body" in detail
 
 
-def test_an_envelope_from_an_unknown_note_domain_is_invalid(
-    vault: Path, provenance: ModuleType
-):
+def test_an_envelope_from_an_unknown_note_domain_is_invalid(vault: Path, provenance: ModuleType):
     path = vault / "01_Inbox" / "old-envelope.md"
     path.write_bytes(note("old envelope", state="unsigned").encode())
     sign(provenance, vault, path)
@@ -742,12 +717,8 @@ def test_an_envelope_from_an_unknown_note_domain_is_invalid(
 # --- inbox intake -------------------------------------------------------------
 
 
-def test_ingest_lands_a_pending_item_that_verifies_green(
-    vault: Path, provenance: ModuleType
-):
-    path = provenance.ingest_note(
-        vault, b"# incoming plan\n\nthe body\n", source="master-node", title="Incoming plan"
-    )
+def test_ingest_lands_a_pending_item_that_verifies_green(vault: Path, provenance: ModuleType):
+    path = provenance.ingest_note(vault, b"# incoming plan\n\nthe body\n", source="master-node", title="Incoming plan")
     assert path == vault / "01_Inbox" / "incoming-plan.md"
     frontmatter, body = provenance.split_note(path.read_bytes())
     assert frontmatter["type"] == "inbox-item"
@@ -761,21 +732,15 @@ def test_ingest_lands_a_pending_item_that_verifies_green(
     assert code == 0, text
 
 
-def test_ingest_refuses_to_overwrite_an_existing_item(
-    vault: Path, provenance: ModuleType
-):
+def test_ingest_refuses_to_overwrite_an_existing_item(vault: Path, provenance: ModuleType):
     provenance.ingest_note(vault, b"# same title\n", source="peer-node", title="Same")
     with pytest.raises(provenance.ProvenanceError, match="refusing to overwrite"):
         provenance.ingest_note(vault, b"# same title\n", source="peer-node", title="Same")
 
 
-def test_email_ingest_fails_closed_until_the_sender_is_authorised(
-    vault: Path, provenance: ModuleType
-):
+def test_email_ingest_fails_closed_until_the_sender_is_authorised(vault: Path, provenance: ModuleType):
     with pytest.raises(provenance.ProvenanceError, match="fails closed"):
-        provenance.ingest_note(
-            vault, b"# from mail\n", source="email", sender="ops@example.org"
-        )
+        provenance.ingest_note(vault, b"# from mail\n", source="email", sender="ops@example.org")
 
     record = provenance.parse_user_record(vault)
     record["authorised_senders"] = ["ops@example.org"]
@@ -784,13 +749,14 @@ def test_email_ingest_fails_closed_until_the_sender_is_authorised(
         provenance.emit_note(record, b"# user record\n"),
     )
 
-    path = provenance.ingest_note(
-        vault, b"# from mail\n", source="email", sender="ops@example.org"
-    )
+    path = provenance.ingest_note(vault, b"# from mail\n", source="email", sender="ops@example.org")
     assert provenance.split_note(path.read_bytes())[0]["sender"] == "ops@example.org"
     with pytest.raises(provenance.ProvenanceError, match="fails closed"):
         provenance.ingest_note(
-            vault, b"# from mail\n", source="email", sender="stranger@example.org",
+            vault,
+            b"# from mail\n",
+            source="email",
+            sender="stranger@example.org",
             title="second",
         )
 
@@ -799,17 +765,13 @@ def test_the_ingest_cli_reads_a_file_and_reports_an_empty_one(
     vault: Path, provenance: ModuleType, capsys: pytest.CaptureFixture[str]
 ):
     item = write(vault.parent / "incoming.md", "# body from a file\n")
-    code = provenance.main(
-        ["--vault", str(vault), "ingest", str(item), "--source", "peer-node"]
-    )
+    code = provenance.main(["--vault", str(vault), "ingest", str(item), "--source", "peer-node"])
     assert code == 0
     assert (vault / "01_Inbox" / "body-from-a-file.md").is_file()
     capsys.readouterr()
 
     empty = write(vault.parent / "empty.md", "")
-    assert provenance.main(
-        ["--vault", str(vault), "ingest", str(empty), "--source", "peer-node"]
-    ) == 1
+    assert provenance.main(["--vault", str(vault), "ingest", str(empty), "--source", "peer-node"]) == 1
     assert "empty" in capsys.readouterr().err
 
 
@@ -836,9 +798,7 @@ def _fill_vault(provenance: ModuleType, root: Path, owner_id: str, node_id: str)
 
 
 @pytest.fixture()
-def federated(
-    tmp_path: Path, provenance: ModuleType, monkeypatch: pytest.MonkeyPatch
-) -> tuple[Path, Path]:
+def federated(tmp_path: Path, provenance: ModuleType, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
     """Two vaults, each resolving its state from <vault>/.state (no shared env)."""
     monkeypatch.delenv("SPARKNET_STATE_DIR", raising=False)
     alpha = _fill_vault(provenance, tmp_path / "alpha", OWNER_ID, "sparknet-node-0001")
@@ -857,22 +817,16 @@ def _master_registry(provenance: ModuleType, node_id: str, *, revoked: bool = Fa
         "overlay_ipv4": "10.100.0.9",
         "requested_capabilities": ["telemetry"],
     }
-    entry = authz.sign_authorization(
-        identity, authz.private_key_from_b64(master_private), ["telemetry"]
-    )
+    entry = authz.sign_authorization(identity, authz.private_key_from_b64(master_private), ["telemetry"])
     entry["revoked"] = revoked
     if revoked:
         entry["signature_b64"] = base64.b64encode(
-            authz.private_key_from_b64(master_private).sign(
-                authz.authorization_message(entry)
-            )
+            authz.private_key_from_b64(master_private).sign(authz.authorization_message(entry))
         ).decode("ascii")
     return {"master_public_key_b64": master_public, "authorizations": [entry]}
 
 
-def test_a_co_signature_appends_without_rewriting_the_author(
-    federated: tuple[Path, Path], provenance: ModuleType
-):
+def test_a_co_signature_appends_without_rewriting_the_author(federated: tuple[Path, Path], provenance: ModuleType):
     alpha, bravo = federated
     path = write(alpha / "01_Inbox" / "hello.md", note())
     sign(provenance, alpha, path)
@@ -898,18 +852,14 @@ def test_a_co_signature_appends_without_rewriting_the_author(
 
     # Trusted via the origin user.md snapshot: the offline fallback.
     frontmatter, _ = provenance.split_note(path.read_bytes())
-    assert provenance.verify_co_signatures(
-        frontmatter, trusted_users=[provenance.parse_user_record(bravo)]
-    ) == []
+    assert provenance.verify_co_signatures(frontmatter, trusted_users=[provenance.parse_user_record(bravo)]) == []
 
     # Re-signing from the same key replaces the entry rather than piling up.
     path.write_bytes(provenance.add_co_signature(path.read_bytes(), bravo))
     assert len(provenance.split_note(path.read_bytes())[0]["tracking"]["signature"]["co_signatures"]) == 1
 
 
-def test_an_unknown_or_foreign_co_signer_is_untrusted(
-    federated: tuple[Path, Path], provenance: ModuleType
-):
+def test_an_unknown_or_foreign_co_signer_is_untrusted(federated: tuple[Path, Path], provenance: ModuleType):
     alpha, bravo = federated
     path = write(alpha / "01_Inbox" / "hello.md", note())
     sign(provenance, alpha, path)
@@ -921,15 +871,11 @@ def test_an_unknown_or_foreign_co_signer_is_untrusted(
     assert problems and "untrusted" in problems[0]
 
     # The author's own record does not vouch for the co-signer.
-    problems = provenance.verify_co_signatures(
-        frontmatter, trusted_users=[provenance.parse_user_record(alpha)]
-    )
+    problems = provenance.verify_co_signatures(frontmatter, trusted_users=[provenance.parse_user_record(alpha)])
     assert problems and "untrusted" in problems[0]
 
 
-def test_a_co_signature_over_different_bytes_is_refused(
-    federated: tuple[Path, Path], provenance: ModuleType
-):
+def test_a_co_signature_over_different_bytes_is_refused(federated: tuple[Path, Path], provenance: ModuleType):
     alpha, bravo = federated
     path = write(alpha / "01_Inbox" / "hello.md", note())
     sign(provenance, alpha, path)
@@ -943,18 +889,12 @@ def test_a_co_signature_over_different_bytes_is_refused(
     lying = provenance.note_message(
         {"body": "00" * 32, "meta": "11" * 32, "tracking": "22" * 32, "conversation": "33" * 32}
     )
-    frontmatter["tracking"]["signature"]["co_signatures"][0]["sig"] = authz.sign_bytes(
-        user_key, lying
-    )
-    problems = provenance.verify_co_signatures(
-        frontmatter, trusted_users=[provenance.parse_user_record(bravo)]
-    )
+    frontmatter["tracking"]["signature"]["co_signatures"][0]["sig"] = authz.sign_bytes(user_key, lying)
+    problems = provenance.verify_co_signatures(frontmatter, trusted_users=[provenance.parse_user_record(bravo)])
     assert problems and "does not verify over the recorded hashes" in problems[0]
 
 
-def test_a_swapped_co_signer_key_is_refused(
-    federated: tuple[Path, Path], provenance: ModuleType
-):
+def test_a_swapped_co_signer_key_is_refused(federated: tuple[Path, Path], provenance: ModuleType):
     alpha, bravo = federated
     path = write(alpha / "01_Inbox" / "hello.md", note())
     sign(provenance, alpha, path)
@@ -965,15 +905,11 @@ def test_a_swapped_co_signer_key_is_refused(
     _, fresh_public = authz.generate_keypair()
     entry = frontmatter["tracking"]["signature"]["co_signatures"][0]
     entry["public_key_b64"] = fresh_public  # same fingerprint, different key
-    problems = provenance.verify_co_signatures(
-        frontmatter, trusted_users=[provenance.parse_user_record(bravo)]
-    )
+    problems = provenance.verify_co_signatures(frontmatter, trusted_users=[provenance.parse_user_record(bravo)])
     assert problems and "key_fingerprint does not match public_key_b64" in problems[0]
 
 
-def test_tampering_the_body_after_co_signing_is_stale_content(
-    federated: tuple[Path, Path], provenance: ModuleType
-):
+def test_tampering_the_body_after_co_signing_is_stale_content(federated: tuple[Path, Path], provenance: ModuleType):
     alpha, bravo = federated
     path = write(alpha / "01_Inbox" / "hello.md", note())
     sign(provenance, alpha, path)
@@ -984,14 +920,10 @@ def test_tampering_the_body_after_co_signing_is_stale_content(
     # The co-signature still commits to the recorded bytes; the note, not the
     # co-signature, is what went stale.
     frontmatter, _ = provenance.split_note(path.read_bytes())
-    assert provenance.verify_co_signatures(
-        frontmatter, trusted_users=[provenance.parse_user_record(bravo)]
-    ) == []
+    assert provenance.verify_co_signatures(frontmatter, trusted_users=[provenance.parse_user_record(bravo)]) == []
 
 
-def test_the_master_registry_resolves_a_co_signer(
-    federated: tuple[Path, Path], provenance: ModuleType
-):
+def test_the_master_registry_resolves_a_co_signer(federated: tuple[Path, Path], provenance: ModuleType):
     alpha, bravo = federated
     path = write(alpha / "01_Inbox" / "hello.md", note())
     sign(provenance, alpha, path)
@@ -1025,8 +957,12 @@ def test_the_co_sign_cli_appends_and_verifies(
 
     code = provenance.main(
         [
-            "--vault", str(alpha), "verify-co-signatures", str(path),
-            "--trusted-user", str(bravo / "00_System" / "user.md"),
+            "--vault",
+            str(alpha),
+            "verify-co-signatures",
+            str(path),
+            "--trusted-user",
+            str(bravo / "00_System" / "user.md"),
         ]
     )
     assert code == 0
@@ -1035,4 +971,3 @@ def test_the_co_sign_cli_appends_and_verifies(
     code = provenance.main(["--vault", str(alpha), "verify-co-signatures", str(path)])
     assert code == 1
     assert "untrusted" in capsys.readouterr().out
-

@@ -5,7 +5,7 @@ Why this exists.  NVIDIA PAIR pairs its nodes with EAP-NOOB (RFC 9140): the two
 ends share a short code over an out-of-band channel and derive ephemeral keys
 from it, bootstrapping a trust between nodes that have never spoken.  Sparknet
 does not need that for *authority* — the roster/election are the trust root, and
-authority comes from key possession — but a share-stanza (ports 4201–4203) is
+authority comes from key possession — but a share-stanza (ports 4201-4203) is
 data-plane, and a node that wants to hold a time-boxed stanza secret without
 going through a full grant ceremony can seed one by sharing a code OOB.
 
@@ -107,9 +107,7 @@ def derive_stanza_key(
     is ``true``.
     """
     if len(oob) != OOB_DIGITS or not oob.isdigit():
-        raise StanzaBootstrapError(
-            REASON_MALFORMED, f"OOB code must be {OOB_DIGITS} digits"
-        )
+        raise StanzaBootstrapError(REASON_MALFORMED, f"OOB code must be {OOB_DIGITS} digits")
     stamp = now or _utc_now()
     if stamp.tzinfo is None:
         raise StanzaBootstrapError(REASON_MALFORMED, "now must be timezone-aware")

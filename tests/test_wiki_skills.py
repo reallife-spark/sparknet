@@ -67,8 +67,20 @@ SKILL_REF_RE = re.compile(
 # /Users/ rule fires on the docs' own placeholder examples.
 HOST_MARKERS = ("/mnt/knowledge/", "/mnt/nvme/", "/opt/raxxar", "/home/raxxar", "/srv/raxxar")
 HOME_PLACEHOLDERS = {
-    "me", "name", "you", "your", "user", "username", "someone", "somebody",
-    "u", "x", "example", "test", "default", "nobody",
+    "me",
+    "name",
+    "you",
+    "your",
+    "user",
+    "username",
+    "someone",
+    "somebody",
+    "u",
+    "x",
+    "example",
+    "test",
+    "default",
+    "nobody",
 }
 HOME_RE = re.compile(r"/(?:home|Users)/([^/\s\"'`]+)")
 
@@ -125,8 +137,7 @@ def test_skill_has_frontmatter_opencode_will_load(skill_dir: Path):
     assert len(name) <= 64, f"{skill_dir.name}: name exceeds 64 chars"
     assert description, f"{skill_dir.name}: frontmatter has no `description`"
     assert len(description) > 40, (
-        f"{skill_dir.name}: description is too thin to trigger on — it must say "
-        f"what the skill does AND when to use it"
+        f"{skill_dir.name}: description is too thin to trigger on — it must say what the skill does AND when to use it"
     )
 
 
@@ -189,11 +200,14 @@ def test_sync_check_passes():
 def test_exclusion_list_matches_the_sync_script():
     """The README, the tests and the script must agree on what is withheld."""
     proc = subprocess.run(
-        [sys.executable, "-c",
-         f"import importlib.util,sys;"
-         f"spec=importlib.util.spec_from_file_location('sync', r'{SYNC_SCRIPT}');"
-         f"m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);"
-         f"print('\\n'.join(sorted(m.EXCLUSIONS)))"],
+        [
+            sys.executable,
+            "-c",
+            f"import importlib.util,sys;"
+            f"spec=importlib.util.spec_from_file_location('sync', r'{SYNC_SCRIPT}');"
+            f"m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);"
+            f"print('\\n'.join(sorted(m.EXCLUSIONS)))",
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -201,8 +215,7 @@ def test_exclusion_list_matches_the_sync_script():
     assert proc.returncode == 0, proc.stderr
     from_script = set(proc.stdout.split())
     assert from_script == EXPECTED_EXCLUSIONS, (
-        f"sync script excludes {sorted(from_script)}, tests expect "
-        f"{sorted(EXPECTED_EXCLUSIONS)}"
+        f"sync script excludes {sorted(from_script)}, tests expect {sorted(EXPECTED_EXCLUSIONS)}"
     )
 
 
@@ -222,11 +235,14 @@ def test_local_skill_list_matches_the_sync_script():
     unrecorded).
     """
     proc = subprocess.run(
-        [sys.executable, "-c",
-         f"import importlib.util,sys;"
-         f"spec=importlib.util.spec_from_file_location('sync', r'{SYNC_SCRIPT}');"
-         f"m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);"
-         f"print('\\n'.join(sorted(m.LOCAL_SKILLS)))"],
+        [
+            sys.executable,
+            "-c",
+            f"import importlib.util,sys;"
+            f"spec=importlib.util.spec_from_file_location('sync', r'{SYNC_SCRIPT}');"
+            f"m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);"
+            f"print('\\n'.join(sorted(m.LOCAL_SKILLS)))",
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -234,8 +250,7 @@ def test_local_skill_list_matches_the_sync_script():
     assert proc.returncode == 0, proc.stderr
     from_script = set(proc.stdout.split())
     assert from_script == EXPECTED_LOCAL_SKILLS, (
-        f"sync script local skills {sorted(from_script)}, tests expect "
-        f"{sorted(EXPECTED_LOCAL_SKILLS)}"
+        f"sync script local skills {sorted(from_script)}, tests expect {sorted(EXPECTED_LOCAL_SKILLS)}"
     )
 
 
@@ -246,9 +261,7 @@ def test_local_skill_is_present_and_recorded_as_local(name: str):
     state = json.loads(SYNC_STATE.read_text())
     recorded = state["skills"].get(name)
     assert recorded is not None, f"{name}: not recorded in .sync.json"
-    assert recorded.get("source") == "local", (
-        f"{name}: recorded as {recorded.get('source')} — must be 'local'"
-    )
+    assert recorded.get("source") == "local", f"{name}: recorded as {recorded.get('source')} — must be 'local'"
 
 
 @pytest.mark.parametrize("skill_dir", SKILL_DIRS, ids=lambda p: p.name)
@@ -315,9 +328,7 @@ def test_role_preflight_rejects_a_missing_role_env(tmp_path: Path):
         (repo / f"{role}-node" / "AGENTS.md").write_text("charter\n")
     (repo / "peer-node" / ".env").write_text(f'VAULT_PATH="{repo}"\n')  # parent fallback
     (repo / "scripts").mkdir()
-    (repo / "scripts" / "sparknet-wiki-env.sh").write_text(
-        (REPO_ROOT / "scripts" / "sparknet-wiki-env.sh").read_text()
-    )
+    (repo / "scripts" / "sparknet-wiki-env.sh").write_text((REPO_ROOT / "scripts" / "sparknet-wiki-env.sh").read_text())
 
     proc = subprocess.run(
         ["bash", "-c", f"cd '{repo}/peer-node' && source '{repo}/scripts/sparknet-wiki-env.sh'"],
@@ -337,9 +348,7 @@ def test_role_preflight_rejects_a_missing_role_env(tmp_path: Path):
 def test_preflight_accepts_a_correct_role_env(role: str, tmp_path: Path):
     repo = tmp_path / "repo"
     (repo / "scripts").mkdir(parents=True)
-    (repo / "scripts" / "sparknet-wiki-env.sh").write_text(
-        (REPO_ROOT / "scripts" / "sparknet-wiki-env.sh").read_text()
-    )
+    (repo / "scripts" / "sparknet-wiki-env.sh").write_text((REPO_ROOT / "scripts" / "sparknet-wiki-env.sh").read_text())
     role_dir = repo / f"{role}-node"
     role_dir.mkdir()
     (role_dir / "AGENTS.md").write_text("charter\n")
@@ -366,9 +375,7 @@ def test_preflight_rejects_an_env_pointing_elsewhere(tmp_path: Path):
     """
     repo = tmp_path / "repo"
     (repo / "scripts").mkdir(parents=True)
-    (repo / "scripts" / "sparknet-wiki-env.sh").write_text(
-        (REPO_ROOT / "scripts" / "sparknet-wiki-env.sh").read_text()
-    )
+    (repo / "scripts" / "sparknet-wiki-env.sh").write_text((REPO_ROOT / "scripts" / "sparknet-wiki-env.sh").read_text())
     role_dir = repo / "peer-node"
     other = repo / "master-node"
     role_dir.mkdir()

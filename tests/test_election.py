@@ -86,7 +86,7 @@ def cluster(consensus, authz):
     """Three members with real, per-test Ed25519 cluster keys."""
     members = []
     private: dict[str, str] = {}
-    for index, name in enumerate(MEMBERS):
+    for _index, name in enumerate(MEMBERS):
         priv, pub = authz.generate_keypair()
         private[name] = priv
         members.append(
@@ -186,9 +186,7 @@ def _formed(
         exchange.submit_vote(_vote(consensus, cluster, name, candidate))
     root = exchange.status()["root"]
     for name in names:
-        exchange.submit_signature(
-            name, consensus.sign_root(root, name, cluster["private"][name])[name]
-        )
+        exchange.submit_signature(name, consensus.sign_root(root, name, cluster["private"][name])[name])
     status = exchange.status()
     assert status["state"] == "formed"
     return exchange, status["root"]
@@ -724,9 +722,7 @@ def test_a_reduced_membership_re_formation_through_the_exchange(election, consen
     """
     _, genesis = _formed(election, consensus, cluster, candidate="beta")
     survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
-    proof = _attested(
-        consensus, cluster, "gamma", consensus.root_id(genesis), ["alpha", "beta"]
-    )
+    proof = _attested(consensus, cluster, "gamma", consensus.root_id(genesis), ["alpha", "beta"])
     _, reformed = _formed(
         election,
         consensus,
@@ -740,9 +736,7 @@ def test_a_reduced_membership_re_formation_through_the_exchange(election, consen
     assert reformed["previous_root_id"] == consensus.root_id(genesis)
     assert reformed["epoch"] == 1
     assert {m["node_id"] for m in reformed["members"]} == {"alpha", "beta"}
-    assert set(reformed["signatures"]) == {"alpha", "beta"}, (
-        "only the survivors may co-sign a reduced root"
-    )
+    assert set(reformed["signatures"]) == {"alpha", "beta"}, "only the survivors may co-sign a reduced root"
     assert consensus.verify_root(reformed, trust=genesis) == (True, consensus.REASON_OK)
     assert consensus.verify_chain([reformed, genesis]) == (True, consensus.REASON_OK)
 
@@ -794,9 +788,7 @@ def test_the_reformed_root_reaches_the_peer_process_and_is_adopted(election, con
     """
     _, genesis = _formed(election, consensus, cluster, candidate="beta")
     survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
-    proof = _attested(
-        consensus, cluster, "gamma", consensus.root_id(genesis), ["alpha", "beta"]
-    )
+    proof = _attested(consensus, cluster, "gamma", consensus.root_id(genesis), ["alpha", "beta"])
     _, reformed = _formed(
         election,
         consensus,
@@ -835,9 +827,7 @@ def test_the_peer_process_refuses_a_rollback_and_a_stranger_fork(election, conse
     a rollback to the parent and a well-signed root with no lineage to it."""
     _, genesis = _formed(election, consensus, cluster, candidate="beta")
     survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
-    proof = _attested(
-        consensus, cluster, "gamma", consensus.root_id(genesis), ["alpha", "beta"]
-    )
+    proof = _attested(consensus, cluster, "gamma", consensus.root_id(genesis), ["alpha", "beta"])
     _, reformed = _formed(
         election,
         consensus,
@@ -1124,9 +1114,7 @@ def test_three_real_member_processes_form_the_root_and_flip_one_identity(tmp_pat
     assert status["root_id"] == winner_document["root_id"]
 
 
-def test_two_real_member_processes_form_a_pair_root_and_flip_one_identity(
-    tmp_path, consensus, election
-):
+def test_two_real_member_processes_form_a_pair_root_and_flip_one_identity(tmp_path, consensus, election):
     """A 2-of-2 pair election: two processes, one socket, one root, one flip.
 
     The pair is the smallest lawful cluster. Both members must bid and vote for
@@ -1180,9 +1168,7 @@ def test_two_real_member_processes_form_a_pair_root_and_flip_one_identity(
     winner_doc = json.loads(identities["alpha"].read_text())
     assert winner_doc["role"] == "master"
     assert winner_doc["operational_key"]["held"] is True
-    assert identities["beta"].read_bytes() == loser_before, (
-        "the losing member of a pair must not be touched"
-    )
+    assert identities["beta"].read_bytes() == loser_before, "the losing member of a pair must not be touched"
     assert outputs["beta"]["accept"]["accepted"] is False
     assert outputs["beta"]["accept"]["reason"] == "not_elected"
 
@@ -1461,7 +1447,8 @@ def test_internal_errors_do_not_leak_internals(election, live, monkeypatch, caps
     The exception text can name files or membership internals that have no
     business crossing the bus; it is logged to stderr for an operator instead.
     """
-    def _boom(body, consensus):  # noqa: ARG001
+
+    def _boom(body, consensus):
         raise RuntimeError("SECRET_ELECTION_DETAIL")
 
     monkeypatch.setattr(election.ElectionExchange, "submit_request", _boom)

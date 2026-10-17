@@ -75,14 +75,10 @@ def cluster():
                 "node_id": name,
                 "fingerprint": hashlib.sha256(f"fp-{name}".encode()).hexdigest(),
                 "wireguard_pubkey": base64.b64encode(
-                    key.public_key().public_bytes(
-                        serialization.Encoding.Raw, serialization.PublicFormat.Raw
-                    )
+                    key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
                 ).decode(),
                 "cluster_pubkey": base64.b64encode(
-                    key.public_key().public_bytes(
-                        serialization.Encoding.Raw, serialization.PublicFormat.Raw
-                    )
+                    key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
                 ).decode(),
             }
         )
@@ -177,8 +173,7 @@ def test_a_cluster_is_a_pair_or_a_trio_and_that_is_not_a_parameter(consensus):
     assert consensus.MIN_CLUSTER_SIZE == 2
     assert consensus.MAX_CLUSTER_SIZE == 3
     assert not hasattr(consensus, "CLUSTER_SIZE"), (
-        "the old fixed-size flag must be gone, or a reader would think three is "
-        "the only lawful cluster"
+        "the old fixed-size flag must be gone, or a reader would think three is the only lawful cluster"
     )
 
 
@@ -187,8 +182,7 @@ def test_root_bytes_do_not_depend_on_member_order(consensus, cluster):
     forward = consensus.root_bytes(_root(cluster["members"], "beta"))
     shuffled = consensus.root_bytes(_root(list(reversed(cluster["members"])), "beta"))
     assert forward == shuffled, (
-        "member order changed the canonical bytes, so two nodes could compute "
-        "different roots for the same agreement"
+        "member order changed the canonical bytes, so two nodes could compute different roots for the same agreement"
     )
 
 
@@ -225,8 +219,7 @@ def test_two_of_three_is_not_enough(consensus, cluster):
         "e1",
     )
     assert result["agreed"] is False, (
-        "a 2-of-3 majority would let one compromised node pair with any other to "
-        "install a hostile master"
+        "a 2-of-3 majority would let one compromised node pair with any other to install a hostile master"
     )
     assert result["counts"] == {"gamma": ["alpha", "beta"]}
 
@@ -242,9 +235,7 @@ def test_a_pair_needs_both_members_to_agree(consensus, cluster):
     )
     assert lone["agreed"] is False
     assert lone["reason"] == consensus.REASON_NOT_AGREED
-    assert lone["detail"].endswith("best had 1"), (
-        "one member's self-vote must not reach a 2-of-2 threshold"
-    )
+    assert lone["detail"].endswith("best had 1"), "one member's self-vote must not reach a 2-of-2 threshold"
 
     both = consensus.tally(
         [
@@ -461,8 +452,7 @@ def test_swapping_a_member_key_after_signing_is_caught(consensus, cluster):
     signed["members"][0]["cluster_pubkey"] = members[1]["cluster_pubkey"]
     ok, _ = consensus.verify_root(signed)
     assert ok is False, (
-        "a member's key swapped after signing must invalidate the root, or a "
-        "member could be silently replaced"
+        "a member's key swapped after signing must invalidate the root, or a member could be silently replaced"
     )
 
 
@@ -476,9 +466,7 @@ def test_a_new_root_supersedes_the_old_one(consensus, cluster):
     `previous_root_id`, and only that parented root may replace it. A second
     root with a new nonce but no lineage is a stranger, not a successor.
     """
-    first = consensus.attach_root_signatures(
-        _root(cluster["members"], "beta", nonce="first"), cluster["private"]
-    )
+    first = consensus.attach_root_signatures(_root(cluster["members"], "beta", nonce="first"), cluster["private"])
     chained = consensus.attach_root_signatures(
         _root(cluster["members"], "gamma", nonce="second", previous_root_id=consensus.root_id(first)),
         cluster["private"],
@@ -495,12 +483,8 @@ def test_a_new_root_supersedes_the_old_one(consensus, cluster):
 def test_a_new_nonce_without_the_chain_is_refused(consensus, cluster):
     """The F1 gap, closed: a well-signed root that does not descend from the
     held root is refused on the trust path, even with a fresh nonce."""
-    first = consensus.attach_root_signatures(
-        _root(cluster["members"], "beta", nonce="first"), cluster["private"]
-    )
-    stranger = consensus.attach_root_signatures(
-        _root(cluster["members"], "gamma", nonce="second"), cluster["private"]
-    )
+    first = consensus.attach_root_signatures(_root(cluster["members"], "beta", nonce="first"), cluster["private"])
+    stranger = consensus.attach_root_signatures(_root(cluster["members"], "gamma", nonce="second"), cluster["private"])
     ok, reason = consensus.verify_root(stranger, trust=first)
     assert ok is False
     assert consensus.REASON_UNCHAINED in reason
@@ -520,9 +504,7 @@ def test_a_legacy_1_0_root_still_verifies_with_its_original_id(consensus, cluste
         "formed_at": _clock().isoformat(),
         "members": cluster["members"],
         "master_node_id": "beta",
-        "master_pubkey": next(
-            m["cluster_pubkey"] for m in cluster["members"] if m["node_id"] == "beta"
-        ),
+        "master_pubkey": next(m["cluster_pubkey"] for m in cluster["members"] if m["node_id"] == "beta"),
     }
     signed = consensus.attach_root_signatures(legacy, cluster["private"])
     assert consensus.verify_root(signed) == (True, consensus.REASON_OK)
@@ -546,9 +528,7 @@ def test_a_1_1_root_chains_to_a_1_0_parent_by_its_legacy_id(consensus, cluster):
             "formed_at": _clock().isoformat(),
             "members": cluster["members"],
             "master_node_id": "beta",
-            "master_pubkey": next(
-                m["cluster_pubkey"] for m in cluster["members"] if m["node_id"] == "beta"
-            ),
+            "master_pubkey": next(m["cluster_pubkey"] for m in cluster["members"] if m["node_id"] == "beta"),
         },
         cluster["private"],
     )
@@ -585,9 +565,7 @@ def test_a_chained_root_may_not_add_a_member(consensus, cluster):
                 serialization.NoEncryption(),
             )
         ).decode()
-        public = key.public_key().public_bytes(
-            serialization.Encoding.Raw, serialization.PublicFormat.Raw
-        )
+        public = key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
         return (
             {
                 "node_id": name,
@@ -598,9 +576,7 @@ def test_a_chained_root_may_not_add_a_member(consensus, cluster):
             private_b64,
         )
 
-    first = consensus.attach_root_signatures(
-        _root(cluster["members"], "beta", nonce="first"), cluster["private"]
-    )
+    first = consensus.attach_root_signatures(_root(cluster["members"], "beta", nonce="first"), cluster["private"])
     delta, delta_priv = _new_member("delta")
     joined = consensus.attach_root_signatures(
         _root(
@@ -619,9 +595,7 @@ def test_a_chained_root_may_not_add_a_member(consensus, cluster):
 
 def test_a_chained_root_may_not_shrink_below_the_minimum(consensus, cluster):
     """A lone survivor holds a removal proof, not a cluster."""
-    first = consensus.attach_root_signatures(
-        _root(cluster["members"], "beta", nonce="first"), cluster["private"]
-    )
+    first = consensus.attach_root_signatures(_root(cluster["members"], "beta", nonce="first"), cluster["private"])
     lone = consensus.attach_root_signatures(
         _root(
             [cluster["members"][0]],
@@ -668,9 +642,7 @@ def _reduced(
     if removal_proofs is not None:
         child["removal_proofs"] = removal_proofs
     names = signers if signers is not None else [m["node_id"] for m in survivors]
-    return consensus.attach_root_signatures(
-        child, {name: cluster["private"][name] for name in names}
-    )
+    return consensus.attach_root_signatures(child, {name: cluster["private"][name] for name in names})
 
 
 def test_a_1_2_reduced_root_with_an_attested_proof_verifies(consensus, cluster):
@@ -683,9 +655,7 @@ def test_a_1_2_reduced_root_with_an_attested_proof_verifies(consensus, cluster):
     """
     genesis = _genesis_12(consensus, cluster)
     survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
-    proof = _attested_proof(
-        consensus, cluster, "gamma", consensus.root_id(genesis), ["alpha", "beta"]
-    )
+    proof = _attested_proof(consensus, cluster, "gamma", consensus.root_id(genesis), ["alpha", "beta"])
     signed = _reduced(consensus, cluster, genesis, survivors, "beta", [proof])
     assert consensus.verify_root(signed, trust=genesis) == (True, consensus.REASON_OK)
     assert consensus.verify_chain([signed, genesis]) == (True, consensus.REASON_OK)
@@ -702,9 +672,7 @@ def test_a_1_2_reduced_root_with_a_revocation_proof_verifies(consensus, cluster)
     """
     genesis = _genesis_12(consensus, cluster, master="beta")
     survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
-    proof = _revocation_proof(
-        consensus, cluster, "gamma", consensus.root_id(genesis), "beta"
-    )
+    proof = _revocation_proof(consensus, cluster, "gamma", consensus.root_id(genesis), "beta")
     signed = _reduced(consensus, cluster, genesis, survivors, "beta", [proof])
     assert consensus.verify_root(signed, trust=genesis) == (True, consensus.REASON_OK)
     assert consensus.verify_chain([signed, genesis]) == (True, consensus.REASON_OK)
@@ -718,9 +686,7 @@ def test_a_1_2_reduced_root_chains_to_a_1_1_parent(consensus, cluster):
         cluster["private"],
     )
     survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
-    proof = _attested_proof(
-        consensus, cluster, "gamma", consensus.root_id(parent), ["alpha", "beta"]
-    )
+    proof = _attested_proof(consensus, cluster, "gamma", consensus.root_id(parent), ["alpha", "beta"])
     signed = _reduced(consensus, cluster, parent, survivors, "beta", [proof], epoch=1)
     assert consensus.verify_root(signed, trust=parent) == (True, consensus.REASON_OK)
 
@@ -746,10 +712,7 @@ def test_a_reduced_root_naming_the_removed_member_is_refused(consensus, cluster)
         version="1.2",
         epoch=1,
     )
-    signatures = {
-        name: consensus.sign_root(child, name, cluster["private"][name])[name]
-        for name in ("alpha", "beta")
-    }
+    signatures = {name: consensus.sign_root(child, name, cluster["private"][name])[name] for name in ("alpha", "beta")}
     signed = dict(child, signatures=signatures)
     ok, reason = consensus.verify_root(signed, trust=genesis)
     assert ok is False
@@ -762,9 +725,7 @@ def test_a_proof_for_a_member_who_stays_is_refused(consensus, cluster):
     survivor is a forged drop record."""
     genesis = _genesis_12(consensus, cluster)
     survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
-    good = _attested_proof(
-        consensus, cluster, "gamma", consensus.root_id(genesis), ["alpha", "beta"]
-    )
+    good = _attested_proof(consensus, cluster, "gamma", consensus.root_id(genesis), ["alpha", "beta"])
     extra = _attested_proof(
         consensus,
         cluster,
@@ -812,12 +773,8 @@ def test_a_proof_naming_the_wrong_parent_is_refused(consensus, cluster):
 def test_a_reduced_root_with_the_wrong_epoch_is_refused(consensus, cluster):
     genesis = _genesis_12(consensus, cluster)
     survivors = [m for m in cluster["members"] if m["node_id"] != "gamma"]
-    proof = _attested_proof(
-        consensus, cluster, "gamma", consensus.root_id(genesis), ["alpha", "beta"]
-    )
-    signed = _reduced(
-        consensus, cluster, genesis, survivors, "beta", [proof], epoch=5
-    )
+    proof = _attested_proof(consensus, cluster, "gamma", consensus.root_id(genesis), ["alpha", "beta"])
+    signed = _reduced(consensus, cluster, genesis, survivors, "beta", [proof], epoch=5)
     ok, reason = consensus.verify_root(signed, trust=genesis)
     assert ok is False
     assert consensus.REASON_UNCHAINED in reason, reason
@@ -846,14 +803,9 @@ def test_consensus_does_not_reimplement_ed25519(consensus):
     """All signing goes through sparknet-authz. Two crypto paths would be a
     second trust boundary that has to agree byte-for-byte."""
     source = (SHARED / "sparknet-consensus.py").read_text()
-    for forbidden in ("Ed25519PrivateKey.from_private_bytes(hashlib",
-                      "sha512", "nacl", "libsodium"):
-        assert forbidden not in source, (
-            f"consensus module appears to implement crypto itself: {forbidden}"
-        )
-    assert "def _load_authz" in source, (
-        "consensus must load sparknet-authz by path rather than reimplementing it"
-    )
+    for forbidden in ("Ed25519PrivateKey.from_private_bytes(hashlib", "sha512", "nacl", "libsodium"):
+        assert forbidden not in source, f"consensus module appears to implement crypto itself: {forbidden}"
+    assert "def _load_authz" in source, "consensus must load sparknet-authz by path rather than reimplementing it"
     # And it must refuse to run without it, not silently degrade.
     assert "refuses to reimplement" in source
 
@@ -864,8 +816,7 @@ def test_consensus_never_calls_the_wall_clock(consensus):
     source = (SHARED / "sparknet-consensus.py").read_text()
     for forbidden in ("datetime.now(", "datetime.utcnow(", "time.time("):
         assert forbidden not in source, (
-            f"consensus module reads the wall clock ({forbidden}); every deadline "
-            f"must be injected"
+            f"consensus module reads the wall clock ({forbidden}); every deadline must be injected"
         )
     assert "clock" in source
 
@@ -874,8 +825,7 @@ def test_a_naive_clock_is_refused(consensus, cluster):
     """Three nodes must not disagree about what time it is."""
     with pytest.raises(consensus.ConsensusError, match="naive datetime"):
         consensus.tally(
-            [_vote(consensus, cluster, m["node_id"], "beta", "e1", f"n{m['node_id']}")
-             for m in cluster["members"]],
+            [_vote(consensus, cluster, m["node_id"], "beta", "e1", f"n{m['node_id']}") for m in cluster["members"]],
             cluster["members"],
             "e1",
         ) if False else consensus._now(lambda: datetime(2026, 10, 5, 12, 0))
@@ -905,8 +855,7 @@ def test_three_single_key_signatures_merge_into_a_valid_root(consensus, cluster)
     """This is the ceremony that replaces attach_root_signatures in production."""
     members = cluster["members"]
     root = _root(members, "alpha")
-    maps = [consensus.sign_root(root, m["node_id"], cluster["private"][m["node_id"]])
-            for m in members]
+    maps = [consensus.sign_root(root, m["node_id"], cluster["private"][m["node_id"]]) for m in members]
 
     signed = consensus.merge_root_signatures(root, maps)
 
@@ -920,8 +869,7 @@ def test_merging_refuses_a_root_that_is_still_incomplete(consensus, cluster):
     """Fail-closed: a root missing one signature is not a root."""
     members = cluster["members"]
     root = _root(members, "alpha")
-    maps = [consensus.sign_root(root, m["node_id"], cluster["private"][m["node_id"]])
-            for m in members]
+    maps = [consensus.sign_root(root, m["node_id"], cluster["private"][m["node_id"]]) for m in members]
     with pytest.raises(consensus.ConsensusError, match="unsigned by"):
         consensus.merge_root_signatures(root, maps[:2])
 
@@ -939,8 +887,7 @@ def test_a_member_signing_twice_is_refused_rather_than_overwritten(consensus, cl
 def test_the_merge_refuses_a_signature_from_outside_the_membership(consensus, cluster):
     members = cluster["members"]
     root = _root(members, "alpha")
-    maps = [consensus.sign_root(root, m["node_id"], cluster["private"][m["node_id"]])
-            for m in members]
+    maps = [consensus.sign_root(root, m["node_id"], cluster["private"][m["node_id"]]) for m in members]
     maps.append({"stranger": "AAAA"})
     with pytest.raises(consensus.ConsensusError, match="not a member"):
         consensus.merge_root_signatures(root, maps)

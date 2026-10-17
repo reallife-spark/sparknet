@@ -26,8 +26,17 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SKIP_DIR_PARTS = {"__pycache__", ".git", ".venv", "dist", "node_modules",
-                  ".pytest_cache", ".ruff_cache", ".opencode", "references"}
+SKIP_DIR_PARTS = {
+    "__pycache__",
+    ".git",
+    ".venv",
+    "dist",
+    "node_modules",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".opencode",
+    "references",
+}
 
 # A single `[` that is not `[[`, i.e. a POSIX test builtin invocation.
 SINGLE_BRACKET_OPEN = re.compile(r"(?<!\[)\[(?!\[)")
@@ -48,10 +57,7 @@ ARRAY_SUBSCRIPT = re.compile(r"\[[@*]\]")
 
 
 def shell_scripts() -> list[Path]:
-    return sorted(
-        p for p in REPO_ROOT.rglob("*.sh")
-        if p.is_file() and not SKIP_DIR_PARTS & set(p.parts)
-    )
+    return sorted(p for p in REPO_ROOT.rglob("*.sh") if p.is_file() and not SKIP_DIR_PARTS & set(p.parts))
 
 
 @pytest.mark.parametrize("script", shell_scripts(), ids=lambda p: str(p.relative_to(REPO_ROOT)))
@@ -124,9 +130,7 @@ def test_env_init_reports_a_stale_env_as_stale(tmp_path: Path):
     (fake_vault / "master-node").mkdir()
     (fake_vault / "master-node" / "AGENTS.md").write_text("master charter\n")
     (fake_vault / "scripts").mkdir()
-    (fake_vault / "scripts" / "sparknet-wiki-env.sh").write_text(
-        "#!/usr/bin/env bash\nexit 0\n"
-    )
+    (fake_vault / "scripts" / "sparknet-wiki-env.sh").write_text("#!/usr/bin/env bash\nexit 0\n")
     (fake_vault / "scripts" / "sparknet-env-init.sh").write_text(
         (REPO_ROOT / "scripts" / "sparknet-env-init.sh").read_text()
     )
@@ -138,20 +142,17 @@ def test_env_init_reports_a_stale_env_as_stale(tmp_path: Path):
     stale_env.write_text('VAULT_PATH="/somewhere/else/entirely"\n')
 
     proc = subprocess.run(
-        ["bash", str(fake_vault / "scripts" / "sparknet-env-init.sh"),
-         str(fake_vault / "peer-node")],
-        capture_output=True, text=True,
+        ["bash", str(fake_vault / "scripts" / "sparknet-env-init.sh"), str(fake_vault / "peer-node")],
+        capture_output=True,
+        text=True,
     )
     output = proc.stdout + proc.stderr
-    assert "missing `]'" not in output, (
-        f"env-init hit the doubled-bracket bug:\n{output}"
-    )
-    assert "stale" in output.lower(), (
-        f"a .env pointing at another vault was not reported as stale:\n{output}"
-    )
+    assert "missing `]'" not in output, f"env-init hit the doubled-bracket bug:\n{output}"
+    assert "stale" in output.lower(), f"a .env pointing at another vault was not reported as stale:\n{output}"
     assert f'VAULT_PATH="{fake_vault / "peer-node"}"' in stale_env.read_text(), (
         "the stale .env was not rewritten to this vault"
     )
+
 
 # --- the fabric --help contract (fabric PLAN Step 14) ------------------------
 #
@@ -177,6 +178,7 @@ SOURCE_ONLY_QUIET = {
     "peer-node/scripts/sparknet-env.sh",
 }
 
+
 #: shared/*.py with a __main__ guard are CLIs and must answer --help. The
 #: modules without one (consensus, liveness) are libraries: executing them
 #: runs no code at all, which is harmless by construction rather than by
@@ -192,8 +194,11 @@ def _shared_clis() -> list[Path]:
 def _porcelain() -> str:
     """The working tree, as git sees it: modified, staged and untracked files."""
     proc = subprocess.run(
-        ["git", "status", "--porcelain"], cwd=REPO_ROOT,
-        capture_output=True, text=True, check=True,
+        ["git", "status", "--porcelain"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return proc.stdout
 
@@ -220,8 +225,13 @@ def test_fabric_every_script_has_help(script: Path, tmp_path: Path) -> None:
     """
     before = _porcelain()
     proc = subprocess.run(
-        [str(script), "--help"], cwd=REPO_ROOT, env=_help_env(tmp_path),
-        capture_output=True, text=True, check=False, timeout=60,
+        [str(script), "--help"],
+        cwd=REPO_ROOT,
+        env=_help_env(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
     )
     name = script.name
     assert proc.returncode == 0, f"{name} --help exited {proc.returncode}:\n{proc.stdout}{proc.stderr}"
@@ -230,9 +240,7 @@ def test_fabric_every_script_has_help(script: Path, tmp_path: Path) -> None:
         f"{name} modified the working tree while answering --help — it executed "
         "part of its body instead of printing usage"
     )
-    assert not (tmp_path / "rehearsal").exists(), (
-        f"{name} created its working tree on --help"
-    )
+    assert not (tmp_path / "rehearsal").exists(), f"{name} created its working tree on --help"
 
 
 @pytest.mark.parametrize("cli", _shared_clis(), ids=lambda p: p.name)
@@ -244,8 +252,13 @@ def test_every_shared_cli_has_help(cli: Path, tmp_path: Path) -> None:
     """
     before = _porcelain()
     proc = subprocess.run(
-        ["python3", str(cli), "--help"], cwd=REPO_ROOT, env=_help_env(tmp_path),
-        capture_output=True, text=True, check=False, timeout=60,
+        ["python3", str(cli), "--help"],
+        cwd=REPO_ROOT,
+        env=_help_env(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
     )
     assert proc.returncode == 0, f"{cli.name} --help exited {proc.returncode}:\n{proc.stdout}{proc.stderr}"
     assert (proc.stdout + proc.stderr).strip(), f"{cli.name} --help printed nothing"
@@ -263,15 +276,17 @@ def test_rehearsal_help_never_touches_its_working_tree(tmp_path: Path) -> None:
     work = tmp_path / "rehearsal"
     proc = subprocess.run(
         [str(REPO_ROOT / "scripts" / "sparknet-rehearsal.sh"), "--help"],
-        cwd=REPO_ROOT, env=_help_env(tmp_path),
-        capture_output=True, text=True, check=False, timeout=60,
+        cwd=REPO_ROOT,
+        env=_help_env(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
     )
     assert proc.returncode == 0, proc.stderr
     assert "Usage:" in proc.stdout, f"no usage block:\n{proc.stdout}"
     assert not work.exists(), "rehearsal created its working tree on --help"
-    assert "==" not in proc.stdout.splitlines()[0], (
-        "rehearsal started running steps instead of printing usage"
-    )
+    assert "==" not in proc.stdout.splitlines()[0], "rehearsal started running steps instead of printing usage"
 
 
 def test_rehearsal_refuses_arguments_it_does_not_take(tmp_path: Path) -> None:
@@ -283,8 +298,12 @@ def test_rehearsal_refuses_arguments_it_does_not_take(tmp_path: Path) -> None:
     work = tmp_path / "rehearsal"
     proc = subprocess.run(
         [str(REPO_ROOT / "scripts" / "sparknet-rehearsal.sh"), "--dry-run"],
-        cwd=REPO_ROOT, env=_help_env(tmp_path),
-        capture_output=True, text=True, check=False, timeout=60,
+        cwd=REPO_ROOT,
+        env=_help_env(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
     )
     assert proc.returncode == 2, f"unexpected argument exited {proc.returncode}"
     assert "unexpected argument" in proc.stderr

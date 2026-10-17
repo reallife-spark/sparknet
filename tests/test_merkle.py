@@ -56,7 +56,7 @@ def mk() -> ModuleType:
 
 class TestHashing:
     def test_empty_tree_root_is_sha256_of_empty_string(self, mk: ModuleType) -> None:
-        assert mk.EMPTY_TREE_ROOT == mk.merkle_root([])
+        assert mk.merkle_root([]) == mk.EMPTY_TREE_ROOT
         assert mk.merkle_root([]) == mk.merkle_root(())
         assert len(mk.merkle_root([])) == 64
 
@@ -200,23 +200,23 @@ class TestInclusionRefusals:
     def test_inserted_component(self, mk: ModuleType) -> None:
         # inserted-component.json
         root = mk.ROOT_VECTORS[3]
-        longer = ["00" * 32] + self.proof_for(mk)
+        longer = ["00" * 32, *self.proof_for(mk)]
         assert not mk.verify_inclusion(LEAVES[2], 2, 3, longer, root)
 
     def test_preceding_garbage(self, mk: ModuleType) -> None:
         # preceding-garbage.json
         root = mk.ROOT_VECTORS[3]
-        assert not mk.verify_inclusion(LEAVES[2], 2, 3, ["00" * 32] + self.proof_for(mk), root)
+        assert not mk.verify_inclusion(LEAVES[2], 2, 3, ["00" * 32, *self.proof_for(mk)], root)
 
     def test_trailing_garbage(self, mk: ModuleType) -> None:
         # trailing-garbage.json
         root = mk.ROOT_VECTORS[3]
-        assert not mk.verify_inclusion(LEAVES[2], 2, 3, self.proof_for(mk) + ["00" * 32], root)
+        assert not mk.verify_inclusion(LEAVES[2], 2, 3, [*self.proof_for(mk), "00" * 32], root)
 
     def test_preceding_root(self, mk: ModuleType) -> None:
         # preceding-root.json
         root = mk.ROOT_VECTORS[3]
-        assert not mk.verify_inclusion(LEAVES[2], 2, 3, [root] + self.proof_for(mk), root)
+        assert not mk.verify_inclusion(LEAVES[2], 2, 3, [root, *self.proof_for(mk)], root)
 
     def test_index_mutations(self, mk: ModuleType) -> None:
         # leafIdx-XOR/@plus/@sub: an honest tree rejects index, not value.
@@ -309,15 +309,15 @@ class TestConsistencyRefusals:
     def test_trailing_garbage(self, mk: ModuleType) -> None:
         # trailing-garbage.json / trailing-root1/2.json / preceding-garbage.json
         first, second, root1, root2, proof = self.base(mk)
-        assert not mk.verify_consistency(first, second, root1, root2, proof + ["ab" * 32])
-        assert not mk.verify_consistency(first, second, root1, root2, ["ab" * 32] + proof)
-        assert not mk.verify_consistency(first, second, root1, root2, proof + [root1])
-        assert not mk.verify_consistency(first, second, root1, root2, [root2] + proof)
+        assert not mk.verify_consistency(first, second, root1, root2, [*proof, "ab" * 32])
+        assert not mk.verify_consistency(first, second, root1, root2, ["ab" * 32, *proof])
+        assert not mk.verify_consistency(first, second, root1, root2, [*proof, root1])
+        assert not mk.verify_consistency(first, second, root1, root2, [root2, *proof])
 
     def test_preceding_garbage(self, mk: ModuleType) -> None:
         # preceding-garbage.json / preceding-root1.json / preceding-root2.json
         first, second, root1, root2, proof = self.base(mk)
-        assert not mk.verify_consistency(first, second, root1, root2, ["cd" * 32] + proof)
+        assert not mk.verify_consistency(first, second, root1, root2, ["cd" * 32, *proof])
 
     def test_modified_proof_element(self, mk: ModuleType) -> None:
         # modified-proof@0-bit-@4.json
@@ -423,7 +423,7 @@ class TestSignedTreeHead:
     def test_wrong_key_and_malformed(self, mk: ModuleType) -> None:
         authz = mk._load_authz()
         private_b64, public_b64 = authz.generate_keypair()
-        other_private_b64, other_public_b64 = authz.generate_keypair()
+        _other_private_b64, other_public_b64 = authz.generate_keypair()
         private_key = authz.private_key_from_b64(private_b64)
         head = mk.sign_tree_head(private_key, public_b64, size=8, root=mk.ROOT_VECTORS[8])
         assert not mk.verify_tree_head(other_public_b64, head)

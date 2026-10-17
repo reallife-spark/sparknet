@@ -1,7 +1,7 @@
 """Every legacy name must be a symlink to its numbered home.
 
-`peer-node/` and `master-node/` now store vault content under
-`00_System`–`07_Archives`, while the vendored wiki suite, the charters and
+`peer-node/` and `master-node/` now store vault content from `00_System` to
+`07_Archives`, while the vendored wiki suite, the charters and
 every old link still say `concepts/`, `_raw/`, `sessions/`. Shims are what
 makes both spellings name one file. Three ways that breaks, all tested here:
 

@@ -79,7 +79,7 @@ from urllib.error import HTTPError, URLError
 # importing the fabric's single loader. These two lines are deliberately
 # identical in every shared module; tests/test_contracts.py pins them.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from sparknet_loader import load_shared  # noqa: E402
+from sparknet_loader import load_shared
 
 VERSION_PREFIX = b"sparknet-http/1"
 DEFAULT_MAX_AGE_SECONDS = 300
@@ -244,7 +244,7 @@ def post_json(
     # (or a failure to verify) through a machine-wide http_proxy.
     opener = urlrequest.build_opener(urlrequest.ProxyHandler({}))
     try:
-        with opener.open(req, timeout=timeout) as resp:  # noqa: S310 - loopback wire by design
+        with opener.open(req, timeout=timeout) as resp:
             text = resp.read().decode("utf-8")
             try:
                 parsed: dict[str, Any] = json.loads(text)
@@ -312,7 +312,7 @@ class _Handler(TimeoutHandler):
             )
         return None
 
-    def log_message(self, fmt: str, *args: Any) -> None:  # noqa: A002
+    def log_message(self, fmt: str, *args: Any) -> None:
         return  # loopback service; keep the log quiet
 
     def _read_body(self) -> bytes:
@@ -374,7 +374,7 @@ class _Handler(TimeoutHandler):
             return None
         return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
-    def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's name
+    def do_GET(self) -> None:
         refusal = self._personality_refusal()
         if refusal is not None:
             self._refuse(refusal)
@@ -391,13 +391,13 @@ class _Handler(TimeoutHandler):
         except RequestError as exc:
             self._refuse(exc)
             return
-        except Exception as exc:  # noqa: BLE001 - never leak a traceback to a caller
+        except Exception as exc:
             print(f"[sparknet-http] internal error on {self.command} {self.path}: {exc!r}", file=sys.stderr)
             self._send(500, {"ok": False, "reason": "internal"})
             return
         self._send(code, payload)
 
-    def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's name
+    def do_POST(self) -> None:
         refusal = self._personality_refusal()
         if refusal is not None:
             self._refuse(refusal)
@@ -425,7 +425,7 @@ class _Handler(TimeoutHandler):
         except RequestError as exc:
             self._refuse(exc)
             return
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             print(f"[sparknet-http] internal error on {self.command} {self.path}: {exc!r}", file=sys.stderr)
             self._send(500, {"ok": False, "reason": "internal"})
             return
@@ -484,7 +484,7 @@ def _main(argv: list[str] | None = None) -> int:
         stamp = _utc_now()
         sig = authz.sign_bytes(priv, request_message("POST", "/v1/ping", body, stamp))
         ok = authz.verify_signature(public_key, sig, request_message("POST", "/v1/ping", body, stamp))
-        print(f"self-test: message={request_message('POST','/v1/ping',body,stamp)!r}")
+        print(f"self-test: message={request_message('POST', '/v1/ping', body, stamp)!r}")
         print(f"self-test: signature valid: {ok}")
         return 0 if ok else 1
 

@@ -89,7 +89,7 @@ def test_rejects_unknown_scope() -> None:
 
 
 def test_chunk_text_is_deterministic() -> None:
-    text = ("paragraph one.\n\n" * 40)
+    text = "paragraph one.\n\n" * 40
     a = chroma.chunk_text(text)
     b = chroma.chunk_text(text)
     assert a == b, "chunking must be a pure function of the input"
@@ -214,9 +214,7 @@ def test_inspect_never_touches_chromadb() -> None:
 # --- real chroma round trip (skipped when the optional package is absent) -----
 
 
-REAL_CHROMA = pytest.mark.skipif(
-    not _has_chromadb(), reason="chromadb not installed; optional extra is opt-in"
-)
+REAL_CHROMA = pytest.mark.skipif(not _has_chromadb(), reason="chromadb not installed; optional extra is opt-in")
 
 
 @REAL_CHROMA
@@ -237,9 +235,14 @@ def test_index_and_query_round_trip(tmp_path: Path) -> None:
 
     proc = subprocess.run(
         [
-            *_run, "peer", "query",
+            *_run,
+            "peer",
+            "query",
             "how does a peer verify an authorization?",
-            "--top-k", "3", "--data-dir", str(data_dir),
+            "--top-k",
+            "3",
+            "--data-dir",
+            str(data_dir),
         ],
         capture_output=True,
         text=True,
@@ -263,7 +266,7 @@ def test_reindex_is_idempotent(tmp_path: Path) -> None:
         )
         assert proc.returncode == 0, proc.stdout + proc.stderr
 
-    import chromadb  # noqa: F401 - available because the marker guards us
+    import chromadb
 
     client = chromadb.PersistentClient(path=str(data_dir))
     collection = client.get_collection("sparknet-fabric")

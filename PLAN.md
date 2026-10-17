@@ -1,6 +1,6 @@
 ---
 title: sparknet Plan
-updated: 2026-10-15
+updated: 2026-10-17
 current: done
 ---
 
@@ -1560,6 +1560,319 @@ and has no forge on a node, so there is nowhere a workflow file would ever run.
         `sparknet-master-signer.service` surviving a reboot with exactly one
         holder of the operational key; deployed containment; Phase 9's
         deliberately-unexecuted destructive legs.
+
+### Step 44 — goSpark / spark.docker interop — complete 2026-10-16
+
+- [x] **Step 44** — Make sparknet and goSpark work *together* rather than merely
+  co-exist: prove the cross-language authority boundary, give a node a real
+  **join** path onto a running fabric, document the node's ports honestly, wire
+  the goSpark knowledge binaries as node services, and stop the foreign images
+  from floating.
+      - **DoD**: (1) a cross-language test proves the fabric's Python authz and
+        goSpark's Go registry/identity layer agree — identical field names,
+        identical canonical envelope **bytes**, identical fingerprint fields;
+        (2) a node can join a running fabric by adopting the elected Master
+        (`--master-pub`/`--registry` stage the registry, pin the public key,
+        and the entrypoint fails closed on a registry with no pinned key);
+        (3) the node's ports are declared in `contracts/ports.json` under
+        `node_ports` with honest axes, projected into the rendered manifest,
+        and drift-tested, while staying a namespace separate from the fabric's;
+        (4) `ingest`/`backup`/`opencode` are real node compose services under
+        profiles, and the setup script advertises exactly the profiles compose
+        defines; (5) the foreign images are pinned (compose NATS tracks the
+        image's `NATS_VERSION`; WebUI is an immutable release tag) and goSpark's
+        reference `compute/docker-compose.vllm.yml` carries a supersession note;
+        (6) all fabric and goSpark gates green.
+      - **Status (complete, 2026-10-16).** Cross-language: new
+        `tests/test_registry_crossverify.py` (6 tests) drives the real goSpark
+        binaries (`sparknetctl`/`sparknet-authz.py`) against each other and pins
+        the shared bytes; the one deliberate asymmetry — goSpark's 64-byte
+        `private_key_b64` (seed+pub) vs the fabric's 32-byte seed — is recorded
+        as *by design* (`test_private_key_encodings_differ_by_design`), since
+        only public keys cross the boundary. Join: `sparknet-node-setup.sh`
+        gains `--master-pub`/`--registry`, `render_env_file` emits
+        `SPARKNET_MASTER_PUB` + `GOSPARK_REGISTRY_FILE`, `act_up` re-renders on
+        (re)specified join inputs, the compose `x-spark-env` carries both, and
+        `spark-entrypoint.sh master_pub()` fails closed when a registry is
+        staged but no key is pinned (also refuses `--registry` with
+        `--role master`); runbook §6 "Join a running fabric" added (later
+        sections renumbered); `tests/test_node_setup_join.py` (7 tests). Ports:
+        `contracts/ports.json` gained `node_measurement` + a `node_ports` table
+        (14 numbers, each with the honest axes and, where a number collides with
+        a fabric one, a `collision_note`), three new invariants, and the
+        renderer projects it into `contracts/manifest.json`; drift tests in
+        `tests/test_contracts.py` + `tests/test_render.py` bind the table to what
+        compose actually publishes and keep the two namespaces apart (the
+        fabric's `opencode-serve` 4200 stays `spec-only` while the node's is
+        declared separately). Services: `spark.compose.yml` gains `ingest`
+        (one-shot indexer), `backup` (signed snapshots, target a host bind
+        outside the source) and `opencode` (loopback 4200) under profiles;
+        `spark-entrypoint.sh` gains `cmd_ingest`/`cmd_backup`; an MCP server is
+        documented as a stdio tool, **not** a listener; runbook §5 documents all
+        three. Pins: compose `nats` default tracks `spark.docker`'s
+        `NATS_VERSION=2.14.2` (→ `2.14.2-alpine`), WebUI pinned to `v0.12.2`, and
+        goSpark's `compute/docker-compose.vllm.yml` carries a **DEPRECATED FOR
+        THE DGX SPARK NODE** supersession note pointing at `spark.docker` (change
+        committed in goSpark); `test_node_foreign_images_are_pinned` +
+        `test_setup_script_advertises_only_profiles_compose_defines` lock both.
+        Gates green: `make test-all` rc=0 (contract **75 passed + 1 skipped**,
+        fabric **912 passed + 5 skipped**, peer **454 passed + 1 skipped**,
+        master **163 passed**), `make ci CI_QUICK=1` all PASS, `make drift-check`
+        in sync; goSpark `make ci CI_QUICK=1` → `ci: ok`.
+      - **`DoD: confirm: user` (physics only)**: a real second host joining the
+        live agx64 Master over a real overlay (needs a second Spark-class host
+        with the node image), and a real GB10 GPU — the same residue Step 43
+        narrowed.
+
+### Step 45 — NVIDIA/dsx standard-practice adoption: clones + inventory — complete 2026-10-17
+
+- [x] **Step 45** — Clone the **14** reference repos (1 EleutherAI + 13
+  dsx-ai-factory) full-history into `/mnt/nvme/github` and write a SHA-cited
+  inventory of what each repo is and which parts of its practice apply to
+  sparknet/goSpark. Baselines recorded first so the sweep can prove it broke
+  nothing.
+      - **DoD**: (1) all 14 clones present at `/mnt/nvme/github/<name>` with
+        full history, each pinned in `references/nvidia-dsx-standard-practice.md`
+        by full SHA, commit count and default branch; (2) the inventory states
+        per repo: purpose, license, standard-file presence, and an
+        adopt / pattern-only / skip verdict for this fabric; (3) green baselines
+        recorded — sparknet `make ci CI_QUICK=1`, goSpark `make ci`, both run
+        **before** any adoption change; (4) license decision executed as
+        agreed: **no license change, zero code copied** — provenance lives in
+        the inventory doc, not a NOTICE.
+      - **Status (complete, 2026-10-17).** Baselines green **before** any
+        change (sparknet `make ci CI_QUICK=1` → `pre-merge-gate: all steps
+        passed`; goSpark `make ci` → `ci: ok`). All 14 clones OK full-history
+        (`lm-evaluation-harness` 4122 commits … `infra-controller` 4302;
+        `model-streamer` default branch **master**); licences read from the
+        clones' own LICENSE files — Apache-2.0 except `libredfish` **and**
+        `lm-evaluation-harness`, both MIT. `references/nvidia-dsx-standard-practice.md`
+        written (pinned SHAs; per-repo purpose/license/commits/branch;
+        observed-standard counts; adoption map; gap table; Step-51 verdicts)
+        and linked from `index.md`; session record
+        `sessions/2026-10-17.md`. No license change, zero code copied.
+
+### Step 46 — Codify the standard: STYLE_GUIDE + resource-first rule + build catalog — complete 2026-10-17
+
+- [x] **Step 46** — Turn the inventory into standing rules both agents read:
+  a `STYLE_GUIDE.md` at the fabric root (conventions adopted from dsx —
+  Makefile `## help`, ruff strictness ladder, shellcheck, SemVer +
+  CHANGELOG discipline, commit hygiene), the NVIDIA **resource-first** rule
+  wired as a make target + AGENTS.md command-table line, and
+  `references/nvidia-build-catalog.md` recording `build.nvidia.com`
+  endpoints (explore/discover, `/v1/models`, api/search) for container/model
+  lookups **before** building our own.
+      - **DoD**: (1) `STYLE_GUIDE.md` exists, cites the inventory as
+        provenance, and is referenced from AGENTS.md; (2) `make nv-search q=…`
+        (or equivalent script) queries the catalog with `$BUILD_NVIDIA_API_KEY`
+        **indirection only** — the key lives at
+        `.state/secrets/build-nvidia.env` (0600, `.state/` gitignored), is
+        documented by *name/path only* in docs, never by value, and the helper
+        degrades to unauthenticated when absent; (3)
+        `references/nvidia-build-catalog.md` records verified endpoints +
+        search pattern; (4) `keys-check` + `make ci CI_QUICK=1` green.
+      - **Note (key handling).** The `nvapi-…` key was pasted in chat in
+        plaintext — treat as exposed: recommend **rotation**; it is not in
+        `.env`, no env var carries it, and it must never enter any tracked
+        file (PLAN/MEMORY/sessions/log/CI). A root-only `.env.example` knob is
+        rejected: `tests/test_layout.py::test_env_example_templates_share_one_key_set`
+        forces identical key sets across all three templates, and a node
+        template must not grow a fabric-tooling key.
+      - **Status (complete, 2026-10-17).** `STYLE_GUIDE.md` written (10
+        sections: resource-first, tree, Python, shell, Makefiles, commits,
+        secrets, CI, docs/memory, release) with a gates table; registered in
+        `EXPECTED_TOP_LEVEL`; linked from `AGENTS.md` ("How work is written")
+        and `index.md`. `scripts/sparknet-nv-search.sh` + `make nv-search`
+        added: `models [SUBSTRING]` / `show ID` / `ngc QUERY` / `discover`;
+        key read only from `$SPARKNET_STATE_DIR/secrets/build-nvidia.env`
+        (default `.state/secrets/`, 0600) and never printed; `ngc` refuses
+        without a key. **The endpoints were re-probed live and the original
+        list was wrong in a load-bearing way**: `build.nvidia.com` (including
+        `/api/search`) is a Next.js SPA — every route answers 200
+        `text/html`, so status 200 proved nothing; the machine-readable
+        catalog is `integrate.api.nvidia.com/v1/models` (81 ids, no auth) and
+        `/v1/models/<id>` is a real lifecycle check (200 live, 410 + EOL date
+        retired). `references/nvidia-build-catalog.md` records all of this,
+        including the correction. `keys-check` extended to `.state/secrets/`
+        (dir 0700, files 0600) with three tests; new hermetic
+        `tests/test_nv_search.py` (8, stub `curl`; includes "the key is sent
+        as a header and never printed"). Gates green: `make ci CI_QUICK=1`
+        all steps PASS after `ruff format` on the new test file.
+
+### Step 47 — Community + agent file set (both repos) — complete 2026-10-17
+
+- [x] **Step 47** — Add the dsx-shaped community surface to **both** repos:
+  `CONTRIBUTING.md`, `SECURITY.md`, `CODEOWNERS`, `.github/PULL_REQUEST_TEMPLATE.md`,
+  issue templates, and the agent-facing `llms.txt` index — written for *this*
+  fabric's real commands (never aspirational targets), in both sparknet and
+  goSpark.
+      - **DoD**: (1) files exist in both repos and describe only commands that
+        actually run (`make ci`, `make test-all`, `make contract-test`, goSpark
+        `make ci` …); (2) new root files registered where the layout tests
+        demand (`EXPECTED_TOP_LEVEL`, `test_claims` prose guards); (3)
+        `make validate` + full `make test-all` green in sparknet, `make ci`
+        green in goSpark; (4) CHANGELOG/RELEASE conventions either adopted
+        (`VERSION` exists) or explicitly deferred **in the inventory doc**,
+        not silently skipped.
+      - **Status (complete, 2026-10-17).** Landed in sparknet: `CONTRIBUTING.md`
+        (setup, the gate, the atomic cross-role rule), `SECURITY.md`
+        (private-report route + the fail-closed authority model it protects),
+        `CODEOWNERS`, `llms.txt`, `CHANGELOG.md`, `.github/` PR + issue
+        templates; all four new root entries plus `.github` registered in
+        `EXPECTED_TOP_LEVEL`; `index.md` "Start here" now names
+        CONTRIBUTING/SECURITY/CHANGELOG. goSpark got the same set plus an
+        `AGENTS.md` (it had none) and a `CHANGELOG.md` opening at `Unreleased`
+        because that repo has no `VERSION`. CHANGELOG adopted in both;
+        `RELEASE.md` / `CODE_OF_CONDUCT` / `GOVERNANCE` / `MAINTAINERS` /
+        `NOTICE` / `llms-full.txt` **deferred with reasons recorded** in the
+        inventory doc's "Step 47 — community surface, as landed" section.
+        Verification: `make validate` pass; `tests/test_layout.py` +
+        `tests/test_claims.py` all pass (the new files are scanned: links
+        resolve, no forbidden phrases, no hard-coded paths); full
+        `make test-all` exit 0; goSpark `make ci` → `ci: ok`.
+
+### Step 48 — GitHub Actions CI from dsx-github-actions (mirror, not source of truth) — complete 2026-10-17
+
+- [x] **Step 48** — sparknet is pushed to a private remote yet has **no
+  workflows**; add `.github/workflows/` for both repos following
+  dsx-github-actions practice: gate jobs mirroring the local gate (keys-check,
+  lint, format-check, shellcheck, validate, contract-test, render-check,
+  pytest quick suite; goSpark: gofmt/vet/test-race + golangci-lint), actions
+  **pinned by SHA (never `@main`)**, CodeQL + secret-scan workflows patterned
+  on dsx's `codeql-scan`/`trufflehog-scan`.
+      - **DoD**: (1) workflows parse (PyYAML check) and are pinned by SHA or
+        immutable version tags; (2) every CI job has a local equivalent and
+        the docs say the **local pre-merge gate stays authoritative**
+        (decision A5 carried); (3) a test asserts no `@main` refs and that
+        workflow steps mirror `scripts/pre-merge-gate.sh` vocabulary;
+        (4) local gates all green (the first real run on GitHub is
+        `DoD: confirm: user`).
+      - **Status (complete, 2026-10-17).** Three workflows in **both** repos:
+        `gate.yml`, `codeql.yml`, `secret-scan.yml`. Every action pinned to a
+        40-hex commit SHA resolved via `git ls-remote` (checkout v4, setup-python
+        v5, setup-go v5, codeql-action v3, gitleaks-action v2). The gate job
+        **calls `make ci`** (PR → `CI_QUICK=1`, push to default branch → full)
+        and never re-lists a check; CodeQL is the one GitHub-only job (no local
+        analyzer) and the only one with `security-events: write`. New guard
+        `tests/test_ci.py` (21 cases): every workflow parses, every `uses:` is a
+        40-hex SHA (so `@main` **and** `@v4` fail), permissions are
+        least-privilege, each gate workflow runs `make ci` and not
+        `make <check>`, and `scripts/pre-merge-gate.sh`'s step names are pinned
+        so the mirror cannot silently drift. gitleaks chosen over dsx's shared
+        org `trufflehog-scan` action (one pinned action, local counterpart
+        `make keys-check`). Two stale prose claims corrected to match
+        (the gate script's "nowhere to hang a workflow" note, goSpark's
+        "GitHub Actions (once added)"). Local gate green: `make ci CI_QUICK=1`
+        all steps PASS; `pytest tests/` pass; goSpark `make ci` → `ci: ok`.
+        **Deferred with reason** (inventory doc): Renovate (SHAs refreshed by
+        hand for now); branch protection requiring the `gate` check is a
+        repository setting → `DoD: confirm: user`, as is the first real
+        GitHub run.
+
+### Step 49 — Python/shell format sweep (sparknet): strict gates become blocking
+
+- [x] **Step 49 — Python/shell format sweep (sparknet): strict gates become blocking** — complete 2026-10-17.
+      - **DoD**: (1) `ruff format --check` clean across the whole fabric tree,
+        `make format-check` green (widened to full-tree); (2) `make lint` runs
+        the widened rule set green with no undocumented suppressions;
+        (3) pre-commit config exists, `make shellcheck` + `keys-check` +
+        `shims-check` green; (4) full `make ci` green — the sweep changed
+        formatting only, never behavior (contract-test + test-all prove it).
+      - **Status (complete, 2026-10-17).** `ruff format .` reformatted 62 files
+        (65 changed incl. session edits; formatting-only, proved by a full
+        `make test-all` green immediately after). `pyproject.toml` `[tool.ruff]`
+        `exclude` gained `".opencode"` (vendored MIT skills are pinned upstream,
+        never ours to reformat — `make wiki-verify` proves no drift) and
+        `force-exclude = true` (so the hook's explicit filenames still honour
+        the excludes). `[tool.ruff.lint]` `select` widened to
+        `E,F,I,UP,B,SIM,RUF,S`, with three **documented** global ignores
+        (`S310` urlopen on peer URLs from config; `S603`/`S607` subprocess with
+        fixed argv + PATH lookup is the design) and `per-file-ignores` for the
+        three test trees (`S101,S103–S108,S110,S112`). Fixed by hand, not
+        suppressed: a module-level `assert` in the registry listener →
+        `raise RuntimeError(...)`, a grant-write `assert` in
+        `sparknet-provenance.py` → `raise ProvenanceError(...)`,
+        `try/except: pass` in `sparknet-authz.py` → `contextlib.suppress`.
+        `ruff check --fix` + `--fix --unsafe-fixes` resolved 73 more; the last
+        8 hand-fixed (SIM102 nested-if, RUF002/RUF003 unicode dashes in
+        consensus/oob/tests, an unused loop var in liveness, `raise ... from`
+        chaining in `spark-precontext.py`). All 33 remaining `# noqa` in the
+        fabric carry a reason. `Makefile`: `lint` is now whole-tree
+        `ruff check .`; `format-check` whole-tree `ruff format --check .`;
+        `FORMAT_BASE` retired; `lint-strict: lint` kept as a deprecated alias.
+        `.githooks/pre-commit` gained the dsx-shape staged-format layer
+        (reformat staged Python, re-stage, exit 1 so the diff is reviewed; soft
+        dependency on ruff, keys-check stays the hard gate) — verified live on a
+        probe file. Docs realigned: `AGENTS.md` `make lint` row,
+        `STYLE_GUIDE.md` §3 + enforced-by table + §6 hooks note. **DoD met**:
+        `make format-check` (111 files already formatted), `make lint` all
+        checks passed, `make ci` all ten steps green.
+
+### Step 50 — Go sweep (goSpark): golangci-lint + style conformance
+
+- [x] **Step 50 — Go sweep (goSpark): golangci-lint + style conformance** — complete 2026-10-17.
+
+### Step 51 — Functional adoption (the point of the exercise)
+
+- [x] **Step 51 — Functional adoption (the point of the exercise)** — complete 2026-10-17.
+      - **DoD**: each leg lands as (code + tests) or (a design doc with an
+        explicit decision line); `make eval` runs green against the stub tier;
+        the inventory's verdicts move from *planned* to *done*; all gates
+        green. Legs needing live hardware/LLM mark `DoD: confirm: user`.
+      - **Legs**: **(a)** `make eval` — lm-evaluation-harness against goSpark's
+        OpenAI gateway (CPU tier via `cmd/stub-vllm`); **(b)**
+        fleet-intelligence-agent telemetry vs `internal/gputel`; **(c)**
+        nv-telemetry observation-model design; **(d)** Redfish with a mock
+        fixture; **(e)** dsx-exchange AsyncAPI contract + NATS auth-callout
+        design; **(f)** pattern-only adoptions in the inventory.
+      - **Status (complete, 2026-10-17).**
+        **(a) code + tests.** `cmd/stub-vllm/main.go` refactored
+        (`newMux`/`echoText`/`digest`; crc32 of `TrimSpace(prompt)`) and gained
+        a faithful **`/v1/completions`** handler (lm-eval's `local-completions`
+        needs it); new `main_test.go` (5 tests). New `eval/spark_smoke.{yaml,jsonl}`
+        pin the stub echo so a perfect score proves the chain;
+        goSpark `Makefile` gained `golangci-lint`, `eval` (+`EVAL_*`/`LMEVAL_*`
+        vars) and `lint`/`ci` now include golangci. **`make eval` green:
+        `spark_smoke exact_match = 1.0`.** Deviation recorded in the inventory:
+        the harness is a **pinned clone** (`/mnt/nvme/github/lm-evaluation-harness`,
+        own `.venv`), not a tracked pip dep.
+        **(b)–(e) design docs with explicit decision lines** (the leg DoD's
+        second arm), in `references/`: `nvidia-fleet-telemetry-comparison.md`
+        (adopt the additive `_info` gauge convention — follow-up),
+        `nvidia-telemetry-observation-model.md` (batch-descriptor discipline as
+        doc; structured validation errors — follow-up),
+        `nvidia-redfish-bmc-inventory.md` (client/projection split + cassette
+        fixture; live BMC `DoD: confirm: user`),
+        `nvidia-dsx-exchange-bus.md` (bus subject/schema contract — follow-up;
+        auth-callout evaluated **and deferred to its own step** as a cross-role
+        contract change).
+        **(f)** all four verdicts updated to *done* in
+        `references/nvidia-dsx-standard-practice.md` with an "as landed"
+        section naming each follow-up and why it is deferred.
+        **DoD met**: `make eval` green; all four inventory verdicts *done*;
+        `make validate`, `tests/test_layout.py`, `tests/test_claims.py`,
+        `tests/test_ci.py` green.
+
+### Step 52 — Verify, close, compact memory
+
+- [x] **Step 52 — Verify, close, compact memory** — complete 2026-10-17.
+      - **DoD**: all named gates green in both repos; MEMORY.md ≤ ~150 lines
+        with history left in `log.md`/`sessions/`; no secrets anywhere
+        (`keys-check`); **no commit unless the user asks** — if asked, land
+        the two repos' changes as their own commits after flagging the
+        pre-existing dirty state.
+      - **Status (complete, 2026-10-17).** All named gates green:
+        **sparknet** `make ci` (all ten steps; fabric, peer 454+1 skip, master),
+        `make drift-check` (33 skills no drift, contract parity, derived in
+        sync), `make keys-check` (clean), `make shims-check` (12 OK),
+        `make validate`; **goSpark** `make ci` → `ci: ok`. Inventory claims
+        audited by spot-check (`make nv-search`, `make eval`, `make drift-check`
+        and the documented reference docs all resolve). **`MEMORY.md` compacted
+        777 → 126 lines** (standing state only; all history remains in `log.md`
+        + `sessions/2026-10-17.md`), and its long-stale peer cursor corrected
+        (`current: 8` → `current: done`). Session file closed. `PLAN.md`
+        `current: done`. 35+ doc/code files touched this arc, **all uncommitted**
+        per the DoD (the trees were already dirty pre-session).
 
 ## Next
 

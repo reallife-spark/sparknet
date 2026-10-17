@@ -45,7 +45,7 @@ from typing import Any
 # importing the fabric's single loader. These two lines are deliberately
 # identical in every shared module; tests/test_contracts.py pins them.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from sparknet_loader import load_shared  # noqa: E402
+from sparknet_loader import load_shared
 
 DEFAULT_SHARED_DIR = Path(__file__).resolve().parent
 
@@ -275,8 +275,8 @@ def _path_of(leaves: list[bytes], index: int, start: int, end: int) -> list[str]
     k = down_to_power_of_two(size)
     mid = start + k
     if index < mid:
-        return _path_of(leaves, index, start, mid) + [_root_of(leaves, mid, end)]
-    return _path_of(leaves, index, mid, end) + [_root_of(leaves, start, mid)]
+        return [*_path_of(leaves, index, start, mid), _root_of(leaves, mid, end)]
+    return [*_path_of(leaves, index, mid, end), _root_of(leaves, start, mid)]
 
 
 def verify_inclusion(entry: Any, index: int, size: int, proof: Any, root: Any) -> bool:
@@ -341,8 +341,8 @@ def _subproof_of(leaves: list[bytes], m: int, start: int, end: int, complete: bo
     k = down_to_power_of_two(size)
     mid = start + k
     if m <= k:
-        return _subproof_of(leaves, m, start, mid, complete) + [_root_of(leaves, mid, end)]
-    return _subproof_of(leaves, m - k, mid, end, False) + [_root_of(leaves, start, mid)]
+        return [*_subproof_of(leaves, m, start, mid, complete), _root_of(leaves, mid, end)]
+    return [*_subproof_of(leaves, m - k, mid, end, False), _root_of(leaves, start, mid)]
 
 
 def verify_consistency(first_size: int, second_size: int, first_root: Any, second_root: Any, proof: Any) -> bool:
@@ -367,7 +367,7 @@ def verify_consistency(first_size: int, second_size: int, first_root: Any, secon
         return False
     # Step 2: an exact-power-of-two first tree's own root is the proof's seed.
     if first_size == 1 << ((first_size - 1).bit_length()):
-        elements = [fr_hex] + elements
+        elements = [fr_hex, *elements]
     fn = first_size - 1
     sn = second_size - 1
     # Step 4: shift the frame up until fn is even.

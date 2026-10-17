@@ -6,6 +6,7 @@
 #   1. a tracked file whose *name* looks like a key (`*.ed25519`, `privkey*`, …)
 #   2. a tracked file containing a PEM private-key block
 #   3. a key under .state/keys/ that is looser than 0600 (its directory than 0700)
+#   4. a secret under .state/secrets/ that is looser than 0600 (dir than 0700)
 #
 # plus a check that the .gitignore backstop is still there — a pattern deleted
 # from .gitignore is silent until someone commits a key by accident.
@@ -30,9 +31,9 @@ case "${1:-}" in
       '  scripts/sparknet-keys-check.sh --help' \
       '' \
       'Checks: tracked key-shaped filenames, tracked PEM private-key blocks,' \
-      '.state/keys/ modes (keys 0600, dir 0700), and the .gitignore backstop.' \
-      'Scans on disk when the directory has no .git (an extracted bundle).' \
-      'Exit 0 = clean, exit 1 = problems found.'
+      '.state/keys/ and .state/secrets/ modes (files 0600, dirs 0700), and the' \
+      '.gitignore backstop. Scans on disk when the directory has no .git (an' \
+      'extracted bundle). Exit 0 = clean, exit 1 = problems found.'
     exit 0 ;;
 esac
 
@@ -131,6 +132,29 @@ check_dir() {
     case "$dmode" in
       700|500) : ;;
       *) note_problem "$dir/.state/keys is mode $dmode, not 0700" ;;
+    esac
+  fi
+
+  # 5. loose secrets on disk — a non-key secret (an API token in an env file)
+  # gets no protection from the .state/keys rules above, so the secrets dir
+  # repeats them. The resource-first helper reads
+  # .state/secrets/build-nvidia.env from exactly this place.
+  if [ -d "$dir/.state/secrets" ]; then
+    local secret
+    while IFS= read -r secret; do
+      [ -n "$secret" ] || continue
+      local secmode
+      secmode="$(stat -c '%a' "$secret" 2>/dev/null || stat -f '%Lp' "$secret")"
+      case "$secmode" in
+        600|400) : ;;
+        *) note_problem "$secret is mode $secmode, not 0600" ;;
+      esac
+    done < <(find "$dir/.state/secrets" -type f 2>/dev/null)
+    local dsemode
+    dsemode="$(stat -c '%a' "$dir/.state/secrets" 2>/dev/null || stat -f '%Lp' "$dir/.state/secrets")"
+    case "$dsemode" in
+      700|500) : ;;
+      *) note_problem "$dir/.state/secrets is mode $dsemode, not 0700" ;;
     esac
   fi
 }

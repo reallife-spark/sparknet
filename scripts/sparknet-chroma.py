@@ -56,8 +56,16 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 #: Directories that are never vault content. Generated dirs, caches, the
 #: vendored skills (not knowledge) and role trees that belong to another scope.
 EXCLUDE_PARTS = {
-    ".git", ".venv", ".state", ".cache", "__pycache__", ".opencode",
-    "node_modules", "dist", ".pytest_cache", ".ruff_cache",
+    ".git",
+    ".venv",
+    ".state",
+    ".cache",
+    "__pycache__",
+    ".opencode",
+    "node_modules",
+    "dist",
+    ".pytest_cache",
+    ".ruff_cache",
 }
 
 SCOPES = ("peer", "master", "fabric")
@@ -199,7 +207,7 @@ class ChromadbMissing(RuntimeError):
 def _require() -> None:
     """Fail with exit code 2 and the install hint when chromadb is absent."""
     try:
-        import chromadb  # type: ignore[import-not-found]  # noqa: F401
+        import chromadb  # type: ignore[import-not-found]  # noqa: F401 - presence is the probe
     except ImportError as exc:  # pragma: no cover - only reachable without the package
         print(
             "sparknet-chroma: chromadb is not installed. It is an OPTIONAL "
@@ -216,9 +224,7 @@ def _collection(scope: str, data_dir: Path):
     _require()
     import chromadb  # type: ignore[import-not-found]
 
-    return chromadb.PersistentClient(path=str(data_dir)).get_or_create_collection(
-        name=f"sparknet-{scope}"
-    )
+    return chromadb.PersistentClient(path=str(data_dir)).get_or_create_collection(name=f"sparknet-{scope}")
 
 
 def _data_dir(path: Path) -> Path:
@@ -308,7 +314,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
     try:
-        collection_name, vault, default_data = resolve_scope(args.scope)
+        _collection_name, vault, default_data = resolve_scope(args.scope)
     except ValueError as exc:
         print(f"sparknet-chroma: {exc}", file=sys.stderr)
         return 1

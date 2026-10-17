@@ -33,7 +33,9 @@ KEY_PATTERNS = ("*.ed25519", "*.pem", "*.key", "privkey*", "id_ed25519*", "*.see
 def run_checker(*args: Path | str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["bash", str(CHECKER), *(str(a) for a in args)],
-        capture_output=True, text=True, cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
     )
 
 
@@ -45,6 +47,7 @@ def scratch(tmp_path: Path) -> Path:
 
 
 # --- the checker --------------------------------------------------------------
+
 
 def test_the_repository_is_clean():
     result = run_checker()
@@ -64,9 +67,16 @@ def test_a_key_shaped_name_fails(scratch: Path):
     assert "node.key" in result.stderr
 
 
-@pytest.mark.parametrize("name", [
-    "id_ed25519", "privkey-wireguard", "node.pem", "bundle.seed", "x.ed25519",
-])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "id_ed25519",
+        "privkey-wireguard",
+        "node.pem",
+        "bundle.seed",
+        "x.ed25519",
+    ],
+)
 def test_every_key_shaped_name_fails(scratch: Path, name: str):
     (scratch / name).write_text("x")
     result = run_checker(scratch)
@@ -81,9 +91,7 @@ PEM_MARKER = "-----BEGIN " + "PRIVATE KEY-----"
 
 def test_a_pem_block_in_a_ordinary_file_fails(scratch: Path):
     (scratch / "notes.md").write_text(
-        "someone pasted this:\n"
-        + PEM_MARKER
-        + "\nMCowBQYDK2Vw\n-----END " + "PRIVATE KEY-----\n"
+        "someone pasted this:\n" + PEM_MARKER + "\nMCowBQYDK2Vw\n-----END " + "PRIVATE KEY-----\n"
     )
     result = run_checker(scratch)
     assert result.returncode == 1
@@ -144,7 +152,46 @@ def test_a_properly_permitted_state_key_passes(scratch: Path):
     assert result.returncode == 0, result.stderr
 
 
+# --- non-key secrets (.state/secrets/) ---------------------------------------
+#
+# A key-ed25519 and an API token are different objects with the same
+# requirement: nothing looser than its owner. The resource-first helper reads
+# .state/secrets/build-nvidia.env, so the directory is gated like the key store.
+
+
+def test_a_loose_state_secret_fails(scratch: Path):
+    secrets = scratch / ".state" / "secrets"
+    secrets.mkdir(parents=True, mode=0o700)
+    (secrets / "build-nvidia.env").write_text("BUILD_NVIDIA_API_KEY=nvapi-secret\n")
+    os.chmod(secrets, 0o700)
+    os.chmod(secrets / "build-nvidia.env", 0o644)
+    result = run_checker(scratch)
+    assert result.returncode == 1
+    assert "0600" in result.stderr
+
+
+def test_a_loose_state_secrets_dir_fails(scratch: Path):
+    state = scratch / ".state"
+    state.mkdir(mode=0o700)
+    (state / "secrets").mkdir(mode=0o755)
+    result = run_checker(scratch)
+    assert result.returncode == 1
+    assert ".state/secrets is mode" in result.stderr and "0700" in result.stderr
+
+
+def test_a_properly_permitted_state_secret_passes(scratch: Path):
+    (scratch / ".state").mkdir(mode=0o700)
+    secrets = scratch / ".state" / "secrets"
+    secrets.mkdir(parents=True, mode=0o700)
+    (secrets / "build-nvidia.env").write_text("BUILD_NVIDIA_API_KEY=nvapi-secret\n")
+    os.chmod(secrets, 0o700)
+    os.chmod(secrets / "build-nvidia.env", 0o600)
+    result = run_checker(scratch)
+    assert result.returncode == 0, result.stderr
+
+
 # --- the backstop -------------------------------------------------------------
+
 
 @pytest.mark.parametrize("rel", [".gitignore", "peer-node/.gitignore"])
 def test_the_gitignore_blocks_every_pattern(rel: str):
@@ -154,6 +201,7 @@ def test_the_gitignore_blocks_every_pattern(rel: str):
 
 
 # --- the hook -----------------------------------------------------------------
+
 
 def test_the_hook_exists_and_calls_the_checker():
     assert HOOK.is_file()
@@ -170,7 +218,9 @@ def test_the_hook_wires_up():
     # this machine having run `make hooks`.
     configured = subprocess.run(
         ["git", "config", "--get", "core.hooksPath"],
-        capture_output=True, text=True, cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
     ).stdout.strip()
     assert configured in ("", ".githooks")
 
@@ -187,12 +237,10 @@ def test_the_hook_blocks_a_bad_commit(tmp_path: Path):
 
     (tmp_path / "leaked.key").write_text(PEM_MARKER + "\nx\n")
     subprocess.run(["git", "add", "-f", "leaked.key"], cwd=tmp_path, check=True)
-    bad = subprocess.run(["bash", ".githooks/pre-commit"], cwd=tmp_path,
-                         capture_output=True, text=True)
+    bad = subprocess.run(["bash", ".githooks/pre-commit"], cwd=tmp_path, capture_output=True, text=True)
     assert bad.returncode == 1, bad.stdout + bad.stderr
 
     subprocess.run(["git", "rm", "-q", "--cached", "leaked.key"], cwd=tmp_path, check=True)
     (tmp_path / "leaked.key").unlink()
-    good = subprocess.run(["bash", ".githooks/pre-commit"], cwd=tmp_path,
-                          capture_output=True, text=True)
+    good = subprocess.run(["bash", ".githooks/pre-commit"], cwd=tmp_path, capture_output=True, text=True)
     assert good.returncode == 0, good.stdout + good.stderr

@@ -2,9 +2,11 @@
 # The fabric's local pre-merge gate: every check a merge must pass, in one run.
 #
 # Why a script and not a CI workflow: sparknet is offline-first and is cloned
-# onto nodes that have no forge and no hosted runner. There is nowhere to hang a
-# `.github/workflows/` file that would ever execute, so the gate has to be
+# onto nodes that have no forge and no hosted runner. The gate has to be
 # something a person runs before they merge — and something `make ci` can wrap.
+# A `.github/workflows/` mirror runs this same script on a hosted runner for a
+# status check (fabric PLAN Step 48), but the LOCAL gate stays authoritative: a
+# node has no forge, so a green badge there is never what authorizes a merge.
 #
 # It runs the same checks in the same order every time and reports every
 # failure it finds rather than stopping at the first, because a merge blocked on

@@ -23,17 +23,16 @@ VENV_PY := $(VAULT_ROOT)/.venv/bin/python
 PY := $(if $(wildcard $(VENV_PY)),$(VENV_PY),python3)
 ROLE ?= peer
 
-# format-check is incremental: it checks the Python files this working tree has
-# changed against FORMAT_BASE, not the whole repo. The repo predates any pinned
-# ruff, so a whole-tree `ruff format --check` reports hundreds of pre-existing
-# differences that belong to a dedicated formatting commit, not to every change.
-FORMAT_BASE ?= HEAD
+# format-check is whole-tree since Step 49: the fabric is pinned to one ruff
+# and the sweep removed the pre-existing differences, so `ruff format --check .`
+# is the gate, not a subset. ruff itself excludes .venv/.state/references and
+# the vendored .opencode/skills tree (see pyproject.toml).
 SCOPE ?= fabric
 
 .PHONY: help help-role layout tui validate test test-all test-peer test-master \
         contract-test lint lint-strict format-check shellcheck test-report ci \
         container-test \
-        render render-check sbom sbom-check drift-check \
+        render render-check sbom sbom-check nv-search drift-check \
         devtools chroma-dev chroma-init chroma-inspect \
         chroma-index chroma-query env-init wiki-sync wiki-verify \
         wiki-preflight bundle bundle-verify status-plan clean dist \
@@ -120,30 +119,16 @@ hooks: ## Point this clone at .githooks/ so every commit runs keys-check
 	@git config core.hooksPath .githooks
 	@echo "core.hooksPath = .githooks"
 
-lint: ## Lint everything that is linted
-	@$(PY) -m ruff check shared scripts tests
-	@$(PY) -m ruff check peer-node/services peer-node/tests
-	@$(PY) -m ruff check master-node/services master-node/tests
+lint: ## Lint the whole fabric (ruff E,F,I,UP,B,SIM,RUF,S — see pyproject.toml)
+	@"$(PY)" -m ruff check .
 
-# Advisory, non-blocking: the wider rule set the fabric is migrating toward
-# (flake8-bugbear B, flake8-simplify SIM, Ruff-specific RUF, bandit S). It is
-# deliberately NOT part of the blocking gate yet — adopting it is a reviewable
-# change of its own, because a handful of the findings are in the consensus and
-# provenance paths where "simplify" and "chain this exception" change behaviour.
-lint-strict: ## Advisory: widened ruff rules (B, SIM, RUF, S); not yet the gate
-	-@"$(PY)" -m ruff check --select B,SIM,RUF,S \
-		--ignore S101,S603,S607,S310,S104,S105,S106,S107,S103,S108,S110,S311,S312,S313,S314,S501,S506 \
-		shared scripts tests peer-node master-node
+# The widened rule set (flake8-bugbear B, flake8-simplify SIM, Ruff-specific
+# RUF, bandit S) became the blocking gate in Step 49, configured in
+# pyproject.toml. `lint-strict` is kept as an alias so older notes keep working.
+lint-strict: lint ## Deprecated alias for `lint` (the widened set is now the gate)
 
-format-check: ## ruff format --check on Python files newly added vs FORMAT_BASE
-	@added="$$( { git -C "$(VAULT_ROOT)" diff --name-only --diff-filter=A $(FORMAT_BASE) -- '*.py'; \
-		git -C "$(VAULT_ROOT)" ls-files --others --exclude-standard -- '*.py'; } | sort -u )"; \
-	if [ -z "$$added" ]; then \
-		echo "format-check: no newly added Python files vs $(FORMAT_BASE)"; \
-		exit 0; \
-	fi; \
-	echo "format-check: $$(printf '%s\n' $$added | wc -l) new file(s) vs $(FORMAT_BASE)"; \
-	printf '%s\n' $$added | xargs "$(PY)" -m ruff format --check
+format-check: ## ruff format --check across the whole fabric (whole-tree since Step 49)
+	@"$(PY)" -m ruff format --check .
 
 shellcheck: ## shellcheck tracked scripts (skipped, with a note, if not installed)
 	@if ! command -v shellcheck >/dev/null 2>&1; then \
@@ -171,6 +156,17 @@ sbom: ## Regenerate sbom/sparknet.cdx.json (CycloneDX) from VERSION/deps/skills
 
 sbom-check: ## Fail if the SBOM is stale vs VERSION, requirements.txt or the skills
 	@"$(PY)" scripts/sparknet-sbom.py --check
+
+# Resource-first (STYLE_GUIDE §1): check NVIDIA's catalog before building our
+# own container or model. `q` is a substring of a model id; no `q` prints the
+# browser surfaces instead. Endpoints + provenance:
+# references/nvidia-build-catalog.md.
+nv-search: ## Look in NVIDIA's catalog first (q="llama"; details: scripts/sparknet-nv-search.sh --help)
+	@if [ -n "$(q)" ]; then \
+		scripts/sparknet-nv-search.sh models "$(q)"; \
+	else \
+		scripts/sparknet-nv-search.sh discover; \
+	fi
 
 # The umbrella drift gate for everything *derived*: the rendered contract
 # manifest, the generated SBOM, the vendored wiki suite, and cross-role contract

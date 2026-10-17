@@ -1,0 +1,82 @@
+# Contributing to sparknet
+
+Thanks for helping. This repository is the **fabric root** of sparknet: a
+two-role system (`peer-node/` implements a node, `master-node/` is the elected
+signing role) joined by one contract in `contracts/` and one implementation in
+`shared/`. Read `AGENTS.md` first — it explains the charter and the Memory/Plan
+Protocol — and `STYLE_GUIDE.md` for how work is written here.
+
+## Before you start
+
+```sh
+make devtools        # create .venv with pytest + ruff (only needed once)
+make hooks           # point this clone at .githooks/ (commits run keys-check)
+make help            # every fabric target, with one-line descriptions
+make -C peer-node help
+make -C master-node help
+```
+
+If `make devtools` is not for you, a system `pytest` and `ruff` are enough;
+`make` picks `.venv/bin/python` when it exists.
+
+## The gate
+
+The **local pre-merge gate is authoritative**; GitHub Actions only mirror it.
+
+```sh
+make ci CI_QUICK=1   # the fast pass: keys, shims, lint, format-check,
+                     # shellcheck, validate, contract-test, render-check, sbom
+make ci              # the same, plus the full suite
+make test-all        # contract + fabric + peer + master suites
+make drift-check     # derived artifacts still match their sources
+```
+
+A change is ready when the gates you ran pass and you can say *how* they were
+run. If a step skips (for example `shellcheck` when the binary is absent), say
+so in the pull request rather than leaving it implicit.
+
+## The one rule that is not style
+
+**Cross-role changes are atomic.** If you touch anything a role depends on —
+`contracts/`, `shared/`, a protocol — edit the contract *and* both roles in the
+**same commit**, then run `make contract-test`. A commit that updates one
+side only leaves the other verifying against a shape that no longer exists;
+`tests/test_contracts.py` exists to fail in exactly that case.
+
+## Style
+
+`STYLE_GUIDE.md` is the standing convention page (Python, shell, Makefiles,
+commits, secrets, CI, docs, release). Three rules worth repeating here:
+
+- **Resource-first**: before building a container, model or service of our
+  own, look in NVIDIA's catalog (`make nv-search q="…"`); record the verdict.
+- **No secrets, ever**: not in code, not in docs — not even a plausible-looking
+  placeholder. Secret material lives under `.state/` (0600 files, 0700 dirs)
+  and `make keys-check` enforces it. See `SECURITY.md` if one slips through.
+- **Every script answers `--help`, and answering it changes nothing.** All
+  scripts are run with `--help` by the suite for this reason.
+
+## Commits
+
+Conventional commits — `feat|fix|docs|style|refactor|perf|test|build|ci|chore`
+— one logical change per commit. A Developer Certificate of Origin is **not**
+required today (this is a private, single-operator repository; the dsx repos'
+DCO/CLA tooling is deliberately not adopted — see
+`references/nvidia-dsx-standard-practice.md`).
+
+## Knowledge pages
+
+The vault around the code is a wiki: distilled pages go to `concepts/`,
+`entities/`, `skills/`, `references/`, `synthesis/`; provenance to
+`references/`; session detail to `sessions/YYYY-MM-DD.md`; `MEMORY.md` is
+standing state only and `PLAN.md` carries the plan cursor. Never scatter
+copies; one page per file.
+
+## Pull requests
+
+Fill in the checklist in the pull request template. The short version:
+
+1. state what changed and **how it was verified** (which gates, what output);
+2. say what you could not verify and why (a `DoD: confirm: user` item is a
+   first-class answer, not a failure);
+3. keep the diff to one logical change.

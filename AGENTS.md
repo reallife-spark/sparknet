@@ -72,18 +72,19 @@ ch role can do |
 | `make validate` | both roles' charters, plans and manifests |
 | `make test-all` | **every** suite: contract, fabric, peer, master |
 | `make contract-test` | the peer still matches `contracts/` |
-| `make ci` / `make ci CI_QUICK=1` | the local pre-merge gate (`scripts/pre-merge-gate.sh`): keys, shims, lint, format-check, shellcheck, validate, contract-test, render-check; `CI_QUICK=1` skips the full suite |
+| `make ci` / `make ci CI_QUICK=1` | the local pre-merge gate (`scripts/pre-merge-gate.sh`): keys, shims, lint, format-check, shellcheck, validate, contract-test, render-check; `CI_QUICK=1` skips the full suite. **Authoritative** — the SHA-pinned GitHub Actions in `.github/workflows/` run the same script as a mirror |
 | `make format-check` / `make shellcheck` | incremental `ruff format --check` (new files only) / shellcheck gate (skips with a note if the binary is absent) |
-| `make lint` / `make lint-strict` | blocking ruff (`E,F,I,UP`) / advisory widened rules (`B,SIM,RUF,S`) |
+| `make lint` | blocking ruff over the whole fabric: `E,F,I,UP` plus `B,SIM,RUF,S` (bugbear/simplify/bandit; the widened set became the gate in PLAN Step 49) — `make lint-strict` is an alias |
 | `make test-report SCOPE=fabric\|peer\|master\|all` | JUnit XML + `.state/reports/summary.json` |
 | `make render` / `make render-check` | regenerate `contracts/manifest.json` from the contract SSOT / fail if it is stale |
+| `make nv-search q="…"` | **resource-first**: look in NVIDIA's catalog before building our own (`scripts/sparknet-nv-search.sh --help`); see `references/nvidia-build-catalog.md` |
 | `make drift-check` | fail if anything *derived* drifted: `render-check` + `wiki-verify` + `contract-test` |
 | `make wiki-sync` / `make wiki-verify` | re-vendor the wiki suite / prove no drift |
 | `make wiki-preflight` | prove the skills resolve *this* vault |
 | `make tui` | launch the TUI from the fabric root **with** KDE notifications (`OPENCODE_CONFIG=…kde-notif.opencode.json`) — roles launch plugin-free with plain `opencode` |
 | `make bundle ROLE=peer\|master` | build a standalone node bundle in `dist/` |
 | `make bundle-verify ROLE=…` | extract it elsewhere and prove it runs |
-| `make keys-check` | no key-shaped names or PEM blocks tracked; `.state/` keys 0600 |
+| `make keys-check` | no key-shaped names or PEM blocks tracked; `.state/keys/` and `.state/secrets/` at 0600 (dirs 0700) |
 | `make shims-check` | every legacy name in `peer-node/` and `master-node/` is still a symlink |
 | `make hooks` | point this clone at `.githooks/` so commits run `keys-check` |
 | `make -C peer-node provenance-verify` | signed notes, ledger chain and approvals |
@@ -91,6 +92,13 @@ ch role can do |
 
 Bare `pytest` at the root runs only `tests/` (fabric level). Use `make test-all`
 when you mean the whole repository.
+
+**How work is written** — `STYLE_GUIDE.md` is the standing convention page for
+both sparknet and goSpark (Python, shell, Makefiles, commits, secrets, CI,
+docs, release), derived from the dsx/EleutherAI practice recorded in
+`references/nvidia-dsx-standard-practice.md`. Its §1 is the **resource-first**
+rule: check `build.nvidia.com`/NGC (`make nv-search`) before building a
+container, model or service of our own, and record the lookup's verdict.
 
 A node's signed vault requires running `make -C peer-node user-init` once
 (generates the key into `.state/keys/`, fills `00_System/user.md`). The private

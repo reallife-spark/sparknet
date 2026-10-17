@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
 import hashlib
 import json
 import re
@@ -229,9 +230,7 @@ def generate_keypair() -> tuple[str, str]:
         serialization.PrivateFormat.Raw,
         serialization.NoEncryption(),
     )
-    public_raw = key.public_key().public_bytes(
-        serialization.Encoding.Raw, serialization.PublicFormat.Raw
-    )
+    public_raw = key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     return (
         base64.b64encode(private_raw).decode("ascii"),
         base64.b64encode(public_raw).decode("ascii"),
@@ -271,14 +270,10 @@ def load_private_key(path: Path) -> Ed25519PrivateKey:
     if stripped and len(stripped) == 32:
         candidates.append(stripped)
     if stripped:
-        try:
+        with contextlib.suppress(Exception):
             candidates.append(base64.b64decode(stripped, validate=True))
-        except Exception:
-            pass
-        try:
+        with contextlib.suppress(ValueError, UnicodeDecodeError):
             candidates.append(bytes.fromhex(stripped.decode("ascii")))
-        except (ValueError, UnicodeDecodeError):
-            pass
     if len(blob) == 32:
         candidates.append(blob)
 
@@ -521,9 +516,7 @@ def ledger_block_hash(block: dict[str, Any]) -> str:
     if not isinstance(block, dict):
         raise AuthzError("ledger block must be an object")
     payload = {k: v for k, v in block.items() if k != "hash"}
-    return hashlib.sha256(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    ).hexdigest()
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
 def cluster_job_message(job: dict[str, Any]) -> bytes:
@@ -543,9 +536,7 @@ def cluster_job_message(job: dict[str, Any]) -> bytes:
     if missing:
         raise AuthzError(f"cluster job missing required field(s): {', '.join(missing)}")
     if job["mode"] not in CLUSTER_JOB_MODES:
-        raise AuthzError(
-            f"unknown cluster job mode {job['mode']!r}; expected one of {', '.join(CLUSTER_JOB_MODES)}"
-        )
+        raise AuthzError(f"unknown cluster job mode {job['mode']!r}; expected one of {', '.join(CLUSTER_JOB_MODES)}")
     subtasks = job["subtasks"]
     if not isinstance(subtasks, list) or not subtasks:
         raise AuthzError("cluster job subtasks must be a non-empty list")
@@ -683,7 +674,7 @@ REASON_GRANT_MALFORMED = "grant_malformed"
 def grant_message(grant: dict[str, Any]) -> bytes:
     """Canonical bytes a grant's signature covers, projected to GRANT_FIELDS.
 
-    One projection rule, shared by the signer and every verifier — the 
+    One projection rule, shared by the signer and every verifier — the
     ``sign-guard-approval``/guard divergence happened because that rule had two
     copies, so a grant deliberately has the single implementation both sides
     import. Serialised with sort_keys and tight separators so the bytes do not

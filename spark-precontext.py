@@ -132,14 +132,14 @@ def build_template(model: str, prompt_files: list[str], max_bytes: int) -> str:
         raise SystemExit(
             "spark-precontext: transformers is required to build a chat template "
             f"({exc}). Use a vLLM base image, or run `digest` only."
-        )
+        ) from None
 
     parts: list[str] = []
     for path in prompt_files:
         try:
             parts.append(Path(path).read_text(encoding="utf-8").strip())
         except OSError as exc:
-            raise SystemExit(f"spark-precontext: cannot read prompt file {path}: {exc}")
+            raise SystemExit(f"spark-precontext: cannot read prompt file {path}: {exc}") from None
     precontext = "\n\n---\n\n".join(p for p in parts if p)
     if not precontext:
         raise SystemExit("spark-precontext: precontext is empty; refusing to write a no-op template")

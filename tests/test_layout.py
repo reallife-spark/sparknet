@@ -33,18 +33,44 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # is either a phantomed leftover or undocumented clutter.
 EXPECTED_TOP_LEVEL = {
     # the wiki category layout
-    "concepts", "entities", "skills", "references", "synthesis", "journal",
-    "projects", "sessions", "_raw", "_staging", "_archives",
+    "concepts",
+    "entities",
+    "skills",
+    "references",
+    "synthesis",
+    "journal",
+    "projects",
+    "sessions",
+    "_raw",
+    "_staging",
+    "_archives",
     # the fabric itself
-    "contracts", "shared", "peer-node", "master-node", "scripts", "tests",
+    "contracts",
+    "shared",
+    "peer-node",
+    "master-node",
+    "scripts",
+    "tests",
     ".opencode",
     # project files
-    "AGENTS.md", "MEMORY.md", "MISSION.md", "PLAN.md", "README.md", "log.md",
-    "Makefile", "pyproject.toml", "requirements.txt", "requirements-dev.txt",
-    ".env.example", ".gitignore", "opencode.json", ".vault-config",
+    "AGENTS.md",
+    "MEMORY.md",
+    "MISSION.md",
+    "PLAN.md",
+    "README.md",
+    "log.md",
+    "Makefile",
+    "pyproject.toml",
+    "requirements.txt",
+    "requirements-dev.txt",
+    ".env.example",
+    ".gitignore",
+    "opencode.json",
+    ".vault-config",
     # the release surface (fabric PLAN Step 41): VERSION is the single source of
     # truth for the fabric version; sbom/ holds the generated CycloneDX SBOM.
-    "VERSION", "sbom",
+    "VERSION",
+    "sbom",
     # shellcheck options for the whole tree, read from the repo root by
     # `make shellcheck` (fabric PLAN Step 37, track A)
     ".shellcheckrc",
@@ -62,22 +88,48 @@ EXPECTED_TOP_LEVEL = {
     # every service runs, the compose orchestration, the precontext baker, and
     # the host bring-up script. They sit at the fabric root because the image
     # build context IS the root (BuildKit named context gospark is separate).
-    "spark.docker", "spark-entrypoint.sh", "spark.compose.yml",
+    "spark.docker",
+    "spark-entrypoint.sh",
+    "spark.compose.yml",
     "spark.compose.cpu.yml",
-    "spark-precontext.py", "sparknet-node-setup.sh",
+    "spark-precontext.py",
+    "sparknet-node-setup.sh",
     # per-clone hooks (activated by `make hooks`) — pre-commit runs keys-check
     ".githooks",
     # curated navigation + the daily-update cache. index.md is hand-maintained,
     # not generated, so deleting it loses real content.
-    "index.md", "hot.md",
+    "index.md",
+    "hot.md",
+    # the standing convention page (fabric PLAN Step 46), derived from the
+    # dsx/EleutherAI practice in references/nvidia-dsx-standard-practice.md
+    "STYLE_GUIDE.md",
+    # the governance surface (fabric PLAN Step 47): how to contribute, how to
+    # report a vulnerability, who owns what, the agent-facing index, the
+    # changelog, and GitHub's templates under .github/. Modeled on the dsx
+    # repos' community files (same inventory reference).
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "CODEOWNERS",
+    "llms.txt",
+    "CHANGELOG.md",
+    ".github",
 }
 
 # Machine-local or generated: never tracked, so never part of the design.
 # `__pycache__` appears at the root whenever a test imports a root-level module
 # (spark-precontext.py is one: the image build context is the root).
-UNTRACKED_TOP_LEVEL = {".venv", ".git", ".state", ".cache", "dist",
-                       ".env", ".pytest_cache", ".ruff_cache", ".mypy_cache",
-                       "__pycache__"}
+UNTRACKED_TOP_LEVEL = {
+    ".venv",
+    ".git",
+    ".state",
+    ".cache",
+    "dist",
+    ".env",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".mypy_cache",
+    "__pycache__",
+}
 
 # Files that record what one machine looked like, rather than describing the
 # system. A captured environment profile legitimately contains absolute host
@@ -93,8 +145,17 @@ CAPTURED_ARTIFACTS = {
 }
 
 VAULT_CATEGORY_DIRS = [
-    "concepts", "entities", "skills", "references", "synthesis", "journal",
-    "projects", "sessions", "_raw", "_staging", "_archives",
+    "concepts",
+    "entities",
+    "skills",
+    "references",
+    "synthesis",
+    "journal",
+    "projects",
+    "sessions",
+    "_raw",
+    "_staging",
+    "_archives",
 ]
 
 # Directories whose contents are history rather than current specification.
@@ -102,13 +163,20 @@ VAULT_CATEGORY_DIRS = [
 # subvaults' equivalents under the PARA layout (`peer-node/`), so a capture
 # that legitimately records a host path stays exempt after the move.
 PROVENANCE_DIRS = {
-    "references", "plans", "sessions", "journal", "_raw", "_archives",
-    "01_Inbox", "02_Daily", "03_Sources", "07_Archives",
+    "references",
+    "plans",
+    "sessions",
+    "journal",
+    "_raw",
+    "_archives",
+    "01_Inbox",
+    "02_Daily",
+    "03_Sources",
+    "07_Archives",
 }
 
 SCAN_SUFFIXES = {".md", ".py", ".sh", ".json", ".template", ".conf", ".env.example"}
-SKIP_DIR_PARTS = {"__pycache__", ".git", ".venv", "dist", "node_modules",
-                  ".pytest_cache", ".ruff_cache", ".opencode"}
+SKIP_DIR_PARTS = {"__pycache__", ".git", ".venv", "dist", "node_modules", ".pytest_cache", ".ruff_cache", ".opencode"}
 
 # Generated committed artifacts whose body is a verbatim copy of a vendored,
 # already-excluded source (.opencode/skills/llm-wiki/SKILL.md, produced by
@@ -116,9 +184,11 @@ SKIP_DIR_PARTS = {"__pycache__", ".git", ".venv", "dist", "node_modules",
 # re-litigate the vendor's example paths; `make model-verify` proves the copy
 # bytes are identical, which is the stronger guarantee. If the generator is
 # changed so this artifact stops being a verbatim copy, remove it from here.
-EXCLUDED_GENERATED = frozenset({
-    "peer-node/manifests/masterspike/vllm-system-prompt.md",
-})
+EXCLUDED_GENERATED = frozenset(
+    {
+        "peer-node/manifests/masterspike/vllm-system-prompt.md",
+    }
+)
 
 
 def markdown_files() -> list[Path]:
@@ -143,7 +213,8 @@ def current_surfaces() -> list[Path]:
     would mean the scan flagged its own detectors and had to be weakened.
     """
     return [
-        p for p in REPO_ROOT.rglob("*")
+        p
+        for p in REPO_ROOT.rglob("*")
         if p.is_file()
         and not SKIP_DIR_PARTS & set(p.parts)
         and p.suffix in SCAN_SUFFIXES
@@ -159,8 +230,7 @@ def current_surfaces() -> list[Path]:
 
 def test_no_undocumented_top_level_entries():
     """Catches the emptied leftovers the split could not delete."""
-    actual = {p.name for p in REPO_ROOT.iterdir()
-              if p.name not in UNTRACKED_TOP_LEVEL}
+    actual = {p.name for p in REPO_ROOT.iterdir() if p.name not in UNTRACKED_TOP_LEVEL}
     undocumented = sorted(actual - EXPECTED_TOP_LEVEL)
     assert not undocumented, (
         f"top-level entries exist that nothing documents: {undocumented}. "
@@ -178,24 +248,23 @@ def test_vault_category_dir_survives_a_fresh_clone(name: str):
     """
     path = REPO_ROOT / name
     assert path.is_dir(), f"the charter documents {name}/ but it does not exist"
-    assert (path / ".gitkeep").is_file(), (
-        f"{name}/ has no .gitkeep, so git will not carry it to a fresh clone"
-    )
+    assert (path / ".gitkeep").is_file(), f"{name}/ has no .gitkeep, so git will not carry it to a fresh clone"
 
 
 def test_no_empty_directory_outside_the_vault_categories():
     """An empty dir is untracked by git, so it cannot be part of the design."""
     empties = [
-        p for p in REPO_ROOT.rglob("*")
+        p
+        for p in REPO_ROOT.rglob("*")
         if p.is_dir()
-        and not any(part in {".git", ".venv", ".state", ".cache", "dist",
-                             "node_modules", "__pycache__", ".opencode"}
-                    for part in p.parts)
+        and not any(
+            part in {".git", ".venv", ".state", ".cache", "dist", "node_modules", "__pycache__", ".opencode"}
+            for part in p.parts
+        )
         and not any(p for p in p.iterdir())
     ]
     assert not empties, (
-        f"empty directories, which git will not carry: "
-        f"{[str(p.relative_to(REPO_ROOT)) for p in empties]}"
+        f"empty directories, which git will not carry: {[str(p.relative_to(REPO_ROOT)) for p in empties]}"
     )
 
 
@@ -263,8 +332,7 @@ def test_env_example_uses_placeholders_not_real_paths():
             continue
         text = example.read_text()
         assert not re.search(r"/mnt/knowledge/", text), (
-            f"{example.relative_to(REPO_ROOT)} hard-codes a host path; a fresh "
-            f"checkout writes it verbatim into .env"
+            f"{example.relative_to(REPO_ROOT)} hard-codes a host path; a fresh checkout writes it verbatim into .env"
         )
 
 
@@ -279,6 +347,7 @@ def test_env_example_templates_share_one_key_set():
     own vault). This is the `env-changes` gate for a tree that regenerates its
     env rather than migrating it.
     """
+
     def keys(path):
         return {
             m.group(1)
@@ -286,13 +355,8 @@ def test_env_example_templates_share_one_key_set():
             if (m := re.match(r"\s*([A-Za-z_][A-Za-z0-9_]*)\s*=", line))
         }
 
-    examples = sorted(
-        p for p in REPO_ROOT.rglob(".env.example")
-        if not (SKIP_DIR_PARTS & set(p.parts))
-    )
-    assert len(examples) >= 3, (
-        f"expected at least the root and both roles' templates, found: {examples}"
-    )
+    examples = sorted(p for p in REPO_ROOT.rglob(".env.example") if not (SKIP_DIR_PARTS & set(p.parts)))
+    assert len(examples) >= 3, f"expected at least the root and both roles' templates, found: {examples}"
     reference = examples[0]
     ref_keys = keys(reference)
     for path in examples[1:]:
@@ -307,9 +371,16 @@ def test_env_example_templates_share_one_key_set():
 
 
 def test_contract_and_shared_are_present_and_populated():
-    for name in ("overlay.json", "capabilities.json", "identity-schema.json",
-                 "ports.json", "guard-protocol.md", "share-protocol.md",
-                 "consensus-protocol.md", "README.md"):
+    for name in (
+        "overlay.json",
+        "capabilities.json",
+        "identity-schema.json",
+        "ports.json",
+        "guard-protocol.md",
+        "share-protocol.md",
+        "consensus-protocol.md",
+        "README.md",
+    ):
         path = REPO_ROOT / "contracts" / name
         assert path.is_file(), f"contracts/{name} is missing"
         assert path.stat().st_size > 0, f"contracts/{name} is empty"
@@ -320,14 +391,12 @@ def test_contract_and_shared_are_present_and_populated():
 def test_the_fabric_entry_point_wires_the_roles():
     """`make test-all` must reach every suite, or "all" means something less."""
     makefile = (REPO_ROOT / "Makefile").read_text()
-    for target in ("test-all", "contract-test", "wiki-verify", "bundle",
-                   "bundle-verify", "env-init", "validate"):
-        assert re.search(rf"^{target}:", makefile, re.M), (
-            f"the fabric Makefile has no {target} target"
-        )
+    for target in ("test-all", "contract-test", "wiki-verify", "bundle", "bundle-verify", "env-init", "validate"):
+        assert re.search(rf"^{target}:", makefile, re.M), f"the fabric Makefile has no {target} target"
     for role in ("peer-node", "master-node"):
         assert f"-C {role}" in makefile, f"the fabric Makefile never delegates to {role}"
     assert (REPO_ROOT / role / "Makefile").is_file()
+
 
 def test_exempted_capture_is_still_generated():
     """An exemption must not become a stale snapshot.
@@ -339,12 +408,10 @@ def test_exempted_capture_is_still_generated():
     """
     capture = REPO_ROOT / "peer-node" / "scripts" / "sparknet-identity-capture.sh"
     assert capture.is_file(), (
-        "the identity capture script is gone, so the exempted capture is now a "
-        "stale snapshot rather than a sample"
+        "the identity capture script is gone, so the exempted capture is now a stale snapshot rather than a sample"
     )
     text = capture.read_text()
     for artifact in CAPTURED_ARTIFACTS:
         assert Path(artifact).name in text, (
-            f"{artifact} is exempted from the relocation scan, but nothing "
-            f"generates it any more"
+            f"{artifact} is exempted from the relocation scan, but nothing generates it any more"
         )

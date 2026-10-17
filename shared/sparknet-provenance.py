@@ -55,7 +55,7 @@ from typing import Any
 # importing the fabric's single loader. These two lines are deliberately
 # identical in every shared module; tests/test_contracts.py pins them.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from sparknet_loader import load_shared  # noqa: E402
+from sparknet_loader import load_shared
 
 DEFAULT_SHARED_DIR = Path(__file__).resolve().parent
 
@@ -81,18 +81,37 @@ USER_RECORD_REF = "00_System/user.md"
 #: blocklist: a new key is a schema change that belongs in the contract first,
 #: so anything unlisted fails rather than being quietly committed.
 #: Pinned against `user_record.fields` in tests/test_contracts.py.
-USER_RECORD_KEYS = frozenset({
-    "type", "schema", "status", "owner_id", "owner_node", "role", "immutable",
-    "key", "authorised_senders",
-})
+USER_RECORD_KEYS = frozenset(
+    {
+        "type",
+        "schema",
+        "status",
+        "owner_id",
+        "owner_node",
+        "role",
+        "immutable",
+        "key",
+        "authorised_senders",
+    }
+)
 USER_KEY_FIELDS = frozenset({"alg", "public_key_b64", "fingerprint", "key_ref", "created"})
 
 #: Fields the secret index may contain. There is deliberately no field a value
 #: could hide in.
-SECRET_INDEX_ENTRY_KEYS = frozenset({
-    "id", "kind", "holder_agent", "ref", "fingerprint", "scopes", "created",
-    "last_rotated", "status", "notes",
-})
+SECRET_INDEX_ENTRY_KEYS = frozenset(
+    {
+        "id",
+        "kind",
+        "holder_agent",
+        "ref",
+        "fingerprint",
+        "scopes",
+        "created",
+        "last_rotated",
+        "status",
+        "notes",
+    }
+)
 SECRET_INDEX_FORBIDDEN = frozenset({"value", "secret", "token", "password", "private_key"})
 
 #: Key-shaped literals the scanner refuses to see in a tracked file. Built from
@@ -102,9 +121,7 @@ _PATTERNS = (
     ("api key literal", re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")),
     (
         "assigned secret",
-        re.compile(
-            r"\b(?:api[_-]?key|secret|token|password)\b\s*[:=]\s*[\"'][^\"'\s]{8,}[\"']", re.I
-        ),
+        re.compile(r"\b(?:api[_-]?key|secret|token|password)\b\s*[:=]\s*[\"'][^\"'\s]{8,}[\"']", re.I),
     ),
 )
 
@@ -194,8 +211,7 @@ def contract() -> dict[str, Any]:
         path = (Path(env) if env else DEFAULT_SHARED_DIR.parent / "contracts") / "tracking-schema.json"
         if not path.is_file():
             raise ProvenanceError(
-                f"cannot find {path}; this tool refuses to guess its own rules. "
-                f"Set SPARKNET_CONTRACTS_DIR."
+                f"cannot find {path}; this tool refuses to guess its own rules. Set SPARKNET_CONTRACTS_DIR."
             )
         try:
             _contract_cache = json.loads(path.read_text())
@@ -308,10 +324,14 @@ def note_hashes(meta: dict[str, Any], tracking: dict[str, Any], body: bytes) -> 
 def note_message(hashes: dict[str, str]) -> bytes:
     """What the user key signs over: domain, then the four hashes, LF-joined."""
     return (
-        NOTE_DOMAIN + b"\n"
-        + hashes["body"].encode("ascii") + b"\n"
-        + hashes["meta"].encode("ascii") + b"\n"
-        + hashes["tracking"].encode("ascii") + b"\n"
+        NOTE_DOMAIN
+        + b"\n"
+        + hashes["body"].encode("ascii")
+        + b"\n"
+        + hashes["meta"].encode("ascii")
+        + b"\n"
+        + hashes["tracking"].encode("ascii")
+        + b"\n"
         + hashes["conversation"].encode("ascii")
     )
 
@@ -483,9 +503,7 @@ def sign_note(raw: bytes, vault: Path, agent: str | None = None, model: str | No
     return emit_note(frontmatter, body)
 
 
-def verify_note(
-    path: Path, record: dict[str, Any] | None = None, vault: Path | None = None
-) -> tuple[str, str]:
+def verify_note(path: Path, record: dict[str, Any] | None = None, vault: Path | None = None) -> tuple[str, str]:
     """Return (outcome, detail) for one note.
 
     Two independent questions, in this order:
@@ -533,9 +551,7 @@ def verify_note(
 
     owner_id = str(tracking.get("owner_id") or "")
     if record.get("owner_id") != owner_id:
-        return "invalid", (
-            f"owner_id {owner_id!r} is not the user record's {record.get('owner_id')!r}"
-        )
+        return "invalid", (f"owner_id {owner_id!r} is not the user record's {record.get('owner_id')!r}")
     if signature.get("key_id") != owner_id:
         return "invalid", f"signature key_id {signature.get('key_id')!r} does not match owner_id"
     if signature.get("key_fingerprint") != expected_fingerprint:
@@ -555,8 +571,7 @@ def verify_note(
         return "invalid", "envelope does not record four 64-hex hashes"
     if signature.get("note_version") != NOTE_VERSION:
         return "invalid", (
-            f"envelope carries note_version {signature.get('note_version')!r}, "
-            f"this verifier knows {NOTE_VERSION!r}"
+            f"envelope carries note_version {signature.get('note_version')!r}, this verifier knows {NOTE_VERSION!r}"
         )
 
     authz = _load_authz()
@@ -595,11 +610,7 @@ def verify_note(
 
 def changed_meta_keys(current: dict[str, Any], signed: dict[str, Any]) -> set[str]:
     """Which top-level metadata keys differ between the file and the envelope."""
-    return {
-        key
-        for key in set(current) | set(signed)
-        if current.get(key) != signed.get(key)
-    }
+    return {key for key in set(current) | set(signed) if current.get(key) != signed.get(key)}
 
 
 # --- co-signatures ------------------------------------------------------------
@@ -679,7 +690,7 @@ def _registry_admits_node(registry: dict[str, Any], owner_node: str) -> tuple[bo
         return False, "registry carries no master_public_key_b64"
     try:
         master = authz.public_key_from_b64(master_b64)
-    except Exception as exc:  # noqa: BLE001 - any parse failure is a refusal
+    except Exception as exc:
         return False, f"registry master key unusable: {exc}"
     entries = registry.get("authorizations")
     if not isinstance(entries, list):
@@ -694,7 +705,7 @@ def _registry_admits_node(registry: dict[str, Any], owner_node: str) -> tuple[bo
             return False, f"node {owner_node!r} is revoked in the registry"
         try:
             message = authz.authorization_message(entry)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return False, f"registry entry for {owner_node!r} is malformed: {exc}"
         if not authz.verify_signature(master, str(entry.get("signature_b64") or ""), message):
             return False, f"registry entry for {owner_node!r} is not signed by the master key"
@@ -803,7 +814,7 @@ def verify_co_signatures(
             continue
         try:
             public_key = authz.public_key_from_b64(public_b64)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             problems.append(f"{label} ({owner_id}): public_key_b64 unusable: {exc}")
             continue
         if fingerprint != fingerprint_label_of_public_b64(public_b64):
@@ -820,9 +831,7 @@ def verify_co_signatures(
                 continue
             problems.append(f"{label} ({owner_id}): untrusted — {detail}")
             continue
-        problems.append(
-            f"{label} ({owner_id}): untrusted — no registry and no matching user.md snapshot"
-        )
+        problems.append(f"{label} ({owner_id}): untrusted — no registry and no matching user.md snapshot")
     return problems
 
 
@@ -949,9 +958,7 @@ def check_user_record(vault: Path) -> list[str]:
                 problems.append(str(exc))
             else:
                 if str(key.get("fingerprint") or "") != expected:
-                    problems.append(
-                        "user record fingerprint is not the digest of its own public key"
-                    )
+                    problems.append("user record fingerprint is not the digest of its own public key")
         if record.get("status") == "filled" and not user_is_filled(record):
             problems.append("user record claims `filled` but is not — run make user-init")
     raw = user_record_path(vault).read_text()
@@ -1044,8 +1051,7 @@ def ingest_note(
             raise ProvenanceError("--sender is required for a source of email")
         if address not in authorised_senders(record):
             raise ProvenanceError(
-                f"sender {address!r} is not on authorised_senders in "
-                f"{USER_RECORD_REF} — the inbox policy fails closed"
+                f"sender {address!r} is not on authorised_senders in {USER_RECORD_REF} — the inbox policy fails closed"
             )
 
     text = body.decode("utf-8", "replace")
@@ -1153,12 +1159,11 @@ def verify_chain(ledger: dict[str, Any]) -> tuple[bool, str]:
             return False, f"block {index} ({block['block_id']}) carries no signature"
         if block["prev_hash"] != previous:
             return False, (
-                f"block {index} ({block['block_id']}) links to {block['prev_hash']!r}, "
-                f"expected {previous!r}"
+                f"block {index} ({block['block_id']}) links to {block['prev_hash']!r}, expected {previous!r}"
             )
         try:
             node_pub = authz.public_key_from_b64(str(block["node_pubkey_b64"] or ""))
-        except Exception as exc:  # noqa: BLE001 - any key-parse failure is a bad block
+        except Exception as exc:
             return False, f"block {index} ({block['block_id']}) has an unusable node_pubkey_b64: {exc}"
         if not authz.verify_signature(node_pub, str(block["signature"]), block_header_signable(block)):
             return False, (
@@ -1167,8 +1172,7 @@ def verify_chain(ledger: dict[str, Any]) -> tuple[bool, str]:
             )
         if "hash" in block and block["hash"] != block_hash(block):
             return False, (
-                f"block {index} ({block['block_id']}) has been altered: it does not "
-                f"re-hash to its recorded hash"
+                f"block {index} ({block['block_id']}) has been altered: it does not re-hash to its recorded hash"
             )
         previous = block["hash"] if "hash" in block else block_hash(block)
     return True, f"{len(blocks)} block(s), chain intact"
@@ -1244,7 +1248,6 @@ def iso(moment) -> str:
     return _iso(moment)
 
 
-
 def build_approval_data(
     *,
     vault: Path,
@@ -1272,9 +1275,7 @@ def build_approval_data(
     except ProvenanceError:
         blocks = []
     approvals = sum(
-        1
-        for block in blocks
-        if isinstance(block, dict) and (block.get("data") or {}).get("event") == "approval"
+        1 for block in blocks if isinstance(block, dict) and (block.get("data") or {}).get("event") == "approval"
     )
     data: dict[str, Any] = {
         "event": "approval",
@@ -1304,10 +1305,7 @@ def append_block(vault: Path, data: dict[str, Any]) -> dict[str, Any]:
     edited block is detectable.
     """
     ledger_path = vault / "blockchain" / "ledger.json"
-    if ledger_path.is_file():
-        ledger = load_ledger(ledger_path)
-    else:
-        ledger = {"version": "2.0", "genesis_hash": "", "blocks": []}
+    ledger = load_ledger(ledger_path) if ledger_path.is_file() else {"version": "2.0", "genesis_hash": "", "blocks": []}
     blocks = ledger.setdefault("blocks", [])
     previous = blocks[-1]["hash"] if blocks else str(ledger.get("genesis_hash", ""))
     index = len(blocks)
@@ -1354,7 +1352,7 @@ def verify_approval_blocks(vault: Path, record: dict[str, Any] | None = None) ->
         record = record if record is not None else parse_user_record(vault)
         user_pub = authz.public_key_from_b64(user_public_b64(record))
     except ProvenanceError as exc:
-        return problems + [f"user record: {exc}"]
+        return [*problems, f"user record: {exc}"]
 
     peer_events = set(contract()["approval"]["event_vocabulary"]["peer"])
     for block in ledger.get("blocks", []):
@@ -1402,8 +1400,7 @@ def approval_ids_in_ledger(vault: Path) -> set[str]:
     return {
         str(block["data"].get("approval_id"))
         for block in ledger.get("blocks", [])
-        if isinstance(block, dict) and isinstance(block.get("data"), dict)
-        and block["data"].get("approval_id")
+        if isinstance(block, dict) and isinstance(block.get("data"), dict) and block["data"].get("approval_id")
     }
 
 
@@ -1512,7 +1509,7 @@ def _checkpoint_block_problems(block: Any) -> str | None:
     authz = _load_authz()
     try:
         node_pub = authz.public_key_from_b64(str(block.get("node_pubkey_b64") or ""))
-    except Exception as exc:  # noqa: BLE001 - any key-parse failure is a bad block
+    except Exception as exc:
         return f"unusable node_pubkey_b64: {exc}"
     if not authz.verify_signature(node_pub, str(block.get("signature") or ""), block_header_signable(block)):
         return "checkpoint header signature does not verify"
@@ -1553,8 +1550,7 @@ def verify_checkpoint(
     anchored_size = int(anchored["size"])
     if size < anchored_size:
         return False, (
-            f"rollback: this node already anchors size {anchored_size}, but the "
-            f"incoming checkpoint claims {size}"
+            f"rollback: this node already anchors size {anchored_size}, but the incoming checkpoint claims {size}"
         )
     if size == anchored_size:
         if root == anchored.get("root"):
@@ -1565,18 +1561,12 @@ def verify_checkpoint(
         )
     if not proof:
         return False, (
-            "a growing checkpoint needs an RFC 6962 consistency proof from the "
-            "anchored root to the new root"
+            "a growing checkpoint needs an RFC 6962 consistency proof from the anchored root to the new root"
         )
     if data["head_hash"] == anchored.get("head_hash"):
         return False, "growth claimed, but the head did not advance"
-    if not _load_merkle().verify_consistency(
-        anchored_size, size, anchored.get("root"), root, proof
-    ):
-        return False, (
-            "consistency: the new root does not prove a pure extension of the "
-            "anchored root"
-        )
+    if not _load_merkle().verify_consistency(anchored_size, size, anchored.get("root"), root, proof):
+        return False, ("consistency: the new root does not prove a pure extension of the anchored root")
     return True, f"anchored growth from size {anchored_size} to {size}"
 
 
@@ -1725,9 +1715,7 @@ def build_grant_use_data(
     except ProvenanceError:
         blocks = []
     uses = sum(
-        1
-        for block in blocks
-        if isinstance(block, dict) and (block.get("data") or {}).get("event") == "grant_use"
+        1 for block in blocks if isinstance(block, dict) and (block.get("data") or {}).get("event") == "grant_use"
     )
     data: dict[str, Any] = {
         "event": "grant_use",
@@ -1826,11 +1814,7 @@ def write_granted_note(
         raise ProvenanceError(f"{note_rel} already exists — refusing to overwrite a vault note")
 
     heading = next(
-        (
-            line.lstrip("#").strip()
-            for line in body.decode("utf-8", "replace").splitlines()
-            if line.startswith("#")
-        ),
+        (line.lstrip("#").strip() for line in body.decode("utf-8", "replace").splitlines() if line.startswith("#")),
         "",
     )
     tracking: dict[str, Any] = {
@@ -2087,11 +2071,7 @@ def patch_granted_note(
 
 def note_paths(vault: Path) -> list[Path]:
     """Every markdown note in 01_Inbox..07_Archives, per the contract's layout."""
-    dirs = sorted(
-        name
-        for name in contract()["layout"]["dirs"]
-        if name >= "01_" and (vault / name).is_dir()
-    )
+    dirs = sorted(name for name in contract()["layout"]["dirs"] if name >= "01_" and (vault / name).is_dir())
     skip = {"__pycache__", ".git", ".state", ".cache", "_staging"}
     paths: list[Path] = []
     for name in dirs:
@@ -2120,10 +2100,7 @@ def verify_vault(vault: Path, strict: bool = False) -> tuple[int, str]:
 
     if user_is_filled(record):
         lock_ok = _verify_lock(vault, user_record_path(vault))
-        lines.append(
-            f"user record: filled, {record.get('owner_id')}, "
-            f"{('lock ok' if lock_ok else 'LOCK MISMATCH')}"
-        )
+        lines.append(f"user record: filled, {record.get('owner_id')}, {('lock ok' if lock_ok else 'LOCK MISMATCH')}")
         if lock_ok is False:
             hard = True
     else:
@@ -2146,10 +2123,7 @@ def verify_vault(vault: Path, strict: bool = False) -> tuple[int, str]:
         elif outcome == "stale:content":
             hard = hard or strict
             soft = True
-    lines.append(
-        f"notes: {len(paths)} checked — "
-        + ", ".join(f"{counts[k]} {k}" for k in counts)
-    )
+    lines.append(f"notes: {len(paths)} checked — " + ", ".join(f"{counts[k]} {k}" for k in counts))
 
     ledger_path = vault / "blockchain" / "ledger.json"
     if ledger_path.is_file():
@@ -2180,9 +2154,7 @@ def verify_vault(vault: Path, strict: bool = False) -> tuple[int, str]:
             if str(approval) not in known:
                 missing.add(str(approval))
     if missing:
-        lines.append(
-            f"  ✗ notes claim approvals that are not in the ledger: {sorted(missing)}"
-        )
+        lines.append(f"  ✗ notes claim approvals that are not in the ledger: {sorted(missing)}")
         hard = True
     else:
         lines.append("approvals: every tracking.approvals[] id resolves to a ledger block")
@@ -2217,9 +2189,7 @@ def _tracked_files(vault: Path) -> list[Path]:
     skip = {".git", ".state", ".cache", "__pycache__", ".venv", "dist", "node_modules"}
     suffixes = {".md", ".py", ".sh", ".json", ".yaml", ".yml", ".template", ".conf", ".txt"}
     return [
-        path
-        for path in vault.rglob("*")
-        if path.is_file() and not skip & set(path.parts) and path.suffix in suffixes
+        path for path in vault.rglob("*") if path.is_file() and not skip & set(path.parts) and path.suffix in suffixes
     ]
 
 
@@ -2258,8 +2228,7 @@ def scan(vault: Path) -> tuple[int, str]:
             extra = set(entry) - SECRET_INDEX_ENTRY_KEYS
             if extra:
                 findings.append(
-                    f"{index_path.name}: entry {entry.get('id')} has keys outside the "
-                    f"schema: {sorted(extra)}"
+                    f"{index_path.name}: entry {entry.get('id')} has keys outside the schema: {sorted(extra)}"
                 )
             registered.append(entry)
 
@@ -2295,8 +2264,7 @@ def scan(vault: Path) -> tuple[int, str]:
         return 1, "scan: FAILED\n  " + "\n  ".join(findings)
     return (
         0,
-        f"scan: clean ({len(files)} tracked files, {len(registered)} registered secret(s), "
-        f"no values in the vault)",
+        f"scan: clean ({len(files)} tracked files, {len(registered)} registered secret(s), no values in the vault)",
     )
 
 
@@ -2366,7 +2334,10 @@ def main(argv: list[str] | None = None) -> int:
     p_append.add_argument("--question", required=True)
     p_append.add_argument("--decision", required=True, choices=("approved", "rejected", "clarified"))
     p_append.add_argument(
-        "--note", action="append", default=[], dest="notes",
+        "--note",
+        action="append",
+        default=[],
+        dest="notes",
         help="vault-relative note path (repeatable)",
     )
     p_append.add_argument("--agent", required=True)
@@ -2422,7 +2393,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p_ingest = sub.add_parser("ingest", help="land one item in 01_Inbox/ as a pending note")
     p_ingest.add_argument(
-        "path", nargs="?", default="-",
+        "path",
+        nargs="?",
+        default="-",
         help="file to read, or - for stdin (default)",
     )
     p_ingest.add_argument("--source", required=True, choices=INGEST_SOURCES)
@@ -2449,9 +2422,7 @@ def main(argv: list[str] | None = None) -> int:
             note = args.note if args.note.is_absolute() else Path.cwd() / args.note
             outcome, detail = verify_note(note, vault=vault)
             print(f"{outcome}: {detail}")
-            return {"valid": 0, "pending": 0, "stale:metadata": 0, "stale:content": 2, "invalid": 1}[
-                outcome
-            ]
+            return {"valid": 0, "pending": 0, "stale:metadata": 0, "stale:content": 2, "invalid": 1}[outcome]
         if args.command == "co-sign":
             note = args.note if args.note.is_absolute() else Path.cwd() / args.note
             signed = add_co_signature(note.read_bytes(), vault)
@@ -2533,10 +2504,7 @@ def main(argv: list[str] | None = None) -> int:
                 record=record,
             )
             block = append_block(vault, data)
-            print(
-                f"appended {data['approval_id']} as block {block['block_id']} "
-                f"(hash {block['hash'][:16]}...)"
-            )
+            print(f"appended {data['approval_id']} as block {block['block_id']} (hash {block['hash'][:16]}...)")
             return 0
         if args.command == "append-checkpoint":
             block = checkpoint(vault)
@@ -2556,7 +2524,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{'anchored' if ok else 'refused'}: {detail}")
             return 0 if ok else 1
         if args.command == "grant-write":
-            assert args.grant.is_file(), f"no such grant file: {args.grant}"
+            if not args.grant.is_file():
+                raise ProvenanceError(f"no such grant file: {args.grant}")
             grant = json.loads(args.grant.read_text())
             if args.body_file:
                 body = args.body_file.read_bytes()

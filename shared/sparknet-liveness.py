@@ -118,7 +118,7 @@ class Monitor:
         """
         results: dict[str, bool] = {}
 
-        for name, peer in self.peers.items():
+        for name in self.peers:
             address = self.resolve(name)
             if address is None:
                 results[name] = False

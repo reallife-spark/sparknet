@@ -71,11 +71,29 @@ ALLOWED_SUFFIXES = {".md", ".yaml", ".yml", ".json"}
 #: Path parts that mark personal or runtime material anywhere in the path. If any
 #: appears, the file is out regardless of the allow-list above.
 EXCLUDE_PARTS = {
-    ".git", ".venv", ".state", ".cache", "__pycache__", "node_modules",
-    "dist", ".pytest_cache", ".ruff_cache", ".opencode",
-    "_raw", "_staging", "_archives", "journal", "sessions",
-    "00_System", "01_Inbox", "02_Daily", "03_Sources", "06_Mail", "07_Archives",
-    "keys", "mail",
+    ".git",
+    ".venv",
+    ".state",
+    ".cache",
+    "__pycache__",
+    "node_modules",
+    "dist",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".opencode",
+    "_raw",
+    "_staging",
+    "_archives",
+    "journal",
+    "sessions",
+    "00_System",
+    "01_Inbox",
+    "02_Daily",
+    "03_Sources",
+    "06_Mail",
+    "07_Archives",
+    "keys",
+    "mail",
 }
 
 #: Exact names that are always personal or secret-bearing.
@@ -97,9 +115,7 @@ def is_excluded(rel: Path) -> bool:
         return True
     if rel.name in EXCLUDE_NAMES:
         return True
-    if rel.suffix.lower() in EXCLUDE_SUFFIXES:
-        return True
-    return False
+    return rel.suffix.lower() in EXCLUDE_SUFFIXES
 
 
 def is_allowed(rel: Path) -> bool:
@@ -108,9 +124,7 @@ def is_allowed(rel: Path) -> bool:
         return True
     if rel.parts and rel.parts[0] in DIR_PREFIXES:
         return True
-    if len(rel.parts) == 2 and rel.parts[0] in ROLES and rel.parts[1] in ROLE_ROOT_FILES:
-        return True
-    return False
+    return bool(len(rel.parts) == 2 and rel.parts[0] in ROLES and rel.parts[1] in ROLE_ROOT_FILES)
 
 
 def corpus_entries(vault: Path) -> list[Path]:
@@ -193,9 +207,7 @@ def _inventory(entries: list[Path]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(
-        description="build the structure-only corpus a node's Open WebUI may ingest"
-    )
+    p = argparse.ArgumentParser(description="build the structure-only corpus a node's Open WebUI may ingest")
     p.add_argument("vault_root", help="the vault to read (nothing is written there)")
     p.add_argument("--out", default=None, help="materialize the corpus into this directory")
     p.add_argument("--plan", action="store_true", help="print a human summary")

@@ -50,11 +50,43 @@ markers = [
 line-length = 120
 target-version = "py310"
 # The services are standalone scripts run directly from the vault.
-exclude = [".venv", ".state", ".cache", "references"]
+# `.opencode/skills` is the vendored wiki suite (MIT, pinned upstream): it is
+# not ours to reformat, and `make wiki-verify` proves it has not drifted, so
+# ruff must keep its hands off it.
+exclude = [".venv", ".state", ".cache", "references", ".opencode"]
 # `ruff format` is a Python-only gate. Without this it also rewrites fenced
 # code blocks inside Markdown, which produces documentation churn unrelated to
 # any code change.
 extend-exclude = ["*.md"]
+# Honour the exclusions even when a path is named explicitly on the command
+# line — the pre-commit hook passes staged filenames, and a staged file under
+# .opencode/ or references/ must still be left alone.
+force-exclude = true
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP"]
+# The blocking set (fabric PLAN Step 49). `E,F,I,UP` are pycodestyle/pyflakes/
+# import-sort/pyupgrade; `B,SIM,RUF,S` add flake8-bugbear, flake8-simplify,
+# Ruff-specific and bandit checks. `make lint` runs exactly this set — it is no
+# longer advisory.
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "S"]
+
+# Every entry is a deliberate, codebase-wide exemption with its reason. A
+# narrower suppression belongs in `per-file-ignores` below, or an inline
+# `# noqa: CODE` carrying a reason — not here.
+ignore = [
+    # S310: urlopen on peer URLs built from the overlay/ports contract, never
+    # from caller-supplied input. There is no untrusted scheme in play.
+    "S310",
+    # S603/S607: the services drive system tools (git, systemctl, wg, ip) with a
+    # fixed argv list and rely on PATH lookup — that is the design, not a defect.
+    "S603",
+    "S607",
+]
+
+# A test file is allowed the things a shipped file is not: it binds all
+# interfaces, writes to /tmp, plants fixture "secrets" and asserts freely.
+# Keeping these scoped to tests means the same pattern in a service still fails.
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S103", "S104", "S105", "S106", "S107", "S108", "S110", "S112"]
+"peer-node/tests/**" = ["S101", "S103", "S104", "S105", "S106", "S107", "S108", "S110", "S112"]
+"master-node/tests/**" = ["S101", "S103", "S104", "S105", "S106", "S107", "S108", "S110", "S112"]

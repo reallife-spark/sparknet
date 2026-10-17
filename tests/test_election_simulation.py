@@ -77,16 +77,14 @@ def _cluster(seed: str = "sim"):
             )
         ).decode()
         public = base64.b64encode(
-            key.public_key().public_bytes(
-                serialization.Encoding.Raw, serialization.PublicFormat.Raw
-            )
+            key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
         ).decode()
         return key, private, public
 
     members, cluster_private, operational = [], {}, {}
     for name in ("alpha", "beta", "gamma"):
         cluster_key, private, public = keypair(f"cluster-{name}")
-        _, op_private, op_public = keypair(f"operational-{name}")
+        _, _op_private, op_public = keypair(f"operational-{name}")
         cluster_private[name] = private
         operational[name] = op_public
         members.append(
@@ -194,8 +192,7 @@ def test_three_nodes_unanimously_elect_one_master():
     clock = SimClock()
 
     votes = [
-        _cast(consensus, cluster, clock, voter, "beta", "e1", f"n-{voter}")
-        for voter in ("alpha", "beta", "gamma")
+        _cast(consensus, cluster, clock, voter, "beta", "e1", f"n-{voter}") for voter in ("alpha", "beta", "gamma")
     ]
     result = consensus.tally(votes, cluster["members"], "e1")
 
@@ -219,8 +216,7 @@ def test_the_elected_masters_key_is_the_one_the_root_authorises():
     clock = SimClock()
 
     votes = [
-        _cast(consensus, cluster, clock, voter, "gamma", "e1", f"n-{voter}")
-        for voter in ("alpha", "beta", "gamma")
+        _cast(consensus, cluster, clock, voter, "gamma", "e1", f"n-{voter}") for voter in ("alpha", "beta", "gamma")
     ]
     result = consensus.tally(votes, cluster["members"], "e1")
     master = result["master_node_id"]
@@ -229,8 +225,7 @@ def test_the_elected_masters_key_is_the_one_the_root_authorises():
     authorised = consensus.authorised_master_pubkey(root)
     assert authorised == cluster["operational"][master]
     assert authorised != cluster["members"][2]["cluster_pubkey"], (
-        "the root must authorise the operational key, not the voting key; the split "
-        "is the security model, not a detail"
+        "the root must authorise the operational key, not the voting key; the split is the security model, not a detail"
     )
 
 
@@ -248,24 +243,14 @@ def test_a_forged_third_vote_cannot_manufacture_unanimity():
     cluster = _cluster()
     clock = SimClock()
 
-    honest = [
-        _cast(consensus, cluster, clock, voter, "alpha", "e1", f"n-{voter}")
-        for voter in ("alpha", "beta")
-    ]
+    honest = [_cast(consensus, cluster, clock, voter, "alpha", "e1", f"n-{voter}") for voter in ("alpha", "beta")]
     forged = _forge(consensus, cluster, clock, "gamma", "alpha", "e1", "n-gamma")
     result = consensus.tally([*honest, forged], cluster["members"], "e1")
 
-    assert result["agreed"] is False, (
-        "two real votes plus one fabricated vote must not elect anyone; "
-        f"got {result}"
-    )
+    assert result["agreed"] is False, f"two real votes plus one fabricated vote must not elect anyone; got {result}"
     assert result["reason"] == consensus.REASON_NOT_AGREED
-    assert result["counts"] == {"alpha": ["alpha", "beta"]}, (
-        "only the two verified votes may appear in the tally"
-    )
-    assert result["rejected"] == [
-        {"node_id": "gamma", "reason": consensus.REASON_BAD_SIGNATURE}
-    ], (
+    assert result["counts"] == {"alpha": ["alpha", "beta"]}, "only the two verified votes may appear in the tally"
+    assert result["rejected"] == [{"node_id": "gamma", "reason": consensus.REASON_BAD_SIGNATURE}], (
         "the forgery must be reported, not silently dropped. An election that "
         "tolerates forgery has to be able to show that it did."
     )
@@ -284,9 +269,7 @@ def test_a_vote_with_no_signature_at_all_is_refused():
     }
     result = consensus.tally([unsigned], cluster["members"], "e1")
     assert result["agreed"] is False
-    assert result["rejected"] == [
-        {"node_id": "gamma", "reason": consensus.REASON_MISSING_SIGNATURE}
-    ]
+    assert result["rejected"] == [{"node_id": "gamma", "reason": consensus.REASON_MISSING_SIGNATURE}]
 
 
 def test_another_members_real_signature_cannot_be_relabelled():
@@ -300,10 +283,7 @@ def test_another_members_real_signature_cannot_be_relabelled():
     cluster = _cluster()
     clock = SimClock()
 
-    honest = [
-        _cast(consensus, cluster, clock, voter, "alpha", "e1", f"n-{voter}")
-        for voter in ("alpha", "beta")
-    ]
+    honest = [_cast(consensus, cluster, clock, voter, "alpha", "e1", f"n-{voter}") for voter in ("alpha", "beta")]
     relabelled = dict(_cast(consensus, cluster, clock, "beta", "alpha", "e1", "n-beta"))
     relabelled["node_id"] = "gamma"
 
@@ -319,11 +299,8 @@ def test_an_impersonator_outside_the_membership_is_refused():
     outsider = _forge(consensus, cluster, clock, "mallory", "mallory", "e1", "n-m")
     result = consensus.tally([outsider], cluster["members"], "e1")
     assert result["agreed"] is False
-    assert result["rejected"] == [
-        {"node_id": "mallory", "reason": consensus.REASON_SIGNER_NOT_A_MEMBER}
-    ], (
-        "a node that is not a member must be refused on membership before its "
-        "signature is even examined"
+    assert result["rejected"] == [{"node_id": "mallory", "reason": consensus.REASON_SIGNER_NOT_A_MEMBER}], (
+        "a node that is not a member must be refused on membership before its signature is even examined"
     )
 
 
@@ -333,10 +310,7 @@ def test_forgery_cannot_launder_an_equivocation_into_a_second_chance():
     cluster = _cluster()
     clock = SimClock()
 
-    votes = [
-        _cast(consensus, cluster, clock, voter, "alpha", "e1", f"n-{voter}")
-        for voter in ("alpha", "beta")
-    ]
+    votes = [_cast(consensus, cluster, clock, voter, "alpha", "e1", f"n-{voter}") for voter in ("alpha", "beta")]
     votes.append(_cast(consensus, cluster, clock, "gamma", "beta", "e1", "n-gamma-1"))
     votes.append(_forge(consensus, cluster, clock, "gamma", "alpha", "e1", "n-gamma-2"))
 
@@ -359,26 +333,20 @@ def test_the_cluster_re_forms_when_the_master_changes():
     clock = SimClock()
 
     first = [
-        _cast(consensus, cluster, clock, voter, "alpha", "e1", f"n1-{voter}")
-        for voter in ("alpha", "beta", "gamma")
+        _cast(consensus, cluster, clock, voter, "alpha", "e1", f"n1-{voter}") for voter in ("alpha", "beta", "gamma")
     ]
     assert consensus.tally(first, cluster["members"], "e1")["master_node_id"] == "alpha"
-    root_alpha = _sign_root(
-        consensus, cluster, _root(consensus, cluster, clock, "alpha", "root-1")
-    )
+    root_alpha = _sign_root(consensus, cluster, _root(consensus, cluster, clock, "alpha", "root-1"))
     assert consensus.verify_root(root_alpha)[0]
 
     # alpha is replaced. A new election_id, so first-round votes cannot be replayed
     # into it, and a new root nonce, so the new root is not a replay of the old.
     clock.advance(minutes=5)
     second = [
-        _cast(consensus, cluster, clock, voter, "gamma", "e2", f"n2-{voter}")
-        for voter in ("alpha", "beta", "gamma")
+        _cast(consensus, cluster, clock, voter, "gamma", "e2", f"n2-{voter}") for voter in ("alpha", "beta", "gamma")
     ]
     result = consensus.tally([*first, *second], cluster["members"], "e2")
-    assert result["agreed"] is True, (
-        f"votes from the earlier election must not stop the later one; got {result}"
-    )
+    assert result["agreed"] is True, f"votes from the earlier election must not stop the later one; got {result}"
     assert result["master_node_id"] == "gamma"
 
     root_gamma = _sign_root(
@@ -405,9 +373,7 @@ def test_the_cluster_re_forms_when_the_master_changes():
     ok, reason = consensus.verify_root(root_alpha, trust=root_alpha)
     assert ok is False
     assert reason.startswith(consensus.REASON_REPLAY), reason
-    stranger = _sign_root(
-        consensus, cluster, _root(consensus, cluster, clock, "beta", "root-3")
-    )
+    stranger = _sign_root(consensus, cluster, _root(consensus, cluster, clock, "beta", "root-3"))
     ok, reason = consensus.verify_root(stranger, trust=root_alpha)
     assert ok is False
     assert consensus.REASON_UNCHAINED in reason, reason
@@ -431,9 +397,7 @@ def test_a_superseded_root_cannot_supersede_its_newer_successor():
     cluster = _cluster()
     clock = SimClock()
 
-    old = _sign_root(
-        consensus, cluster, _root(consensus, cluster, clock, "alpha", "root-1")
-    )
+    old = _sign_root(consensus, cluster, _root(consensus, cluster, clock, "alpha", "root-1"))
     clock.advance(minutes=5)
     new = _sign_root(
         consensus,
@@ -467,9 +431,7 @@ def test_verify_chain_accepts_a_two_link_formation_line():
     cluster = _cluster()
     clock = SimClock()
 
-    genesis = _sign_root(
-        consensus, cluster, _root(consensus, cluster, clock, "alpha", "root-1")
-    )
+    genesis = _sign_root(consensus, cluster, _root(consensus, cluster, clock, "alpha", "root-1"))
     clock.advance(minutes=5)
     reformed = _sign_root(
         consensus,
@@ -493,9 +455,7 @@ def test_verify_chain_refuses_a_lineage_with_a_hole():
     cluster = _cluster()
     clock = SimClock()
 
-    genesis = _sign_root(
-        consensus, cluster, _root(consensus, cluster, clock, "alpha", "root-1")
-    )
+    genesis = _sign_root(consensus, cluster, _root(consensus, cluster, clock, "alpha", "root-1"))
     clock.advance(minutes=5)
     middle = _sign_root(
         consensus,
@@ -538,9 +498,7 @@ def test_verify_chain_refuses_a_chain_that_does_not_reach_genesis():
     cluster = _cluster()
     clock = SimClock()
 
-    genesis = _sign_root(
-        consensus, cluster, _root(consensus, cluster, clock, "alpha", "root-1")
-    )
+    genesis = _sign_root(consensus, cluster, _root(consensus, cluster, clock, "alpha", "root-1"))
     clock.advance(minutes=5)
     reformed = _sign_root(
         consensus,
@@ -570,8 +528,7 @@ def test_first_round_votes_do_not_help_a_later_election():
     clock = SimClock()
 
     stale = [
-        _cast(consensus, cluster, clock, voter, "alpha", "e1", f"n1-{voter}")
-        for voter in ("alpha", "beta", "gamma")
+        _cast(consensus, cluster, clock, voter, "alpha", "e1", f"n1-{voter}") for voter in ("alpha", "beta", "gamma")
     ]
     result = consensus.tally(stale, cluster["members"], "e2")
     assert result["agreed"] is False
@@ -606,7 +563,7 @@ def test_the_window_is_a_constant_and_nothing_waits_for_it():
             f"{forbidden}() is called in the election simulation. Clocks are "
             f"injected; a test that waits for a window is a test nobody runs."
         )
-    assert ELECTION_WINDOW == timedelta(hours=2)
+    assert timedelta(hours=2) == ELECTION_WINDOW
 
 
 def test_an_election_resolves_within_the_window():
@@ -621,9 +578,7 @@ def test_an_election_resolves_within_the_window():
         clock.advance(seconds=30)
         partial = consensus.tally(votes, cluster["members"], "e1")
         if index < 2:
-            assert partial["agreed"] is False, (
-                f"after {index + 1} of 3 votes nothing may be elected"
-            )
+            assert partial["agreed"] is False, f"after {index + 1} of 3 votes nothing may be elected"
 
     final = consensus.tally(votes, cluster["members"], "e1")
     assert final["agreed"] is True
@@ -643,8 +598,7 @@ def test_the_simulation_never_becomes_a_fabricated_unanimity():
     clock = SimClock()
 
     forged = [
-        _forge(consensus, cluster, clock, voter, "alpha", "e1", f"n-{voter}")
-        for voter in ("alpha", "beta", "gamma")
+        _forge(consensus, cluster, clock, voter, "alpha", "e1", f"n-{voter}") for voter in ("alpha", "beta", "gamma")
     ]
     result = consensus.tally(forged, cluster["members"], "e1")
     assert result["agreed"] is False
@@ -699,17 +653,14 @@ def test_only_the_elected_master_may_sign_a_registry_entry():
     clock = SimClock()
 
     votes = [
-        _cast(consensus, cluster, clock, voter, "beta", "e1", f"n-{voter}")
-        for voter in ("alpha", "beta", "gamma")
+        _cast(consensus, cluster, clock, voter, "beta", "e1", f"n-{voter}") for voter in ("alpha", "beta", "gamma")
     ]
     master = consensus.tally(votes, cluster["members"], "e1")["master_node_id"]
     root = _sign_root(consensus, cluster, _root(consensus, cluster, clock, master, "r1"))
 
     # gamma's entry, signed by the elected Master. Accepted.
     authz, entry = _entry(consensus, cluster, "gamma", clock)
-    entry["signature_b64"] = authz.sign_bytes(
-        _operational_key("sim", master), authz.authorization_message(entry)
-    )
+    entry["signature_b64"] = authz.sign_bytes(_operational_key("sim", master), authz.authorization_message(entry))
     ok, reason = consensus.registry_signer_is_authorised(root, entry)
     assert ok, reason
 
@@ -721,8 +672,7 @@ def test_only_the_elected_master_may_sign_a_registry_entry():
     )
     ok, reason = consensus.registry_signer_is_authorised(root, impostor)
     assert ok is False, (
-        "a non-elected member's operational key must not authorise a grant, or the "
-        "election decides nothing"
+        "a non-elected member's operational key must not authorise a grant, or the election decides nothing"
     )
     assert reason.startswith(consensus.REASON_BAD_SIGNATURE), reason
 
@@ -741,9 +691,7 @@ def test_a_revoked_registry_entry_still_verifies_but_is_not_authority():
     root = _sign_root(consensus, cluster, _root(consensus, cluster, clock, "beta", "r1"))
     authz, entry = _entry(consensus, cluster, "gamma", clock)
     entry["revoked"] = True
-    entry["signature_b64"] = authz.sign_bytes(
-        _operational_key("sim", "beta"), authz.authorization_message(entry)
-    )
+    entry["signature_b64"] = authz.sign_bytes(_operational_key("sim", "beta"), authz.authorization_message(entry))
 
     ok, reason = consensus.registry_signer_is_authorised(root, entry)
     assert ok, (

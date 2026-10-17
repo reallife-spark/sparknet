@@ -1,0 +1,41 @@
+# CodeQL for the fabric's Python surface, patterned on the dsx repos'
+# `codeql-scan` (references/nvidia-dsx-standard-practice.md, Step 48).
+#
+# There is no local equivalent of a hosted analyzer, so this is the one job
+# that is genuinely GitHub-only. The local gate stays authoritative for
+# everything it can check; this adds the static-analysis pass that a runner
+# can do and a Spark node cannot.
+name: codeql
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  schedule:
+    - cron: "17 4 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: analyze (python)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@ce5e7eeac396d720fe2d802714996c8ce561e311 # v3
+        with:
+          languages: python
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@ce5e7eeac396d720fe2d802714996c8ce561e311 # v3
+        with:
+          category: "/language:python"

@@ -56,17 +56,11 @@ EXCLUSIONS: dict[str, str] = {
         "drives the RLSpark dossier workflow, which is this cluster's project"
     ),
     "memory-bridge": (
-        "reads per-tool agent histories (~/.codex, ~/.claude, ...); a node "
-        "running opencode has none of those sources"
+        "reads per-tool agent histories (~/.codex, ~/.claude, ...); a node running opencode has none of those sources"
     ),
-    "wiki-agent": (
-        "targeted search over per-tool agent histories; same missing sources as "
-        "memory-bridge"
-    ),
-    "wiki-history-ingest": (
-        "ingests per-tool agent histories; same missing sources as memory-bridge"
-    ),
-    }
+    "wiki-agent": ("targeted search over per-tool agent histories; same missing sources as memory-bridge"),
+    "wiki-history-ingest": ("ingests per-tool agent histories; same missing sources as memory-bridge"),
+}
 
 # Skills read from git rather than from a working tree. `skill-creator` is the
 # case that forces this: both the farm copy AND the upstream checkout have 29+
@@ -112,8 +106,20 @@ HOST_PATH_MARKERS = (
 )
 # `/home/x` and `/Users/x` are host paths only when x is not a placeholder.
 HOME_PLACEHOLDERS = {
-    "me", "name", "you", "your", "user", "username", "someone", "somebody",
-    "u", "x", "example", "test", "default", "nobody",
+    "me",
+    "name",
+    "you",
+    "your",
+    "user",
+    "username",
+    "someone",
+    "somebody",
+    "u",
+    "x",
+    "example",
+    "test",
+    "default",
+    "nobody",
 }
 HOME_PATH_RE = re.compile(r"/(?:home|Users)/([^/\s\"'`]+)")
 
@@ -122,11 +128,7 @@ def skill_dirs() -> list[str]:
     """Names of the farm's skills, ignoring symlink farms and non-skill dirs."""
     if not SOURCE.is_dir():
         sys.exit(f"skill source not found: {SOURCE}")
-    return sorted(
-        p.name
-        for p in SOURCE.iterdir()
-        if p.is_dir() and (p / "SKILL.md").is_file()
-    )
+    return sorted(p.name for p in SOURCE.iterdir() if p.is_dir() and (p / "SKILL.md").is_file())
 
 
 def copy_skill(name: str, src: Path, dest: Path) -> None:
@@ -404,10 +406,7 @@ def check_mode() -> int:
     problems: list[str] = []
 
     if state.get("upstream_commit") != UPSTREAM_COMMIT:
-        problems.append(
-            f"upstream commit moved: recorded {state.get('upstream_commit')}, "
-            f"constant {UPSTREAM_COMMIT}"
-        )
+        problems.append(f"upstream commit moved: recorded {state.get('upstream_commit')}, constant {UPSTREAM_COMMIT}")
 
     recorded = state.get("skills", {})
     present = {p.name for p in DEST.iterdir() if p.is_dir()}

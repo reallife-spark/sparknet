@@ -3,7 +3,7 @@
 
 The fabric elects its Master rather than being told where one is. A cluster is a
 pair (two members) or the full cluster (three); of them, one is elected, and the
-election requires unanimity because any n−1-of-n majority would let one
+election requires unanimity because any n-1-of-n majority would let one
 compromised node paired with another install a hostile Master.
 
 The result is a **cluster trust root**: n ordinary Ed25519 signatures over
@@ -45,7 +45,7 @@ from typing import Any
 # importing the fabric's single loader. These two lines are deliberately
 # identical in every shared module; tests/test_contracts.py pins them.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from sparknet_loader import load_shared  # noqa: E402
+from sparknet_loader import load_shared
 
 SCHEMA_VERSION = "1.2"
 
@@ -55,11 +55,13 @@ SCHEMA_VERSION = "1.2"
 MIN_CLUSTER_SIZE = 2
 MAX_CLUSTER_SIZE = 3
 
+
 #: Unanimity. See contracts/consensus-protocol.md for why not a majority.
 #: Computed from the roster at tallied size, so a pair requires 2 of 2 and the
 #: full cluster requires 3 of 3 — never a fixed count.
 def _unanimity(member_ids: frozenset[str]) -> int:
     return len(member_ids)
+
 
 DEFAULT_SHARED_DIR = Path(__file__).resolve().parent
 
@@ -294,15 +296,11 @@ def vote_message(vote: dict[str, Any]) -> bytes:
     for field_name in ("node_id", "candidate_node_id", "election_id", "nonce", "cast_at"):
         if field_name not in vote:
             raise ConsensusError(f"vote missing required field: {field_name}")
-    envelope = {k: vote[k] for k in sorted(
-        ("node_id", "candidate_node_id", "election_id", "nonce", "cast_at")
-    )}
+    envelope = {k: vote[k] for k in sorted(("node_id", "candidate_node_id", "election_id", "nonce", "cast_at"))}
     return json.dumps(envelope, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
-def sign_vote(
-    vote: dict[str, Any], cluster_private_key_b64: str, shared_dir: Path | None = None
-) -> Vote:
+def sign_vote(vote: dict[str, Any], cluster_private_key_b64: str, shared_dir: Path | None = None) -> Vote:
     """Sign a vote with a member's cluster key.
 
     The Ed25519 work is delegated to `sparknet-authz` in full. This module's job is
@@ -313,7 +311,7 @@ def sign_vote(
     try:
         key = authz.private_key_from_b64(cluster_private_key_b64)
         signature_b64 = authz.sign_bytes(key, vote_message(vote))
-    except Exception as exc:  # noqa: BLE001 - surface the real cause
+    except Exception as exc:
         raise ConsensusError(f"cannot sign vote: {exc}") from exc
     return Vote(
         node_id=vote["node_id"],
@@ -368,9 +366,7 @@ def tally(
         considered += 1
         voter = vote.get("node_id")
         if voter not in member_ids:
-            rejected.append(
-                {"node_id": str(voter), "reason": REASON_SIGNER_NOT_A_MEMBER}
-            )
+            rejected.append({"node_id": str(voter), "reason": REASON_SIGNER_NOT_A_MEMBER})
             continue
         # Verify before counting. Not after: once a forged vote is in `seen` or
         # `candidates` it is already influencing the outcome.
@@ -445,7 +441,7 @@ def verify_vote(
         public_key.verify(base64.b64decode(vote["signature_b64"]), vote_message(vote))
     except ConsensusError:
         raise
-    except Exception:  # noqa: BLE001 - any verification failure is a bad signature
+    except Exception:
         return False, REASON_BAD_SIGNATURE
     return True, REASON_OK
 
@@ -473,21 +469,17 @@ def sign_root(
     """
     member_ids = {m["node_id"] for m in root["members"]}
     if node_id not in member_ids:
-        raise ConsensusError(
-            f"{node_id} is not a member of this root; it may not sign it"
-        )
+        raise ConsensusError(f"{node_id} is not a member of this root; it may not sign it")
     authz = _load_authz(shared_dir)
     try:
         key = authz.private_key_from_b64(cluster_private_key_b64)
         signature = authz.sign_bytes(key, root_bytes(root))
-    except Exception as exc:  # noqa: BLE001 - surface the real cause
+    except Exception as exc:
         raise ConsensusError(f"cannot sign root: {exc}") from exc
     return {node_id: signature}
 
 
-def merge_root_signatures(
-    root: dict[str, Any], signature_maps: list[dict[str, str]]
-) -> dict[str, Any]:
+def merge_root_signatures(root: dict[str, Any], signature_maps: list[dict[str, str]]) -> dict[str, Any]:
     """Combine per-member signature maps into a root, once every member has signed.
 
     Refuses to overwrite an existing signature for a node. A later signature from
@@ -509,8 +501,7 @@ def merge_root_signatures(
     missing = member_ids - set(merged)
     if missing:
         raise ConsensusError(
-            f"root is unsigned by: {', '.join(sorted(missing))}; a root needs all "
-            f"{len(member_ids)} members to sign"
+            f"root is unsigned by: {', '.join(sorted(missing))}; a root needs all {len(member_ids)} members to sign"
         )
     signed = dict(root)
     signed["signatures"] = merged
@@ -588,17 +579,12 @@ def canonical_removal_proof(proof: dict[str, Any]) -> dict[str, Any]:
     if missing:
         raise ConsensusError(f"removal proof missing field(s): {', '.join(missing)}")
     if proof["kind"] not in REMOVAL_PROOF_KINDS:
-        raise ConsensusError(
-            f"removal proof kind must be one of {REMOVAL_PROOF_KINDS}, "
-            f"got {proof['kind']!r}"
-        )
+        raise ConsensusError(f"removal proof kind must be one of {REMOVAL_PROOF_KINDS}, got {proof['kind']!r}")
     return {f: proof[f] for f in sorted(REMOVAL_PROOF_FIELDS)}
 
 
 def removal_proof_bytes(proof: dict[str, Any]) -> bytes:
-    return json.dumps(
-        canonical_removal_proof(proof), sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
+    return json.dumps(canonical_removal_proof(proof), sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
 def sign_removal_proof(
@@ -612,7 +598,7 @@ def sign_removal_proof(
     try:
         key = authz.private_key_from_b64(private_key_b64)
         signature = authz.sign_bytes(key, removal_proof_bytes(proof))
-    except Exception as exc:  # noqa: BLE001 - surface the real cause
+    except Exception as exc:
         raise ConsensusError(f"cannot sign removal proof: {exc}") from exc
     signed = dict(proof)
     signatures = dict(signed.get("signatures") or {})
@@ -661,26 +647,18 @@ def verify_removal_proof(
 
     extra = set(signatures) - set(required)
     if extra:
-        return False, (
-            f"{REASON_BAD_REMOVAL_PROOF}: signed by non-required "
-            f"{', '.join(sorted(extra))}"
-        )
+        return False, (f"{REASON_BAD_REMOVAL_PROOF}: signed by non-required {', '.join(sorted(extra))}")
     absent = set(required) - set(signatures)
     if absent:
-        return False, (
-            f"{REASON_MISSING_SIGNATURE}: removal proof unsigned by "
-            f"{', '.join(sorted(absent))}"
-        )
+        return False, (f"{REASON_MISSING_SIGNATURE}: removal proof unsigned by {', '.join(sorted(absent))}")
 
     message = removal_proof_bytes(projected)
     for node_id, public_key_b64 in required.items():
         try:
             public_key = authz.public_key_from_b64(public_key_b64)
             public_key.verify(base64.b64decode(signatures[node_id]), message)
-        except Exception:  # noqa: BLE001 - any verification failure is a bad proof
-            return False, (
-                f"{REASON_BAD_REMOVAL_PROOF}: {node_id}'s signature does not verify"
-            )
+        except Exception:
+            return False, (f"{REASON_BAD_REMOVAL_PROOF}: {node_id}'s signature does not verify")
     return True, REASON_OK
 
 
@@ -737,10 +715,7 @@ def verify_root(
         except ConsensusError as exc:
             return False, f"{REASON_MALFORMED}: held root unusable: {exc}"
         if previous["nonce"] == projected["nonce"]:
-            return False, (
-                f"{REASON_REPLAY}: this nonce is already the root in force; a new "
-                f"root needs a new nonce"
-            )
+            return False, (f"{REASON_REPLAY}: this nonce is already the root in force; a new root needs a new nonce")
         chained = projected.get("previous_root_id", "") == root_id(previous)
         if not chained:
             return False, (
@@ -816,8 +791,7 @@ def verify_root(
     members = projected["members"]
     if len(members) < MIN_CLUSTER_SIZE or len(members) > MAX_CLUSTER_SIZE:
         return False, (
-            f"{REASON_WRONG_MEMBER_COUNT}: expected {MIN_CLUSTER_SIZE} or "
-            f"{MAX_CLUSTER_SIZE}, got {len(members)}"
+            f"{REASON_WRONG_MEMBER_COUNT}: expected {MIN_CLUSTER_SIZE} or {MAX_CLUSTER_SIZE}, got {len(members)}"
         )
     ids = [m["node_id"] for m in members]
     if len(set(ids)) != len(ids):
@@ -830,25 +804,17 @@ def verify_root(
     by_id = {m["node_id"]: m for m in members}
     extra = set(signatures) - set(by_id)
     if extra:
-        return False, (
-            f"{REASON_SIGNER_NOT_A_MEMBER}: signed by non-members "
-            f"{', '.join(sorted(extra))}"
-        )
+        return False, (f"{REASON_SIGNER_NOT_A_MEMBER}: signed by non-members {', '.join(sorted(extra))}")
     absent = set(by_id) - set(signatures)
     if absent:
-        return False, (
-            f"{REASON_MISSING_SIGNATURE}: no signature from "
-            f"{', '.join(sorted(absent))}"
-        )
+        return False, (f"{REASON_MISSING_SIGNATURE}: no signature from {', '.join(sorted(absent))}")
 
     message = root_bytes(projected)
     for node_id in sorted(by_id):
         try:
-            public_key = authz.public_key_from_b64(
-                by_id[node_id]["cluster_pubkey"]
-            )
+            public_key = authz.public_key_from_b64(by_id[node_id]["cluster_pubkey"])
             public_key.verify(base64.b64decode(signatures[node_id]), message)
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False, (
                 f"{REASON_BAD_SIGNATURE}: {node_id}'s signature does not verify "
                 f"against the cluster_pubkey the root itself names"
@@ -893,9 +859,7 @@ def verify_chain(roots: list[dict[str, Any]]) -> tuple[bool, str]:
         trust = roots[index + 1] if index + 1 < len(roots) else None
         ok, reason = verify_root(root, trust=trust)
         if not ok:
-            return False, (
-                f"{REASON_UNCHAINED}: link {index} of the chain fails: {reason}"
-            )
+            return False, (f"{REASON_UNCHAINED}: link {index} of the chain fails: {reason}")
     return True, REASON_OK
 
 
@@ -907,9 +871,7 @@ def authorised_master_pubkey(root: dict[str, Any]) -> str | None:
     return canonical_root(root)["master_pubkey"]
 
 
-def registry_signer_is_authorised(
-    root: dict[str, Any], registry_entry: dict[str, Any]
-) -> tuple[bool, str]:
+def registry_signer_is_authorised(root: dict[str, Any], registry_entry: dict[str, Any]) -> tuple[bool, str]:
     """Check a registry entry was signed by the master this root names.
 
     This is the join between consensus and the existing authorization scheme: the
@@ -928,9 +890,8 @@ def registry_signer_is_authorised(
             base64.b64decode(entry["signature_b64"]),
             authz.authorization_message(entry),
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         return False, (
-            f"{REASON_BAD_SIGNATURE}: the registry entry is not signed under the "
-            f"operational key this root authorises"
+            f"{REASON_BAD_SIGNATURE}: the registry entry is not signed under the operational key this root authorises"
         )
     return True, REASON_OK

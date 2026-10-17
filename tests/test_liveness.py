@@ -104,6 +104,7 @@ def test_authority_plane_is_still_refused_from_the_watch(liveness):
 
 # --- the three rules -----------------------------------------------------------
 
+
 def test_hostname_is_re_resolved_every_probe(liveness):
     """A renumbered peer is found as itself; there is no keepalive to warm it."""
     mon, clock, resolver_calls = _monitor(liveness, lit={"alpha"})
@@ -156,9 +157,7 @@ def test_eviction_requires_quiet_past_the_grace(liveness):
         clock["now"] = clock["now"] + timedelta(seconds=10)
         mon.probe_once()
     assert all(p.missed_probes >= 3 for p in mon.peers.values())
-    assert mon.eviction_candidates() == [], (
-        "misses without a quiet window must not evict — activity may still land"
-    )
+    assert mon.eviction_candidates() == [], "misses without a quiet window must not evict — activity may still land"
     clock["now"] = clock["now"] + timedelta(seconds=130)
     mon.probe_once()
     # alpha is still quiet (no activity), beta too — but this round has no

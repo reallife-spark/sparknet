@@ -1,0 +1,55 @@
+# sparknet
+
+> sparknet is a two-role fabric — an implemented peer node and an elected
+> Master signing role — joined by one contract (`contracts/`) and one signed
+> authorization implementation (`shared/`). This vault is the fabric root and
+> its knowledge base.
+
+Read `AGENTS.md` first: it is the charter (roles, layout, Memory/Plan
+Protocol, boundaries). `STYLE_GUIDE.md` is how work is written. `index.md` is
+the curated knowledge index; `PLAN.md` is the plan cursor.
+
+## Contracts and shared code
+
+- `contracts/` — the cross-role single source of truth: overlay, capabilities,
+  identity, ports, guard/share/consensus/health/provenance protocols; rendered
+  inventory in `contracts/manifest.json`.
+- `shared/sparknet-authz.py` — the one signing/verification implementation;
+  never copied.
+- `contracts/README.md` — what each contract file governs.
+- `contracts/deployment-runbook.md`, `contracts/spark-node-runbook.md` — how a
+  real deployment is assembled and verified.
+
+## Roles
+
+- `peer-node/` — the implemented node: guard, anchor, dispatch bridge, agent
+  ports, its own vault. Read `peer-node/AGENTS.md`.
+- `master-node/` — the elected signing role, built and proven live; runs the
+  peer's services by path and owns the isolated signer. Read
+  `master-node/AGENTS.md`.
+
+## Commands
+
+- Setup: `make devtools`, `make hooks`
+- Gates: `make ci` (local pre-merge gate, authoritative), `make test-all`,
+  `make contract-test`, `make drift-check`, `make keys-check`,
+  `make shims-check`
+- Navigation: `make help`, `make layout`, `make help-role`
+- Deployables: `make bundle ROLE=peer|master`, `make bundle-verify ROLE=…`
+- Resource-first: `make nv-search q="…"` before building your own container
+  or model; see `references/nvidia-build-catalog.md`.
+
+## Knowledge layout
+
+- `concepts/`, `entities/`, `skills/`, `synthesis/` — distilled pages
+- `references/` — external material and provenance (`pair-architecture-review`,
+  `nvidia-dsx-standard-practice`, `nvidia-build-catalog`)
+- `sessions/` — per-session memory; `MEMORY.md` — standing state; `log.md` —
+  append-only audit trail
+- `plans/`, `_raw/`, `_archives/` — history and staging
+
+## Boundaries
+
+Cross-role changes are atomic (one commit, then `make contract-test`). No
+secrets are tracked. Offensive security work does not belong in a default
+session (see `AGENTS.md`).
