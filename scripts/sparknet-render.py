@@ -94,6 +94,20 @@ def build(contracts_dir: Path) -> dict:
         }
     ports = dict(sorted(ports.items(), key=lambda kv: int(kv[0])))
 
+    # The spark-node compose stack: a separate namespace from the fabric ports,
+    # carried separately so a shared number (9090 guard/compute, 8080
+    # admin-surface/agent-gateway, 4222 nat-gateway/nats) is not collapsed.
+    node_ports: dict[str, dict] = {}
+    for port, spec in ports_src.get("node_ports", {}).items():
+        node_ports[port] = {
+            "service": spec.get("service"),
+            "bound_by": spec.get("bound_by"),
+            "host_published": spec.get("host_published"),
+            "implementation_state": spec.get("implementation_state"),
+            "runtime": spec.get("runtime"),
+        }
+    node_ports = dict(sorted(node_ports.items(), key=lambda kv: int(kv[0])))
+
     return {
         "contract": "sparknet-contract-manifest",
         "schema_version": MANIFEST_SCHEMA_VERSION,
@@ -103,6 +117,7 @@ def build(contracts_dir: Path) -> dict:
         "contracts": contracts,
         "known_capabilities": known_capabilities,
         "ports": ports,
+        "node_ports": node_ports,
     }
 
 

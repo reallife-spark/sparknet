@@ -12,6 +12,8 @@
 #   control    the goSpark control plane (holds the Master signing key)
 #   gpu        the cgo GPU-telemetry sidecar (degrades: available=false + reason)
 #   nats       the NATS/JetStream bus the goSpark plane runs on
+#   ingest     crawl the vault and refresh the RAG index (one-shot)
+#   backup     the signed vault-snapshot daemon
 #   opencode   the node's agent surface over the vault
 #   precontext (re)build the chat template only, then exit
 #   shell      drop to a shell in the node image
@@ -47,6 +49,8 @@ Subcommands:
   control     run the goSpark control plane (Master signing key)
   gpu         run the GPU-telemetry sidecar
   nats        run the NATS/JetStream bus
+  ingest      crawl the vault and refresh the RAG index (one-shot)
+  backup      run the signed vault-snapshot daemon
   opencode    run the node's opencode server over the vault
   precontext  rebuild the precontext chat template, then exit
   shell       drop into a shell
@@ -123,6 +127,16 @@ pub_of() { jq -r '.public_key_b64' "$1"; }
 
 master_pub() {
   if [ -n "${SPARKNET_MASTER_PUB:-}" ]; then printf '%s' "$SPARKNET_MASTER_PUB"; return; fi
+  # Fail closed on a joined node: a registry is adopted against a PINNED key. If
+  # the key is missing here the node would fall through to its own self-minted
+  # control key, which the Master-signed registry does not cover — the agent
+  # would then run with a trust anchor that authorises nothing (or, worse, an
+  # operator could mistake the failure for open mode). The setup script always
+  # writes SPARKNET_MASTER_PUB whenever a registry is staged, so this only trips
+  # a hand-edited or partial environment.
+  if [ -n "${GOSPARK_REGISTRY_FILE:-}" ]; then
+    die "GOSPARK_REGISTRY_FILE is set but SPARKNET_MASTER_PUB is empty — pass --master-pub (or a registry whose master_public_key_b64 is readable)"
+  fi
   local ck="${SPARKNET_CONTROL_KEY:-$STATE_DIR/control.key}"
   ensure_key "$ck" -node "control" -role master -overlay 10.100.0.1
   pub_of "$ck"
@@ -262,6 +276,42 @@ cmd_nats() {
   exec nats-server "${args[@]}"
 }
 
+# The goSpark knowledge indexer: crawl the vault, chunk, embed through the
+# compute plane, write the RAG index. One-shot by design (the binary has no
+# daemon mode): enabling it at `up` refreshes the index once, and it exits.
+# Re-run with `docker compose ... --profile ingest run --rm ingest`.
+cmd_ingest() {
+  ensure_state; ensure_env; ensure_secret
+  local vault="${GOSPARK_KNOWLEDGE_DIR:-$NODE_DIR}"
+  local out="${GOSPARK_INGEST_OUT:-$STATE_DIR/rag/index.json}"
+  mkdir -p "$(dirname "$out")"
+  export GOSPARK_KNOWLEDGE_DIR="$vault"
+  export GOSPARK_EMBED_SECRET="${GOSPARK_EMBED_SECRET:-$SPARKNET_SHARED_SECRET}"
+  local args=(-root "$vault" -out "$out")
+  [ -n "${GOSPARK_EMBED_ENDPOINT:-}" ] && args+=(-embed-endpoint "$GOSPARK_EMBED_ENDPOINT")
+  [ -n "${GOSPARK_EMBED_MODEL:-}" ] && args+=(-embed-model "$GOSPARK_EMBED_MODEL")
+  log "ingest $vault -> $out (embed ${GOSPARK_EMBED_ENDPOINT:-none})"
+  exec sparknet-ingest "${args[@]}"
+}
+
+# The goSpark signed-backup daemon: hash the vault, copy it under the target and
+# write a node-signed manifest, every interval. Signed with the SAME node key as
+# the agent (one path, one identity), so a restore can tell a faithful snapshot
+# from a tampered one.
+cmd_backup() {
+  ensure_state; ensure_env; ensure_secret; export_gospark_env
+  local key="${SPARKNET_NODE_KEY:-$STATE_DIR/node.key}"
+  ensure_key "$key" -node "$(node_id)" -role peer -overlay "$(node_overlay)"
+  local source="${GOSPARK_BACKUP_SOURCE:-$NODE_DIR}"
+  local target="${GOSPARK_BACKUP_TARGET:-/srv/sparknet/backups}"
+  local interval="${GOSPARK_BACKUP_INTERVAL:-6h}"
+  mkdir -p "$target"
+  local args=(run -source "$source" -target "$target" -key "$key" -interval "$interval")
+  [ -n "${GOSPARK_BACKUP_SKIP_DIRS:-}" ] && args+=(-skip-dirs "$GOSPARK_BACKUP_SKIP_DIRS")
+  log "backup $source -> $target every $interval (key $key)"
+  exec sparknet-backup "${args[@]}"
+}
+
 cmd_opencode() {
   ensure_state; ensure_env
   log "opencode serve over $(node_id)"
@@ -295,6 +345,8 @@ case "${1:-help}" in
   control)    shift; cmd_control "$@" ;;
   gpu)        shift; cmd_gpu "$@" ;;
   nats)       shift; cmd_nats "$@" ;;
+  ingest)     shift; cmd_ingest "$@" ;;
+  backup)     shift; cmd_backup "$@" ;;
   opencode)   shift; cmd_opencode "$@" ;;
   precontext) shift; cmd_precontext "$@" ;;
   shell)      shift; exec /bin/bash "$@" ;;

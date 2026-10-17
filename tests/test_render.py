@@ -82,6 +82,14 @@ def test_manifest_ports_match_the_contract() -> None:
     assert set(_manifest()["ports"]) == set(ports)
 
 
+def test_manifest_node_ports_match_the_contract() -> None:
+    src = json.loads((CONTRACTS / "ports.json").read_text())
+    assert set(_manifest()["node_ports"]) == set(src.get("node_ports", {})), (
+        "the node ports are a separate namespace from the fabric ports; both "
+        "must reach the manifest, unmerged, so a shared number is not collapsed"
+    )
+
+
 def test_manifest_records_a_hash_for_each_contract() -> None:
     for row in _manifest()["contracts"]:
         assert len(row["sha256"]) == 64, f"{row['file']} has no sha256"

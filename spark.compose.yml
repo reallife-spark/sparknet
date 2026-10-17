@@ -23,6 +23,9 @@
 #   --profile embed + vllm-embed                      (embeddings, for the RAG corpus)
 #   --profile rerank + vllm-rerank                    (cross-encoder reranker)
 #   --profile audio + vllm-audio                      (speech/audio model)
+#   --profile ingest + ingest                         (one-shot: refresh the RAG index)
+#   --profile backup + backup                         (signed vault snapshots, on a timer)
+#   --profile opencode + opencode                     (the node's opencode server on :4200)
 #
 # To run more than one multimodal profile at once, add them all:
 #   docker compose -f spark.compose.yml --profile embed --profile audio up -d
@@ -70,6 +73,12 @@ x-spark-env: &spark-env
   SPARKNET_STATE_DIR: /srv/sparknet/peer-node/.state
   SPARKNET_BUS_URL: nats://nats:4222
   SPARKNET_SHARED_SECRET: ${SPARKNET_SHARED_SECRET:-}
+  # Fabric join: the elected Master's pinned operational key and the Master-signed
+  # registry the agent adopts. Both empty on a standalone node (open, self-signed);
+  # both written by `sparknet-node-setup.sh --master-pub/--registry`. The registry
+  # path is the IN-CONTAINER path — the state dir is the host bind mount below.
+  SPARKNET_MASTER_PUB: ${SPARKNET_MASTER_PUB:-}
+  GOSPARK_REGISTRY_FILE: ${GOSPARK_REGISTRY_FILE:-}
   VLLM_MODEL: ${VLLM_MODEL:-Qwen/Qwen2.5-32B-Instruct}
   TZ: ${TZ:-UTC}
 
@@ -105,11 +114,13 @@ x-vllm-runtime: &vllm-runtime
 services:
   # The goSpark bus. Run as the upstream NATS image so a first bring-up does not
   # need the (large) node image just to have a bus; the node image also bakes a
-  # pinned nats-server for `spark-entrypoint nats` and for tests. JetStream
+  # pinned nats-server for `spark-entrypoint nats` and for tests. The default
+  # below tracks the image's NATS_VERSION pin (spark.docker) so the upstream
+  # service and the baked binary are the same release. JetStream
   # persists under the host state dir so a restart does not lose the stream (the
   # ledger lives in .state; losing the stream would orphan it).
   nats:
-    image: nats:${NATS_IMAGE_TAG:-2.11-alpine}
+    image: nats:${NATS_IMAGE_TAG:-2.14.2-alpine}
     container_name: sparknet-nats
     command: ["-js", "-a", "0.0.0.0", "-p", "4222", "-m", "8222", "-sd", "/data"]
     volumes:
@@ -226,7 +237,6 @@ services:
       GOSPARK_GATEWAY_UPSTREAM: http://vllm:8000
       GOSPARK_COMPUTE_ENDPOINT: http://compute:9090
       GOSPARK_KV_ENDPOINT: http://kvrouter:9100
-      SPARKNET_MASTER_PUB: ${SPARKNET_MASTER_PUB:-}
     volumes:
       - *state-volume
     ports:
@@ -277,7 +287,7 @@ services:
 
   # Open WebUI, the only foreign image, pointing at the node's own gateway.
   webui:
-    image: ghcr.io/open-webui/open-webui:${WEBUI_TAG:-main}
+    image: ghcr.io/open-webui/open-webui:${WEBUI_TAG:-v0.12.2}
     profiles: ["webui"]
     container_name: sparknet-webui
     depends_on:
@@ -294,6 +304,88 @@ services:
         target: /app/backend/data
     ports:
       - "${SPARKNET_BIND_API:-0.0.0.0}:3000:8080"
+    restart: unless-stopped
+
+  # --- knowledge profiles (opt-in) -------------------------------------------
+  #
+  # The goSpark knowledge binaries as node services. They link no model and no
+  # CUDA: ingest feeds the local RAG index through the compute plane; backup
+  # signs content-addressed snapshots of the vault with the node key.
+
+  # One-shot: crawl the node vault, chunk it, embed through the compute plane,
+  # write the RAG index into the state dir. Enabling this profile refreshes the
+  # index once at `up`; re-run on demand with
+  #   docker compose -f spark.compose.yml --profile ingest run --rm ingest
+  ingest:
+    <<: [*spark-node]
+    profiles: ["ingest"]
+    container_name: sparknet-ingest
+    command: ["ingest"]
+    depends_on:
+      compute:
+        condition: service_started
+    environment:
+      <<: *spark-env
+      GOSPARK_KNOWLEDGE_DIR: /srv/sparknet/peer-node
+      GOSPARK_INGEST_OUT: /srv/sparknet/peer-node/.state/rag/index.json
+      # Set by the embed profile to aim ingest at the dedicated embeddings
+      # server; empty => the compute plane's local hashed embedder (chunks, no
+      # vectors).
+      GOSPARK_EMBED_ENDPOINT: ${SPARKNET_EMBED_ENDPOINT:-}
+      GOSPARK_EMBED_MODEL: ${SPARKNET_EMBED_MODEL:-sparknet-embed-hash}
+    volumes:
+      - *state-volume
+    restart: "no"
+
+  # Signed snapshot daemon: hash the vault, copy it under the backup target and
+  # write a node-signed manifest, every interval. The target is a HOST bind
+  # mount and is deliberately OUTSIDE the source — a target inside the source
+  # would be walked and included in its own snapshot. `.state` is skipped: the
+  # signing key must never be inside the tree it signs.
+  backup:
+    <<: [*spark-node]
+    profiles: ["backup"]
+    container_name: sparknet-backup
+    command: ["backup"]
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      <<: *spark-env
+      GOSPARK_BACKUP_SOURCE: ${GOSPARK_BACKUP_SOURCE:-/srv/sparknet/peer-node}
+      GOSPARK_BACKUP_TARGET: ${GOSPARK_BACKUP_TARGET:-/srv/sparknet/backups}
+      GOSPARK_BACKUP_INTERVAL: ${GOSPARK_BACKUP_INTERVAL:-6h}
+      GOSPARK_BACKUP_SKIP_DIRS: ${GOSPARK_BACKUP_SKIP_DIRS:-.state,.git,__pycache__}
+    volumes:
+      - *state-volume
+      - type: bind
+        source: ${SPARKNET_STATE_HOST:-./peer-node/.state}/backups
+        target: /srv/sparknet/backups
+    restart: unless-stopped
+
+  # The node's opencode server over the vault. Local-only by design: it carries
+  # the whole node's session authority, so it binds loopback and is never a
+  # fabric edge. The vault is the image's WORKDIR, so opencode resolves the
+  # node's project without a flag; its sessions and caches are pointed into the
+  # mounted state so they survive a container recreation.
+  opencode:
+    <<: [*spark-node]
+    profiles: ["opencode"]
+    container_name: sparknet-opencode
+    command: ["opencode"]
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      <<: *spark-env
+      OPENCODE_HOST: ${OPENCODE_HOST:-127.0.0.1}
+      OPENCODE_PORT: ${OPENCODE_PORT:-4200}
+      XDG_DATA_HOME: /srv/sparknet/peer-node/.state/opencode/data
+      XDG_CACHE_HOME: /srv/sparknet/peer-node/.state/opencode/cache
+    volumes:
+      - *state-volume
+    ports:
+      - "${SPARKNET_BIND_LOCAL:-127.0.0.1}:4200:4200"
     restart: unless-stopped
 
   # --- multimodal profile services (opt-in) ----------------------------------

@@ -12,10 +12,16 @@
 #   ./sparknet-node-setup.sh --engine stub   # no GPU: CPU stub engine + sim telemetry
 #   ./sparknet-node-setup.sh up              # build step already done -> just run
 #
-# It writes exactly two host things: the node state under peer-node/.state (keys,
-# secret, env-file — gitignored, mode 0600/0700) and the staged bundle tarball at
-# peer-node/container/context/sparknet-peer.tar.gz. Nothing else on the host is
-# touched, and no secret ever enters an image layer.
+# Join a running fabric by handing the node the elected Master's public key and
+# the Master-signed registry (instead of running open, self-signed):
+#
+#   ./sparknet-node-setup.sh --master-pub "$MASTER_PUB" \
+#     --registry /path/to/node-authorizations.json up
+#
+# It writes exactly three host things: the node state under peer-node/.state
+# (keys, secret, env-file, the joined registry — gitignored, mode 0600/0700), the
+# staged bundle tarball at peer-node/container/context/sparknet-peer.tar.gz, and
+# nothing else. No secret ever enters an image layer.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,6 +33,8 @@ GOSPARK_DIR="${GOSPARK_DIR:-/mnt/knowledge/goSpark}"
 ROLE="${SPARKNET_ROLE:-peer}"
 PROFILES="${SPARK_PROFILES:-}"
 ENGINE="${SPARK_ENGINE:-vllm}"   # vllm (real GPU engine) | stub (CPU-only OpenAI-compatible stub)
+MASTER_PUB="${SPARKNET_MASTER_PUB:-}"   # b64 string or a file containing it
+REGISTRY="${SPARKNET_REGISTRY_FILE:-}"  # Master-signed node-authorizations registry
 DO_BUILD=1
 ACTION="up"
 
@@ -50,7 +58,14 @@ Actions:
 Options:
   --role peer|master   node role (default peer; master also enables the control plane)
   --engine vllm|stub   model engine (default vllm; stub = CPU-only OpenAI stub, no GPU/model)
-  --profiles A,B,C     compose profiles to enable: kv control webui embed rerank audio
+  --profiles A,B,C     compose profiles to enable: kv control webui embed rerank audio ingest backup opencode
+  --master-pub KEY     the elected Master's Ed25519 public key (base64) or a file
+                       holding it; joins the node to the fabric instead of running
+                       open. With --registry and no key, the key is read from the
+                       registry's master_public_key_b64 (less strong than pinning
+                       it out of band; logged).
+  --registry FILE      Master-signed node-authorizations registry to adopt; copied
+                       into the node state dir and passed to the goSpark agent.
   --no-build           skip the bundle + image build (use the existing image)
   --gospark DIR        goSpark checkout (default /mnt/knowledge/goSpark)
   -h, --help           this text
@@ -60,10 +75,12 @@ EOF
 while [ $# -gt 0 ]; do
   case "$1" in
     up|build|down|status|logs) ACTION="$1"; shift ;;
-    --role)      ROLE="$2"; shift 2 ;;
-    --engine)    ENGINE="$2"; shift 2 ;;
-    --profiles)  PROFILES="$2"; shift 2 ;;
-    --no-build)  DO_BUILD=0; shift ;;
+    --role)       ROLE="$2"; shift 2 ;;
+    --engine)     ENGINE="$2"; shift 2 ;;
+    --profiles)   PROFILES="$2"; shift 2 ;;
+    --master-pub) MASTER_PUB="$2"; shift 2 ;;
+    --registry)   REGISTRY="$2"; shift 2 ;;
+    --no-build)   DO_BUILD=0; shift ;;
     --gospark)   GOSPARK_DIR="$2"; shift 2 ;;
     -h|--help)   usage; exit 0 ;;
     *) die "unknown argument: $1 (try --help)" ;;
@@ -78,6 +95,9 @@ case "$ROLE" in
   peer|master) ;;
   *) die "--role must be 'peer' or 'master' (got: $ROLE)" ;;
 esac
+if [ -n "$REGISTRY" ] && [ "$ROLE" = master ]; then
+  die "--registry joins a PEER to a fabric whose Master signs elsewhere; a master node runs the control plane, which signs its own registry"
+fi
 
 # --- preflight ---------------------------------------------------------------
 
@@ -85,6 +105,9 @@ preflight() {
   command -v docker >/dev/null || die "docker not found"
   docker compose version >/dev/null 2>&1 || die "'docker compose' (v2 plugin) not found"
   [ -f "$COMPOSE_FILE" ] || die "compose file missing: $COMPOSE_FILE"
+  if [ -n "$REGISTRY" ]; then
+    [ -f "$REGISTRY" ] || die "registry file not found: $REGISTRY"
+  fi
   if [ "$DO_BUILD" = 1 ]; then
     [ -d "$GOSPARK_DIR" ] || die "goSpark not found at $GOSPARK_DIR (use --gospark DIR)"
     for b in sparknet-agent sparknet-control sparknet-gpu sparknetctl; do
@@ -122,9 +145,56 @@ stage_bundle() {
 
 # --- env-file + state --------------------------------------------------------
 
+# In-container paths (the state dir is a host bind mount; see spark.compose.yml).
+STATE_DIR_IN_CONTAINER=/srv/sparknet/peer-node/.state
+REGISTRY_IN_CONTAINER="$STATE_DIR_IN_CONTAINER/node-authorizations.json"
+
+# Resolve the fabric-join inputs (--master-pub / --registry) into the values the
+# env-file carries. Joining is opt-in: with neither, the node runs open and
+# self-signed exactly as before.
+#
+#   * --master-pub may be the base64 key itself or a path to a file holding it;
+#   * --registry is copied verbatim into the node state dir (never an image
+#     layer) and its path handed to the goSpark agent;
+#   * when a registry is given without a pinned key, the operational key is read
+#     from the registry's own master_public_key_b64 field — the key the elected
+#     root names — and a warning is logged, because a key read from the same
+#     document it is meant to authenticate is weaker than one pinned out of band.
+resolve_join() {
+  JOIN_MASTER_PUB=""
+  JOIN_REGISTRY_PATH=""
+
+  if [ -n "$MASTER_PUB" ]; then
+    if [ -f "$MASTER_PUB" ]; then
+      JOIN_MASTER_PUB="$(tr -d '[:space:]' < "$MASTER_PUB")"
+    else
+      JOIN_MASTER_PUB="$(printf '%s' "$MASTER_PUB" | tr -d '[:space:]')"
+    fi
+    [ -n "$JOIN_MASTER_PUB" ] || die "--master-pub is empty"
+  fi
+
+  if [ -n "$REGISTRY" ]; then
+    [ -f "$REGISTRY" ] || die "registry file not found: $REGISTRY"
+    mkdir -p "$NODE_STATE"
+    cp "$REGISTRY" "$NODE_STATE/node-authorizations.json"
+    chmod 600 "$NODE_STATE/node-authorizations.json"
+    JOIN_REGISTRY_PATH="$REGISTRY_IN_CONTAINER"
+    if [ -z "$JOIN_MASTER_PUB" ]; then
+      command -v python3 >/dev/null || die "python3 needed to read master_public_key_b64 from the registry"
+      JOIN_MASTER_PUB="$(python3 -c \
+        'import json,sys;print(json.load(open(sys.argv[1])).get("master_public_key_b64",""))' \
+        "$REGISTRY")"
+      [ -n "$JOIN_MASTER_PUB" ] \
+        || die "registry $REGISTRY has no master_public_key_b64; pass --master-pub"
+      warn "no --master-pub: using the key embedded in the registry (pin it out of band for the strong form)"
+    fi
+  fi
+}
+
 render_env_file() {
   mkdir -p "$NODE_STATE"
   chmod 700 "$NODE_STATE" 2>/dev/null || true
+  resolve_join
 
   local id role overlay model secret
   id="${SPARKNET_NODE_ID:-$(hostname)}"
@@ -165,8 +235,18 @@ VLLM_MAX_MODEL_LEN=${VLLM_MAX_MODEL_LEN:-65536}
 HF_CACHE_DIR=${HF_CACHE_DIR:-$HOME/.cache/huggingface}
 SPARKNET_BIND_API=${SPARKNET_BIND_API:-0.0.0.0}
 SPARKNET_BIND_LOCAL=${SPARKNET_BIND_LOCAL:-127.0.0.1}
+# Pinned foreign images. NATS_IMAGE_TAG must track NATS_VERSION in spark.docker
+# (the same nats-server is also baked into the image for `spark-entrypoint nats`);
+# WEBUI_TAG is a stable release, never `main`/`latest`.
+NATS_IMAGE_TAG=${NATS_IMAGE_TAG:-2.14.2-alpine}
+WEBUI_TAG=${WEBUI_TAG:-v0.12.2}
+SPARKNET_MASTER_PUB=${JOIN_MASTER_PUB:-}
+GOSPARK_REGISTRY_FILE=${JOIN_REGISTRY_PATH:-}
 EOF
   chmod 600 "$ENV_FILE"
+  if [ -n "${JOIN_REGISTRY_PATH:-}" ]; then
+    log "joined fabric: registry staged, master key $([ -n "$JOIN_MASTER_PUB" ] && echo pinned || echo 'from registry')"
+  fi
   log "wrote $ENV_FILE (node=$id role=$role overlay=$overlay)"
 }
 
@@ -211,7 +291,12 @@ act_build() {
 
 act_up() {
   [ "$DO_BUILD" = 1 ] && act_build
-  [ -f "$ENV_FILE" ] || { render_env_file; }
+  # Re-render whenever join inputs are (re)specified, so an already-running node
+  # can be joined without hand-editing the env-file; otherwise render only if the
+  # env-file does not exist yet (never clobber a hand-tuned one).
+  if [ ! -f "$ENV_FILE" ] || [ -n "$MASTER_PUB" ] || [ -n "$REGISTRY" ]; then
+    render_env_file
+  fi
   write_gpu_fixture
   log "starting services (role=$ROLE engine=${ENGINE} profiles=${PROFILES:-none})"
   compose up -d

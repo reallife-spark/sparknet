@@ -23,7 +23,7 @@
       "contract": "ports",
       "file": "ports.json",
       "schema_version": "2.0",
-      "sha256": "500d557ddf43009206144c278daa684c55b8f8d0b76369244477946047975db9"
+      "sha256": "9a58bd3ec295d7c5f50d53d0c435b6bc084299164f17f41ba90c2efba45cf915"
     },
     {
       "contract": "proposal-schema",
@@ -50,6 +50,106 @@
     "push-receive",
     "telemetry"
   ],
+  "node_ports": {
+    "3000": {
+      "bound_by": "node",
+      "host_published": true,
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "node-webui"
+    },
+    "4200": {
+      "bound_by": "node",
+      "host_published": true,
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "node-opencode"
+    },
+    "4222": {
+      "bound_by": "node",
+      "host_published": true,
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "node-nats"
+    },
+    "8000": {
+      "bound_by": "node",
+      "host_published": true,
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "node-vllm"
+    },
+    "8001": {
+      "bound_by": "node",
+      "host_published": false,
+      "implementation_state": "implemented",
+      "runtime": "not-verifiable-here",
+      "service": "node-vllm-embed"
+    },
+    "8002": {
+      "bound_by": "node",
+      "host_published": false,
+      "implementation_state": "implemented",
+      "runtime": "not-verifiable-here",
+      "service": "node-vllm-rerank"
+    },
+    "8003": {
+      "bound_by": "node",
+      "host_published": false,
+      "implementation_state": "implemented",
+      "runtime": "not-verifiable-here",
+      "service": "node-vllm-audio"
+    },
+    "8080": {
+      "bound_by": "node",
+      "host_published": true,
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "node-agent-gateway"
+    },
+    "8081": {
+      "bound_by": "node",
+      "host_published": true,
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "node-control-gateway"
+    },
+    "8222": {
+      "bound_by": "node",
+      "host_published": true,
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "node-nats-monitor"
+    },
+    "8899": {
+      "bound_by": "node",
+      "host_published": true,
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "node-control-admin"
+    },
+    "9090": {
+      "bound_by": "node",
+      "host_published": true,
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "node-compute"
+    },
+    "9100": {
+      "bound_by": "node",
+      "host_published": false,
+      "implementation_state": "implemented",
+      "runtime": "not-verifiable-here",
+      "service": "node-kvrouter"
+    },
+    "9180": {
+      "bound_by": "node",
+      "host_published": false,
+      "implementation_state": "implemented",
+      "runtime": "not-verifiable-here",
+      "service": "node-control-metrics"
+    }
+  },
   "note": "Generated from contracts/*.json. Regenerate with `make render`.",
   "ports": {
     "4096": {

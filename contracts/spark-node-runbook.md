@@ -120,6 +120,45 @@ before it can answer:
 ./sparknet-node-setup.sh --profiles embed,rerank,audio,webui up   # all at once
 ```
 
+Three profiles are not model servers — they are the node's knowledge services,
+the goSpark binaries run in-stack:
+
+```sh
+./sparknet-node-setup.sh --profiles ingest up     # one-shot: refresh the RAG index
+./sparknet-node-setup.sh --profiles backup up     # signed vault snapshots, on a timer
+./sparknet-node-setup.sh --profiles opencode up   # the node's opencode server on :4200
+```
+
+- **ingest** crawls the node vault, chunks it and embeds through the compute
+  plane (`sparknet-ingest`), writing the index to `.state/rag/index.json`. It is
+  a one-shot: enabling the profile refreshes the index once at `up`, then the
+  service exits. Re-run on demand without touching the rest of the stack:
+
+  ```sh
+  docker compose -f spark.compose.yml --profile ingest run --rm ingest
+  ```
+
+  Point it at the dedicated embeddings server by also enabling `embed` (it
+  honours `SPARKNET_EMBED_ENDPOINT`); with no embedder it indexes chunks only.
+
+- **backup** runs `sparknet-backup run`: it hashes the vault, copies it under the
+  backup target and writes a **node-signed** manifest every
+  `GOSPARK_BACKUP_INTERVAL` (default `6h`), so `sparknet-backup verify` can tell
+  a faithful snapshot from a tampered one. The target is a host bind mount
+  (`.state/backups`) and is deliberately **outside** the source — a target inside
+  the source would be walked and included in its own snapshot — and `.state` is
+  skipped so the signing key is never inside the tree it signs.
+
+- **opencode** serves the node's vault as an opencode project on `127.0.0.1:4200`
+  (loopback by default: it carries the whole node's session authority, so it is
+  never a fabric edge). Sessions and caches live under `.state/opencode/` so they
+  survive a container recreation. An **MCP server is a stdio tool here, not a
+  listener** — it is not a port and is not wired as a service.
+
+The `--profiles` names are checked against `spark.compose.yml` by
+`tests/test_contracts.py::test_setup_script_advertises_only_profiles_compose_defines`,
+so the setup script can never advertise a profile that does nothing.
+
 The text engine serves the **fabric precontext**: `spark-precontext.py` merges
 the MASTERSPIKE system prompt with the `contracts/`-derived digest and prepends
 it as a wrapper chat template at container start. Verify it once, out of band:
@@ -133,7 +172,108 @@ docker run --rm --entrypoint spark-entrypoint sparknet-spark-node:dev \
 tokens, and that the multimodal engines load their real models. No suite on a
 non-GPU host can see those.
 
-## 6. Simulated GPU telemetry (control / placement / metrics, no GPU)
+### Port map
+
+The node's ports are contracted in `contracts/ports.json` under `node_ports` — a
+namespace beside the fabric's `ports`, because the node publishes to the docker
+host namespace while the fabric listens in the overlay. What the bring-up
+exposes:
+
+| Port | Service | Bind default | Reaches |
+|---|---|---|---|
+| 8000 | `vllm` | `SPARKNET_BIND_API` (0.0.0.0) | the OpenAI-compatible engine (or stub) |
+| 8080 | `agent` gateway | `SPARKNET_BIND_API` | the node's fabric-facing edge |
+| 8081 | `control` gateway | `SPARKNET_BIND_API` | `--role master` only |
+| 8899 | `control` admin | `SPARKNET_BIND_LOCAL` (127.0.0.1) | `--role master` admin |
+| 3000 | Open WebUI | `SPARKNET_BIND_API` | `--profiles webui` |
+| 4222 | NATS bus | `SPARKNET_BIND_LOCAL` | JetStream, persisted under `.state/nats` |
+| 8222 | NATS monitor | `SPARKNET_BIND_LOCAL` | monitoring endpoint |
+| 9090 | `compute` | `SPARKNET_BIND_LOCAL` | `/v1/execute`, forwarding to vLLM |
+
+Not published to the host (docker-network only, dialed by the stack itself):
+`9100` kvrouter, `9180` control metrics, and `8001`/`8002`/`8003` for the
+`embed`/`rerank`/`audio` profiles.
+
+Three of these numbers — **8080**, **9090**, **4222** — also appear in the
+fabric's `ports` (admin-surface, guard, nat-gateway). A shared number is not a
+shared socket: the loopback defaults above are exactly what keeps a node and a
+role's listeners apart on one host. The one that does not cooperate by default
+is 8080, whose wildcard publish would fight a master's admin surface on
+`10.100.0.1:8080`; `contracts/ports.json` records that collision, and the fix on
+a shared host is to move the node's bind (`SPARKNET_BIND_LOCAL`) rather than
+re-bind the fabric side.
+
+## 6. Join a running fabric (adopt the elected Master)
+
+By default the node runs **open and self-signed**: `spark-entrypoint` mints its
+own keys and the goSpark agent authorises anything the local control key signs.
+That is correct for a standalone inference appliance and wrong the moment the
+node is meant to be one more member of the elected fabric. Joining replaces the
+self-minted trust with the two artefacts the election produced: the elected
+cluster trust root's **operational public key** and a **Master-signed
+registry entry** for this node's identity.
+
+The two implementations of that signature are one, proven on both legs by
+`tests/test_registry_crossverify.py` (Python `shared/sparknet-authz.py` signs →
+goSpark `internal/authz` verifies, and the reverse, with refusals each way). Only
+*public* keys cross the boundary: the Master signs with the fabric's 32-byte
+seed, the node verifies against its base64 public half, and the node's own key
+stays goSpark-format.
+
+**Preconditions:** the election has run (`deployment-runbook.md`, Step 13) and
+the Master operator can sign; this node is running as `--role peer` (a `--role
+master` node runs the control plane, which is itself the registry authority —
+the setup script refuses `--registry` with `--role master`).
+
+```sh
+# 1. On the node: mint the node key (or let the first boot mint it) and project
+#    it into the fabric's identity record — the five identity-schema fields, with
+#    the node's Ed25519 public key in the wireguard_public_key_b64 slot:
+python3 - <<'PY' > node.identity.json
+import json
+k = json.load(open(".state/node.key"))     # or peer-node/.state/node.key on the host
+print(json.dumps({
+    "node_id": k["node_id"], "role": k["role"],
+    "wireguard_public_key_b64": k["public_key_b64"],
+    "overlay_ipv4": k["overlay_ipv4"],
+    "requested_capabilities": sorted(k["requested_capabilities"]),
+}, indent=2))
+PY
+
+# 2. On the Master: sign that identity into the registry with the elected
+#    operational key — the same document peer manifests/node-authorizations.json
+#    carries, entries signed per entry over signed_envelope_fields:
+python3 shared/sparknet-authz.py sign node.identity.json \
+  --master-key "$STATE_DIR/keys/master-operational.key" \
+  --capabilities cluster-serve,telemetry --out entry.json
+# (entry.json then joins the fabric's node-authorizations.json authorizations[]
+#  — exactly the document the live pair already distributes.)
+
+# 3. Back on the node: stage both artefacts and (re)up. The key may be given as
+#    the base64 string or as a file holding it; with --registry and no key, the
+#    key is read from the registry's own master_public_key_b64 (logged — pinning
+#    it out of band is the stronger form):
+./sparknet-node-setup.sh \
+  --master-pub "$MASTER_PUB" \
+  --registry /path/to/node-authorizations.json up
+
+# 4. Verify the adoption (inside the running image):
+docker exec sparknet-agent sparknetctl registry verify \
+  -registry /srv/sparknet/peer-node/.state/node-authorizations.json \
+  -master-pub "$MASTER_PUB"
+```
+
+Fail-closed behaviour on the join path, all tested:
+
+- a registry staged **without** a reachable `SPARKNET_MASTER_PUB` makes
+  `spark-entrypoint` refuse to start the agent rather than fall back to a
+  self-minted key that the Master-signed entries do not cover;
+- a tampered entry (widened capabilities, flipped `revoked`) fails verification
+  in *both* implementations, not just the one that signed it;
+- leaving the flags off returns the node to open mode exactly as before — the
+  join is opt-in, never a default.
+
+## 7. Simulated GPU telemetry (control / placement / metrics, no GPU)
 
 The opt-in synthetic backend is for exercising the *plumbing* that the real GPU
 feeds — the sidecar, the bus, `/admin/gpu`, placement gates and graphs:
@@ -150,7 +290,7 @@ it: `SPARKNET_GPU_FIXTURE=<path>`. With nothing set, the sidecar degrades to
 always keep, and a test in `tests/test_gpu_telemetry_hardware_free.py` holds it
 there.
 
-## 7. Containerised election rehearsal
+## 8. Containerised election rehearsal
 
 The election arc was proven live on real hosts (Step 13, 2026-10-07). What was
 missing was proof that the **packaged artifact** — image toolchain, baked
@@ -175,7 +315,7 @@ It runs in a container network namespace, so it proves the runtime and the ports
 **not** the overlay: WireGuard on a real NIC, reboot survival and containment
 remain `confirm: user` (see `deployment-runbook.md` Phase 6–9).
 
-## 8. The residual `confirm: user` list (physics)
+## 9. The residual `confirm: user` list (physics)
 
 Answer these — on the Spark, by someone who can see it — before calling the node
 deployed:
@@ -193,7 +333,7 @@ deployed:
 6. **Phase 9 legs.** Rollback and replace-Master re-formation stay deliberately
    unexecuted; a revoke has still to be shown inert at the guard on a real host.
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 - **Build fails resolving packages / no DNS.** Build with `--network=host` (the
   sandbox has no network). The same applies to `docker run` on this host.
