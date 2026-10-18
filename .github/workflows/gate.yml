@@ -50,6 +50,16 @@ jobs:
       - name: Install the gate's tooling
         run: make devtools
 
+      # Put the venv this job just created first on PATH for everything that
+      # follows — the same thing activating it does locally. Both the suite and
+      # the scripts under test spawn `python3` (keygen, guard, dispatch), and
+      # only .venv carries the dependencies: without this, every such spawn
+      # silently measures the runner's system python instead of the
+      # interpreter the gate provisioned (runs 39118879305, 39117849825 —
+      # `cryptography` missing, Ed25519 keygen quietly skipped).
+      - name: Activate the provisioned venv for the job
+        run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
       # One step, one command: the workflow does not re-list the checks. The
       # gate script owns the vocabulary (keys-check, shims-check, lint,
       # format-check, shellcheck, validate, contract-test, render-check,
