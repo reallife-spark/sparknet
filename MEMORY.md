@@ -5,7 +5,7 @@
 > own it. **All history lives in `log.md` and `sessions/YYYY-MM-DD.md`** — an
 > entry here is a durable fact you still need, never a record of what happened.
 
-Updated: 2026-10-17
+Updated: 2026-10-18
 
 ## Plan cursors
 
@@ -87,8 +87,10 @@ Updated: 2026-10-17
 
 ## Open items (`DoD: confirm: user`)
 
-- Live GitHub CI (workflows are shaped + SHA-pinned; only GitHub proves a run)
-  and branch protection requiring the `gate` check.
+- **Branch protection requiring the `gate` check** — unavailable on this plan
+  (needs Pro or a public repo), so no check is enforced as required today;
+  revisit if visibility or plan changes. **Live GitHub CI itself is proven**
+  (see gotchas).
 - Hardware/LLM legs of the adoption arc: a real GPU/driver host, a live BMC
   (Redfish inventory), a live eval endpoint (`EVAL_BASE_URL`), the Open WebUI
   handshake.
@@ -101,6 +103,12 @@ Updated: 2026-10-17
 - **Local gates are authoritative**; the SHA-pinned GitHub Actions run the same
   `scripts/pre-merge-gate.sh` as a mirror. `make ci` (add `CI_QUICK=1` for the
   quick pass); `make test-all` for every suite. Bare `pytest` runs only `tests/`.
+  **Both repos' `gate` + `secret-scan` pass on GitHub since 2026-10-18** (six
+  bare-clone fixes; this host's system `python3` has `cryptography`, which is
+  why the interpreter assumptions were invisible locally — CI measures the
+  runner). `codeql` **self-skips with a `::notice`**: GitHub only scans public
+  repos on the Free plan, so it analyses for real once public or Code
+  Security-enabled.
 - **A full `make ci` needs a long timeout** — the default 120 s shell cap
   truncates it (`Terminated` mid-run is not a gate failure).
 - **`gh` lives at `~/.local/bin/gh`** (authenticated as `reallife-spark`), but a

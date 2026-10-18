@@ -218,13 +218,27 @@ Decisions and the guard:
   cannot do.
 - **CodeQL is the one GitHub-only job** (no local analyzer on a Spark node), so
   it is documented as an addition, not a replacement, and keeps
-  `security-events: write` while every other workflow is `contents: read`.
+  `security-events: write` while every other workflow is `contents: read`
+  (plus `actions: read`, which `analyze()` needs to read its own workflow run
+  to classify the outcome). GitHub only scans **public** repositories on the
+  Free plan, so a preflight now checks availability and, when the feature is
+  absent, emits a `::notice` and skips — green and explained rather than red
+  for a tool the plan cannot run, and a real analysis the moment the repo goes
+  public or Code Security is enabled (user decision, 2026-10-18).
 - **Deferred**: Renovate (the four dsx `renovate.json` repos) — pinned SHAs are
   refreshed by hand for now; recorded in the inventory's skip list intent, not
   silently dropped. Branch protection requiring the `gate` check is a
-  `DoD: confirm: user` item (it is a repository setting, not a file).
-- **First real run is `DoD: confirm: user`**: these tests prove the workflows
-  are shaped to run and pinned; only GitHub can prove they pass there.
+  `DoD: confirm: user` item (it is a repository setting, not a file) — and as
+  of 2026-10-18 it is also **unavailable on this plan** (branch protection
+  needs Pro or a public repo), so no check is enforced as required.
+- **First real run is `DoD: confirm: user`** → **confirmed 2026-10-18**: both
+  repos' `gate` and `secret-scan` pass on GitHub Actions, so the mirror is
+  proven and `make ci` is authoritative. It took six fixes to get there, all of
+  them assumptions this machine hid: system `python3` without `cryptography`,
+  `python3 -m venv` handed a file path instead of a directory, missing
+  per-vault `.env`, tests spawning bare interpreters, and codeql's
+  `actions: read` (then the plan wall above). Recorded in
+  `sessions/2026-10-18.md`.
 
 ## Functional verdicts (Step 51)
 
