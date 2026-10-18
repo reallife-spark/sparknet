@@ -21,6 +21,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -249,10 +250,15 @@ def test_every_shared_cli_has_help(cli: Path, tmp_path: Path) -> None:
 
     `sparknet-oob.py --help` used to exit 1 (usage to stderr), which made a
     help request look like a failure; the exit-0 path is asserted here.
+
+    Run with sys.executable, not a bare `python3`: these CLIs import
+    `cryptography`, which the gate installs into the repo venv. On a machine
+    whose system interpreter lacks it, a bare python3 exits 2 and the test
+    would be measuring the machine rather than the CLI (first CI run).
     """
     before = _porcelain()
     proc = subprocess.run(
-        ["python3", str(cli), "--help"],
+        [sys.executable, str(cli), "--help"],
         cwd=REPO_ROOT,
         env=_help_env(tmp_path),
         capture_output=True,
