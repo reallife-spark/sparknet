@@ -16,6 +16,12 @@ on:
 
 permissions:
   contents: read
+  # analyze() reads the workflow run it belongs to in order to classify the
+  # job's outcome; without actions: read that call 403s and the step reports
+  # "Resource not accessible by integration" / "configuration error" even
+  # though the analysis itself succeeded (goSpark run 39063248225, same
+  # permission block).
+  actions: read
   security-events: write
 
 concurrency:

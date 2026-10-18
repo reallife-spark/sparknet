@@ -110,16 +110,28 @@ def test_every_action_is_pinned_to_a_commit_sha(path: Path):
 
 @pytest.mark.parametrize("path", workflow_files(), ids=display)
 def test_workflow_declares_minimum_permissions(path: Path):
-    """Every workflow asks for `contents: read`, plus `security-events` only
-    for the CodeQL workflow, which genuinely needs to upload results."""
+    """Every workflow asks for `contents: read`, plus the two documented
+    CodeQL exceptions: `security-events: write` to upload results, and
+    `actions: read` so analyze() can read the workflow run it belongs to
+    (without it that call 403s and the step fails as a "configuration error"
+    even though the analysis succeeded)."""
     workflow = yaml.safe_load(path.read_text())
     permissions = workflow.get("permissions")
-    allowed = ({"contents": "read"}, {"contents": "read", "security-events": "write"})
+    allowed = (
+        {"contents": "read"},
+        {"contents": "read", "security-events": "write"},
+        {"contents": "read", "actions": "read", "security-events": "write"},
+    )
     assert permissions in allowed, (
         f"{display(path)} should declare "
         f"`permissions: {{contents: read}}` at the top (CodeQL's "
-        f"security-events: write is the one documented exception)."
+        f"security-events: write and actions: read are the documented "
+        f"exceptions)."
     )
+    if permissions and "actions" in permissions:
+        assert path.name == "codeql.yml", (
+            f"{display(path)} asks for actions: read, which only CodeQL needs to classify its own workflow run."
+        )
 
 
 def test_the_gate_workflows_call_the_local_gate():

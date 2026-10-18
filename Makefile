@@ -185,7 +185,11 @@ drift-check: ## Fail if derived artifacts drifted (manifest, SBOM, skills, contr
 	@echo "drift-check: all derived artifacts are in sync"
 
 devtools: ## Create .venv with cryptography, pytest and ruff (opt-in)
-	@if [ ! -x "$(VENV_PY)" ]; then python3 -m venv "$(VENV_PY)"; fi
+	@# venv's argument is the DIRECTORY to create, not the interpreter inside it.
+	@# Passing $(VENV_PY) here (as this did until the first bare-clone CI run)
+	@# built a venv inside .venv/bin/python/, after which every target that
+	@# execs $(VENV_PY) failed with "Is a directory".
+	@if [ ! -x "$(VENV_PY)" ]; then python3 -m venv "$(VAULT_ROOT)/.venv"; fi
 	@"$(VENV_PY)" -m pip install --quiet --upgrade pip
 	@"$(VENV_PY)" -m pip install --quiet -r "$(VAULT_ROOT)/requirements.txt"
 	@"$(VENV_PY)" -m pip install --quiet -r "$(VAULT_ROOT)/requirements-dev.txt"
@@ -197,7 +201,7 @@ devtools: ## Create .venv with cryptography, pytest and ruff (opt-in)
 CHROMA_SCOPE ?= peer
 
 chroma-dev: ## Install the OPTIONAL chromadb package (sparknet[chroma]); allow-list untouched
-	@if [ ! -x "$(VENV_PY)" ]; then python3 -m venv "$(VENV_PY)"; fi
+	@if [ ! -x "$(VENV_PY)" ]; then python3 -m venv "$(VAULT_ROOT)/.venv"; fi
 	@"$(VENV_PY)" -m pip install --quiet --upgrade pip
 	@"$(VENV_PY)" -m pip install --quiet 'chromadb>=0.5'
 	@echo "chromadb ready. Run: make chroma-init / chroma-index / chroma-query CHROMA_SCOPE=fabric"
