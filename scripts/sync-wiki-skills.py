@@ -398,12 +398,22 @@ def apply_mode() -> None:
 
 
 def check_mode() -> int:
-    """Fail if the vendored copy drifted from its recorded source state."""
+    """Fail if the vendored copy drifted from its recorded source state.
+
+    A skill source that is not on this machine is reported but is not a
+    failure: the vendored copy is the committed artifact, and the farm it came
+    from exists only where the farm was mounted. Failing on its absence would
+    make `make ci` fail on every driverless Spark node and on any runner,
+    which is the opposite of the point — the suite is vendored so that a bare
+    clone works without the farm. Drift is only knowable between two trees
+    that are both present, so that is what is checked and that still fails.
+    """
     if not SYNC_STATE.is_file():
         print("no .sync.json — run --apply first", file=sys.stderr)
         return 1
     state = json.loads(SYNC_STATE.read_text())
     problems: list[str] = []
+    unverifiable: list[str] = []
 
     if state.get("upstream_commit") != UPSTREAM_COMMIT:
         problems.append(f"upstream commit moved: recorded {state.get('upstream_commit')}, constant {UPSTREAM_COMMIT}")
@@ -426,6 +436,9 @@ def check_mode() -> int:
             # Git-sourced: the working tree may be polluted, so verify the
             # commit the vendoring was pinned to instead of hashing the tree.
             repo = Path(meta["source"]).parents[1]
+            if not repo.is_dir():
+                unverifiable.append(f"{name}: git source {repo} not on this machine")
+                continue
             head = subprocess.run(
                 ["git", "-C", str(repo), "rev-parse", "--short", "HEAD"],
                 capture_output=True,
@@ -437,7 +450,7 @@ def check_mode() -> int:
             continue
         src = Path(meta["source"])
         if not src.is_dir():
-            problems.append(f"{name}: source {src} no longer exists")
+            unverifiable.append(f"{name}: source {src} not on this machine")
             continue
         if source_digest(name, src) != meta["sha256"]:
             problems.append(f"{name}: upstream source changed — review and re-sync")
@@ -448,6 +461,14 @@ def check_mode() -> int:
 
     for hit in find_host_paths():
         problems.append(f"host absolute path in vendored file — {hit}")
+
+    if unverifiable:
+        print(
+            f"{len(unverifiable)} of {len(recorded)} sources are not on this machine; their digests were not compared:"
+        )
+        for note in unverifiable:
+            print(f"  - {note}")
+        print("(run --check on the machine hosting the skill farm for the full comparison)")
 
     if problems:
         print("wiki skill vendoring is stale:", file=sys.stderr)
