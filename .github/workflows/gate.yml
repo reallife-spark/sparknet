@@ -60,6 +60,15 @@ jobs:
       - name: Activate the provisioned venv for the job
         run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
+      # Per-node vault state, which is gitignored by design and so absent from
+      # every fresh clone: each role's `.env` names its VAULT_PATH and the
+      # wiki suite refuses to resolve a vault it cannot find (the resolution
+      # test asserts this rather than quietly writing one). This is the
+      # documented one-time bootstrap a node runs — same command, idempotent,
+      # no secrets involved.
+      - name: Bootstrap each vault's .env
+        run: make env-init
+
       # One step, one command: the workflow does not re-list the checks. The
       # gate script owns the vocabulary (keys-check, shims-check, lint,
       # format-check, shellcheck, validate, contract-test, render-check,
