@@ -1,0 +1,325 @@
+# syntax=docker/dockerfile:1
+#
+# sparknet.agx.docker — the AGX Xavier node image.
+#
+# The node distribution retargeted from NVIDIA DGX Spark (GB10, sm_121a, CUDA
+# 13) to NVIDIA AGX Xavier (Volta, sm_72, JetPack 5.x / L4T r35, CUDA 11.4).
+# Same bundle, same dispatcher, same service graph as spark.docker — a
+# different inference stack, because NVIDIA publishes no vLLM container for
+# the r35 branch (resource-first verdict recorded in goagx/README.md).
+#
+# One image, many services, exactly like the Spark image:
+# goagx/sparknet.agx.compose.yml runs THIS image with a different dispatcher
+# subcommand per service (spark-entrypoint.sh). The divergence from the Spark
+# image is concentrated in the engine layer:
+#
+#   text LLM   vLLM v0.2.7 built from source against the image's own torch;
+#              sm_70+PTX at build time, the driver JITs the PTX for sm_72
+#   embed      llama.cpp llama-server (baked GGUF bge-m3), CPU
+#   rerank     llama.cpp llama-server --reranking (baked GGUF), CPU
+#   audio      whisper.cpp whisper-server on the OpenAI transcriptions path,
+#              CPU
+#
+# The aux engines are CPU-only on purpose: the GPU budget belongs to the text
+# model, and each aux model is small enough for the A57 cluster (measured
+# rates are a hardware leg — goagx/README.md marks it DoD: confirm: user).
+#
+# Build (from the sparknet repo root; same named context as spark.docker):
+#
+#   docker build -f goagx/sparknet.agx.docker \
+#     --build-context gospark=/mnt/knowledge/goSpark \
+#     -t sparknet-agx-node:dev .
+#
+# The goSpark binaries must already be built on the host:
+#
+#   make -C /mnt/knowledge/goSpark build build-gpu
+#
+# This compiles vLLM, xformers and two inference servers from source: expect
+# hours, and build it ON the Xavier (unified memory — a 16 GB Xavier NX wants
+# swap before the xformers/vLLM steps; raise MAX_JOBS on a 32 GB Xavier).
+# `sparknet-node-setup.sh --platform agx` does all of the above; this header
+# is the manual path.
+#
+# --- Base image --------------------------------------------------------------
+#
+# AGX Xavier tops out at JetPack 5.1.x (L4T r35, CUDA 11.4, Ubuntu 20.04).
+# The only PyTorch base NVIDIA publishes for r35 is
+# l4t-pytorch:r35.2.1-pth2.0-py3 — the complete r35 tag list is
+# r35.1.0-pth1.11/1.12/1.13 and r35.2.1-pth2.0 (there is no r35.3/r35.4/
+# r35.6 tag): torch 2.0.0, cu114, Python 3.8. Everything below is pinned to
+# what that base provides.
+ARG L4T_BASE=nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3
+
+# --- pins --------------------------------------------------------------------
+# Pinned, never `latest`: a mutating tag defeats the point of a node image.
+# Every ARG below is overridable with --build-arg; the defaults are the
+# researched combination (goagx/README.md records what was checked and what
+# the alternatives were).
+ARG OPENCODE_VERSION=1.18.35
+ARG NATS_VERSION=2.14.2
+
+# Aux engines: llama.cpp's current release versioning, whisper.cpp's
+# long-standing one. Both land in the final image as single executables.
+ARG LLAMA_CPP_REPO=https://github.com/ggml-org/llama.cpp.git
+ARG LLAMA_CPP_REF=v0.7.0
+ARG WHISPER_CPP_REPO=https://github.com/ggml-org/whisper.cpp.git
+ARG WHISPER_CPP_REF=v1.9.5
+
+# --- aux engines (llama.cpp + whisper.cpp) -----------------------------------
+# Built once here, shipped as two executables: llama-server with
+# BUILD_SHARED_LIBS=OFF (static llama/ggml/common), whisper-server via its own
+# install rule (whisper links static by default). No toolchain and no .so set
+# from this stage enters the final image — only the binaries.
+FROM ${L4T_BASE} AS aux-build
+
+ARG LLAMA_CPP_REPO
+ARG LLAMA_CPP_REF
+ARG WHISPER_CPP_REPO
+ARG WHISPER_CPP_REF
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates curl git build-essential cmake \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth 1 --branch "${LLAMA_CPP_REF}" "${LLAMA_CPP_REPO}" /src/llama.cpp \
+ && cmake -S /src/llama.cpp -B /src/llama.cpp/build \
+      -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
+ && cmake --build /src/llama.cpp/build --parallel "$(nproc)" --target llama-server \
+ && install -D -m 0755 /src/llama.cpp/build/bin/llama-server /opt/aux/bin/llama-server \
+ && /opt/aux/bin/llama-server -h 2>&1 | grep -q -e '--port'
+
+RUN git clone --depth 1 --branch "${WHISPER_CPP_REF}" "${WHISPER_CPP_REPO}" /src/whisper.cpp \
+ && cmake -S /src/whisper.cpp -B /src/whisper.cpp/build -DCMAKE_BUILD_TYPE=Release \
+ && cmake --build /src/whisper.cpp/build --parallel "$(nproc)" --target whisper-server \
+ && cmake --install /src/whisper.cpp/build --prefix /opt/aux \
+ && /opt/aux/bin/whisper-server -h 2>&1 | grep -q -e '--port'
+
+# --- the node image ----------------------------------------------------------
+FROM ${L4T_BASE}
+
+ARG OPENCODE_VERSION
+ARG NATS_VERSION
+# vLLM: the newest release line that predates the CUDA-12-only world, built
+# against the base's torch 2.0.0/cu114 with two visible requirement
+# relaxations (see the engine step below) — never a hidden patch.
+ARG VLLM_GIT_URL=https://github.com/vllm-project/vllm.git
+ARG VLLM_GIT_REF=v0.2.7
+# vLLM's setup rejects unknown archs outright (NVIDIA_SUPPORTED_ARCHS has no
+# "7.2"): target sm_70 and let the driver JIT the PTX for Xavier's sm_72.
+ARG TORCH_CUDA_ARCH_LIST="7.0+PTX"
+# The xformers release matched to torch 2.0.0. vLLM imports xformers
+# unconditionally (model_executor/layers/attention.py), so this is mandatory,
+# not an optimisation — built from sdist against this image's nvcc.
+ARG XFORMERS_PIP_SPEC="xformers==0.0.20"
+# The transformers release contemporary with vLLM 0.2.7 — pip's py3.8 ceiling
+# would otherwise float it years past what this codebase expects.
+ARG TRANSFORMERS_PIP_SPEC="transformers==4.37.2"
+# Compiler jobs for the source builds. Conservative default: the build runs on
+# the Xavier itself and unified memory is the binding constraint at 16 GB.
+ARG MAX_JOBS=4
+# Aux models, baked at SHA-pinned Hugging Face resolve URLs — a `main` URL is
+# a different model tomorrow than it is today.
+ARG EMBED_GGUF_URL=https://huggingface.co/ggml-org/bge-m3-Q8_0-GGUF/resolve/9eba04c5d75ba5a1595e45de734d36bef4e5cb98/bge-m3-q8_0.gguf
+ARG RERANK_GGUF_URL=https://huggingface.co/gpustack/bge-reranker-v2-m3-GGUF/resolve/3093af03b1a635e67b084b1d8c03c5f5e020fd05/bge-reranker-v2-m3-Q4_K_M.gguf
+ARG WHISPER_GGUF_URL=https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small-q5_1.bin
+# Set by BuildKit per --platform — declared HERE, inside the stage: an ARG
+# before the first FROM is out of scope for RUN and would expand empty
+# (tested; spark.docker's stage-local declaration is the proven pattern).
+ARG TARGETARCH
+
+LABEL org.opencontainers.image.title="sparknet AGX Xavier node" \
+      org.opencontainers.image.description="SparkNet node image: source-built vLLM + llama.cpp/whisper.cpp + goSpark + sparknet bundle + KB precontext (NVIDIA AGX Xavier / sm_72, ARM64)." \
+      org.opencontainers.image.source="https://github.com/reallife-spark/goSpark" \
+      org.opencontainers.image.licenses="MIT"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    SPARKNET_FABRIC_ROOT=/srv/sparknet \
+    SPARKNET_NODE_DIR=/srv/sparknet/peer-node \
+    SPARKNET_OPT=/opt/sparknet \
+    SPARKNET_VENV=/opt/sparknet/venv \
+    SPARKNET_CONTEXT_DIR=/opt/sparknet/context \
+    SPARKNET_STATE_DIR=/srv/sparknet/peer-node/.state \
+    VLLM_MODEL=mistralai/Mistral-7B-Instruct-v0.2 \
+    VLLM_PORT=8000 \
+    NATS_PORT=4222 \
+    VLLM_CLI="python3 -m vllm.entrypoints.openai.api_server"
+
+# --- runtime tooling + build toolchain ---------------------------------------
+# The toolchain stays deliberately: vLLM/xformers compile their CUDA
+# extensions at image-build time, and a JIT path can still want a compiler at
+# first use. goagx/README.md records the image-size cost. ffmpeg is here for
+# the audio profile only: whisper's --convert turns whatever an OpenAI client
+# uploads (webm/ogg/mp3) into the WAV16 it wants. The nvcc gate fails loudly
+# here rather than as a cryptic setup.py error three hours in.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates curl tini python3-venv python3-pip jq \
+      git build-essential ninja-build python3-dev ffmpeg \
+ && rm -rf /var/lib/apt/lists/* \
+ && if ! command -v nvcc >/dev/null 2>&1 && [ ! -x /usr/local/cuda/bin/nvcc ]; then \
+      echo "sparknet.agx: no nvcc in the base image — l4t-pytorch must ship the CUDA compiler (see goagx/README.md)" >&2; \
+      exit 1; \
+    fi
+
+# --- NATS server (the goSpark bus) -------------------------------------------
+RUN case "$TARGETARCH" in \
+      amd64) asset=amd64 ;; \
+      arm64) asset=arm64 ;; \
+      *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+ && curl -fsSL "https://github.com/nats-io/nats-server/releases/download/v${NATS_VERSION}/nats-server-v${NATS_VERSION}-linux-${asset}.tar.gz" -o /tmp/nats.tar.gz \
+ && tar -xzf /tmp/nats.tar.gz -C /tmp \
+ && install -m 0755 "/tmp/nats-server-v${NATS_VERSION}-linux-${asset}/nats-server" /usr/local/bin/nats-server \
+ && rm -rf /tmp/nats.tar.gz "/tmp/nats-server-v${NATS_VERSION}-linux-${asset}" \
+ && nats-server --version
+
+# --- opencode (the node's agent surface; same pin as the other node images) ---
+RUN case "$TARGETARCH" in \
+      amd64) asset=x64 ;; \
+      arm64) asset=arm64 ;; \
+      *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+ && curl -fsSL "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-${asset}.tar.gz" -o /tmp/opencode.tar.gz \
+ && tar -xzf /tmp/opencode.tar.gz -C /usr/local/bin opencode \
+ && chmod 0755 /usr/local/bin/opencode \
+ && rm /tmp/opencode.tar.gz \
+ && opencode --version
+
+# --- inference engine: vLLM built from source --------------------------------
+# The research, in short (full verdict in goagx/README.md): NVIDIA has no
+# vLLM container for r35, the closest community images target r36, so the
+# engine is built here against the base's own torch 2.0.0 / CUDA 11.4. Three
+# upstream assumptions do not hold on this hardware, and each is corrected
+# openly below rather than by patching vLLM's code:
+#
+#   torch==2.1.2            the base already provides 2.0.0; letting pip
+#                           resolve it would fetch the CPU-only aarch64 wheel
+#                           from PyPI. Relaxed to `torch`, which the
+#                           preinstalled CUDA build satisfies.
+#   xformers==0.0.23.post1  a cu12.1 pin; vLLM imports xformers
+#                           unconditionally, so 0.0.20 — the release matched
+#                           to torch 2.0.0 — is installed from sdist first
+#                           and the pin rewritten to match.
+#   transformers>=4.36      floated to 4.37.2: the newest release that is
+#                           contemporary with vLLM 0.2.7 and still py3.8.
+#
+# If this combination ever needs a fork's fixes, point VLLM_GIT_URL at that
+# fork — the escape hatch is part of the contract, never a silent patch.
+ARG VLLM_GIT_URL
+ARG VLLM_GIT_REF
+ARG TORCH_CUDA_ARCH_LIST
+ARG XFORMERS_PIP_SPEC
+ARG TRANSFORMERS_PIP_SPEC
+ARG MAX_JOBS
+
+ENV TORCH_CUDA_ARCH_LIST=${TORCH_CUDA_ARCH_LIST} \
+    MAX_JOBS=${MAX_JOBS}
+
+RUN python3 -m pip install --no-cache-dir --upgrade pip \
+ && python3 -m pip install --no-cache-dir "${XFORMERS_PIP_SPEC}" \
+ && git clone --depth 1 --branch "${VLLM_GIT_REF}" "${VLLM_GIT_URL}" /opt/vllm-src \
+ && sed -ri \
+      -e 's/^torch.*/torch/' \
+      -e "s|^xformers.*|${XFORMERS_PIP_SPEC}|" \
+      -e "s/^transformers.*/${TRANSFORMERS_PIP_SPEC}/" \
+      /opt/vllm-src/requirements.txt \
+ && grep -E '^(torch|xformers|transformers)' /opt/vllm-src/requirements.txt \
+ && python3 -m pip install --no-cache-dir -r /opt/vllm-src/requirements.txt \
+ && python3 -m pip install --no-cache-dir --no-build-isolation /opt/vllm-src \
+ && python3 -c "import vllm, vllm._C; print('vllm', vllm.__version__)"
+
+# --- aux models (baked, SHA-pinned) ------------------------------------------
+# Small enough to bake (~1.1 GB total): the aux engines then boot in seconds
+# with no network, and the compose comment about first bring-up model
+# downloads stays true — only the text model is pulled at start.
+RUN mkdir -p /opt/sparknet/models \
+ && curl -fsSL "${EMBED_GGUF_URL}" -o /opt/sparknet/models/bge-m3-q8_0.gguf \
+ && curl -fsSL "${RERANK_GGUF_URL}" -o /opt/sparknet/models/bge-reranker-v2-m3-Q4_K_M.gguf \
+ && curl -fsSL "${WHISPER_GGUF_URL}" -o /opt/sparknet/models/ggml-small-q5_1.bin \
+ && test -s /opt/sparknet/models/bge-m3-q8_0.gguf \
+ && test -s /opt/sparknet/models/bge-reranker-v2-m3-Q4_K_M.gguf \
+ && test -s /opt/sparknet/models/ggml-small-q5_1.bin
+
+# --- the aux engines themselves ----------------------------------------------
+COPY --from=aux-build /opt/aux/bin/llama-server /opt/aux/bin/whisper-server /usr/local/bin/
+RUN test -x /usr/local/bin/llama-server \
+ && test -x /usr/local/bin/whisper-server \
+ && ! ldd /usr/local/bin/llama-server 2>/dev/null | grep -q 'not found' \
+ && ! ldd /usr/local/bin/whisper-server 2>/dev/null | grep -q 'not found'
+
+# --- goSpark control/service plane (prebuilt host binaries, named context) ----
+# The cgo GPU sidecar links NVML (present via the Jetson driver; DCGM has no
+# JetPack 5 build and is not installed — the sidecar's health half degrades to
+# available=false with a reason, by contract). COPYing the host's
+# `make build build-gpu` output keeps the source out of the image.
+COPY --from=gospark /bin/ /usr/local/bin/
+RUN chmod 0755 /usr/local/bin/sparknet-* /usr/local/bin/stub-vllm \
+ && test -x /usr/local/bin/sparknet-control \
+ && test -x /usr/local/bin/sparknet-agent \
+ && test -x /usr/local/bin/sparknetctl \
+ && test -x /usr/local/bin/stub-vllm
+
+# --- compute plane + configs (from the same named context) -------------------
+COPY --from=gospark /compute/ /opt/sparknet/compute/
+COPY --from=gospark /configs/ /opt/sparknet/gospark-configs/
+RUN rm -rf /opt/sparknet/compute/__pycache__ \
+ && python3 -m venv "${SPARKNET_VENV}" \
+ && "${SPARKNET_VENV}/bin/pip" install --no-cache-dir --upgrade pip \
+ && "${SPARKNET_VENV}/bin/pip" install --no-cache-dir -r /opt/sparknet/compute/requirements.txt \
+ && "${SPARKNET_VENV}/bin/pip" install --no-cache-dir 'cryptography>=42' python-multipart \
+ && "${SPARKNET_VENV}/bin/python" -c "import fastapi, uvicorn, httpx, cryptography"
+
+# --- the sparknet node bundle ------------------------------------------------
+# Same staged artifact as spark.docker, one code path for the repo, the
+# archive and both images.
+ARG BUNDLE_TARBALL=peer-node/container/context/sparknet-peer.tar.gz
+COPY ${BUNDLE_TARBALL} /tmp/sparknet-peer.tar.gz
+RUN mkdir -p /tmp/bundle /srv/sparknet \
+ && tar -xzf /tmp/sparknet-peer.tar.gz -C /tmp/bundle \
+ && cp -a /tmp/bundle/sparknet-peer/. /srv/sparknet/ \
+ && rm -rf /tmp/bundle /tmp/sparknet-peer.tar.gz \
+ && test -f /srv/sparknet/peer-node/scripts/sparknet-env.sh \
+ && test -d /srv/sparknet/contracts \
+ && test -d /srv/sparknet/shared \
+ && test -f /srv/sparknet/peer-node/manifests/masterspike/vllm-system-prompt.md
+
+# --- the fabric as precontext ------------------------------------------------
+# Identical two baked artifacts to spark.docker: the MASTERSPIKE system
+# prompt and the compact fabric digest, injected into every completion
+# through a wrapper chat template built at container start by
+# spark-precontext.py (the model's own HF template — for the AGX default
+# model that is mistralai/Mistral-7B-Instruct-v0.2's).
+COPY spark-precontext.py /opt/sparknet/spark-precontext.py
+RUN mkdir -p "${SPARKNET_CONTEXT_DIR}" \
+ && cp /srv/sparknet/peer-node/manifests/masterspike/vllm-system-prompt.md \
+       "${SPARKNET_CONTEXT_DIR}/masterspike-system-prompt.md" \
+ && python3 /opt/sparknet/spark-precontext.py digest \
+      --contracts /srv/sparknet/contracts \
+      --out "${SPARKNET_CONTEXT_DIR}/fabric-digest.md" \
+ && python3 /srv/sparknet/scripts/sparknet-rag-corpus.py /srv/sparknet \
+      --out "${SPARKNET_CONTEXT_DIR}/rag-corpus" \
+ && test -s "${SPARKNET_CONTEXT_DIR}/fabric-digest.md"
+
+# --- entrypoint + dispatcher -------------------------------------------------
+# The same dispatcher as the Spark image, plus the three aux-engine
+# subcommands (llama-embed, llama-rerank, whisper-asr) this image uses, and
+# the VLLM_CLI override that lets the vllm subcommand launch a source-built
+# vLLM 0.2.x (which has no `vllm serve` subcommand) without a second
+# dispatcher. The audio shim rides along and is byte-compiled here — a
+# syntax error in it should fail the build, not the first audio request.
+COPY spark-entrypoint.sh /usr/local/bin/spark-entrypoint
+COPY goagx/sparknet-audio-shim.py /opt/sparknet/audio_shim.py
+RUN chmod 0755 /usr/local/bin/spark-entrypoint \
+ && ln -sf /opt/sparknet/venv/bin/python /usr/local/bin/sparknet-python \
+ && "${SPARKNET_VENV}/bin/python" -m py_compile /opt/sparknet/audio_shim.py \
+ && /usr/local/bin/spark-entrypoint help >/dev/null
+
+WORKDIR /srv/sparknet/peer-node
+
+# The dispatcher picks the service from its first argument (vllm, compute,
+# agent, llama-embed, ...). Nothing here bakes a vault path or a secret: .env
+# is regenerated at boot, keys live in the host-mounted .state, and the shared
+# secret arrives from the environment.
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/spark-entrypoint"]
+CMD ["vllm"]

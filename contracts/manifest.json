@@ -23,7 +23,7 @@
       "contract": "ports",
       "file": "ports.json",
       "schema_version": "2.0",
-      "sha256": "9a58bd3ec295d7c5f50d53d0c435b6bc084299164f17f41ba90c2efba45cf915"
+      "sha256": "14fe5f71e3f692afd8e79d1cc2b467ad95c0b1835adcbf2a4e917d228c82ec86"
     },
     {
       "contract": "proposal-schema",
@@ -236,7 +236,7 @@
       "runtime": "not-verifiable-here",
       "service": "wireguard"
     },
-    "8080": {
+    "8088": {
       "bound_by": "master",
       "implementation_state": "provisioned",
       "runtime": "not-verifiable-here",

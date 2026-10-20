@@ -95,8 +95,8 @@ def build(contracts_dir: Path) -> dict:
     ports = dict(sorted(ports.items(), key=lambda kv: int(kv[0])))
 
     # The spark-node compose stack: a separate namespace from the fabric ports,
-    # carried separately so a shared number (9090 guard/compute, 8080
-    # admin-surface/agent-gateway, 4222 nat-gateway/nats) is not collapsed.
+    # carried separately so a shared number (9090 guard/compute, 4222
+    # nat-gateway/nats) is not collapsed.
     node_ports: dict[str, dict] = {}
     for port, spec in ports_src.get("node_ports", {}).items():
         node_ports[port] = {

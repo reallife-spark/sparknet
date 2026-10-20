@@ -21,7 +21,8 @@ The fabric already has the *authority* half of agent traffic:
 - **Provisioned but silent agents** — `peer-node/agents/{engineering,cyber,
   vault-curator}/agent.py` are two-line placeholders. `opencode-serve` (8090)
   is the single opencode server. Open WebUI is the Master's declared admin
-  surface (overlay 8080, provisioned, not deployed).
+  surface (overlay 8088, provisioned; relocated from 8080 and deployed on the
+  live Master, fabric Step 55).
 
 What is *not* contracted is the part in between: how one agent reaches another
 (or reaches a tool on a neighbouring node), and what an LLM-driven surface

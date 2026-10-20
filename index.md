@@ -1,6 +1,6 @@
 ---
 title: sparknet Knowledge Index
-updated: 2026-10-17
+updated: 2026-10-19
 ---
 
 # sparknet — Knowledge Index
@@ -54,7 +54,7 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/proposal-protocol.md` | the narrative behind the proposal workflow: fail-closed transitions, inline keys, why a verified chain is not an authority to write |
 | `contracts/deployment-runbook.md` | phased deployment guide (live on agx64+agx32) |
 | `contracts/admin-federation-runbook.md` | Phase 5 live deploy of cross-node admin federation |
-| `contracts/spark-node-runbook.md` | DGX Spark node image: CPU smoke, simulated telemetry, containerised election today; the confirm-on-the-Spark list |
+| `contracts/spark-node-runbook.md` | DGX Spark node image: CPU smoke, simulated telemetry, containerised election today; the confirm-on-the-Spark list; AGX Xavier variant of the surface under `--platform agx` |
 | `contracts/README.md` | the contract index — what each file governs |
 | `contracts/manifest.json` | generated inventory of the contract SSOT (capabilities, ports, per-file hashes) |
 | `shared/sparknet-authz.py` | the one signing implementation — never copied |
@@ -97,6 +97,10 @@ One synthesis page: [[what-pair-membership-implies-for-sparknet-reformation]].
 
 ## Working areas
 
+- `goagx/` — the node image surface retargeted to Jetson AGX Xavier (sm_72,
+  16 GB): `sparknet.agx.docker`, `sparknet.agx.compose.yml`, the audio shim;
+  same contract/services/ports as the Spark stack, selected by
+  `sparknet-node-setup.sh --platform agx` (`goagx/README.md` first)
 - `_raw/` — unprocessed captures (never deleted; ingest promotes them)
 - `_staging/` — LLM-written pages awaiting review (`WIKI_STAGED_WRITES=true`)
 - `_archives/` — vault snapshots for `/wiki-rebuild`

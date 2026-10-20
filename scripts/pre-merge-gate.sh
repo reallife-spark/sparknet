@@ -31,8 +31,9 @@ case "${1:-}" in
       '' \
       '--quick   run the fast gates only (skip the full test suite)' \
       '' \
-      'Runs keys-check, shims-check, lint, format-check, shellcheck (when it' \
-      'is installed), validate, contract-test, render-check, sbom-check, then' \
+      'Runs keys-check, shims-check, lint, format-check, shellcheck (provisioning' \
+      'the pinned binary when it is absent), validate, contract-test, render-check,' \
+      'sbom-check, then' \
       'the full suite. Reports every failure it finds, and exits non-zero if' \
       'any step failed.'
     exit 0 ;;

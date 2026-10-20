@@ -5,8 +5,14 @@ part of the fabric, not of either role: one artifact, many services, each a
 `spark-entrypoint.sh` subcommand. This runbook is the operator's companion to
 those three files plus `sparknet-node-setup.sh`. It is deliberately split into
 **what can be proven on a machine with no NVIDIA hardware** and **what only the
-Spark can confirm** — the same honesty the peer and master runbooks apply to the
-real hosts.
+Spark can confirm** — the same honesty the peer and master runbooks apply to
+the real hosts.
+
+One flag widens it: `--platform agx` selects the Jetson AGX Xavier twin of the
+same surface (`goagx/` — its own dockerfile, compose file and audio shim, same
+services/ports/profiles). Everything below is written for the Spark and applies
+to the AGX variant wherever a step does not name the image; the differences are
+gathered in the AGX subsection of §5 and in `goagx/README.md`.
 
 Behavioural contracts still win over this page: the overlay, ports, capabilities
 and identity live in `overlay.json`, `ports.json`, `capabilities.json` and
@@ -52,6 +58,10 @@ docker buildx build --network=host \
 `sparknet-node-setup.sh build` does the same, plus the bundle staging and the
 env-file, and is the supported path. The image is ~20 GB: 17 layers, the vLLM
 base, the baked fabric context used for precontext, and the pinned tooling.
+
+`--platform agx build` builds `goagx/sparknet.agx.docker` as
+`sparknet-agx-node:dev` instead — same flags, same named context, see
+`goagx/README.md` for the resource-first verdict and the build budget.
 
 ## 4. CPU-only smoke — no GPU, no model
 
@@ -194,14 +204,37 @@ Not published to the host (docker-network only, dialed by the stack itself):
 `9100` kvrouter, `9180` control metrics, and `8001`/`8002`/`8003` for the
 `embed`/`rerank`/`audio` profiles.
 
-Three of these numbers — **8080**, **9090**, **4222** — also appear in the
-fabric's `ports` (admin-surface, guard, nat-gateway). A shared number is not a
+Two of these numbers — **9090**, **4222** — also appear in the fabric's
+`ports` (guard, nat-gateway). A shared number is not a
 shared socket: the loopback defaults above are exactly what keeps a node and a
-role's listeners apart on one host. The one that does not cooperate by default
-is 8080, whose wildcard publish would fight a master's admin surface on
-`10.100.0.1:8080`; `contracts/ports.json` records that collision, and the fix on
-a shared host is to move the node's bind (`SPARKNET_BIND_LOCAL`) rather than
-re-bind the fabric side.
+role's listeners apart on one host. (8080 used to be a third — the admin surface
+— until it was relocated to 8088, fabric Step 55, so the agent gateway's
+wildcard publish no longer fights it.) The fix on a shared host is to move the
+node's bind (`SPARKNET_BIND_LOCAL`) rather than re-bind the fabric side.
+
+### The AGX Xavier variant (`--platform agx`)
+
+`--platform agx` selects `goagx/sparknet.agx.compose.yml` and
+`spark-agx.env` together (the default stays `spark`), and swaps the image to
+`sparknet-agx-node:dev`. The service graph, container names, profiles, ports
+and core env keys are the same by test (`tests/test_agx_node.py`), so §5 and
+§6 read unchanged; manual `docker compose -f …` commands substitute the AGX
+file. What genuinely differs, all documented in `goagx/README.md`:
+
+- **defaults that fit 16 GB** — Mistral-7B instead of Qwen2.5-32B, context
+  8192 instead of 65536, `VLLM_SHM_SIZE=4gb`; each overridable;
+- **vLLM v0.2.7 built from source** (`sm_72` via `7.0+PTX`, xformers from
+  sdist, build gates `import vllm._C` + `--port` greps) behind the `VLLM_CLI`
+  dialect switch — the engine command is an env, not a hardcode;
+- **audio runs through the shim**: whisper.cpp has no OpenAI transcription
+  route, so `sparknet-audio-shim.py` exposes `/v1/audio/transcriptions` on
+  the audio profile's port and forwards to `127.0.0.1:8004`;
+- **embed/rerank are llama.cpp**, serving `/v1/embeddings` and
+  `/v1/rerank` (+ `/v1/reranking`).
+
+The CPU smoke works identically: `--engine stub` layers
+`spark.compose.cpu.yml` (command/env/device reservations only — never the
+image) onto whichever base file the platform selected.
 
 ## 6. Join a running fabric (adopt the elected Master)
 
@@ -332,6 +365,12 @@ deployed:
    hold against the deployed unit, not just the rehearsal.
 6. **Phase 9 legs.** Rollback and replace-Master re-formation stay deliberately
    unexecuted; a revoke has still to be shown inert at the guard on a real host.
+
+On an AGX Xavier node (`--platform agx`) this whole list applies with the
+GB10 specifics swapped for Xavier's — `sm_72` inside a 16 GB budget, the
+source-built vLLM/xformers actually completing, the sidecar reading the
+Jetson driver — plus the audio-shim behaviours; `goagx/README.md` keeps that
+extra list.
 
 ## 10. Troubleshooting
 

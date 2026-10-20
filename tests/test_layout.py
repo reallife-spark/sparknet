@@ -82,6 +82,7 @@ EXPECTED_TOP_LEVEL = {
     "MCP_A2A_DESIGN.md",
     "COMPUTE_CAPABILITY_DESIGN.md",
     "CLUSTER_INFERENCE_DESIGN.md",
+    "CLUSTER_JOB_REALIZATION_DESIGN.md",
     "PER_USER_VAULTS_DESIGN.md",
     "ADMIN_FEDERATION_DESIGN.md",
     # the DGX Spark node image surface: the image Dockerfile, the one dispatcher
@@ -94,6 +95,9 @@ EXPECTED_TOP_LEVEL = {
     "spark.compose.cpu.yml",
     "spark-precontext.py",
     "sparknet-node-setup.sh",
+    # the AGX Xavier twin of the node surface: image + compose + audio shim +
+    # README, retargeted from GB10 to sm_72 with the same service contract.
+    "goagx",
     # per-clone hooks (activated by `make hooks`) — pre-commit runs keys-check
     ".githooks",
     # curated navigation + the daily-update cache. index.md is hand-maintained,
@@ -129,6 +133,10 @@ UNTRACKED_TOP_LEVEL = {
     ".ruff_cache",
     ".mypy_cache",
     "__pycache__",
+    # The editor's own config dir, created on first open of this tree as a vault.
+    # It is machine-local state (the volatile files are gitignored, the rest is
+    # never tracked), not part of the fabric's design.
+    ".obsidian",
 }
 
 # Files that record what one machine looked like, rather than describing the

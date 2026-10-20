@@ -25,8 +25,8 @@ resolve; do not use them. `~/.ssh/config` carries the current aliases.
 
 Declared surfaces this touches (see `ports.json`): the peer bridge **4096**
 (`dispatch-bridge`, currently `--bind 127.0.0.1`) and the Master admin surface
-**8080** (`admin-surface`, `10.100.0.1`). The console dials the peer bridge on
-`<peer-overlay-ip>:4096/admin/<action>`.
+**8088** (`admin-surface`, `10.100.0.1`; relocated from 8080, fabric Step 55).
+The console dials the peer bridge on `<peer-overlay-ip>:4096/admin/<action>`.
 
 ## Preconditions on both hosts
 

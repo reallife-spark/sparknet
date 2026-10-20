@@ -1,0 +1,471 @@
+# sparknet.agx.compose.yml — the AGX Xavier node as one image, many services.
+#
+# The AGX twin of spark.compose.yml: same service names, same ports, same
+# container names, same profiles, same state contract — so every test, tool
+# and runbook step that works on the Spark node works here. What changes is
+# the engine layer behind those names (goagx/sparknet.agx.docker builds the
+# image; spark-entrypoint.sh dispatches):
+#
+#   vllm         vLLM v0.2.7 built from source (sm_72 via sm_70+PTX JIT),
+#                default model mistralai/Mistral-7B-Instruct-v0.2 — a 7B fits
+#                Xavier's 8-16 GB, a 32B does not
+#   vllm-embed   llama.cpp llama-server, baked GGUF bge-m3 (OpenAI
+#                /v1/embeddings), CPU
+#   vllm-rerank  llama.cpp llama-server --reranking, baked GGUF
+#                bge-reranker-v2-m3 (/v1/rerank + /v1/reranking), CPU
+#   vllm-audio   whisper.cpp whisper-server behind a thin OpenAI
+#                /v1/audio/transcriptions shim (whisper's own server has no
+#                OpenAI route), CPU
+#
+# The aux engines are CPU-only on purpose: the GPU budget belongs to the text
+# model. The env file is separate from the Spark node's (spark-agx.env vs
+# spark.env) so switching platforms never inherits a stale base/model line.
+#
+# Bring it up (the setup script does this; this is the manual path):
+#
+#   make -C peer-node dist
+#   cp dist/sparknet-peer.tar.gz peer-node/container/context/sparknet-peer.tar.gz
+#   make -C /mnt/knowledge/goSpark build build-gpu
+#   docker compose -f goagx/sparknet.agx.compose.yml --env-file peer-node/.state/spark-agx.env build
+#   docker compose -f goagx/sparknet.agx.compose.yml --env-file peer-node/.state/spark-agx.env up -d
+#
+# (Build it on the Xavier: the vLLM/xformers compile needs the target's GPU
+# stack and unified memory — goagx/README.md.)
+#
+# Profiles — identical surface to spark.compose.yml:
+#
+#   default         nats vllm compute agent gpu      (text LLM + telemetry)
+#   --profile kv    + kvrouter                        (KV-residency index)
+#   --profile control + control                       (this node holds the Master key)
+#   --profile webui + webui                           (Open WebUI on :3000)
+#   --profile embed + vllm-embed                      (embeddings, for the RAG corpus)
+#   --profile rerank + vllm-rerank                    (cross-encoder reranker)
+#   --profile audio + vllm-audio                      (speech/audio model)
+#   --profile ingest + ingest                         (one-shot: refresh the RAG index)
+#   --profile backup + backup                         (signed vault snapshots, on a timer)
+#   --profile opencode + opencode                     (the node's opencode server on :4200)
+#
+# No GPU at hand? The same CPU overlay applies — service names match:
+#
+#   docker compose -f goagx/sparknet.agx.compose.yml -f spark.compose.cpu.yml up -d
+#
+# Everything is variable-interpolated (docker compose reads the env file or
+# .env next to this file). Nothing is hard-coded.
+
+name: sparknet-agx
+
+# --- shared fragments --------------------------------------------------------
+
+x-agx-node: &agx-node
+  image: sparknet-agx-node:${SPARKNET_IMAGE_TAG:-dev}
+  build:
+    # The repo root: the bundle tarball, spark-entrypoint.sh and
+    # spark-precontext.py all live there, same as the Spark build.
+    context: ..
+    dockerfile: goagx/sparknet.agx.docker
+    additional_contexts:
+      # The host's `make -C goSpark build build-gpu` output. A named context,
+      # not a COPY, so the goSpark source never enters this build context.
+      gospark: ${GOSPARK_DIR:-/mnt/knowledge/goSpark}
+    args:
+      L4T_BASE: ${L4T_BASE:-nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3}
+      OPENCODE_VERSION: ${OPENCODE_VERSION:-1.18.35}
+      NATS_VERSION: ${NATS_VERSION:-2.14.2}
+      # The build escape hatches: point the engine at a fork's fixes without
+      # patching anything (documented in goagx/README.md).
+      VLLM_GIT_URL: ${VLLM_GIT_URL:-https://github.com/vllm-project/vllm.git}
+      VLLM_GIT_REF: ${VLLM_GIT_REF:-v0.2.7}
+      XFORMERS_PIP_SPEC: ${XFORMERS_PIP_SPEC:-xformers==0.0.20}
+      TRANSFORMERS_PIP_SPEC: ${TRANSFORMERS_PIP_SPEC:-transformers==4.37.2}
+      MAX_JOBS: ${MAX_JOBS:-4}
+  restart: unless-stopped
+
+# Environment every node service shares. Identical contract to the Spark
+# node: the shared secret is generated once into --env-file and the host
+# state dir; the dispatcher persists/reads it. VLLM_MODEL defaults to a 7B
+# because Xavier's memory is 8-16 GB, not 128.
+x-agx-env: &agx-env
+  SPARKNET_NODE_ID: ${SPARKNET_NODE_ID:-spark-01}
+  SPARKNET_ROLE: ${SPARKNET_ROLE:-peer}
+  SPARKNET_OVERLAY_IPV4: ${SPARKNET_OVERLAY_IPV4:-10.100.0.2}
+  SPARKNET_STATE_DIR: /srv/sparknet/peer-node/.state
+  SPARKNET_BUS_URL: nats://nats:4222
+  SPARKNET_SHARED_SECRET: ${SPARKNET_SHARED_SECRET:-}
+  # Fabric join: both empty on a standalone node; written by
+  # `sparknet-node-setup.sh --master-pub/--registry`. In-container paths.
+  SPARKNET_MASTER_PUB: ${SPARKNET_MASTER_PUB:-}
+  GOSPARK_REGISTRY_FILE: ${GOSPARK_REGISTRY_FILE:-}
+  VLLM_MODEL: ${VLLM_MODEL:-mistralai/Mistral-7B-Instruct-v0.2}
+  TZ: ${TZ:-UTC}
+
+# .state is a HOST bind mount, never a named volume: keys and the signed
+# ledger survive recreation and never enter an image layer. Default resolves
+# to the repo-root peer-node state (this file lives in goagx/).
+x-state-volume: &state-volume
+  type: bind
+  source: ${SPARKNET_STATE_HOST:-../peer-node/.state}
+  target: /srv/sparknet/peer-node/.state
+
+# GPU reservation for the text model and the telemetry sidecar. On JetPack 5
+# the NVIDIA container runtime exposes the Jetson GPU; DCGM has no r35 build,
+# so the gpu sidecar's metrics half degrades to available=false with a reason
+# (by contract) while NVML still reports the device.
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+# vLLM wants a large shared-memory segment and host IPC for its workers.
+# 4gb, not the Spark default's 16gb: the whole machine is 8-16 GB and the
+# default model is a 7B. Raise VLLM_SHM_SIZE for a bigger model on a 32 GB
+# Xavier.
+x-vllm-runtime: &vllm-runtime
+  ipc: host
+  shm_size: ${VLLM_SHM_SIZE:-4gb}
+  ulimits:
+    memlock: -1
+    stack: 67108864
+
+# --- services ----------------------------------------------------------------
+
+services:
+  # The goSpark bus. Same upstream image and pin as spark.compose.yml — the
+  # ledger path and JetStream state live under the host state dir.
+  nats:
+    image: nats:${NATS_IMAGE_TAG:-2.14.2-alpine}
+    container_name: sparknet-nats
+    command: ["-js", "-a", "0.0.0.0", "-p", "4222", "-m", "8222", "-sd", "/data"]
+    volumes:
+      - type: bind
+        source: ${SPARKNET_STATE_HOST:-../peer-node/.state}/nats
+        target: /data
+    ports:
+      - "${SPARKNET_BIND_LOCAL:-127.0.0.1}:4222:4222"
+      - "${SPARKNET_BIND_LOCAL:-127.0.0.1}:8222:8222"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8222/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # The text LLM. Same wiring as the Spark node (MASTERSPIKE precontext
+  # through the wrapper chat template, LAN-exposed on :8000) — only the
+  # engine underneath differs: the source-built vLLM and a model that fits
+  # Xavier. SPARKNET_PREFIX_CACHING is honoured by the dispatcher (vLLM
+  # 0.2.x supports --enable-prefix-caching).
+  vllm:
+    <<: [*agx-node, *vllm-runtime, *gpu]
+    container_name: sparknet-vllm
+    command: ["${VLLM_SERVICE_CMD:-vllm}"]
+    environment:
+      <<: *agx-env
+      VLLM_PORT: "8000"
+      VLLM_GPU_MEM_UTIL: ${VLLM_GPU_MEM_UTIL:-0.85}
+      VLLM_MAX_MODEL_LEN: ${VLLM_MAX_MODEL_LEN:-8192}
+      VLLM_EXTRA_ARGS: ${VLLM_EXTRA_ARGS:-}
+      SPARKNET_MULTIMODAL: ${SPARKNET_MULTIMODAL:-}
+      SPARKNET_MM_LIMIT: ${SPARKNET_MM_LIMIT:-}
+    volumes:
+      - *state-volume
+      - type: bind
+        source: ${HF_CACHE_DIR:-${HOME}/.cache/huggingface}
+        target: /root/.cache/huggingface
+    ports:
+      - "${SPARKNET_BIND_API:-0.0.0.0}:8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 600s
+
+  # The Python compute plane beside the GPU: /v1/execute (infer/embed) with
+  # X-Sparknet-Auth, forwarding to vLLM. Unchanged from the Spark node —
+  # VLLM_ENDPOINT talks to whichever engine the vllm service runs.
+  compute:
+    <<: [*agx-node]
+    container_name: sparknet-compute
+    command: ["compute"]
+    depends_on:
+      vllm:
+        condition: service_started
+    environment:
+      <<: *agx-env
+      COMPUTE_LISTEN_HOST: 0.0.0.0
+      COMPUTE_LISTEN_PORT: "9090"
+      VLLM_ENDPOINT: http://vllm:8000/v1/chat/completions
+      SPARKNET_REQUIRE_VLLM: ${SPARKNET_REQUIRE_VLLM:-1}
+      # Set by the embed profile; empty => the worker's local hashed embedder.
+      SPARKNET_EMBED_ENDPOINT: ${SPARKNET_EMBED_ENDPOINT:-}
+      SPARKNET_EMBED_MODEL: ${SPARKNET_EMBED_MODEL:-sparknet-embed-hash}
+    volumes:
+      - *state-volume
+    ports:
+      - "${SPARKNET_BIND_LOCAL:-127.0.0.1}:9090:9090"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9090/v1/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # The KV-residency index (RadixAttention prefixes). Self-contained FastAPI —
+  # no engine dependency, so it runs unchanged beside the source-built vLLM.
+  kvrouter:
+    <<: [*agx-node]
+    profiles: ["kv"]
+    container_name: sparknet-kvrouter
+    command: ["kvrouter"]
+    depends_on:
+      vllm:
+        condition: service_started
+    environment:
+      <<: *agx-env
+      KV_LISTEN_HOST: 0.0.0.0
+      KV_LISTEN_PORT: "9100"
+    volumes:
+      - *state-volume
+
+  # The goSpark node: verifies Master-signed tasks, executes, attests. Its
+  # gateway fronts the text engine; the compute endpoint is the worker above.
+  agent:
+    <<: [*agx-node]
+    container_name: sparknet-agent
+    command: ["agent"]
+    depends_on:
+      nats:
+        condition: service_healthy
+      compute:
+        condition: service_started
+    environment:
+      <<: *agx-env
+      GOSPARK_GATEWAY_LISTEN: 0.0.0.0:8080
+      GOSPARK_GATEWAY_UPSTREAM: http://vllm:8000
+      GOSPARK_COMPUTE_ENDPOINT: http://compute:9090
+      GOSPARK_KV_ENDPOINT: http://kvrouter:9100
+    volumes:
+      - *state-volume
+    ports:
+      - "${SPARKNET_BIND_API:-0.0.0.0}:8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # The control plane. Only on the node that holds the Master signing key.
+  control:
+    <<: [*agx-node]
+    profiles: ["control"]
+    container_name: sparknet-control
+    command: ["control"]
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      <<: *agx-env
+      SPARKNET_ROLE: master
+      GOSPARK_ADMIN_LISTEN: 0.0.0.0:8899
+      GOSPARK_METRICS_LISTEN: 0.0.0.0:9180
+      GOSPARK_GATEWAY_LISTEN: 0.0.0.0:8081
+    volumes:
+      - *state-volume
+    ports:
+      - "${SPARKNET_BIND_LOCAL:-127.0.0.1}:8899:8899"
+      - "${SPARKNET_BIND_API:-0.0.0.0}:8081:8081"
+
+  # The GPU-telemetry sidecar. Degrades to available=false with a reason when
+  # there is no DCGM (never present on r35) — never a hard failure, by
+  # contract. NVML, which Jetson does provide, still reports the device.
+  gpu:
+    <<: [*agx-node, *gpu]
+    container_name: sparknet-gpu
+    command: ["gpu"]
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      <<: *agx-env
+      SPARKNET_GPU_INTERVAL: ${SPARKNET_GPU_INTERVAL:-30s}
+    volumes:
+      - *state-volume
+
+  # Open WebUI, the only foreign image, pointing at the node's own gateway.
+  webui:
+    image: ghcr.io/open-webui/open-webui:${WEBUI_TAG:-v0.12.2}
+    profiles: ["webui"]
+    container_name: sparknet-webui
+    depends_on:
+      agent:
+        condition: service_started
+    environment:
+      OPENAI_API_BASE_URL: ${WEBUI_API_BASE:-http://agent:8080/v1}
+      OPENAI_API_KEY: ${SPARKNET_SHARED_SECRET:-sparknet-local}
+      WEBUI_AUTH: ${WEBUI_AUTH:-false}
+      ENABLE_OLLAMA_API: "false"
+    volumes:
+      - type: bind
+        source: ${SPARKNET_STATE_HOST:-../peer-node/.state}/webui
+        target: /app/backend/data
+    ports:
+      - "${SPARKNET_BIND_API:-0.0.0.0}:3000:8080"
+    restart: unless-stopped
+
+  # --- knowledge profiles (opt-in) -------------------------------------------
+  #
+  # The goSpark knowledge binaries as node services. Identical to the Spark
+  # node: they link no model and no CUDA.
+
+  # One-shot: crawl the node vault, chunk it, embed through the compute
+  # plane, write the RAG index into the state dir.
+  #   docker compose -f goagx/sparknet.agx.compose.yml --profile ingest run --rm ingest
+  ingest:
+    <<: [*agx-node]
+    profiles: ["ingest"]
+    container_name: sparknet-ingest
+    command: ["ingest"]
+    depends_on:
+      compute:
+        condition: service_started
+    environment:
+      <<: *agx-env
+      GOSPARK_KNOWLEDGE_DIR: /srv/sparknet/peer-node
+      GOSPARK_INGEST_OUT: /srv/sparknet/peer-node/.state/rag/index.json
+      # Set by the embed profile to aim ingest at the dedicated embeddings
+      # server; empty => the compute plane's local hashed embedder.
+      GOSPARK_EMBED_ENDPOINT: ${SPARKNET_EMBED_ENDPOINT:-}
+      GOSPARK_EMBED_MODEL: ${SPARKNET_EMBED_MODEL:-sparknet-embed-hash}
+    volumes:
+      - *state-volume
+    restart: "no"
+
+  # Signed snapshot daemon: hash the vault, copy it under the backup target
+  # and write a node-signed manifest, every interval. Target outside the
+  # source; .state never inside the tree it signs.
+  backup:
+    <<: [*agx-node]
+    profiles: ["backup"]
+    container_name: sparknet-backup
+    command: ["backup"]
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      <<: *agx-env
+      GOSPARK_BACKUP_SOURCE: ${GOSPARK_BACKUP_SOURCE:-/srv/sparknet/peer-node}
+      GOSPARK_BACKUP_TARGET: ${GOSPARK_BACKUP_TARGET:-/srv/sparknet/backups}
+      GOSPARK_BACKUP_INTERVAL: ${GOSPARK_BACKUP_INTERVAL:-6h}
+      GOSPARK_BACKUP_SKIP_DIRS: ${GOSPARK_BACKUP_SKIP_DIRS:-.state,.git,__pycache__}
+    volumes:
+      - *state-volume
+      - type: bind
+        source: ${SPARKNET_STATE_HOST:-../peer-node/.state}/backups
+        target: /srv/sparknet/backups
+    restart: unless-stopped
+
+  # The node's opencode server over the vault. Local-only by design: it binds
+  # loopback and is never a fabric edge.
+  opencode:
+    <<: [*agx-node]
+    profiles: ["opencode"]
+    container_name: sparknet-opencode
+    command: ["opencode"]
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      <<: *agx-env
+      OPENCODE_HOST: ${OPENCODE_HOST:-127.0.0.1}
+      OPENCODE_PORT: ${OPENCODE_PORT:-4200}
+      XDG_DATA_HOME: /srv/sparknet/peer-node/.state/opencode/data
+      XDG_CACHE_HOME: /srv/sparknet/peer-node/.state/opencode/cache
+    volumes:
+      - *state-volume
+    ports:
+      - "${SPARKNET_BIND_LOCAL:-127.0.0.1}:4200:4200"
+    restart: unless-stopped
+
+  # --- multimodal profile services (opt-in, CPU on AGX) ----------------------
+  #
+  # The three aux engines. Same service names, ports and health contract as
+  # the Spark node (8001/8002/8003), a different engine underneath each: the
+  # models are baked into the image, so these come up in seconds with no
+  # downloads and no GPU reservation — the GPU belongs to the text model.
+
+  # Embeddings. llama-server's OpenAI-compatible /v1/embeddings over the
+  # baked bge-m3 GGUF. Point the compute worker at it with
+  # SPARKNET_EMBED_ENDPOINT=http://vllm-embed:8001/v1/embeddings.
+  vllm-embed:
+    <<: [*agx-node]
+    profiles: ["embed"]
+    container_name: sparknet-vllm-embed
+    command: ["llama-embed"]
+    environment:
+      <<: *agx-env
+      VLLM_PORT: "8001"
+      LLAMA_EMBED_MODEL: /opt/sparknet/models/bge-m3-q8_0.gguf
+      LLAMA_EMBED_ALIAS: ${LLAMA_EMBED_ALIAS:-bge-m3}
+      LLAMA_EMBED_CTX: ${LLAMA_EMBED_CTX:-512}
+      LLAMA_EMBED_EXTRA_ARGS: ${LLAMA_EMBED_EXTRA_ARGS:-}
+    volumes:
+      - *state-volume
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8001/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Cross-encoder reranker. llama-server serves /v1/rerank and /v1/reranking
+  # (both spellings, both client conventions) over the baked GGUF.
+  vllm-rerank:
+    <<: [*agx-node]
+    profiles: ["rerank"]
+    container_name: sparknet-vllm-rerank
+    command: ["llama-rerank"]
+    environment:
+      <<: *agx-env
+      VLLM_PORT: "8002"
+      LLAMA_RERANK_MODEL: /opt/sparknet/models/bge-reranker-v2-m3-Q4_K_M.gguf
+      LLAMA_RERANK_CTX: ${LLAMA_RERANK_CTX:-512}
+      LLAMA_RERANK_EXTRA_ARGS: ${LLAMA_RERANK_EXTRA_ARGS:-}
+    volumes:
+      - *state-volume
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8002/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Speech / audio (ASR). whisper.cpp's server speaks its own multipart
+  # /inference route; the entrypoint runs a thin OpenAI
+  # /v1/audio/transcriptions shim in front so the API surface matches the
+  # Spark node's vLLM audio server. A separate service so the text model
+  # stays resident and cheap.
+  vllm-audio:
+    <<: [*agx-node]
+    profiles: ["audio"]
+    container_name: sparknet-vllm-audio
+    command: ["whisper-asr"]
+    environment:
+      <<: *agx-env
+      VLLM_PORT: "8003"
+      WHISPER_MODEL: /opt/sparknet/models/ggml-small-q5_1.bin
+      WHISPER_LANGUAGE: ${WHISPER_LANGUAGE:-}
+      WHISPER_EXTRA_ARGS: ${WHISPER_EXTRA_ARGS:-}
+    volumes:
+      - *state-volume
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8003/health >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

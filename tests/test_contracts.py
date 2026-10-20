@@ -811,7 +811,7 @@ def test_the_share_plane_grants_no_authority(ports: dict):
 #
 # The node's ports are docker host-publishes plus in-stack listeners, not overlay
 # sockets, so they live in `node_ports` beside `ports` rather than inside it: a
-# shared NUMBER (9090, 8080, 4222) is a documentation signal, not a merge. These
+# shared NUMBER (9090, 4222) is a documentation signal, not a merge. These
 # tests keep the declaration and spark.compose.yml from drifting apart, and keep
 # the two namespaces from collapsing back into one dict.
 
@@ -948,34 +948,51 @@ def test_setup_script_advertises_only_profiles_compose_defines():
 def test_node_foreign_images_are_pinned():
     """A node image that floats is not reproducible: `main`/`latest` move.
 
-    Two foreign images ride along in the stack. The NATS one must be the same
-    release as the nats-server baked into the node image (spark.docker's
-    NATS_VERSION), or the upstream bus and the in-image binary disagree; the
-    WebUI one must be an immutable release tag, not a rolling branch.
+    Two node stacks ship (DGX Spark, AGX Xavier — goagx/), and each rides two
+    foreign images. The NATS one must be the same release as the nats-server
+    baked into its node image (that dockerfile's NATS_VERSION), or the
+    upstream bus and the in-image binary disagree; the WebUI one must be an
+    immutable release tag, not a rolling branch. The two stacks must also
+    agree with each other: one fabric, one bus release.
     """
     import yaml
 
-    compose = yaml.safe_load(COMPOSE.read_text())
-    services = compose["services"]
+    stacks = [
+        ("spark.docker", REPO_ROOT / "spark.docker", COMPOSE),
+        (
+            "goagx/sparknet.agx.docker",
+            REPO_ROOT / "goagx" / "sparknet.agx.docker",
+            REPO_ROOT / "goagx" / "sparknet.agx.compose.yml",
+        ),
+    ]
+    nats_versions: dict[str, str] = {}
+    for dname, dockerfile, compose_path in stacks:
+        compose = yaml.safe_load(compose_path.read_text())
+        services = compose["services"]
 
-    assert ":${NATS_IMAGE_TAG:-2." in services["nats"]["image"], "the nats service must keep a pinned default tag"
-    docker_nats = re.search(r"ARG NATS_VERSION=([\w.\-]+)", (REPO_ROOT / "spark.docker").read_text())
-    assert docker_nats, "spark.docker no longer pins NATS_VERSION"
-    compose_nats = re.search(r"NATS_IMAGE_TAG:-([\w.\-]+)", services["nats"]["image"])
-    assert compose_nats, "cannot read the compose nats tag default"
-    assert compose_nats.group(1) == f"{docker_nats.group(1)}-alpine", (
-        f"compose nats tag {compose_nats.group(1)!r} must track spark.docker "
-        f"NATS_VERSION {docker_nats.group(1)!r} (as <version>-alpine)"
-    )
+        assert ":${NATS_IMAGE_TAG:-2." in services["nats"]["image"], (
+            f"{compose_path.name}: the nats service must keep a pinned default tag"
+        )
+        docker_nats = re.search(r"ARG NATS_VERSION=([\w.\-]+)", dockerfile.read_text())
+        assert docker_nats, f"{dname} no longer pins NATS_VERSION"
+        compose_nats = re.search(r"NATS_IMAGE_TAG:-([\w.\-]+)", services["nats"]["image"])
+        assert compose_nats, f"cannot read {compose_path.name} nats tag default"
+        assert compose_nats.group(1) == f"{docker_nats.group(1)}-alpine", (
+            f"compose nats tag {compose_nats.group(1)!r} must track {dname} "
+            f"NATS_VERSION {docker_nats.group(1)!r} (as <version>-alpine)"
+        )
+        nats_versions[dname] = docker_nats.group(1)
 
-    webui = services["webui"]["image"]
-    default = re.search(r"WEBUI_TAG:-([\w.\-]+)", webui)
-    assert default, "the webui service must keep an overridable pinned tag"
-    tag = default.group(1)
-    assert tag not in ("main", "latest", "dev"), (
-        f"the webui default tag {tag!r} is a rolling tag; pin a release (e.g. v0.12.2)"
-    )
-    assert re.match(r"^v?\d+\.\d+\.\d+", tag), f"the webui default tag {tag!r} is not a release version"
+        webui = services["webui"]["image"]
+        default = re.search(r"WEBUI_TAG:-([\w.\-]+)", webui)
+        assert default, f"{compose_path.name}: the webui service must keep an overridable pinned tag"
+        tag = default.group(1)
+        assert tag not in ("main", "latest", "dev"), (
+            f"the webui default tag {tag!r} is a rolling tag; pin a release (e.g. v0.12.2)"
+        )
+        assert re.match(r"^v?\d+\.\d+\.\d+", tag), f"the webui default tag {tag!r} is not a release version"
+
+    assert len(set(nats_versions.values())) == 1, f"the two node stacks disagree on the bus release: {nats_versions}"
 
 
 # --- consensus protocol --------------------------------------------------------

@@ -25,7 +25,6 @@ The normative contract is ``contracts/consensus-protocol.md``.
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import sys
@@ -438,7 +437,7 @@ def verify_vote(
         return False, REASON_MISSING_SIGNATURE
     try:
         public_key = authz.public_key_from_b64(member["cluster_pubkey"])
-        public_key.verify(base64.b64decode(vote["signature_b64"]), vote_message(vote))
+        public_key.verify(authz.decode_b64_strict(vote["signature_b64"], what="vote signature"), vote_message(vote))
     except ConsensusError:
         raise
     except Exception:
@@ -656,7 +655,7 @@ def verify_removal_proof(
     for node_id, public_key_b64 in required.items():
         try:
             public_key = authz.public_key_from_b64(public_key_b64)
-            public_key.verify(base64.b64decode(signatures[node_id]), message)
+            public_key.verify(authz.decode_b64_strict(signatures[node_id], what="removal-proof signature"), message)
         except Exception:
             return False, (f"{REASON_BAD_REMOVAL_PROOF}: {node_id}'s signature does not verify")
     return True, REASON_OK
@@ -813,7 +812,7 @@ def verify_root(
     for node_id in sorted(by_id):
         try:
             public_key = authz.public_key_from_b64(by_id[node_id]["cluster_pubkey"])
-            public_key.verify(base64.b64decode(signatures[node_id]), message)
+            public_key.verify(authz.decode_b64_strict(signatures[node_id], what="root signature"), message)
         except Exception:
             return False, (
                 f"{REASON_BAD_SIGNATURE}: {node_id}'s signature does not verify "
@@ -887,7 +886,7 @@ def registry_signer_is_authorised(root: dict[str, Any], registry_entry: dict[str
         public_key = authz.public_key_from_b64(expected)
         entry = dict(registry_entry)
         public_key.verify(
-            base64.b64decode(entry["signature_b64"]),
+            authz.decode_b64_strict(entry["signature_b64"], what="registry entry signature"),
             authz.authorization_message(entry),
         )
     except Exception:

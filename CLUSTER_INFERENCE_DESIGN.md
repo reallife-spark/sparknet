@@ -393,7 +393,7 @@ reserved; the rest is proposed:
   `contracts/identity-schema.json` (canonicalisation, the permission/provenance
   signature split), `contracts/share-protocol.md` (one-to-one shares, evidence),
   `contracts/consensus-protocol.md` (vote vs grant asymmetry),
-  `contracts/ports.json` (`4223 vector-embed` spec-only; `8080` admin surface),
+  `contracts/ports.json` (`4223 vector-embed` spec-only; `8088` admin surface),
   `COMPUTE_CAPABILITY_DESIGN.md` (the `compute-serve` predecessor this
   generalises), and `MCP_A2A_DESIGN.md` (A2A over the signed transport,
   broadcast rejected).

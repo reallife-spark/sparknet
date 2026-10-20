@@ -32,8 +32,10 @@ make drift-check     # derived artifacts still match their sources
 ```
 
 A change is ready when the gates you ran pass and you can say *how* they were
-run. If a step skips (for example `shellcheck` when the binary is absent), say
-so in the pull request rather than leaving it implicit.
+run. `make shellcheck` is **required**, not advisory: it provisions the pinned
+binary into `.cache/tools/` when shellcheck is not on `PATH` (see the Makefile
+for the pin), and fails closed if it can neither find nor fetch one. If any other
+step skips, say so in the pull request rather than leaving it implicit.
 
 ## The one rule that is not style
 

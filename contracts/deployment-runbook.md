@@ -109,7 +109,7 @@ make -C peer-node keys                  # peer keys into its own state dir
 
 ## Phase 2 — the overlay is up before any election
 
-The election rides the overlay (`ports.json` 4210 `overlay_only`). Bring `wg0`
+The election rides the overlay (`ports.json` 4210 `overlay_only`). Bring `wg1`
 up first, out of band: each host generates a WireGuard keypair
 (`wg genkey | tee <state>/wg.key | wg pubkey > <state>/wg.pub`, 0600), the
 public halves and overlay addresses (`10.100.0.1` for the prospective Master,
@@ -157,7 +157,7 @@ Assert (scriptable on the exchange host, via `GET /election/status` until
   `held`, its `master-node/manifests/cluster-trust-root.json` names it;
 - the other member(s) stay `"role": "peer"` with **no** trust_root block and
   **no** root document — same byte-level no-loss assertion as the rehearsal's
-  before/after snapshot (DoD 5) applied over `wg0` delivery.
+  before/after snapshot (DoD 5) applied over `wg1` delivery.
 
 ## Phase 6 — the signer, via the unit, not a shell
 
@@ -204,7 +204,7 @@ behaviour, since no suite on this machine can see it.
 ## Phase 9 — rollback and re-formation
 
 - Rollback an election: `systemctl disable --now sparknet-master-signer.service`,
-  remove the state trust root and the flipped identity fields, `wg-quick down`,
+  remove the state trust root and the flipped identity fields, `ip link del wg1`,
   rebuild from Phase 0.
 - Replace the Master: never by revoking — a new root with a new nonce
   (n/n, i.e. 2/2 in the pair), per `consensus-protocol.md` §Re-formation.

@@ -78,7 +78,7 @@ in the upstream source:
    .133 peer                         .131 Master
    ┌──────────────────────┐          ┌───────────────────────────────┐
    │ Open WebUI (8181)    │          │ Open WebUI admin surface      │
-   │   └ events.webhooks ─┼──┐       │   (10.100.0.1:8080)           │
+   │   └ events.webhooks ─┼──┐       │   (10.100.0.1:8088)           │
    │ sparknet-admin-agent │  │       │ sparknet-admin-console        │
    │   (loopback spool)   │  │       │   ├─ live feed                │
    │ sparknet-dispatch-   │◄─┼───────┤   ├─ user/KB/chat control      │
@@ -216,7 +216,7 @@ the approval decision is the Master's.
 | 0 | This design page; fabric `PLAN.md` step; peer and master plan pointers. | `make contract-test`, fabric suite green with only doc + plan edits. | **landed 2026-10-12** |
 | 1 | Compose: signup + `pending` + audit trail; `sparknet-admin-agent.py`; unit + installer; tests. | peer suite green; `--help` contract; relocatable. | **landed 2026-10-12** |
 | 2 | `admin-supervise` in `contracts/` + `shared/`; bridge `/admin/*` route; signer `sign-admin-request`. | `make contract-test`, master parity green. | **landed as code + signed plumbing 2026-10-12**; live legs (Phase 5) still carry the reachability change |
-| 3 | Master admin console; deploy the declared admin surface; service-account enforcement. | console serves; no human admin on peer (DoD: confirm: user). | **landed as code 2026-10-12** (`sparknet-admin-console.py`, `make console`); binding on `10.100.0.1:8080` is the Phase 5 live leg |
+| 3 | Master admin console; deploy the declared admin surface; service-account enforcement. | console serves; no human admin on peer (DoD: confirm: user). | **landed as code 2026-10-12** (`sparknet-admin-console.py`, `make console`); binding on `10.100.0.1:8088` (relocated from 8080, fabric Step 55) is the Phase 5 live leg |
 | 4 | KDE Connect + live feed notifications. | plugin path proven against a paired device. | **landed as code 2026-10-12** (`feed --ping`); a real paired-device ping is a Phase 5 live leg |
 | 5 | Live deploy on `.131`/`.133` (turns the overlay-reachable surface on; bridge today binds loopback by design). | `DoD: confirm: user`. | **runbook written 2026-10-12** (`contracts/admin-federation-runbook.md`); live legs open. Recon surfaced **F1**, now **fixed in code** (route-class source policy + repeatable `--bind`) — see below |
 | 6 | Full gates: `make test-all`, `contract-test`, `lint`, `validate`, `keys-check`, `shims-check`, `bundle-verify`, `precommit`. | green. | re-run whenever a phase lands |

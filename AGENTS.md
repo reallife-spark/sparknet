@@ -24,6 +24,7 @@ to one role as though it described the whole system.
 | `peer-node/` | peer | a working node: guard, anchor, dispatch, its own wiki vault |
 | `master-node/` | master | the elected signing role — **built** (Steps 15–18); it runs the peer's services by path, holds an isolated signer, and declares an admin surface. **The election/signer arc was proven live on real hosts 2026-10-07** (fabric Steps 12→13): agx64/agx32 co-formed a 2/2 trust root, the signer ran as `sparknet-master-signer.service` on agx64, signed a live registry, survived a real reboot, and a revoke/restore demo ran. Phase 9's destructive legs (rollback / replace-Master re-formation) are documented in `contracts/deployment-runbook.md` and deliberately left unexecuted |
 | `scripts/` | both | fabric-level tooling: vendoring, env, bundling |
+| `goagx/` | both | the AGX Xavier twin of the node image surface: `sparknet.agx.docker` (L4T r35, vLLM built from source), its parity compose file, the whisper audio shim, and the platform README — selected by `sparknet-node-setup.sh --platform spark\|agx` (fabric Step 56) |
 | `.opencode/skills/` | both | the vendored wiki suite |
 
 Three consequences worth holding onto:
@@ -73,7 +74,7 @@ ch role can do |
 | `make test-all` | **every** suite: contract, fabric, peer, master |
 | `make contract-test` | the peer still matches `contracts/` |
 | `make ci` / `make ci CI_QUICK=1` | the local pre-merge gate (`scripts/pre-merge-gate.sh`): keys, shims, lint, format-check, shellcheck, validate, contract-test, render-check; `CI_QUICK=1` skips the full suite. **Authoritative** — the SHA-pinned GitHub Actions in `.github/workflows/` run the same script as a mirror |
-| `make format-check` / `make shellcheck` | incremental `ruff format --check` (new files only) / shellcheck gate (skips with a note if the binary is absent) |
+| `make format-check` / `make shellcheck` | incremental `ruff format --check` (new files only) / shellcheck gate — **required**: provisions the pinned binary into `.cache/tools/` when it is not on `PATH` |
 | `make lint` | blocking ruff over the whole fabric: `E,F,I,UP` plus `B,SIM,RUF,S` (bugbear/simplify/bandit; the widened set became the gate in PLAN Step 49) — `make lint-strict` is an alias |
 | `make test-report SCOPE=fabric\|peer\|master\|all` | JUnit XML + `.state/reports/summary.json` |
 | `make render` / `make render-check` | regenerate `contracts/manifest.json` from the contract SSOT / fail if it is stale |

@@ -163,8 +163,14 @@ def verify_stanza(
 
 def make_handoff(envelope: dict[str, Any]) -> bytes:
     """The wire bytes to send: the envelope without the containing secret echoed
-    in plaintext besides its hash.  The OOB code itself is never carried."""
-    return base64.b64decode(envelope["key_b64"])
+    in plaintext besides its hash.  The OOB code itself is never carried.
+
+    The key is decoded strictly (``validate=True``): this is the one secret the
+    handoff carries, and a tolerant decode would let a malformed ``key_b64``
+    produce a shorter key that quietly weakens the derived shared secret. An
+    invalid encoding must fail here, not downstream.
+    """
+    return base64.b64decode(envelope["key_b64"], validate=True)
 
 
 if __name__ == "__main__":

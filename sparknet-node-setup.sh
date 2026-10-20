@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# sparknet-node-setup.sh — bring up a DGX Spark SparkNet node end to end.
+# sparknet-node-setup.sh — bring up a SparkNet node end to end (DGX Spark by
+# default; AGX Xavier with --platform agx).
 #
 # One command from a clean checkout to a running node: build the sparknet bundle,
 # stage it for the image, mint the shared secret, write the compose env-file,
@@ -10,6 +11,7 @@
 #   ./sparknet-node-setup.sh --role master   # also start the control plane (:control)
 #   ./sparknet-node-setup.sh --profiles embed,webui
 #   ./sparknet-node-setup.sh --engine stub   # no GPU: CPU stub engine + sim telemetry
+#   ./sparknet-node-setup.sh --platform agx  # AGX Xavier: goagx/sparknet.agx.* image+compose
 #   ./sparknet-node-setup.sh up              # build step already done -> just run
 #
 # Join a running fabric by handing the node the elected Master's public key and
@@ -33,6 +35,7 @@ GOSPARK_DIR="${GOSPARK_DIR:-/mnt/knowledge/goSpark}"
 ROLE="${SPARKNET_ROLE:-peer}"
 PROFILES="${SPARK_PROFILES:-}"
 ENGINE="${SPARK_ENGINE:-vllm}"   # vllm (real GPU engine) | stub (CPU-only OpenAI-compatible stub)
+PLATFORM="${SPARKNET_PLATFORM:-spark}"  # spark (DGX Spark image) | agx (AGX Xavier image)
 MASTER_PUB="${SPARKNET_MASTER_PUB:-}"   # b64 string or a file containing it
 REGISTRY="${SPARKNET_REGISTRY_FILE:-}"  # Master-signed node-authorizations registry
 DO_BUILD=1
@@ -44,7 +47,7 @@ die()  { printf '\033[1;31m[error]\033[0m %s\n' "$*" >&2; exit 1; }
 
 usage() {
   cat <<'EOF'
-sparknet-node-setup.sh — bring up a DGX Spark SparkNet node.
+sparknet-node-setup.sh — bring up a SparkNet node (DGX Spark or AGX Xavier).
 
 Usage: sparknet-node-setup.sh [action] [options]
 
@@ -57,6 +60,10 @@ Actions:
 
 Options:
   --role peer|master   node role (default peer; master also enables the control plane)
+  --platform spark|agx target image/compose (default spark = DGX Spark;
+                        agx = AGX Xavier, goagx/sparknet.agx.* — its own
+                        env-file, so switching platforms never inherits
+                        the other's base/model lines)
   --engine vllm|stub   model engine (default vllm; stub = CPU-only OpenAI stub, no GPU/model)
   --profiles A,B,C     compose profiles to enable: kv control webui embed rerank audio ingest backup opencode
   --master-pub KEY     the elected Master's Ed25519 public key (base64) or a file
@@ -76,6 +83,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     up|build|down|status|logs) ACTION="$1"; shift ;;
     --role)       ROLE="$2"; shift 2 ;;
+    --platform)   PLATFORM="$2"; shift 2 ;;
     --engine)     ENGINE="$2"; shift 2 ;;
     --profiles)   PROFILES="$2"; shift 2 ;;
     --master-pub) MASTER_PUB="$2"; shift 2 ;;
@@ -98,6 +106,22 @@ esac
 if [ -n "$REGISTRY" ] && [ "$ROLE" = master ]; then
   die "--registry joins a PEER to a fabric whose Master signs elsewhere; a master node runs the control plane, which signs its own registry"
 fi
+
+# The platform selects the compose file and the env-file together: an AGX node
+# must never build against spark.compose.yml, and the two platforms keep
+# separate env-files (spark.env vs spark-agx.env) so a switch never inherits
+# the other's base/model lines.
+case "$PLATFORM" in
+  spark)
+    COMPOSE_FILE="$REPO/spark.compose.yml"
+    ENV_FILE="$NODE_STATE/spark.env"
+    ;;
+  agx)
+    COMPOSE_FILE="$REPO/goagx/sparknet.agx.compose.yml"
+    ENV_FILE="$NODE_STATE/spark-agx.env"
+    ;;
+  *) die "--platform must be 'spark' or 'agx' (got: $PLATFORM)" ;;
+esac
 
 # --- preflight ---------------------------------------------------------------
 
@@ -196,12 +220,28 @@ render_env_file() {
   chmod 700 "$NODE_STATE" 2>/dev/null || true
   resolve_join
 
-  local id role overlay model secret
+  local id role overlay model secret base_line max_len_line img_dockerfile
   id="${SPARKNET_NODE_ID:-$(hostname)}"
   role="$ROLE"
   if [ -n "${SPARKNET_OVERLAY_IPV4:-}" ]; then overlay="$SPARKNET_OVERLAY_IPV4"
   elif [ "$role" = master ]; then overlay="10.100.0.1"; else overlay="10.100.0.2"; fi
-  model="${VLLM_MODEL:-Qwen/Qwen2.5-32B-Instruct}"
+  # Platform-conditional block: the AGX node builds from an L4T base with a
+  # 7B default (Xavier has 8-16 GB, not 128) and a tighter context/shm; the
+  # Spark node keeps its vLLM base, 32B default and 65536 context. The build
+  # escape hatches (VLLM_GIT_URL, MAX_JOBS, ...) pass through the shell
+  # environment, so they are deliberately not written here.
+  if [ "$PLATFORM" = agx ]; then
+    model="${VLLM_MODEL:-mistralai/Mistral-7B-Instruct-v0.2}"
+    base_line="L4T_BASE=${L4T_BASE:-nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3}"
+    max_len_line="VLLM_MAX_MODEL_LEN=${VLLM_MAX_MODEL_LEN:-8192}
+VLLM_SHM_SIZE=${VLLM_SHM_SIZE:-4gb}"
+    img_dockerfile=sparknet.agx.docker
+  else
+    model="${VLLM_MODEL:-Qwen/Qwen2.5-32B-Instruct}"
+    base_line="VLLM_BASE=${VLLM_BASE:-nvcr.io/nvidia/vllm:26.04-py3}"
+    max_len_line="VLLM_MAX_MODEL_LEN=${VLLM_MAX_MODEL_LEN:-65536}"
+    img_dockerfile=spark.docker
+  fi
 
   # One secret for the whole node, shared by compute/agent/control/kvrouter. It
   # lives in the host state dir and is passed to every service through the
@@ -227,15 +267,15 @@ SPARKNET_SHARED_SECRET=$secret_val
 SPARKNET_STATE_HOST=$NODE_STATE
 GOSPARK_DIR=$GOSPARK_DIR
 SPARKNET_IMAGE_TAG=${SPARKNET_IMAGE_TAG:-dev}
-VLLM_BASE=${VLLM_BASE:-nvcr.io/nvidia/vllm:26.04-py3}
+$base_line
 VLLM_MODEL=$model
 VLLM_SERVICE_CMD=$service_cmd
 VLLM_GPU_MEM_UTIL=${VLLM_GPU_MEM_UTIL:-0.85}
-VLLM_MAX_MODEL_LEN=${VLLM_MAX_MODEL_LEN:-65536}
+$max_len_line
 HF_CACHE_DIR=${HF_CACHE_DIR:-$HOME/.cache/huggingface}
 SPARKNET_BIND_API=${SPARKNET_BIND_API:-0.0.0.0}
 SPARKNET_BIND_LOCAL=${SPARKNET_BIND_LOCAL:-127.0.0.1}
-# Pinned foreign images. NATS_IMAGE_TAG must track NATS_VERSION in spark.docker
+# Pinned foreign images. NATS_IMAGE_TAG must track NATS_VERSION in $img_dockerfile
 # (the same nats-server is also baked into the image for `spark-entrypoint nats`);
 # WEBUI_TAG is a stable release, never `main`/`latest`.
 NATS_IMAGE_TAG=${NATS_IMAGE_TAG:-2.14.2-alpine}
@@ -285,7 +325,11 @@ act_build() {
   render_env_file
   write_gpu_fixture
   ensure_vault_env
-  log "building the node image (VLLM_BASE=${VLLM_BASE:-nvcr.io/nvidia/vllm:26.04-py3})"
+  if [ "$PLATFORM" = agx ]; then
+    log "building the node image ($PLATFORM: L4T_BASE=${L4T_BASE:-nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3})"
+  else
+    log "building the node image ($PLATFORM: VLLM_BASE=${VLLM_BASE:-nvcr.io/nvidia/vllm:26.04-py3})"
+  fi
   compose build
 }
 

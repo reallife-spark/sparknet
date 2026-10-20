@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from types import ModuleType
 
+import pytest
 from contract_helpers import load
 
 # --- golden vectors -----------------------------------------------------------
@@ -173,3 +174,41 @@ def test_capability_order_asymmetry_is_intentional(authz: ModuleType):
         "granted capabilities became order-sensitive, so rewriting the registry "
         "with the same set in a different order invalidates the Master's signature"
     )
+
+
+# --- strict base64 ------------------------------------------------------------
+
+
+def test_decode_b64_strict_rejects_the_cross_version_trap(authz: ModuleType):
+    """The malformed inputs a tolerant decoder accepts on one CPython and not another.
+
+    A real Ed25519 public key is 32 bytes -> 44 base64 chars ending in ``=``. A
+    43-char body with a stray trailing ``=`` is the shape that historically
+    decoded on 3.12 (tolerant) and raised on 3.14 (strict). Routing every decode
+    through one strict helper removes the version dependence; this pins it.
+    """
+    # A valid key decodes to exactly 32 bytes with and without the module.
+    good = "xjKK/BeuwLIsxZz53jwHYOoXyZRSqUO1Rv6JafZShx0="
+    assert len(authz.decode_b64_strict(good, what="key")) == 32
+
+    # Non-alphabet bytes must be refused, not silently ignored.
+    for bad in ("not base64!!", "AAAA AAAA", "a=b=c"):
+        with pytest.raises(authz.AuthzError):
+            authz.decode_b64_strict(bad, what="signature")
+
+
+def test_decode_b64_strict_urlsafe_variant(authz: ModuleType):
+    import base64
+
+    raw = b"a grant token payload"
+    token = base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+    assert authz.decode_b64_strict(token, what="grant token", urlsafe=True) == raw
+
+
+def test_verify_signature_is_fail_closed_on_malformed_base64(authz: ModuleType):
+    """A garbage signature must return False, never raise, and never pass."""
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    pub = Ed25519PrivateKey.generate().public_key()
+    assert authz.verify_signature(pub, "!!!not base64!!!", b"msg") is False
+    assert authz.verify_signature(pub, "", b"msg") is False

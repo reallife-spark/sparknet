@@ -1,6 +1,6 @@
 ---
 title: sparknet Plan
-updated: 2026-10-17
+updated: 2026-10-20
 current: done
 ---
 
@@ -1873,6 +1873,577 @@ and has no forge on a node, so there is nowhere a workflow file would ever run.
         (`current: 8` → `current: done`). Session file closed. `PLAN.md`
         `current: done`. 35+ doc/code files touched this arc, **all uncommitted**
         per the DoD (the trees were already dirty pre-session).
+
+## Step 53 — 00_System template refresh (both roles) + vault-template
+
+- [x] **Step 53 — base knowledge template refresh** — complete 2026-10-18.
+      Scope decided with the user: refresh **both** roles' `00_System/` base
+      sets **and** fill the `peer-node/deployment/vault-template/` stub.
+      **Identity decision: `sparknet-node-0002`** (local numbering, peer-parity
+      with `sparknet-node-0001` — deliberately *not* the live trust-root names
+      `agx64`/`node131`; the divergence is recorded, not accidental).
+      Companion network arc (h58 WiFi uplink on agx64/agx32, staged before any
+      eth0 direct-link change) opens as **Step 54**.
+      - **DoD**: (1) both roles' `00_System` prose states current truth — no
+        pre-election claims (master charter vocabulary: "proven live
+        2026-10-07", "declared, not bound", Phase 9 legs unexecuted);
+        (2) the master identity chain is consistent — `node_id:
+        sparknet-node-0002` in `manifests/{node,master}-identity.json`,
+        `00_System/user.md owner_node` matching, `.user.lock` sha256
+        rewritten, `provenance-verify` + strict `precommit` green;
+        (3) `peer-node/deployment/vault-template/` is a real, instantiable
+        template (no non-existent paths, pointer-only into `contracts/`);
+        (4) gates green: `make validate`, `contract-test`, `render-check`,
+        `keys-check`, `shims-check`, both roles' `precommit`, `lint`,
+        `test-all`.
+      - **Status (complete, 2026-10-18).** All four DoD arms met.
+        **(1)** Stale claims fixed in `master-node/00_System/`:
+        `alpha-admin.md` §5 ("never been deployed" → proven live 2026-10-07
+        with what remains unbuilt) and §6 ("Master is not elected, no signing
+        key is in use" → admin services `spec-only`/`provisioned`, nothing
+        binds `10.100.0.1:8080`, election no longer the gap), `user.md`
+        body (signer claim), `index.md` (work-in-flight now points at
+        `plans/MASTER_BUILD_PLAN.md` — the role has no root `PLAN.md` — and
+        the admin bullet records federation ran live 2026-10-12 while
+        git/file-share/NAT/vector stay spec-only);
+        `peer-node/00_System/index.md` (terminal cursor) — its `alpha-agent`
+        inbox-transport claim was **verified still true** against
+        `contracts/ports.json` (no intake listener exists) and deliberately
+        left standing. **(2)** Identity chain fixed end-to-end: `node_id:
+        sparknet-node-0002` in both manifests, `user.md owner_node`
+        matching, `.user.lock` sha256 rewritten (`ecee44f8…`); strict
+        `precommit` clean; the role's content dirs hold **no signed notes**,
+        so nothing needed re-signing. **(3)** `deployment/vault-template/`
+        built out: honest README (instantiation steps, and the closed
+        `sparknet-env-init.sh` role list stated rather than glossed) plus
+        `00_System/{index,user(unfilled),schema.yaml,secrets-index.json,log.md}`.
+        **(4)** Every gate rc=0: `validate`, `contract-test`,
+        `render-check`, `keys-check`, `shims-check`, both roles'
+        `precommit`, `lint`, `test-all` (contract + fabric + peer 461 passed
+        1 skipped + master). Note: `schema.yaml`'s `source.tracking` was
+        left fabric-relative — it is pinned exactly by
+        `tests/test_contracts.py:1315`. Nothing committed (not asked).
+        Cursor `53 → 54`.
+
+## Step 54 — h58 WiFi uplink on agx64/agx32 (staged; eth0 direct link gated)
+
+- [ ] **Step 54 — WiFi-first network staging** — opened 2026-10-18.
+      User-assisted: **the user runs** the PSK-bearing `nmcli device wifi
+      connect h58 …` on each node (PSK never enters chat, the vault, or any
+      command the agent runs); everything else is agent-side. Recon facts:
+      both nodes carry an Intel AX210 (`8086:2725`) with `iwlwifi` loaded —
+      this is configuration, not driver work; each has exactly one ethernet
+      port; `wg1` endpoints are pinned to `192.168.178.131/133:51820`.
+      - **DoD**: (1) `wlan0` connected to h58 on both nodes with an
+        autoconnect NM profile; (2) wlan0 carries the default route
+        (`ipv4.route-metric 50`; eth0's DHCP default stays as fallback —
+        LAN `.131`/`.133`, the `100.65.19.51 via .126` route and the `wg1`
+        endpoints untouched); (3) internet verified over wlan0
+        (`ip route get 1.1.1.1` → dev wlan0, curl 204) and the `wg1`
+        handshake still fresh on both; (4) h58's per-node gateway/subnet/DNS
+        recorded in the session file and `MEMORY.md`. The eth0
+        direct-cable re-addressing is **`DoD: confirm: user`** — applied as
+        a follow-up when the cable exists, with the subnet decision taken
+        against the facts from (4).
+
+## Step 55 — role-swap deployment: peer on agx64, Master (all built services) on agx32
+
+> **Superseded (deployed state) by Step 57 (2026-10-19)**, which redeployed both
+> hosts clean-slate over the `10.99.0.0/30` cable underlay and re-ran the
+> election (root `fa6f4fa5…`). Step 55's deployment was archived to
+> `~/.local/state/sparknet/ARCHIVE-2026-10-19-escalation/`; its remaining
+> `DoD: confirm: user` legs are carried by Step 57.
+
+- [ ] **Step 55 — role-swap deployment of the fabric onto the live pair** —
+      opened 2026-10-18. Trigger: the operator wants the two AGXes
+      communicating by exchanging keys, then `peer-node` set up on **agx64**
+      and `master-node` with all of its services on **agx32** — the reverse
+      of today's live roles (agx64 holds both the 2026-10-07 root's signer
+      and cluster2's `node131` Master). The user's node↔node SSH
+      `Permission denied (publickey)` in both directions is reproduced and
+      is fixed by Phase 1.
+      **Operator decisions (answered 2026-10-18):** retire-first (archive,
+      never delete) · LAN underlay now (WiFi Step 54 + direct cable stay
+      follow-ups) · node_ids `sparknet-node-0001` (peer@agx64) /
+      `sparknet-node-0002` (master@agx32) = repo SSOT · scope = everything
+      built, spec-only ports honestly unstarted.
+      **Hard constraint driving the order:** `contracts/overlay.json` pins
+      `10.100.0.1` = Master anchor, never assignable to a peer → the flip
+      to agx32 breaks both existing deployments, so they retire (Phase 2)
+      before the overlay re-forms (Phase 3).
+      - **Phases:** 0 pre-flight gates + host facts (venv mandatory —
+        system cryptography 2.8 < 42) · 1 exchange SSH keys (fixes the
+        publickey error) · 2 inventory → disable all old `sparknet-*`
+        units → mv state to `~/.local/state/sparknet/ARCHIVE-2026-10-18/`
+        (rollback = mv back + re-enable) · 3 fresh wg keys, wg1 flipped
+        `.1`=agx32 / `.2`=agx64, LAN endpoints, cross-ping · 4
+        `make bundle ROLE=master` → verify → `~/sparknet/` both hosts,
+        python3.9 venv + cryptography ≥42, env-init per role, c2-pattern
+        units (absolute paths + `User=raxxar`, recorded deviation from the
+        runbook's `%h`/root form) · 5 keygen/keys + `cluster-members.json`
+        roster (pub halves cross out-of-band) + `SPARKNET_NODE_ID` ·
+        6 peer-only proof (validate, role peer, no root doc) then the
+        election: serve on `10.100.0.1:4210`, `election-approve
+        EXPECT=sparknet-node-0002`, `election-request CANDIDATE=…` ·
+        7 signer unit → socket/root-id/caps `["sign"]`, ledger + parity,
+        registry sign + root-alone verify + three refusals, console smoke,
+        admin surface 8080 deploy attempt (reachability = confirm item),
+        peer side `install-units` (guard-d, dispatch-bridge loopback +
+        `10.100.0.2` per the F1 pattern, admin-agent, vault-provisioner,
+        sync, wifi-guard, firewall), `guard-status`/`authz-verify`/
+        `guard-contract`; wg reuses `wg1` — `anchor` not run ·
+        8 transcript `/mnt/log/sparknet-swap-deploy-2026-10-18.md` +
+        confirm list, port inventory proves spec-only silent, deployed
+        `validate` + strict `precommit` + `units-check` ·
+        9 PLAN/log/session/MEMORY.
+      - **DoD**: (1) node↔node SSH `BatchMode` echo OK both directions;
+        (2) old deployments archived + every old unit disabled + no
+        process holds an old key; (3) wg1 up with fresh keys,
+        `10.100.0.1`=agx32, ping 0% both ways; (4) root co-signed by
+        `0001`+`0002`, `0002` Master, `0001` peer without a root doc;
+        (5) signer socket proves root-id + caps `["sign"]`, registry
+        verifies root-alone on the peer, three refusals hold,
+        ledger+parity green; (6) built scope running with spec-only ports
+        absent from `ss`; (7) transcript + confirm list landed, plan
+        records updated. Live legs stay `DoD: confirm: user` where a
+        human sees the node (restart/reboot survival, admin-surface
+        reachability, guard refusal on a revoked host if exercised).
+      - **Progress (2026-10-19):** Phases 7–8 executed and verified on the
+        live pair — full record in
+        `/mnt/log/sparknet-swap-deploy-2026-10-18.md`. **7a** signer live
+        (socket `srw-------`, root-id `c5b4a23a…`, caps `["sign"]`,
+        `public-key k8Gh2j…`). **7b** registry signed (peer entry
+        `4f9d8a4e…`), peer verifies **root-alone** `allowed:true`, the
+        **three refusals** hold; fixed the peer `authz-verify` target
+        (`Makefile:112` → `$(FABRIC_ROOT)/shared/sparknet-authz.py`).
+        **7c** peer units installed — guard (`10.100.0.2:9090`) and
+        dispatch-bridge (`127.0.0.1`+`10.100.0.2:4096`, F1) active after
+        minting the missing node key (`make keys` → `ed25519-node.key.b64`);
+        console `feed` federates `{"ok":true}`; wg1 reused, anchor not run.
+        **7d** admin surface **relocated + deployed** — an unrelated `mitm`
+        container holds `0.0.0.0:8080`, so the surface moved `8080 → 8088` in the
+        contract + compose + tests and is up at `10.100.0.1:8088` (HTTP 200 over
+        the overlay from the peer; a human browser check = confirm). **8** peer `validate` + strict `precommit`
+        **clean** (9 notes valid, ledger intact), master `validate` clean
+        (**units wired and enabled**), spec-only ports (`4220–4223`, `4203`,
+        `8090`) absent from `ss`, ad-hoc election serve on `4210` stopped.
+        **Deviation:** the python floor is met with **uv CPython 3.12**
+        (supersedes the "python3.9 venv" wording in Phase 4). **Finding:**
+        keygen writes `.state/keys/*.pub*` at `0644` but `keys-check` demands
+        `0600` — normalised on-host, reconcile in the repo. Step **stays
+        open**: the remaining DoD legs are `DoD: confirm: user` (reboot
+        survival; admin-surface browser check — bound at `10.100.0.1:8088`,
+        HTTP 200 from the peer; guard refusal on a revoked host; WiFi Step 54 +
+        direct cable).
+
+## Step 56 — goagx: the node surface on Jetson AGX Xavier (sm_72, 16 GB)
+
+- [ ] **Step 56 — goagx + the AGX node-image remake** — opened 2026-10-19.
+      Trigger: retarget the goSpark node distribution from the DGX Spark to a
+      Jetson AGX Xavier, all features retained, and remake the node image
+      Dockerfile as `sparknet.agx.docker`.
+      **Operator decisions (answered 2026-10-19):** (1) lives in this repo as
+      `goagx/`, consuming the existing goSpark binaries through the same
+      `gospark` named context — **no Go fork**; (2) inference engine =
+      **vLLM v0.2.7 built from source** (the era that still supported
+      `sm_72` + Python 3.8, behind `TORCH_CUDA_ARCH_LIST="7.0+PTX"`);
+      (3) **real engines for rerank and audio too** (llama.cpp v0.7.0,
+      whisper.cpp v1.9.5 — no placeholders).
+      **Resource-first verdict (STYLE_GUIDE §1, `make nv-search` + forums):**
+      NVIDIA publishes **no vLLM container for the r35 branch** (stated by an
+      NVIDIA moderator in the JetPack 5.1.4 thread); `nvcr.io/nvidia/vllm` is
+      current-generation only (25.09→26.06-py3, Python 3.12); the
+      jetson-containers route fails on JetPack 5 exactly at Python/triton
+      (≥3.10 vs r35's 3.8). Fallback escape hatch kept as
+      `ARG VLLM_GIT_URL` (point it at dusty-nv/jetson-containers
+      `packages/llm/vllm` instead of re-deriving).
+      - **Deliverables (9-file set):** `goagx/sparknet.agx.docker` (L4T
+        r35.2.1-pth2.0 base, aux-build stage for llama/whisper, xformers
+        sdist + vLLM source build with requirement relaxations, build gates
+        `import vllm._C` + `--port` greps + `py_compile` shim, `VLLM_CLI`
+        image env) · `goagx/sparknet.agx.compose.yml` (14 services, identical
+        names/ports/profiles/core env keys to `spark.compose.yml`, AGX
+        defaults Mistral-7B / 8192 / shm 4gb) · `goagx/sparknet-audio-shim.py`
+        (OpenAI `/v1/audio/transcriptions` over whisper's `/inference`;
+        whisper ships no OpenAI route) · `goagx/README.md` (verdict, truth
+        table, build budget, what-proven-where) · `sparknet-node-setup.sh
+        --platform spark|agx` (default stays spark — test fixtures untouched;
+        platform picks compose file + env file together) ·
+        `spark-entrypoint.sh` `VLLM_CLI` dialect switch + `llama-embed` /
+        `llama-rerank` / `whisper-asr` subcommands · runbook AGX subsection ·
+        `index.md` / `CHANGELOG.md` · `tests/test_agx_node.py` + coupling
+        edits (`test_layout.py` goagx, `test_contracts.py` pin test over both
+        stacks).
+      - **DoD**: (1) `tests/test_agx_node.py` green — service/port/env-key
+        parity, container names/profiles parity, pin sharing (NATS/opencode
+        both stacks), AGX defaults fit 16 GB, setup `--platform` wiring,
+        entrypoint gating (2× `modern` gates), baked+healthchecked aux
+        engines, shim surface; (2) `docker build --check` clean on the AGX
+        dockerfile and `docker compose config -q` resolves all three
+        compositions (agx, agx+cpu overlay, spark); (3) ruff check/format
+        clean on every new/edited Python file; (4) full gate chain rc=0:
+        `lint format-check shellcheck validate contract-test test-all ci`
+        (+ `render-check` if the runbook edit reaches the manifest);
+        (5) docs landed (README verdict cited, runbook subsection, index,
+        CHANGELOG) with no forbidden phrase. **`DoD: confirm: user`:** the
+        source build actually completing on Xavier hardware, real tokens/s
+        from the 7B model in 16 GB, NVML/sidecar reading the Jetson driver
+        honestly, whisper `detect_language` through the shim.
+      - **Progress (2026-10-19):** all nine deliverables written; parity +
+        claims + layout + setup-join + cpu-smoke suites green (exit 0);
+        `docker build --check` clean; all three compose configs resolve;
+        ruff clean on the new/edited Python; resource-first verdict recorded
+        in `goagx/README.md` from primary sources (NGC tag list, two NVIDIA
+        forum threads). **Gates (2026-10-19, rc=0 all):** `render-check`,
+        `lint`, `format-check` (113 files), `shellcheck` (binary absent —
+        skipped with the standard note), `validate`, `contract-test`,
+        `test-all` (peer 461/1skip, master green), and the full `make ci`
+        pre-merge gate ("all steps passed"). Auto-verifiable DoD (1)–(5)
+        hold; step stays `[ ]` only for the `confirm: user` legs.
+      - **Note**: Step 55 stays **open** (its live legs are `confirm: user`);
+        the cursor moves here for this workstream, exactly as 54 was parked
+        as a follow-up.
+
+## Step 57 — fresh peer deployment on both AGXes + manual 2/2 master escalation over the sparknet cable
+
+- [x] **Step 57 — clean-slate pair: peer-node + KB template on both hosts, cable
+      underlay, manual election ceremony** — opened 2026-10-19, **done
+      2026-10-19 (all phases 0–11 executed and verified)**; live legs
+      (cable move, reboot survival, human review of the transcript) stay
+      `DoD: confirm: user`. Outcome: agx32/agx64 redeployed clean-slate as
+      peers on the knowledge-base template; wlan0 `.21`/`.22` carry the uplink
+      (default-route handover asserted); the direct eth0 cable became the
+      dedicated sparknet underlay `10.99.0.0/30` (`.1`=agx32 `.2`=agx64, static
+      never-default) with the `wg1` overlay pinned to it (cross-ping 0% both
+      ways); the **manual 2/2 ceremony formed root `fa6f4fa5…` naming `0002`
+      (agx32) Master** (0001 stays a peer with no root document); the isolated
+      signer runs as a c2-pattern unit (socket ``srw-------``, root-id
+      `fa6f4fa5…`, caps `["sign"]`, public-key `xjKK/Beuw…` == root
+      `master_pubkey`); a signed registry entry (peer fingerprint `84bd134e…`,
+      caps `p2p-sync,push-receive,telemetry`) verifies **root-alone** on the
+      still-peer, and the three refusals hold (wrong operational key, unnamed
+      node, tampered root); guard + dispatch-bridge active on agx64 (guard
+      `10.100.0.2:9090`, bridge `127.0.0.1`+`10.100.0.2:4096`). Full transcript:
+      `/mnt/log/sparknet-manual-escalation-2026-10-19.md`. This **supersedes**
+      Step 55's deployment (archived `ARCHIVE-2026-10-19-escalation`). Trigger:
+      operator wants both AGXes freshly deployed as peer-nodes (each with the
+      knowledge-base template instantiated + `user-init`), then one node
+      escalated to Master **manually**, walking the election conversation:
+      the peer's signed bid/vote is the request, the other side's
+      `election-approve` is the acceptance, the root forms only at 2/2.
+      **Operator decisions (answered 2026-10-19):** master =
+      **agx32** (`blue-team`, anchor `10.100.0.1`); node_ids host-stable
+      `0001`=agx64 / `0002`=agx32; vault owner `raxxar` on both;
+      **network posture:** wlan0 stays the uplink (WiFi `h58`,
+      `.21`/`.22`, default route) even while eth0 is cabled; the direct
+      eth0 cable is a dedicated **sparknet underlay** `10.99.0.0/30`
+      (agx32 `.1`, agx64 `.2`), and the `wg1` overlay endpoints are pinned
+      to the cable — the cable *is* the sparknet connection. This closes
+      Steps 54/55's parked "direct-cable re-addressing" follow-up (subnet
+      decision taken here). The physical plug happens **after** the static
+      cable profiles are live, so the move is a no-op for every configured
+      state (WiFi untouched; wg re-handshakes within keepalive).
+      **Method:** the Step 55 role-swap transcript
+      (`/mnt/log/sparknet-swap-deploy-2026-10-18.md`) is the proven command
+      reference (uv 3.12 venv, wireguard-go `setconf`-hang gotcha, c2-pattern
+      units, registry-shipped-peer-identity gotcha); deviations: overlay
+      endpoints = cable IPs, retire target = the Step 55 deployment
+      (archive `ARCHIVE-2026-10-19-escalation`), vault template + `user-init`
+      on both roles' vaults (fixes the "filled user.md ships, private key
+      nowhere" finding on these nodes).
+      - **Phases:** 0 pre-flight + `bundle ROLE=master` → verify → scp both ·
+        1 retire (agx32 signer/ledger/parity + admin container first; then
+        agx64 guard/bridge; unit files + state + trees → archive) ·
+        2 fresh trees `~/sparknet/`, uv 3.12 venv, env-init per role,
+        **vault template → 00_System + `user-init OWNER_ID=raxxar`**,
+        provenance-verify + precommit before the first note ·
+        3 network: ssh aliases → wlan0 `.21`/`.22`, assert default handover
+        to wlan0, `sparknet-cable` nmcli profiles `10.99.0.x/30`
+        never-default, wired-LAN profiles `autoconnect no`, cable cross-ping
+        (over the switch) → **operator moves the physical cable** →
+        re-asserts · 4 keys + identities + `wg-render` with cable endpoints
+        + wireguard-go bringup + overlay cross-ping · 5 cluster keys +
+        `cluster-members.json` (2 members, sha256(node_id) fingerprints) ·
+        6 peer-only proof (validate, both `role: peer`, no root doc) ·
+        7 **the ceremony** (serve `10.100.0.1:4210`;
+        `election-request CANDIDATE=0002` on agx64;
+        `election-approve EXPECT=0002` on agx32; `formed`, 2/2 co-sigs,
+        0002 → master, 0001 stays peer no-root) · 8 signer unit (c2 pattern)
+        socket/root-id/caps `["sign"]` · 9 registry sign + ship + root-alone
+        verify + three refusals · 10 peer units agx64
+        (`install-units --apply`, node key for the bridge, guard-status) ·
+        11 transcript `/mnt/log/sparknet-manual-escalation-2026-10-19.md`,
+        session/MEMORY, Step 55 recorded superseded-by-archive.
+      - **DoD**: (1) wlan0 carries default + internet on both through and
+        after the cable move; SSH from this host via `.21`/`.22` alive
+        throughout; (2) old deployments archived, no sparknet unit files
+        remain; (3) both peer vaults have filled `user.md` + valid
+        `.user.lock`, precommit clean; (4) `10.99.0.x` cross-ping 0% over
+        the direct cable; overlay up, cross-ping 0%; (5) root co-signed by
+        `0001`+`0002`, `0002` master, `0001` peer without a root doc;
+        (6) signer socket root-id + caps `["sign"]`; registry verifies
+        root-alone on the peer; three refusals hold; (7) guard + bridge
+        active on agx64; (8) transcript landed. Live legs stay
+        `DoD: confirm: user` (the physical cable move itself, reboot
+        survival, human review of the ceremony transcript).
+
+## Step 58 — overlay survives reboot on the kernel-module-less AGX hosts
+
+- [x] **Step 58 — userspace-aware overlay anchors for both roles** — opened and
+      **done 2026-10-19**; the literal reboot stays `DoD: confirm: user`. Closes
+      Step 57's parked "reboot survival" leg and retires the ad-hoc
+      `/root/scripts/sparknet-wg-restore.sh`.
+      **Root cause (probed live):** the AGX hosts ship `CONFIG_WIREGUARD=n`, so
+      `ip link add … type wireguard` fails and `wg-quick up` — including its
+      userspace fallback — is unusable: it starts `wireguard-go`, does not wait
+      for the UAPI socket, and hangs in `wg setconf` before the interface is
+      configured. The peer's `sparknet-wireguard-anchor.service` was **enabled
+      but had no `/etc/sparknet/wireguard.env`**, so it would have failed at boot
+      and left the node with no overlay; the master had no anchor unit at all.
+      **Deliverables:** new role-neutral `peer-node/scripts/sparknet-wg-bringup.sh`
+      (kernel probe → `wireguard-go` + UAPI-socket wait → `timeout`-capped
+      `wg setconf` confirmed by `wg show` → address/MTU/route); the peer anchor
+      now `chattr -i`-unlocks the pinned config before rendering and delegates to
+      the helper with the `10.100.0.1/32` route; new
+      `master-node/scripts/sparknet-master-wireguard-anchor.sh` +
+      `sparknet-master-wireguard-anchor.service` (force-loads the peer's
+      `.setconf`, resolves the helper by path, `chattr +i`), wired into
+      `master-node/Makefile` `UNITS` with generated-shim install. Tests extended
+      (peer bring-up/anchor contract; master anchor+unit). An unrelated
+      pre-existing failure was fixed: the untracked editor dir `.obsidian` at the
+      repo root was breaking `tests/test_layout.py`; added to
+      `UNTRACKED_TOP_LEVEL` (machine-local, per the test's own definition).
+      **Deploy:** both bundles rebuilt from the working tree + `bundle-verify`d,
+      scp'd and re-extracted into `~/sparknet` preserving `.env`/`.state`;
+      `/etc/sparknet/wireguard.env` written on agx64 (0600 root);
+      `SPARKNET_WG_INTERFACE=wg1` added to agx32's `master-node/.env`; the master
+      anchor unit + `/usr/local/libexec/sparknet` shim installed and enabled (the
+      tracked parity/ledger units were **not** reinstalled — they run the c2
+      absolute-path form live, and `make units` would clobber them with `%h`).
+      **Proof (non-destructive):** with `wg1` deleted on each host, restarting the
+      role's anchor unit rebuilt the interface through `wireguard-go`, re-pinned
+      the config,       and the handshake returned within ~10 s; overlay cross-ping
+      **0% both ways (~2 ms)**. All local gates green
+      (`make ci CI_QUICK=1`, `make test-all`, `make lint`). Nothing committed;
+      the ad-hoc fix additionally added `Before=docker.service` to both anchor
+      units and disabled AGX wlan power-save.
+      **Live reboot proof (2026-10-19):** both hosts were rebooted for real.
+      agx64 re-formed `wg1 10.100.0.2/32` and re-handshook within ~25 s of coming
+      back; agx32 restored `wg1 10.100.0.1/24`, its ledger/parity/signer units
+      returned active, and the admin container auto-started and bound
+      `10.100.0.1:8088` (health `healthy`, HTTP 200 over the overlay) with no
+      operator action — the `Before=docker.service` ordering holds.
+      **DoD:** (1) new helper + both anchors + unit exist and are covered by
+      tests; (2) both role bundles verify standalone; (3) both anchors enabled
+      and active on the live pair; (4) cold-path restore (no interface → unit)
+      rebuilds `wg1` and restores the handshake on both hosts; (5) overlay
+      cross-ping 0%; (6) local gates green; (7) **a literal host reboot on each
+      role restored the overlay and the admin surface unattended**. All DoD
+      legs verified; nothing stays open.
+
+## Step 59 — deployment/contract consistency remediation (A–E)
+
+- [x] **Step 59 — bring the live pair and the repo into agreement** — opened and
+      **done 2026-10-19** after a read-only audit of the live pair against the
+      repo surfaced five drift classes. Operator decisions: enable the master
+      firewall; point protected paths at the live `wg1`/state layout; add
+      election/root re-formation ledger blocks.
+      **A — peer authorization (live only).** Deployed the real peer
+      `node-identity.json`, a Master-signed `node-authorizations.json`, and the
+      corrected `keys/master-ed25519.pub.b64`; `make authz-verify` on agx64 →
+      `allowed: true`, fingerprint `84bd134e…`. The **repo copies stay
+      fail-closed** (empty registry, placeholder pubkey — the committed manifests
+      were reverted); live authorization is a deployment-side action.
+      **B — firewall + anchor placement.** Both anchors now `install -m 0600`
+      the conf at `/etc/wireguard/<iface>.conf` and pin it `chattr +i`.
+      `sparknet-firewall.service` enabled on agx64; new
+      `master-node/systemd/sparknet-master-firewall.service` (shim → the peer's
+      `sparknet-firewall.sh` by path, ingress-only) added + enabled on agx32.
+      Proven live: `SPARKNET-FW-IN`/`-FWD` chains present, 8181/11434/18000
+      restricted, master egress has zero rules, overlay unaffected.
+      **C — signer generalization.** `record_signature` → `record_event(…)`; the
+      signer self-records `trust_root_formed`/`trust_root_reformed` at startup
+      when the root is not already in the ledger (`Signer._record_root_binding`);
+      new `sparknet-registry-sign-socket.sh` (fresh connection per request).
+      Live restart wrote `00000000 trust_root_formed` (root `fa6f4fa5…`), then
+      re-signing node 0001 wrote `00000001 signature_issued` (byte-identical
+      signature); `sparknet-ledger.py verify` → chain intact.
+      **D — protected paths.** `critical-manifest.json` + `security-policies.json`
+      re-pointed to `/etc/wireguard/wg1.conf` (the anchor is the renderer) with
+      provenance; `test_manifests.py`/`test_guard.py`, `peer-node/docs/wireguard.md`
+      and `contracts/deployment-runbook.md` realigned. Deployed to the live peer;
+      guard `--check-manifest` → 9 protected paths, provenance complete.
+      **DoD:** (1) gates green — `make ci CI_QUICK=1`, `make test-all` (469
+      passed / 1 skipped), `make contract-test`; (2) peer `authz-verify` allowed
+      on agx64 with the repo still fail-closed; (3) both firewalls enforce the
+      protected ports; (4) ledger carries the genesis root block + the
+      signature-issued block and verifies; (5) **real reboots of both hosts**
+      restored the overlay, the firewall, the guard, the master units and the
+      admin surface (HTTP 200 on `10.100.0.1:8088`) unattended; overlay
+       cross-ping 0% both ways. All DoD legs verified; nothing committed.
+
+## Step 60 — robustness / fail-safe hardening (A–F)
+
+- [x] **Step 60 — harden the fabric's security surface against fail-open** —
+      opened and **done 2026-10-20** after a direct read-only review of the
+      security-critical modules (authz, http, guard-d, signer, ledger, consensus,
+      oob, dispatch-bridge, anchors, firewall, shell). The code was already
+      fail-closed by construction; this step pays down the low/medium robustness
+      debts found, each now pinned by a test.
+      **A — guardrail tests (fail before the fix).** `tests/test_hardening.py`
+      scans every `b64decode` in `shared/` + `*/services/` and fails unless it
+      routes through the strict helper or passes `validate=True`; asserts both
+      anchors pin *both* config copies; asserts the Master anchor header does not
+      claim it skips pinning; asserts the anchors require `SPARKNET_WG_INTERFACE`.
+      `peer-node/tests/test_guard.py` gains three fail-closed tests (chattr
+      cannot-lock → refuse; already-locked/unreadable → tolerate; re-lock failure
+      after a write → refuse). `peer-node/tests/test_firewall.py` gains
+      install-self-verifies + unit-runs-verify. `peers/master` anchor tests gain
+      the EXIT-trap assertions. `tests/test_authz_golden.py` gains the strict
+      base64 vectors incl. the cross-CPython 43-char trap.
+      **B — one strict decoder.** `shared/sparknet-authz.py` gains
+      `decode_b64_strict(text, *, what, urlsafe=False)`; `public_key_from_b64`,
+      `private_key_from_b64`, `verify_signature` route through it; the four
+      tolerant `b64decode` sites in `sparknet-consensus.py`, the oob `make_handoff`
+      and the dispatch-bridge grant token decode now decode strictly (`base64`
+      imports pruned where they became unused).
+      **C — privileged-step hardening.** Guard: new `_is_immutable()` three-way
+      probe (True/False/None); `enforce_immutability` now **refuses**
+      (`immutability_not_enforced`) instead of silently skipping when `chattr +i`
+      cannot lock; `apply_patch` re-lock failure after a successful write now
+      **refuses** (`immutability_not_restored`) instead of being swallowed in a
+      `finally`. Firewall: new `verify` verb (non-zero unless every protected port
+      jumps on v4+v6 and each chain ends in DROP); `install` verifies itself; both
+      firewall units run `ExecStartPost=… verify`. Anchors: an `EXIT` trap re-pins
+      any existing config on a non-zero exit, so a failed run never leaves the
+      overlay config writable.
+      **D — interface default discipline.** Both anchors now require
+      `SPARKNET_WG_INTERFACE` (`${VAR-}` + `die`) instead of `:-wg0`, so a missing
+      env file fails loudly rather than silently bringing up a second interface.
+      **E — docs + edge cases.** `peer-node/docs/wireguard.md` documents the
+      dual-copy pin, the re-pin-on-failure trap, the required interface, and the
+      Master re-render/re-run workflow for peer-stanza changes (revocation via
+      `wg set … remove` still takes effect immediately and survives the pin).
+      **F — deploy + records.** Deployed the hardened firewall + anchor + guard to
+      agx64 and the master anchor + shared firewall script + both firewall units
+      to agx32; live: `sparknet-firewall verify` PASS on both hosts, both anchors
+      restart clean with **both** copies pinned (`----i---` on `/etc/wireguard`
+      and state-dir `wg1.conf`), guards re-armed (`mode: anchored`, 9 protected
+      paths), overlay cross-ping 0% both ways (~1.8 ms).
+      **DoD:** (1) `make ci CI_QUICK=1` green; (2) `make test-all` green
+      (peer `475 passed, 1 skipped`; contract/fabric/master green); (3) the new
+      guardrail tests fail on the pre-fix code and pass on the fixed code;
+      (4) live firewall `verify` PASS on both hosts and both anchors leave both
+      copies pinned. All DoD legs verified; nothing committed.
+
+## Step 61 — cluster job realization design
+
+- [x] **Step 61 — `CLUSTER_JOB_REALIZATION_DESIGN.md`** — a fabric-root design
+      proposal realizing `CLUSTER_INFERENCE_DESIGN.md`: which seams exist, which
+      side of each seam wins, and why. Design only — it adopts nothing.
+      **The four defects it records** (all found by reading the tree, each cited
+      to file:line): **D1** the job envelope has two divergent encodings and
+      neither is pinned — the fabric signs ISO-8601 `created_at`/`expires_at`
+      with four fields always projected (`shared/sparknet-authz.py:464-490`),
+      goSpark/proto use `int64` `*_unix` with `omitempty`
+      (`cluster.proto:41-42`, `apiv1/types.go:183-189`), the signer's own
+      `_job()` fixture matches neither (`test_signer_isolation.py:226-233`),
+      and `tests/test_authz_golden.py` pins every other canonicalisation
+      **except** `cluster_job_message`; **D2** peer↔peer fan-out is unreachable
+      on the authority plane (a peer's `AllowedIPs` is exactly
+      `10.100.0.1/32`), so at `master_governed` the **Master** becomes the
+      dispatcher and a peer-initiated cross-peer fan-out is a named, deferred
+      increment needing a time-boxed job-scoped data-plane stanza; **D3** the
+      `fabric` Chroma scope is a deny-list (`EXCLUDE_PARTS`) where the charter
+      and `sparknet-rag-corpus.py` mandate an allow-list — the wrong default for
+      a corpus served to every `cluster-serve` node; **D4** the parent design's
+      `chromadb:8000` prose (`CLUSTER_INFERENCE_DESIGN.md:77`) no longer matches
+      the committed config (Open WebUI → `127.0.0.1:18000`, the out-of-repo
+      `~/infra` stack), recorded here, corrected there in its own commit.
+      **Seam F, the Master's vector DB (port 4223), in scope as the operator
+      directed.** Three industry patterns weighed against measured facts —
+      native distributed VDB (Milvus/Qdrant), HA sharding+replication+etcd, and
+      pgvector — all **rejected for v1**, with Qdrant designated the upgrade
+      path under a numeric trigger. The deciding number: the `fabric` corpus is
+      **3.3 MB / 257 files / ≈2,300 chunks** (measured 2026-10-20) on a
+      two-host Xavier fleet with no k8s, no object store and no postgres in
+      tree. The chosen shape is the **inverse** of all three patterns: the index
+      is *derived state* (pure `plan_index`/`chunk_text`, idempotent upsert), so
+      it gets a single writer on the Master, stateless readers over the
+      WireGuard overlay, and **rebuild-from-source instead of replication**.
+      F1–F10 specify: one collection `sparknet-fabric`; embedded
+      `PersistentClient` behind our own listener via
+      `shared/sparknet-http.py` (not the `chromadb` server — no registry gate,
+      API-key auth); **server-side query embedding only**, with a collection
+      stamp (`embedding_model`/`chroma_version`/`corpus_digest`) checked per
+      query and **503 on mismatch** — closing the live hazard that
+      `pyproject.toml:29` pins `chromadb>=0.5` **unbounded above**, so a library
+      upgrade can silently change the model under a live index; allow-list
+      corpus; `POST /v1/query`, `GET /v1/doc/{id}` (how `context_refs` resolves
+      — the parent note never said), `POST /admin/reindex` loopback-only; a
+      six-step fail-closed check gated on the **existing**
+      `cluster-dispatch`/`cluster-serve` pair, so **no new capability**; and the
+      invariant that a job with `context.source: master_vector_db` that cannot
+      get context is **refused at dispatch, never run ungrounded** — silence is
+      an answer, a silently-degraded answer is a different question. Ownership
+      `master-node/services/sparknet-vector-serve.py`, chunker **imported not
+      copied** (the `sparknet-ledger.py:37` pattern); build step filed in
+      **`master-node/plans/MASTER_ADMIN_PLAN.md`** (which `ports.json`'s own
+      status string and `master-control-plane.md:61` already name), not
+      `MASTER_BUILD_PLAN.md`.
+      **Eight adoption increments, order = dependency chain** (operator
+      decisions 2026-10-20): envelope golden vectors → 4223 → task ingress →
+      construction/placement → reduce → reindex timer → n≥3 peer fan-out →
+      live deploy. `MASTER_BUILD_PLAN.md` Step 9 (nocturnal pooling scheduler)
+      cross-referenced as the nearest existing "pooled fabric" concept —
+      marked `[x]` but Status reopened 2026-10-06 with nothing built.
+      **DoD:** (1) the doc is registered in
+      `tests/test_layout.py::EXPECTED_TOP_LEVEL` and `make test-all` proves it;
+      (2) zero diff to `contracts/capabilities.json`, `contracts/ports.json`,
+      `shared/sparknet-authz.py` and `contracts/manifest.json` — the
+      "nothing adopted" invariant, shown by `git status`; (3) all gates green —
+      `make render-check`, `validate`, `contract-test`, `lint`, `format-check`,
+      `shellcheck`, `test-all`, `make ci CI_QUICK=1`. All three legs verified
+      2026-10-20: doc registered and proven by `make test-all` (peer 475
+      passed, 1 skipped; contract/fabric/master green); the four
+      contract/shared files last modified 06:14/10-19/10-12 — before this
+      session's 09:52 start — and their pending diffs are Step 55's 8080→8088
+      and Step 60's `decode_b64_strict`, so this step's diff over them is
+      **zero**; every gate green including `shellcheck` run **for real** with
+      the v0.11.0 binary at `/tmp/opencode/bin` on `PATH`. That last run found
+      two info-level findings Step 60 had masked by leaving the binary off
+      `PATH` (its `make ci` passed only by skipping): `return $rc` unquoted and
+      SC2329 on `repin_on_exit`, which is reached indirectly via `trap … EXIT`.
+      Fixed here — one quote, one site-level directive per `.shellcheckrc`'s
+      documented convention (SC1090 is handled the same way; SC2317 is already
+      waived globally for the identical "reached by name" rationale) — and
+      `--help` re-proven intact. Nothing committed. Cursor `61 → done`.
+      **Follow-up (same session, operator-directed): make shellcheck real.**
+      The skip was the defect, not the symptom — on any host without the
+      binary (this one, and every fresh clone) `make ci` passed while shellcheck
+      never ran. `make shellcheck` now **provisions the pinned binary itself**:
+      `SHELLCHECK_VERSION ?= 0.11.0` (pinned like the SHA-pinned Actions, so a
+      new release cannot silently change what the gate enforces) into
+      `.cache/tools/shellcheck-<ver>/<arch>/`, then runs it. A version bump is a
+      reviewed commit. Fails **closed** when it can neither find nor fetch one
+      (verified with a bogus proxy: non-zero exit naming the URL and the
+      offline remedy) — a required gate must never pass by not running. New
+      `make shellcheck-install` target for provisioning without the gate. The
+      GitHub workflow needed **no change**: `make shellcheck` self-provisions,
+      so CI keeps calling only `make ci` (the single-vocabulary rule
+      `tests/test_ci.py::test_the_gate_workflows_call_the_local_gate` enforces —
+      an attempt to add a `make shellcheck-install` step failed that test
+      because `make shellcheck` is a prefix of it, and the target was reverted
+      to a developer convenience rather than contorting the workflow). Docs
+      realigned where they described the old behaviour: `AGENTS.md`,
+      `STYLE_GUIDE.md` §1, `CONTRIBUTING.md`, `scripts/pre-merge-gate.sh`
+      `--help`. **DoD:** (1) from an empty `.cache/tools` with no shellcheck on
+      `PATH`, `make shellcheck` downloads, runs and **PASSES**; (2) the same
+      holds through the whole gate — `./scripts/pre-merge-gate.sh --quick` from
+      a clean cache: *pre-merge-gate: all steps passed*, with a real
+      `shellcheck: 0.11.0` line replacing the old *SKIPPED*; (3) offline +
+      absent ⇒ non-zero; (4) `make test-all` green (peer 475 passed, 1 skipped;
+      `tests/test_ci.py` green); (5) `make ci CI_QUICK=1` green.
 
 ## Next
 

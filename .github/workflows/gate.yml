@@ -60,6 +60,13 @@ jobs:
       - name: Activate the provisioned venv for the job
         run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
+      # shellcheck is a REQUIRED gate. `make shellcheck` provisions the pinned
+      # binary itself when it is not on PATH, so the gate workflow needs no
+      # separate step and never depends on whatever the runner image ships —
+      # it just calls `make ci` like everything else (the single-vocabulary
+      # rule tests/test_ci.py enforces). `make shellcheck-install` exists for a
+      # developer who wants the binary up front without running the gate.
+
       # Per-node vault state, which is gitignored by design and so absent from
       # every fresh clone: each role's `.env` names its VAULT_PATH and the
       # wiki suite refuses to resolve a vault it cannot find (the resolution

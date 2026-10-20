@@ -31,6 +31,7 @@ SCOPE ?= fabric
 
 .PHONY: help help-role layout tui validate test test-all test-peer test-master \
         contract-test lint lint-strict format-check shellcheck test-report ci \
+        shellcheck-install \
         container-test \
         render render-check sbom sbom-check nv-search drift-check \
         devtools chroma-dev chroma-init chroma-inspect \
@@ -130,17 +131,58 @@ lint-strict: lint ## Deprecated alias for `lint` (the widened set is now the gat
 format-check: ## ruff format --check across the whole fabric (whole-tree since Step 49)
 	@"$(PY)" -m ruff format --check .
 
-shellcheck: ## shellcheck tracked scripts (skipped, with a note, if not installed)
-	@if ! command -v shellcheck >/dev/null 2>&1; then \
-		echo "shellcheck: not installed — SKIPPED (install shellcheck to enable this gate)"; \
-		exit 0; \
+# Pinned like the SHA-pinned GitHub Actions: the gate must not silently change
+# what it enforces when a new shellcheck release starts reporting something new.
+# A version bump is a reviewed commit, not an ambient upgrade.
+SHELLCHECK_VERSION ?= 0.11.0
+SHELLCHECK_CACHE ?= $(VAULT_ROOT)/.cache/tools
+
+shellcheck: ## shellcheck tracked scripts (provisions the pinned binary, then runs it)
+	@set -e; \
+	sc="$$(command -v shellcheck 2>/dev/null || true)"; \
+	if [ -z "$$sc" ]; then \
+		case "$$(uname -m)" in \
+			x86_64|amd64) arch=x86_64 ;; \
+			aarch64|arm64) arch=aarch64 ;; \
+			*) echo "shellcheck: no pinned build for $$(uname -m); install it on PATH" >&2; exit 1 ;; \
+		esac; \
+		dest="$(SHELLCHECK_CACHE)/shellcheck-$(SHELLCHECK_VERSION)/$$arch"; \
+		bin="$$dest/shellcheck"; \
+		if [ ! -x "$$bin" ]; then \
+			url="https://github.com/koalaman/shellcheck/releases/download/v$(SHELLCHECK_VERSION)/shellcheck-v$(SHELLCHECK_VERSION).linux.$$arch.tar.xz"; \
+			echo "shellcheck: not on PATH — provisioning v$(SHELLCHECK_VERSION) ($$arch) into $$dest" >&2; \
+			mkdir -p "$$dest"; \
+			if ! curl -fsSL "$$url" | tar -xJ -C "$$dest" --strip-components=1; then \
+				echo "shellcheck: could not download $$url — this gate is REQUIRED (see CONTRIBUTING.md); install shellcheck on PATH to run it offline" >&2; \
+				exit 1; \
+			fi; \
+		fi; \
+		sc="$$bin"; \
 	fi; \
+	echo "shellcheck: $$("$$sc" --version | awk 'NR==2 {print $$2}') ($$sc)"; \
 	files="$$(git -C "$(VAULT_ROOT)" ls-files '*.sh' | grep -v '^\.opencode/skills/' || true)"; \
 	if [ -z "$$files" ]; then echo "shellcheck: no tracked shell scripts"; exit 0; fi; \
-	printf '%s\n' "$$files" | xargs shellcheck
+	printf '%s\n' "$$files" | xargs "$$sc"
 
 test-report: ## Write JUnit XML + summary.json (SCOPE=fabric|peer|master|all)
 	@./scripts/sparknet-test-report.sh "$(SCOPE)"
+
+shellcheck-install: ## Provision the pinned shellcheck binary without running the gate
+	@set -e; \
+	case "$$(uname -m)" in \
+		x86_64|amd64) arch=x86_64 ;; \
+		aarch64|arm64) arch=aarch64 ;; \
+		*) echo "shellcheck-install: no pinned build for $$(uname -m)" >&2; exit 1 ;; \
+	esac; \
+	dest="$(SHELLCHECK_CACHE)/shellcheck-$(SHELLCHECK_VERSION)/$$arch"; \
+	bin="$$dest/shellcheck"; \
+	if [ ! -x "$$bin" ]; then \
+		url="https://github.com/koalaman/shellcheck/releases/download/v$(SHELLCHECK_VERSION)/shellcheck-v$(SHELLCHECK_VERSION).linux.$$arch.tar.xz"; \
+		echo "shellcheck-install: fetching v$(SHELLCHECK_VERSION) ($$arch)"; \
+		mkdir -p "$$dest"; \
+		curl -fsSL "$$url" | tar -xJ -C "$$dest" --strip-components=1; \
+	fi; \
+	echo "shellcheck-install: $$bin"
 
 ci: ## Run the local pre-merge gate (CI_QUICK=1 to skip the full suite)
 	@./scripts/pre-merge-gate.sh $(if $(filter 1,$(CI_QUICK)),--quick,)

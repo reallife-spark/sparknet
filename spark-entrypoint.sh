@@ -1,22 +1,28 @@
 #!/usr/bin/env bash
-# spark-entrypoint — the DGX Spark node's one dispatcher.
+# spark-entrypoint — the node's one dispatcher (DGX Spark and AGX Xavier).
 #
-# `spark.compose.yml` runs THIS SAME IMAGE with a different subcommand per
-# service, so the whole node (engine, control plane, compute plane, bundle,
-# precontext) is one image and one code path:
+# `spark.compose.yml` and `goagx/sparknet.agx.compose.yml` run THIS SAME
+# SCRIPT with a different subcommand per service, so the whole node (engine,
+# control plane, compute plane, bundle, precontext) is one image and one code
+# path:
 #
-#   vllm       the vLLM OpenAI server, with the fabric precontext chat template
-#   compute    the Python compute-plane worker (infer/embed) beside the GPU
-#   kvrouter   the RadixAttention / KV-residency index daemon
-#   agent      a goSpark node: verifies signed tasks, executes, attests
-#   control    the goSpark control plane (holds the Master signing key)
-#   gpu        the cgo GPU-telemetry sidecar (degrades: available=false + reason)
-#   nats       the NATS/JetStream bus the goSpark plane runs on
-#   ingest     crawl the vault and refresh the RAG index (one-shot)
-#   backup     the signed vault-snapshot daemon
-#   opencode   the node's agent surface over the vault
-#   precontext (re)build the chat template only, then exit
-#   shell      drop to a shell in the node image
+#   vllm         the OpenAI engine server, with the fabric precontext chat
+#                template (VLLM_CLI picks the engine: `vllm serve` on the
+#                Spark image, the source-built module on AGX)
+#   compute      the Python compute-plane worker (infer/embed) beside the GPU
+#   kvrouter     the RadixAttention / KV-residency index daemon
+#   agent        a goSpark node: verifies signed tasks, executes, attests
+#   control      the goSpark control plane (holds the Master signing key)
+#   gpu          the cgo GPU-telemetry sidecar (degrades: available=false + reason)
+#   nats         the NATS/JetStream bus the goSpark plane runs on
+#   ingest       crawl the vault and refresh the RAG index (one-shot)
+#   backup       the signed vault-snapshot daemon
+#   opencode     the node's agent surface over the vault
+#   llama-embed  AGX: llama.cpp embeddings server (baked GGUF)
+#   llama-rerank AGX: llama.cpp reranking server (baked GGUF)
+#   whisper-asr  AGX: whisper.cpp ASR behind the OpenAI transcriptions shim
+#   precontext   (re)build the chat template only, then exit
+#   shell        drop to a shell in the node image
 #
 # Nothing here bakes a vault path or a secret. The sparknet .env is regenerated
 # at boot, keys live in the host-mounted $SPARKNET_STATE_DIR (never an image
@@ -36,12 +42,13 @@ die() { printf '[spark] ERROR: %s\n' "$*" >&2; exit 1; }
 
 usage() {
   cat <<'EOF'
-spark-entrypoint — DGX Spark SparkNet node dispatcher
+spark-entrypoint — SparkNet node dispatcher (DGX Spark / AGX Xavier)
 
 Usage: spark-entrypoint <subcommand> [args...]
 
 Subcommands:
   vllm        serve the configured model with the fabric precontext template
+              (engine from VLLM_CLI; flags newer than the engine are skipped)
   vllm-stub   serve a CPU-only OpenAI-compatible stub (no GPU / no model)
   compute     run the Python compute-plane worker (infer / embed)
   kvrouter    run the KV-cache residency index daemon
@@ -52,6 +59,10 @@ Subcommands:
   ingest      crawl the vault and refresh the RAG index (one-shot)
   backup      run the signed vault-snapshot daemon
   opencode    run the node's opencode server over the vault
+  llama-embed  embeddings over the baked GGUF (LLAMA_EMBED_* env)
+  llama-rerank reranking over the baked GGUF (LLAMA_RERANK_* env)
+  whisper-asr  whisper.cpp ASR behind OpenAI /v1/audio/transcriptions
+               (WHISPER_* env; needs ffmpeg for non-WAV uploads)
   precontext  rebuild the precontext chat template, then exit
   shell       drop into a shell
   help        this text
@@ -63,12 +74,18 @@ Key environment (all optional; defaults shown):
   SPARKNET_STATE_DIR        <vault>/.state
   SPARKNET_BUS_URL          nats://nats:4222
   SPARKNET_SHARED_SECRET    generated into the state dir if unset
-  VLLM_MODEL                Qwen/Qwen2.5-32B-Instruct
+  VLLM_CLI                  vllm serve  (AGX image sets
+                            "python3 -m vllm.entrypoints.openai.api_server")
+  VLLM_MODEL                Qwen/Qwen2.5-32B-Instruct (AGX: Mistral-7B)
   VLLM_PORT                 8000
   VLLM_GPU_MEM_UTIL         0.85
   VLLM_MAX_MODEL_LEN        65536
   VLLM_EXTRA_ARGS           (word-split; model-specific flags)
   SPARKNET_MULTIMODAL       set non-empty to add --limit-mm-per-prompt
+                            (engines without the flag ignore this branch)
+  LLAMA_EMBED_MODEL         /opt/sparknet/models/bge-m3-q8_0.gguf
+  LLAMA_RERANK_MODEL        /opt/sparknet/models/bge-reranker-v2-m3-Q4_K_M.gguf
+  WHISPER_MODEL             /opt/sparknet/models/ggml-small-q5_1.bin
 EOF
 }
 
@@ -198,15 +215,35 @@ cmd_vllm() {
     fi
   fi
 
-  local args=(serve "$model"
+  # VLLM_CLI is the whole engine command (`vllm serve` on the Spark image; a
+  # module path on AGX, where the source-built vLLM 0.2.x has no `vllm`
+  # subcommand). If the command ends in `serve`, the model is the first
+  # positional after it; anything else gets --model. The two newer-engine
+  # switches below (prefix caching, multimodal limits) are only passed when
+  # the engine is the modern CLI — vLLM 0.2.x has neither flag and would
+  # exit on an unknown argument; its knobs travel through VLLM_EXTRA_ARGS.
+  # shellcheck disable=SC2206
+  local cli=(${VLLM_CLI:-vllm serve})
+  local modern=0
+  local -a args=()
+  if [ "${cli[-1]}" = "serve" ]; then
+    cli=("${cli[@]::${#cli[@]}-1}")
+    args=(serve "$model")
+    modern=1
+  else
+    args=(--model "$model")
+  fi
+  args+=(
     --host 0.0.0.0
     --port "${VLLM_PORT:-8000}"
     --served-model-name "$model"
     --gpu-memory-utilization "${VLLM_GPU_MEM_UTIL:-0.85}"
     --max-model-len "${VLLM_MAX_MODEL_LEN:-65536}")
-  [ "${SPARKNET_PREFIX_CACHING:-1}" = "1" ] && args+=(--enable-prefix-caching)
+  if [ "$modern" = 1 ] && [ "${SPARKNET_PREFIX_CACHING:-1}" = "1" ]; then
+    args+=(--enable-prefix-caching)
+  fi
   [ -s "${tmpl:-}" ] && args+=(--chat-template "$tmpl")
-  if [ -n "${SPARKNET_MULTIMODAL:-}" ]; then
+  if [ "$modern" = 1 ] && [ -n "${SPARKNET_MULTIMODAL:-}" ]; then
     args+=(--limit-mm-per-prompt "${SPARKNET_MM_LIMIT:-image=4,video=1,audio=1}")
   fi
   if [ -n "${VLLM_EXTRA_ARGS:-}" ]; then
@@ -214,8 +251,8 @@ cmd_vllm() {
     local extra=(${VLLM_EXTRA_ARGS})
     args+=("${extra[@]}")
   fi
-  log "vllm serve $model (precontext: ${tmpl:-none})"
-  exec vllm "${args[@]}"
+  log "${cli[*]} ${args[*]} (precontext: ${tmpl:-none})"
+  exec "${cli[@]}" "${args[@]}"
 }
 
 cmd_compute() {
@@ -329,8 +366,6 @@ cmd_precontext() {
   printf '%s\n' "$tmpl"
 }
 
-# --- dispatch ----------------------------------------------------------------
-
 # --- vllm stub (CPU-only) -----------------------------------------------------
 cmd_vllm_stub() {
   local model="${VLLM_MODEL:-Qwen/Qwen2.5-32B-Instruct}"
@@ -339,20 +374,100 @@ cmd_vllm_stub() {
   exec stub-vllm -model "$model" -port "$port" -host 0.0.0.0
 }
 
+# --- aux engines (the AGX image's multimodal services) -------------------------
+# Each checks its engine and baked model up front — a missing GGUF is a build
+# error with a clear message, not a crash loop — runs the shared boot steps,
+# then execs in the foreground, same contract as every other subcommand. All
+# three are CPU-only by design: the GPU belongs to the text model.
+
+cmd_llama_embed() {
+  ensure_state; ensure_env
+  command -v llama-server >/dev/null || die "llama-server not found in this image"
+  local model="${LLAMA_EMBED_MODEL:-/opt/sparknet/models/bge-m3-q8_0.gguf}"
+  [ -s "$model" ] || die "embed model missing: $model (image bake step failed?)"
+  local port="${VLLM_PORT:-8001}"
+  local args=(--host 0.0.0.0 --port "$port" --model "$model"
+    --embedding --pooling mean
+    --alias "${LLAMA_EMBED_ALIAS:-bge-m3}"
+    --ctx-size "${LLAMA_EMBED_CTX:-512}")
+  if [ -n "${LLAMA_EMBED_EXTRA_ARGS:-}" ]; then
+    # shellcheck disable=SC2206
+    local extra=(${LLAMA_EMBED_EXTRA_ARGS})
+    args+=("${extra[@]}")
+  fi
+  log "llama-embed $model on 0.0.0.0:$port (OpenAI /v1/embeddings)"
+  exec llama-server "${args[@]}"
+}
+
+cmd_llama_rerank() {
+  ensure_state; ensure_env
+  command -v llama-server >/dev/null || die "llama-server not found in this image"
+  local model="${LLAMA_RERANK_MODEL:-/opt/sparknet/models/bge-reranker-v2-m3-Q4_K_M.gguf}"
+  [ -s "$model" ] || die "rerank model missing: $model (image bake step failed?)"
+  local port="${VLLM_PORT:-8002}"
+  # --reranking implies embedding + rank pooling inside llama.cpp; the server
+  # then answers both /v1/rerank and /v1/reranking (jina and cohere shapes).
+  local args=(--host 0.0.0.0 --port "$port" --model "$model"
+    --reranking
+    --alias "${LLAMA_RERANK_ALIAS:-bge-reranker-v2-m3}"
+    --ctx-size "${LLAMA_RERANK_CTX:-512}")
+  if [ -n "${LLAMA_RERANK_EXTRA_ARGS:-}" ]; then
+    # shellcheck disable=SC2206
+    local extra=(${LLAMA_RERANK_EXTRA_ARGS})
+    args+=("${extra[@]}")
+  fi
+  log "llama-rerank $model on 0.0.0.0:$port (OpenAI/Cohere /v1/rerank)"
+  exec llama-server "${args[@]}"
+}
+
+cmd_whisper_asr() {
+  ensure_state; ensure_env
+  command -v whisper-server >/dev/null || die "whisper-server not found in this image"
+  local model="${WHISPER_MODEL:-/opt/sparknet/models/ggml-small-q5_1.bin}"
+  [ -s "$model" ] || die "whisper model missing: $model (image bake step failed?)"
+  local port="${VLLM_PORT:-8003}"
+  local up="${WHISPER_UPSTREAM_PORT:-8004}"
+  # --convert makes whisper accept whatever an OpenAI client uploads (webm,
+  # ogg, mp3) and needs ffmpeg — installed by the AGX image for this purpose.
+  # The engine stays on loopback; only the shim is published.
+  local wargs=(--host 127.0.0.1 --port "$up" --model "$model" --convert)
+  [ -n "${WHISPER_LANGUAGE:-}" ] && wargs+=(--language "$WHISPER_LANGUAGE")
+  if [ -n "${WHISPER_EXTRA_ARGS:-}" ]; then
+    # shellcheck disable=SC2206
+    local wextra=(${WHISPER_EXTRA_ARGS})
+    wargs+=("${wextra[@]}")
+  fi
+  log "whisper-asr: whisper-server on 127.0.0.1:$up + OpenAI shim on 0.0.0.0:$port"
+  whisper-server "${wargs[@]}" &
+  local wpid=$!
+  WHISPER_UPSTREAM="http://127.0.0.1:$up" "$VENV/bin/python" -m uvicorn \
+    --app-dir /opt/sparknet audio_shim:app --host 0.0.0.0 --port "$port" &
+  local shim_pid=$!
+  trap 'kill "$wpid" "$shim_pid" 2>/dev/null || true' EXIT TERM INT
+  # Supervise both: whichever exits first takes the container down, so compose
+  # restarts it instead of leaving half an audio stack running.
+  wait -n "$wpid" "$shim_pid"
+}
+
+# --- dispatch ----------------------------------------------------------------
+
 case "${1:-help}" in
   --help|-h|help|"") usage; exit 0 ;;
-  vllm)       shift; cmd_vllm "$@" ;;
-  vllm-stub)  shift; cmd_vllm_stub "$@" ;;
-  compute)    shift; cmd_compute "$@" ;;
-  kvrouter)   shift; cmd_kvrouter "$@" ;;
-  agent)      shift; cmd_agent "$@" ;;
-  control)    shift; cmd_control "$@" ;;
-  gpu)        shift; cmd_gpu "$@" ;;
-  nats)       shift; cmd_nats "$@" ;;
-  ingest)     shift; cmd_ingest "$@" ;;
-  backup)     shift; cmd_backup "$@" ;;
-  opencode)   shift; cmd_opencode "$@" ;;
-  precontext) shift; cmd_precontext "$@" ;;
-  shell)      shift; exec /bin/bash "$@" ;;
+  vllm)         shift; cmd_vllm "$@" ;;
+  vllm-stub)    shift; cmd_vllm_stub "$@" ;;
+  compute)      shift; cmd_compute "$@" ;;
+  kvrouter)     shift; cmd_kvrouter "$@" ;;
+  agent)        shift; cmd_agent "$@" ;;
+  control)      shift; cmd_control "$@" ;;
+  gpu)          shift; cmd_gpu "$@" ;;
+  nats)         shift; cmd_nats "$@" ;;
+  ingest)       shift; cmd_ingest "$@" ;;
+  backup)       shift; cmd_backup "$@" ;;
+  opencode)     shift; cmd_opencode "$@" ;;
+  llama-embed)  shift; cmd_llama_embed "$@" ;;
+  llama-rerank) shift; cmd_llama_rerank "$@" ;;
+  whisper-asr)  shift; cmd_whisper_asr "$@" ;;
+  precontext)   shift; cmd_precontext "$@" ;;
+  shell)        shift; exec /bin/bash "$@" ;;
   *) echo "spark-entrypoint: unknown subcommand: $1" >&2; usage >&2; exit 2 ;;
 esac

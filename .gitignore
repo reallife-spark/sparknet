@@ -20,10 +20,9 @@
 .vault-config/cache
 
 # Defensive: the desktop editor re-creates its own config dir if it reopens
-# this vault. Keep its workspace state out of history.
-.obsidian/workspace.json
-.obsidian/workspace-mobile.json
-.obsidian/cache
+# this vault. Ignore the whole directory — workspace state, appearance and
+# plugin scratch are all machine-local and must never be committed.
+.obsidian/
 
 # Tooling noise
 __pycache__/

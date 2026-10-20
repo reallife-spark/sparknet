@@ -162,6 +162,34 @@ def public_key_b64(public_key: Ed25519PublicKey) -> str:
     return base64.b64encode(raw).decode("ascii")
 
 
+def decode_b64_strict(text: str, *, what: str = "value", urlsafe: bool = False) -> bytes:
+    """Decode base64 *strictly*, rejecting non-alphabet bytes and bad padding.
+
+    This is the one decoding entry point for signatures, keys and wire bodies.
+    Every call passes ``validate=True`` so a string that is not canonical base64
+    is rejected with an explicit error rather than silently truncated to a shorter
+    prefix that still happens to verify-or-not.
+
+    Why it exists: CPython's tolerant decoder accepts some malformed input (for
+    example a 43-character body with a stray padding ``=``) on 3.12 but raises on
+    3.14 with ``validate=True``. Sprinkling ``validate=True`` by hand left a few
+    call sites tolerant, so a signature could be interpreted differently depending
+    on the interpreter that happened to run — a portability trap in the one layer
+    whose job is to be trusted about signatures. One helper, one interpretation.
+
+    ``urlsafe`` selects the URL-safe alphabet (used for grant bearer tokens).
+    The padding is normalised first, since URL-safe tokens are commonly emitted
+    unpadded while ``b64decode`` wants a multiple of four.
+    """
+    try:
+        if urlsafe:
+            padded = text + "=" * (-len(text) % 4)
+            return base64.urlsafe_b64decode(padded.encode("ascii"))
+        return base64.b64decode(text, validate=True)
+    except Exception as exc:
+        raise AuthzError(f"{what} is not valid base64") from exc
+
+
 def public_key_from_b64(raw_b64: str) -> Ed25519PublicKey:
     """Build a public key from a base64 string rather than a file.
 
@@ -169,10 +197,7 @@ def public_key_from_b64(raw_b64: str) -> Ed25519PublicKey:
     crypto implementation. A module that loaded keys its own way would be a second
     place for a length or encoding mistake to hide.
     """
-    try:
-        raw = base64.b64decode(raw_b64, validate=True)
-    except Exception as exc:
-        raise AuthzError("public key is not valid base64") from exc
+    raw = decode_b64_strict(raw_b64, what="public key")
     if len(raw) != 32:
         raise AuthzError(f"Ed25519 public key must be 32 bytes, got {len(raw)}")
     return Ed25519PublicKey.from_public_bytes(raw)
@@ -192,10 +217,7 @@ def private_key_from_b64(raw_b64: str) -> Ed25519PrivateKey:
     has already been through a machine-readable channel. One encoding, one
     interpretation, one place to be wrong.
     """
-    try:
-        raw = base64.b64decode(raw_b64, validate=True)
-    except Exception as exc:
-        raise AuthzError("private key is not valid base64") from exc
+    raw = decode_b64_strict(raw_b64, what="private key")
     if len(raw) != 32:
         raise AuthzError(f"Ed25519 private key must be 32 bytes, got {len(raw)}")
     return Ed25519PrivateKey.from_private_bytes(raw)
@@ -285,8 +307,8 @@ def load_private_key(path: Path) -> Ed25519PrivateKey:
 
 def verify_signature(public_key: Ed25519PublicKey, signature_b64: str, message: bytes) -> bool:
     try:
-        signature = base64.b64decode(signature_b64, validate=True)
-    except Exception:
+        signature = decode_b64_strict(signature_b64, what="signature")
+    except AuthzError:
         return False
     try:
         public_key.verify(signature, message)

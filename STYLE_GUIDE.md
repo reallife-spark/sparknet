@@ -68,8 +68,9 @@ were working from, so the next agent can see the search happened.
   (`tests/test_shell.py` covers what it cannot see).
 - Write for bash 3.2 as well as 5 — the deployment hosts and macOS both run
   the scripts (`${array[@]+"${array[@]}"}`, no `mapfile`).
-- shellcheck clean under `.shellcheckrc` (`make shellcheck`; the gate skips
-  with a note when the binary is absent).
+- shellcheck clean under `.shellcheckrc` (`make shellcheck`; the target
+  provisions the pinned binary into `.cache/tools/` when it is not on `PATH`,
+  so the gate is required rather than skipped).
 - Quote expansions, prefer `[[ ]]`, use absolute paths rather than `cd` chains.
 - A script that mutates state fails **closed** and says what it refused.
 

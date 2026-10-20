@@ -12,6 +12,12 @@ Entries are written per release, not per commit: the commit history and
 - NVIDIA/dsx standard-practice adoption arc (PLAN Steps 45–52): reference-repo
   inventory, `STYLE_GUIDE.md`, resource-first `make nv-search`, community
   files, GitHub Actions mirror, format/lint sweep, functional adoptions.
+- AGX Xavier node surface (`goagx/`, fabric PLAN Step 56): the node image
+  remade for Jetson AGX Xavier (sm_72 / 16 GB — L4T r35 base, vLLM v0.2.7
+  built from source behind `VLLM_CLI`, llama.cpp embed/rerank, whisper.cpp
+  behind the OpenAI audio shim), an AGX compose twin with identical
+  services/ports/profiles, `sparknet-node-setup.sh --platform spark|agx`,
+  and the parity gates in `tests/test_agx_node.py`.
 
 ## [0.1.0] — initial version
 
