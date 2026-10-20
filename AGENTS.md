@@ -24,7 +24,7 @@ to one role as though it described the whole system.
 | `peer-node/` | peer | a working node: guard, anchor, dispatch, its own wiki vault |
 | `master-node/` | master | the elected signing role — **built** (Steps 15–18); it runs the peer's services by path, holds an isolated signer, and declares an admin surface. **The election/signer arc was proven live on real hosts 2026-10-07** (fabric Steps 12→13): agx64/agx32 co-formed a 2/2 trust root, the signer ran as `sparknet-master-signer.service` on agx64, signed a live registry, survived a real reboot, and a revoke/restore demo ran. Phase 9's destructive legs (rollback / replace-Master re-formation) are documented in `contracts/deployment-runbook.md` and deliberately left unexecuted |
 | `scripts/` | both | fabric-level tooling: vendoring, env, bundling |
-| `goagx/` | both | the AGX Xavier twin of the node image surface: `sparknet.agx.docker` (L4T r35, vLLM built from source), its parity compose file, the whisper audio shim, and the platform README — selected by `sparknet-node-setup.sh --platform spark\|agx` (fabric Step 56) |
+| `goagx/` | both | the AGX Xavier twin of the node image surface: `sparknet.agx.docker` (L4T r35, vLLM built from source), its parity compose file, the whisper audio shim, `bootstrap-agx.sh` + `GOSPARK_PIN`, and the platform README — selected by `sparknet-node-setup.sh --platform spark\|agx` (fabric Step 56). `make goagx-publish` generates the standalone deployment repo `reallife-spark/goagx` from it (Step 62); `make goagx-drift-check` catches drift |
 | `.opencode/skills/` | both | the vendored wiki suite |
 
 Three consequences worth holding onto:

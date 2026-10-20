@@ -100,7 +100,10 @@ One synthesis page: [[what-pair-membership-implies-for-sparknet-reformation]].
 - `goagx/` — the node image surface retargeted to Jetson AGX Xavier (sm_72,
   16 GB): `sparknet.agx.docker`, `sparknet.agx.compose.yml`, the audio shim;
   same contract/services/ports as the Spark stack, selected by
-  `sparknet-node-setup.sh --platform agx` (`goagx/README.md` first)
+  `sparknet-node-setup.sh --platform agx` (`goagx/README.md` first). The
+  **standalone deployment repo** `reallife-spark/goagx` is generated from
+  this tree (`make goagx-publish`): clone it on a fresh Xavier, run
+  `./goagx/bootstrap-agx.sh`, get a full fabric node.
 - `_raw/` — unprocessed captures (never deleted; ingest promotes them)
 - `_staging/` — LLM-written pages awaiting review (`WIKI_STAGED_WRITES=true`)
 - `_archives/` — vault snapshots for `/wiki-rebuild`

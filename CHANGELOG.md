@@ -18,6 +18,14 @@ Entries are written per release, not per commit: the commit history and
   behind the OpenAI audio shim), an AGX compose twin with identical
   services/ports/profiles, `sparknet-node-setup.sh --platform spark|agx`,
   and the parity gates in `tests/test_agx_node.py`.
+- Standalone goagx deployment repo (fabric PLAN Step 62): `reallife-spark/goagx`
+  is generated from this fabric by `scripts/sparknet-goagx-publish.sh`
+  (`make goagx-publish` / `make goagx-drift-check`) — both role subvaults,
+  `contracts/`, `shared/`, the setup script and the goagx image surface, so a
+  fresh AGX Xavier clones one repo and becomes a full fabric node. New
+  `goagx/bootstrap-agx.sh` (device preflight + goSpark at the
+  `goagx/GOSPARK_PIN`), generated `VERSIONS.json`/`SHA256SUMS` manifest and
+  verify workflow, pinned by `tests/test_goagx_repo.py`.
 
 ## [0.1.0] — initial version
 

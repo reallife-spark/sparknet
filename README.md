@@ -20,7 +20,7 @@ Not one node — a fabric with two node roles and a shared contract:
 | `peer-node/` | peer | **implemented** — guard, anchor, dispatch, its own vault |
 | `master-node/` | master | **built** (Steps 15–18); runs the peer's services by path; isolated signer deployed on agx64, election/signer arc proven live 2026-10-07 |
 | `scripts/` | both | fabric tooling: skill vendoring, env init, bundling |
-| `goagx/` | both | the AGX Xavier twin of the node image surface (image, compose, audio shim, README) — `sparknet-node-setup.sh --platform spark\|agx` (Step 56) |
+| `goagx/` | both | the AGX Xavier twin of the node image surface (image, compose, audio shim, bootstrap, README) — `sparknet-node-setup.sh --platform spark\|agx` (Step 56); `make goagx-publish` generates the standalone `reallife-spark/goagx` deployment repo (Step 62) |
 | `.opencode/skills/` | both | the vendored wiki skill suite (33 skills: 32 vendored + 1 local, MIT) |
 
 **A role subvault alone is not a deployment.** A peer cannot verify a signature

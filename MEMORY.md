@@ -9,53 +9,35 @@ Updated: 2026-10-20
 
 ## Plan cursors
 
-- **root `PLAN.md` `current: done`.** Step 57 (clean-slate peer pair on both
+- **root `PLAN.md` `current: 62`.** Step 57 (clean-slate peer pair on both
   AGXes + manual 2/2 Master escalation over the direct sparknet cable) delivered
   **2026-10-19**, Phases 0–11 executed and verified; live legs stay
   `DoD: confirm: user` (physical cable move done; human review of the ceremony
   transcript). It **supersedes Step 55's deployment** (archived
   `ARCHIVE-2026-10-19-escalation`). Step 58 (userspace-aware overlay anchors for
   both roles — **closes Step 57's parked reboot-survival leg**) delivered
-  **2026-10-19**: both hosts restore `wg1` at boot via enabled anchor units, proven
-  by a cold-path restart + cross-ping (a literal reboot stays `confirm: user`).
-  **Both hosts were then rebooted for real (2026-10-19)** — overlay, firewall,
-  guard, master units and the admin surface all returned unattended. Step 59
-  (deployment/contract consistency remediation A–E) delivered **2026-10-19**:
-  peer authorization live (repo stays fail-closed), firewalls on both roles,
-  ledger genesis + signature-issued blocks, protected paths → `wg1`. Step 60
-  (robustness / fail-safe hardening A–F) delivered **2026-10-20**: one strict
-  base64 decoder, guard fail-closed on a chattr-less FS, firewall self-verify,
-  anchor re-pin-on-failure + required interface. Step 61 (fabric-root design
-  `CLUSTER_JOB_REALIZATION_DESIGN.md`) delivered **2026-10-20**: records four
-  cited defects — divergent
-  envelope encodings with nothing pinning `cluster_job_message`; peer↔peer
-  fan-out blocked by a peer's single `AllowedIPs` (Master dispatches at
-  n≥3, cross-peer fan-out deferred); the `fabric` index is a deny-list where the
-  charter mandates an allow-list; the parent note's `chromadb:8000` prose is
-  stale vs the committed `127.0.0.1:18000`/`~/infra`. It puts the Master vector
-  DB (**port 4223**) in scope: Milvus/Qdrant, HA sharding+replication+etcd and
-  pgvector all rejected for v1 (corpus ≈2,300 chunks; no k8s/object-store/
-  postgres in tree), **Qdrant designated the upgrade path**, and the index
-  treated as derived state — single writer, rebuild-from-source instead of
-  replication, collection-stamp 503-on-mismatch. Eight hand-forwarded
-  increments, order = dependency chain; the 4223 build step belongs in
-  `MASTER_ADMIN_PLAN.md`. Design only — `4223` still `spec-only`. Cursor
-  `done`. Step 60's `make ci` had passed with **shellcheck silently skipped**
-  (binary absent from PATH); re-running it with v0.11.0 surfaced two info
-  findings Step 60 introduced (`return $rc` unquoted; SC2329 on the
-  trap-invoked `repin_on_exit`) — fixed here, and now gated for real. Step 56 (`goagx/`) is delivered+reviewed;
-  its hardware legs are `DoD: confirm: user` (below). New roadmap work gets a
-  **new** step. Steps 1–54 closed/parked.
-  Steps 45–52
-  (2026-10-17) adopted NVIDIA/dsx standard practice across sparknet **and**
-  goSpark (**Scope guard: no license change, zero code copied.** Provenance
-  is `references/nvidia-dsx-standard-practice.md`, 14 repos pinned by SHA,
-  clones at `/mnt/nvme/github`). Step 53 (2026-10-18) refreshed both roles'
-  `00_System` base sets (stale pre-election claims) and built
-  `deployment/vault-template/`; the master identity chain is now
-  `sparknet-node-0002` end-to-end — a deliberate divergence from the live
-  trust root's `agx64`, recorded not accidental. Step 54 = h58 WiFi uplink
-  (in progress). New roadmap work gets a **new** step.
+  **2026-10-19**: both hosts restore `wg1` at boot via enabled anchor units,
+  proven by a cold-path restart + cross-ping (a literal reboot stays
+  `confirm: user`). **Both hosts were then rebooted for real (2026-10-19)** —
+  overlay, firewall, guard, master units and the admin surface all returned
+  unattended. Step 59 (deployment/contract consistency remediation A–E)
+  delivered **2026-10-19**: peer authorization live (repo stays fail-closed),
+  firewalls on both roles, ledger genesis + signature-issued blocks, protected
+  paths → `wg1`. Step 60 (robustness / fail-safe hardening A–F) delivered
+  **2026-10-20**: one strict base64 decoder, guard fail-closed on a chattr-less
+  FS, firewall self-verify, anchor re-pin-on-failure + required interface.
+  Step 61 (`CLUSTER_JOB_REALIZATION_DESIGN.md`, design-only, `4223`
+  `spec-only`) delivered **2026-10-20**; its follow-up made `make shellcheck`
+  self-provision the pinned 0.11.0, and the first GitHub CI run then caught the
+  pin being defeated by the runner's 0.9.0 plus a twin `return $rc` in the
+  master anchor — both fixed (resolver shared by both targets; version is
+  *enforced*, not defaulted). **Step 62 (`reallife-spark/goagx` standalone
+  distribution) delivered **2026-10-20: `reallife-spark/goagx` exists (private,
+  generated, never hand-edited); fabric DoD legs 1–5 verified (fresh-clone
+  `--verify`, repo CI 3× success, `make ci`/`test-all`/`drift-check` green) —
+  its silicon legs are parked below with Step 56's.** Cursor `done`. Step 56 (`goagx/`) is delivered+reviewed; its hardware legs
+  are `DoD: confirm: user` (below). New roadmap work gets a **new** step.
+  Steps 1–54 closed/parked.
 - **`peer-node/PLAN.md` `current: done`** — the peer arc is terminal; its last
   work (Steps 2–12: container, grants, bridge, Open WebUI surface, conversation
   passing, `MASTERSPIKE`, sharing regime, node admin agent) closed 2026-10-11/12.
@@ -83,6 +65,13 @@ Updated: 2026-10-20
   role's copy of the contract drifts.
 - **The shipped registry is empty on purpose** — the fail-closed default. No
   node has privileges until the Master signs something.
+- **`reallife-spark/goagx` is a generated distribution, never hand-edited.**
+  It is the one-way export of this fabric's node surface (`make goagx-publish`;
+  verify with `scripts/sparknet-goagx-publish.sh --verify <clone>`; drift via
+  `make goagx-drift-check`, which self-skips unauthenticated). Every commit is
+  a full-tree release; fixes go into the fabric and get republished. Its root
+  README/manifest carry the pinned sparknet SHA, the goSpark pin
+  (`goagx/GOSPARK_PIN`) and the image ARG pins.
 - **Vaults: three, not one.** Fabric root plus `peer-node/` and `master-node/`,
   each with its own `.env`, category skeleton and `AGENTS.md`. Resolve which one
   you are in before writing. Both role vaults store content in `00_System`–
@@ -184,6 +173,11 @@ Updated: 2026-10-20
 
 ## Open items (`DoD: confirm: user`)
 
+- **Step 62 AGX legs**: the vLLM/xformers source build completing on a real
+  Xavier from a clone of the published `reallife-spark/goagx` (bootstrap →
+  setup), real tok/s inside 16 GB, and the full-node bring-up (overlay anchor +
+  guard/bridge units) on that host — publishing and verifying the repo does not
+  prove the silicon.
 - **Branch protection requiring the `gate` check** — unavailable on this plan
   (needs Pro or a public repo), so no check is enforced as required today;
   revisit if visibility or plan changes. **Live GitHub CI itself is proven**

@@ -2445,5 +2445,65 @@ and has no forge on a node, so there is nowhere a workflow file would ever run.
       absent ⇒ non-zero; (4) `make test-all` green (peer 475 passed, 1 skipped;
       `tests/test_ci.py` green); (5) `make ci CI_QUICK=1` green.
 
+## Step 62 — goagx standalone distribution repo (reallife-spark/goagx)
+
+- [x] **Step 62 — publish the AGX Xavier node as a standalone deployment repo** —
+      opened 2026-10-20, **closed 2026-10-20**. Trigger (user): put goagx in its own GitHub repository
+      under the org with everything needed to deploy onto a Jetson AGX Xavier
+      and become a fully functioning sparknet node — vLLM setup included and
+      the required parts of the sparknet codebase hosted in that repo.
+      **Operator decisions (answered 2026-10-20):** (1) **generated
+      distribution** — one-way export from this fabric at a pinned ref, like
+      `make bundle`, never hand-edited on the forge side; (2) **full fabric
+      node** — compose stack plus host integration (overlay anchor, guard/
+      bridge units, firewall), not compose-only; (3) **peer + master opt-in**
+      (`--role master`), same surface as the monorepo setup script; (4)
+      target = **`reallife-spark/goagx`, private** (the org is `reallife-spark`;
+      the user's "reallife-sparknet" names it).
+      **Design.** The published tree *reproduces the monorepo layout* for the
+      needed subtrees (`peer-node/`, `master-node/`, `contracts/`, `shared/`,
+      `scripts/`, `.opencode/`, `opencode.json`, `requirements.txt`, plus the
+      root glue `spark-entrypoint.sh`, `spark-precontext.py`,
+      `spark.compose.cpu.yml`, `sparknet-node-setup.sh`, `.dockerignore` and
+      the `goagx/` surface itself) so every existing code path —
+      `sparknet-node-setup.sh --platform agx`, `make -C peer-node dist`, the
+      image's `COPY`, `install-units` — runs **unmodified** from a clone. One
+      code path; the repo is what `make bundle` ships plus the image surface.
+      goSpark arrives by pin: `goagx/GOSPARK_PIN` (one file, consumed by both
+      the bootstrap and the publish manifest) and
+      `goagx/bootstrap-agx.sh` (new, fabric-owned), which preflights the
+      device (aarch64, L4T r35, docker+buildx+nvidia-runtime, disk, swap —
+      the vLLM/xformers source build is the known 16 GB risk), fetches
+      goSpark at the pin, `make build build-gpu`, then hands over to
+      `sparknet-node-setup.sh --platform agx`.
+      **Deliverables:** `goagx/GOSPARK_PIN`, `goagx/bootstrap-agx.sh`,
+      `scripts/sparknet-goagx-publish.sh` (`--out`/`--verify`/`--push`,
+      SHA256SUMS + VERSIONS.json + generated deploy-first README from
+      `goagx/publish-templates/`), `make goagx-publish` /
+      `make goagx-drift-check` (the drift leg **self-skips with a notice**
+      when the private remote cannot be fetched, the `codeql` pattern — it is
+      not in `pre-merge-gate.sh`, which stays offline-first), and
+      `tests/test_goagx_repo.py` pinning the export manifest against every
+      dockerfile `COPY` source and compose reference. Docs: goagx README
+      "Standalone deployment repo" section, CHANGELOG, index, AGENTS row.
+      **DoD:** (1) `scripts/sparknet-goagx-publish.sh --out <tmp>` produces a
+      tree that passes its own `--verify` extracted elsewhere (relocation
+      discipline); (2) `reallife-spark/goagx` exists (private) and carries the
+      first release commit; (3) `tests/test_goagx_repo.py` green in the
+      fabric suite, shell `--help` contract holds for both new scripts;
+      (4) `make goagx-drift-check` green from this host (authenticated),
+      self-skipping with a notice where it is not; (5) full gate chain rc=0 —
+      `lint format-check shellcheck validate contract-test render-check
+      test-all` + `make ci CI_QUICK=1`. **`DoD: confirm: user`:** the vLLM
+      source build completing on actual Xavier hardware from a clone of the
+      published repo, real tok/s in 16 GB, and the full-node bring-up
+      (overlay + guard units) on that host — publishing the repo does not
+      prove the silicon. **Resolution (operator, 2026-10-20): parked** — the
+      silicon legs join the standing `DoD: confirm: user` open items next to
+      Step 56's identical legs; everything else was verified (relocation
+      `--verify` from a fresh clone of tip `73cf157`, repo private with its
+      own `verify` workflow 3× green, `make ci`/`test-all`/`drift-check`
+      green).
+
 ## Next
 

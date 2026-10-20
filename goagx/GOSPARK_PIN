@@ -1,0 +1,13 @@
+# goSpark pin — the single source for which goSpark revision the goagx
+# distribution builds against (fabric PLAN Step 62).
+#
+# Consumed by:
+#   goagx/bootstrap-agx.sh          fetch + `make build build-gpu` on the device
+#   scripts/sparknet-goagx-publish.sh   VERSIONS.json in the published manifest
+#
+# A bump is a reviewed commit: change the SHA here, run
+# `make goagx-publish` and note the goSpark changelog in the release message.
+# Repo visibility is private; the device needs a fine-grained PAT or a
+# deploy key with read access to reallife-spark/goSpark.
+GOSPARK_REPO=https://github.com/reallife-spark/goSpark.git
+GOSPARK_SHA=f5477518a495db35a4318ad796bbe86d094e06c2

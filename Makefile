@@ -34,6 +34,7 @@ SCOPE ?= fabric
         shellcheck-install \
         container-test \
         render render-check sbom sbom-check nv-search drift-check \
+        goagx-publish goagx-drift-check \
         devtools chroma-dev chroma-init chroma-inspect \
         chroma-index chroma-query env-init wiki-sync wiki-verify \
         wiki-preflight bundle bundle-verify status-plan clean dist \
@@ -213,11 +214,16 @@ nv-search: ## Look in NVIDIA's catalog first (q="llama"; details: scripts/sparkn
 	fi
 
 # The umbrella drift gate for everything *derived*: the rendered contract
-# manifest, the generated SBOM, the vendored wiki suite, and cross-role contract
-# parity. Each of these compares a generated or copied artifact against the
-# source it claims to come from; running them together is what "nothing has
-# silently drifted" means.
-drift-check: ## Fail if derived artifacts drifted (manifest, SBOM, skills, contracts)
+# manifest, the generated SBOM, the vendored wiki suite, cross-role contract
+# parity, and the published goagx distribution. Each of these compares a
+# generated or copied artifact against the source it claims to come from;
+# running them together is what "nothing has silently drifted" means.
+#
+# The goagx leg compares against a PRIVATE remote, so it self-skips with a
+# notice when that remote cannot be fetched (the codeql pattern) — it is a
+# convenience drift detector, not a required offline gate. Run
+# `make goagx-drift-check` alone for the strict, authenticated form.
+drift-check: ## Fail if derived artifacts drifted (manifest, SBOM, skills, contracts, goagx)
 	@echo "drift-check: contract manifest"
 	@$(MAKE) --no-print-directory render-check
 	@echo "drift-check: software bill of materials"
@@ -226,7 +232,18 @@ drift-check: ## Fail if derived artifacts drifted (manifest, SBOM, skills, contr
 	@$(MAKE) --no-print-directory wiki-verify
 	@echo "drift-check: cross-role contract parity"
 	@$(MAKE) --no-print-directory contract-test
+	@echo "drift-check: published goagx distribution"
+	@$(MAKE) --no-print-directory goagx-drift-check
 	@echo "drift-check: all derived artifacts are in sync"
+
+# The goagx distribution (reallife-spark/goagx, generated — fabric PLAN Step
+# 62). Publish is a full-tree release commit; verify also ships inside the
+# published repo, where its generated workflow re-runs it on every push.
+goagx-publish: ## Push a release commit of the goagx distribution to reallife-spark/goagx
+	@scripts/sparknet-goagx-publish.sh --push $(if $(FROM_GIT),--from-git $(FROM_GIT),)
+
+goagx-drift-check: ## Fail if reallife-spark/goagx drifted from this tree (self-skips offline)
+	@scripts/sparknet-goagx-publish.sh --drift
 
 devtools: ## Create .venv with cryptography, pytest and ruff (opt-in)
 	@# venv's argument is the DIRECTORY to create, not the interpreter inside it.

@@ -14,6 +14,35 @@ Xavier. The platform selection is a setup-script flag.
 | `sparknet.agx.docker` | the AGX node image (remake of `spark.docker`) |
 | `sparknet.agx.compose.yml` | same 14 services / profiles / ports as `spark.compose.yml`, AGX defaults |
 | `sparknet-audio-shim.py` | OpenAI `/v1/audio/transcriptions` over whisper.cpp |
+| `bootstrap-agx.sh` | device-side entry: preflight, goSpark at the pin, hand over to the setup script |
+| `GOSPARK_PIN` | the one goSpark revision this distribution builds against |
+| `publish-templates/` | README + workflow templates for the standalone repo |
+
+## Standalone deployment repo (reallife-spark/goagx)
+
+`reallife-spark/goagx` is the **generated distribution** of this surface: a
+private repo holding everything a fresh Xavier needs to become a fully
+functioning sparknet node — both role subvaults, `contracts/`, `shared/`, the
+setup script, the root files the image build COPYs, and this directory — laid
+out as a clone of the fabric so every code path runs unmodified. It is
+exported by `scripts/sparknet-goagx-publish.sh` (`make goagx-publish`), never
+hand-edited; the next publish overwrites the tree, and `VERSIONS.json` +
+`SHA256SUMS` record the sparknet SHA, the goSpark pin and the image pins.
+
+On the device:
+
+```sh
+git clone https://github.com/reallife-spark/goagx.git && cd goagx
+./goagx/bootstrap-agx.sh     # preflight (aarch64/L4T r35/docker/swap/disk),
+                             # goSpark at the pin, then setup --platform agx up
+```
+
+`make goagx-drift-check` compares this tree against the published tip
+(self-skipping with a notice where the private remote cannot be fetched); the
+published repo's generated `verify` workflow re-runs
+`sparknet-goagx-publish.sh --verify` on every push. The hardware legs — the
+source build completing on the Xavier, real tok/s — stay where the table
+below puts them: proven on silicon, not in CI.
 
 The goSpark binaries (`bin/` via the BuildKit named context `gospark`) are
 consumed **unchanged**; `goSpark` itself is not forked for AGX.

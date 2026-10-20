@@ -67,6 +67,10 @@ EXPECTED_TOP_LEVEL = {
     ".gitignore",
     "opencode.json",
     ".vault-config",
+    # the device entry for the standalone goagx distribution (fabric PLAN
+    # Step 62): a shim symlink to goagx/bootstrap-agx.sh, so a clone of
+    # reallife-spark/goagx has ./bootstrap-agx.sh at the top level
+    "bootstrap-agx.sh",
     # the release surface (fabric PLAN Step 41): VERSION is the single source of
     # truth for the fabric version; sbom/ holds the generated CycloneDX SBOM.
     "VERSION",

@@ -1,0 +1,93 @@
+# goagx — sparknet node on NVIDIA AGX Xavier
+
+**Generated distribution — do not edit by hand.** Every file here is exported
+from the sparknet fabric at a pinned revision; the next publish overwrites the
+tree. Fixes belong upstream in [sparknet](https://github.com/reallife-spark/sparknet)
+(`goagx/` for the image surface, `contracts/`, `peer-node/`, …), never here.
+
+| | |
+|---|---|
+| Published | {{PUBLISHED}} |
+| sparknet | `{{SPARKNET_SHA}}` of [reallife-spark/sparknet](https://github.com/reallife-spark/sparknet) |
+| goSpark | `{{GOSPARK_SHA}}` of [{{GOSPARK_REPO}}]({{GOSPARK_REPO}}) |
+| Platform | NVIDIA Jetson AGX Xavier — `sm_72`, L4T r35 (JetPack 5), 16 GB |
+| Engine | vLLM {{VLLM_REF}} built from source inside the node image |
+| Base image | `{{L4T_BASE}}` |
+
+## What this is
+
+A fully self-hostable sparknet node for the AGX Xavier: the node image
+(`goagx/sparknet.agx.docker` — source-built vLLM + llama.cpp/whisper.cpp +
+goSpark), the 14-service compose surface, the peer+master role vaults, the
+cross-role `contracts/` and the signed-authorization implementation in
+`shared/`. A role subvault alone is not a deployment; this repo ships the
+smallest tree that actually runs, assembled by the fabric's own bundle
+machinery.
+
+## Deploy a fresh Xavier (full fabric node)
+
+Prerequisites: JetPack 5.x (L4T r35) with the docker runtime, BuildKit
+(`docker buildx`), git, and credentials that can read the private goSpark repo
+(a fine-grained PAT or deploy key — never commit one). Budget **~25 GB free
+disk**, **≥ 8 GB swap** (the vLLM/xformers source build OOM-kills itself on a
+16 GB machine without it) and **hours** for the first image build.
+
+```sh
+git clone https://github.com/reallife-spark/goagx.git
+cd goagx
+./goagx/bootstrap-agx.sh          # preflight + goSpark at the pin, then:
+                                  # sparknet-node-setup.sh --platform agx up
+```
+
+First bring-up serves the text node (nats, vLLM, compute, agent, gpu) on the
+default ports — OpenAI API on `:8000`, node gateway on `:8080`. Then:
+
+```sh
+# Join an existing fabric (peer): pin the Master key + adopt the signed registry
+./sparknet-node-setup.sh --platform agx \
+  --master-pub "$MASTER_PUB" --registry node-authorizations.json up
+
+# Host integration: node keys, overlay (wireguard-go anchor), guard/bridge
+# systemd units, firewall — the rest of a full fabric node
+make -C peer-node user-init
+make -C peer-node install-units APPLY=1
+# overlay + firewall: see contracts/deployment-runbook.md
+
+# This node holds the Master key instead:
+./goagx/bootstrap-agx.sh --role master up
+```
+
+Profiles (`--profiles embed,webui,audio,…`), the CPU smoke engine
+(`--engine stub`) and every other setup flag work exactly as documented in
+`contracts/spark-node-runbook.md`. The election/signer ceremony is separate —
+this repo stands a node up; it does not elect or sign
+(`contracts/deployment-runbook.md`).
+
+## Verify the bytes you received
+
+```sh
+./scripts/sparknet-goagx-publish.sh --verify .
+```
+
+checks the SHA256SUMS manifest, the pin files, the `--help` surface of the
+entry scripts, the audio shim's Python 3.8 grammar and the compose
+resolution. The same command runs in this repo's `verify` workflow on every
+push.
+
+## Layout
+
+| Path | Contents |
+|---|---|
+| `goagx/` | the AGX image surface: dockerfile, compose file, audio shim, `bootstrap-agx.sh`, `GOSPARK_PIN`, resource-first README |
+| `peer-node/` `master-node/` | both role subvaults (keys, units, guard, services) |
+| `contracts/` `shared/` | the cross-role contract and the signed-authorization implementation — a node cannot run without them |
+| `scripts/` | bundle, env-init, this repo's publish/verify tool |
+| `sparknet-node-setup.sh` | the one-command bring-up (`--platform agx`) |
+| `spark-entrypoint.sh` `spark-precontext.py` | the image's dispatcher and precontext builder |
+| `VERSIONS.json` `SHA256SUMS` | machine-readable pins + integrity manifest |
+
+## Updating
+
+Regenerated from the fabric, never patched here. To move a node forward:
+`git pull` (a new publish), then re-run `./goagx/bootstrap-agx.sh` — the
+image rebuild is incremental except where the engine pins changed.

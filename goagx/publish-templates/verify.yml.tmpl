@@ -1,0 +1,34 @@
+# The goagx distribution's own gate — re-runs the shipped verify mode.
+#
+# This workflow is GENERATED into the published repo (fabric PLAN Step 62) and
+# calls the same scripts/sparknet-goagx-publish.sh --verify that the fabric
+# runs before every publish, so the check that gates a release is the check
+# that runs here. The LOCAL gate stays authoritative (same rule as the fabric):
+# if this and a local --verify disagree, fix this workflow, never the script.
+#
+# Actions are pinned to full commit SHAs, matching the fabric's dsx practice.
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: distribution verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Verify the distribution
+        run: ./scripts/sparknet-goagx-publish.sh --verify .
