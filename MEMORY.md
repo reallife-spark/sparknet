@@ -236,6 +236,18 @@ Updated: 2026-10-20
   A required gate must never pass by not running. `make shellcheck-install`
   provisions without running the gate. The workflows were deliberately left
   calling only `make ci` (`tests/test_ci.py` pins that invariant).
+- **A gate that runs a *different* checker than CI is a gate that lies.** The
+  pin must be *enforced*, not merely defaulted: `make shellcheck` accepts a
+  `shellcheck` already on `PATH` **only if its version equals**
+  `SHELLCHECK_VERSION`. The runner image ships 0.9.0; the first push let it
+  through and CI enforced 0.9.0's opinion instead of 0.11.0's — that caught a
+  real `return $rc` (SC2086) here, but only after a red CI run. When a pinned
+  tool is the thing a gate's name promises, verify the version, not the
+  presence. Both `shellcheck` targets share one resolver so they cannot drift.
+- **Fix a bug where its twin lives.** The SC2086 quick-fix landed in the peer's
+  `sparknet-wireguard-anchor.sh` and the *master's* `sparknet-master-*.sh` twin
+  kept it, because only one was re-checked. These two files are deliberately
+  near-duplicates; grep the sibling before closing a shellcheck finding.
 
 ## Local vs live
 

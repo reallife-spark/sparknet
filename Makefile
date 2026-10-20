@@ -134,31 +134,45 @@ format-check: ## ruff format --check across the whole fabric (whole-tree since S
 # Pinned like the SHA-pinned GitHub Actions: the gate must not silently change
 # what it enforces when a new shellcheck release starts reporting something new.
 # A version bump is a reviewed commit, not an ambient upgrade.
+#
+# The pin is *enforced*, not merely used-as-a-default: a shellcheck already on
+# PATH is accepted ONLY if its version matches. A runner image shipping 0.9.0
+# must not turn the gate into 0.9.0's opinion — that is exactly how a green
+# local run and a red CI run happened once already.
 SHELLCHECK_VERSION ?= 0.11.0
 SHELLCHECK_CACHE ?= $(VAULT_ROOT)/.cache/tools
 
+# Resolve the pinned shellcheck, provisioning it if needed. Sets `sc` via the
+# caller's shell. Shared by `shellcheck` and `shellcheck-install` so the two can
+# never disagree about what "the pinned binary" means.
+define shellcheck-resolve
+case "$$(uname -m)" in \
+	x86_64|amd64) _sca=x86_64 ;; \
+	aarch64|arm64) _sca=aarch64 ;; \
+	*) echo "shellcheck: no pinned build for $$(uname -m); install shellcheck $(SHELLCHECK_VERSION) on PATH" >&2; exit 1 ;; \
+esac; \
+_scd="$(SHELLCHECK_CACHE)/shellcheck-$(SHELLCHECK_VERSION)/$$_sca"; \
+_scb="$$_scd/shellcheck"; \
+if [ ! -x "$$_scb" ]; then \
+	_scr="$$(command -v shellcheck 2>/dev/null || true)"; \
+	if [ -n "$$_scr" ] && [ "$$("$$_scr" --version 2>/dev/null | awk 'NR==2 {print $$2}')" = "$(SHELLCHECK_VERSION)" ]; then \
+		_scb="$$_scr"; \
+	else \
+		_scu="https://github.com/koalaman/shellcheck/releases/download/v$(SHELLCHECK_VERSION)/shellcheck-v$(SHELLCHECK_VERSION).linux.$$_sca.tar.xz"; \
+		echo "shellcheck: provisioning pinned v$(SHELLCHECK_VERSION) ($$_sca) into $$_scd" >&2; \
+		mkdir -p "$$_scd"; \
+		if ! curl -fsSL "$$_scu" | tar -xJ -C "$$_scd" --strip-components=1; then \
+			echo "shellcheck: could not download $$_scu — this gate is REQUIRED (see CONTRIBUTING.md); install shellcheck $(SHELLCHECK_VERSION) on PATH to run it offline" >&2; \
+			exit 1; \
+		fi; \
+	fi; \
+fi; \
+sc="$$_scb"
+endef
+
 shellcheck: ## shellcheck tracked scripts (provisions the pinned binary, then runs it)
 	@set -e; \
-	sc="$$(command -v shellcheck 2>/dev/null || true)"; \
-	if [ -z "$$sc" ]; then \
-		case "$$(uname -m)" in \
-			x86_64|amd64) arch=x86_64 ;; \
-			aarch64|arm64) arch=aarch64 ;; \
-			*) echo "shellcheck: no pinned build for $$(uname -m); install it on PATH" >&2; exit 1 ;; \
-		esac; \
-		dest="$(SHELLCHECK_CACHE)/shellcheck-$(SHELLCHECK_VERSION)/$$arch"; \
-		bin="$$dest/shellcheck"; \
-		if [ ! -x "$$bin" ]; then \
-			url="https://github.com/koalaman/shellcheck/releases/download/v$(SHELLCHECK_VERSION)/shellcheck-v$(SHELLCHECK_VERSION).linux.$$arch.tar.xz"; \
-			echo "shellcheck: not on PATH — provisioning v$(SHELLCHECK_VERSION) ($$arch) into $$dest" >&2; \
-			mkdir -p "$$dest"; \
-			if ! curl -fsSL "$$url" | tar -xJ -C "$$dest" --strip-components=1; then \
-				echo "shellcheck: could not download $$url — this gate is REQUIRED (see CONTRIBUTING.md); install shellcheck on PATH to run it offline" >&2; \
-				exit 1; \
-			fi; \
-		fi; \
-		sc="$$bin"; \
-	fi; \
+	$(shellcheck-resolve); \
 	echo "shellcheck: $$("$$sc" --version | awk 'NR==2 {print $$2}') ($$sc)"; \
 	files="$$(git -C "$(VAULT_ROOT)" ls-files '*.sh' | grep -v '^\.opencode/skills/' || true)"; \
 	if [ -z "$$files" ]; then echo "shellcheck: no tracked shell scripts"; exit 0; fi; \
@@ -169,20 +183,8 @@ test-report: ## Write JUnit XML + summary.json (SCOPE=fabric|peer|master|all)
 
 shellcheck-install: ## Provision the pinned shellcheck binary without running the gate
 	@set -e; \
-	case "$$(uname -m)" in \
-		x86_64|amd64) arch=x86_64 ;; \
-		aarch64|arm64) arch=aarch64 ;; \
-		*) echo "shellcheck-install: no pinned build for $$(uname -m)" >&2; exit 1 ;; \
-	esac; \
-	dest="$(SHELLCHECK_CACHE)/shellcheck-$(SHELLCHECK_VERSION)/$$arch"; \
-	bin="$$dest/shellcheck"; \
-	if [ ! -x "$$bin" ]; then \
-		url="https://github.com/koalaman/shellcheck/releases/download/v$(SHELLCHECK_VERSION)/shellcheck-v$(SHELLCHECK_VERSION).linux.$$arch.tar.xz"; \
-		echo "shellcheck-install: fetching v$(SHELLCHECK_VERSION) ($$arch)"; \
-		mkdir -p "$$dest"; \
-		curl -fsSL "$$url" | tar -xJ -C "$$dest" --strip-components=1; \
-	fi; \
-	echo "shellcheck-install: $$bin"
+	$(shellcheck-resolve); \
+	echo "shellcheck-install: $$sc"
 
 ci: ## Run the local pre-merge gate (CI_QUICK=1 to skip the full suite)
 	@./scripts/pre-merge-gate.sh $(if $(filter 1,$(CI_QUICK)),--quick,)
