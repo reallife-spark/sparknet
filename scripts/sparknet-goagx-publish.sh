@@ -157,7 +157,7 @@ resolved_sha() {  # the sparknet revision this export represents
 # --- stage --------------------------------------------------------------------
 
 stage_into() {  # <target-dir>
-  local target="$1" subtree f sha goshort
+  local target="$1" subtree f sha
   mkdir -p "$target"
 
   if [ -n "$FROM_GIT" ]; then
@@ -195,7 +195,6 @@ stage_into() {  # <target-dir>
   [ -f "$TEMPLATES/README.md.tmpl" ] || die "missing template $TEMPLATES/README.md.tmpl"
   [ -f "$TEMPLATES/verify.yml.tmpl" ] || die "missing template $TEMPLATES/verify.yml.tmpl"
   sha="$(resolved_sha)"
-  goshort="$(pin_get GOSPARK_SHA | cut -c1-12)"
   sed -e "s|{{SPARKNET_SHA}}|$sha|g" \
       -e "s|{{GOSPARK_SHA}}|$(pin_get GOSPARK_SHA)|g" \
       -e "s|{{GOSPARK_REPO}}|$(pin_get GOSPARK_REPO)|g" \
@@ -436,16 +435,18 @@ drift_check() {  # stage from the tree, diff against the published tip
     warn "SKIPPED: cannot fetch $REMOTE (private remote unreachable or unauthenticated) — goagx drift not measured"
     return 0
   fi
-  # Generation metadata, stamped at stage time: the manifest timestamp, the
-  # README's Published row and the hashes those two set in SHA256SUMS.
-  # Normalizing all three keeps --drift from flagging every run on its own
-  # clock — real content drift still shows.
+  # Generation metadata, stamped at stage time: the manifest timestamp, how
+  # the tip happened to be published (worktree vs a ref — the sparknet_sha
+  # field still catches an old ref), the README's Published row and the
+  # hashes those set in SHA256SUMS. Normalizing keeps --drift from flagging
+  # its own clock/mode — real content drift still shows.
   for tree in "$remote_work/goagx" "$stage"; do
     python3 - "$tree/VERSIONS.json" <<'PY'
 import json, sys
 path = sys.argv[1]
 m = json.load(open(path))
-m.pop("published", None)
+for key in ("published", "sparknet_from_git"):
+    m.pop(key, None)
 with open(path, "w") as fh:
     json.dump(m, fh, indent=2, sort_keys=True)
     fh.write("\n")
