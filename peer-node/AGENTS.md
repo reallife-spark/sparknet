@@ -168,6 +168,15 @@ Run `/wiki-status` first, then `/wiki-ingest`, `/wiki-query`, `/wiki-lint`,
 `/wiki-capture`, `/wiki-synthesize`, `/wiki-digest`, `/wiki-rebuild`,
 `/daily-update`.
 
+## Templates
+
+| Template | Purpose |
+| --- | --- |
+| `deployment/vault-template/` | Starter `00_System/` set for a fresh vault (`cp` + `make user-init`). |
+| `manifests/node-template-manifest.json` | Identity manifest skeleton populated at provisioning. |
+| `configs/wireguard/wg0-node.conf.template` | Peer WireGuard stanza (see `docs/wireguard.md`). |
+| `agents/template.sparknet-agent@.service` | Per-agent systemd unit template for role agents. |
+
 ## Boundaries
 
 - **Scope discipline.** This vault holds peer-role sparknet knowledge. Master

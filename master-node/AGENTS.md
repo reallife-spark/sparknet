@@ -223,6 +223,14 @@ Run `/wiki-status` first, then `/wiki-ingest`, `/wiki-query`, `/wiki-lint`,
 `/wiki-capture`, `/wiki-synthesize`, `/wiki-digest`, `/wiki-rebuild`,
 `/daily-update`.
 
+## Templates
+
+| Template | Purpose |
+| --- | --- |
+| `deployment/vault-template/` | Starter `00_System/` set for a fresh vault (`cp` + `make user-init`). |
+| `configs/wireguard/master-peer.template` | Master-side WireGuard peer stanza for `wg0`. |
+| `docs/killswitch-template.md` | KillSwitch procedure template (operational checklist). |
+
 ## Boundaries
 
 - **Scope discipline.** This vault holds Master-role sparknet knowledge.
