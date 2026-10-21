@@ -146,7 +146,14 @@ def build_template(model: str, prompt_files: list[str], max_bytes: int) -> str:
     if max_bytes > 0 and len(precontext.encode("utf-8")) > max_bytes:
         precontext = precontext.encode("utf-8")[:max_bytes].decode("utf-8", "ignore")
 
-    tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=True)
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=True)
+    except Exception:
+        # The pinned tokenizers stack may refuse a model's regenerated
+        # tokenizer.json (schema drift). The sentencepiece sidecar still
+        # loads and carries the same chat template — losing the system
+        # prompt to a parsing quirk is worse than a slow tokenizer here.
+        tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=True, use_fast=False)
     template = tokenizer.chat_template
     if isinstance(template, dict):
         template = template.get("default") or next(iter(template.values()))

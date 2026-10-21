@@ -160,6 +160,11 @@ services:
       VLLM_EXTRA_ARGS: ${VLLM_EXTRA_ARGS:-}
       SPARKNET_MULTIMODAL: ${SPARKNET_MULTIMODAL:-}
       SPARKNET_MM_LIMIT: ${SPARKNET_MM_LIMIT:-}
+      # The fabric precontext is baked into the chat template; on a small
+      # context window the raw system prompt can exceed it, so the byte cap
+      # is configurable per node: 0 = no cap.
+      SPARKNET_PRECONTEXT: ${SPARKNET_PRECONTEXT:-1}
+      SPARKNET_PRECONTEXT_MAX_BYTES: ${SPARKNET_PRECONTEXT_MAX_BYTES:-}
     volumes:
       - *state-volume
       - type: bind
@@ -261,7 +266,10 @@ services:
     environment:
       <<: *spark-env
       SPARKNET_ROLE: master
-      GOSPARK_ADMIN_LISTEN: 0.0.0.0:8899
+      # The admin surface grants full registry control and goSpark refuses a
+      # non-loopback bind outright, so it stays on 127.0.0.1 — the host
+      # mapping below is loopback-only too. Reach it with an SSH tunnel.
+      GOSPARK_ADMIN_LISTEN: 127.0.0.1:8899
       GOSPARK_METRICS_LISTEN: 0.0.0.0:9180
       GOSPARK_GATEWAY_LISTEN: 0.0.0.0:8081
     volumes:

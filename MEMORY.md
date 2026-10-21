@@ -5,7 +5,7 @@
 > own it. **All history lives in `log.md` and `sessions/YYYY-MM-DD.md`** — an
 > entry here is a durable fact you still need, never a record of what happened.
 
-Updated: 2026-10-20
+Updated: 2026-10-21
 
 ## Plan cursors
 
@@ -154,6 +154,33 @@ Updated: 2026-10-20
   carry `Before=docker.service`**. Port relocated `8080`→`8088` because the
   unrelated lab container `mitm` holds `0.0.0.0:8080` on agx32. Ports
   `4220`–`4223` are spec-only.
+- **The goagx node stack runs live on both hosts (2026-10-21).** Both carry the
+  same image facts: goagx `5cfe888`, goSpark `f547751`, vLLM 0.2.7, torch
+  `2.0.0a0+ec3941ad.nv23.02`, transformers 4.37.2, xformers 0.0.20, jinja2
+  3.1.6, whisper.cpp 1.9.5, llama.cpp 0.7.0. Measured ~5 tok/s for Mistral-7B
+  fp16 (agx32 60.2 s / agx64 61.6 s per 300 completion tokens), 4 771 prompt
+  tokens after the precontext cap. Durable facts worth keeping:
+  - **`VLLM_GPU_MEM_UTIL` is a fraction of system RAM on Jetson** (unified
+    memory; `mem_get_info` reports the system), and vLLM 0.2.7 subtracts a
+    *system-wide* peak → 0.4 on the 64 GB peer, **0.8 on the 32 GB master**;
+    lower values on the master mean no room for the cache blocks at all.
+  - **The 32 GB master cannot host Mistral-7B and the aux profiles (embed /
+    rerank / audio) together** — the engine dies with
+    `torch.cuda.OutOfMemoryError`. The aux profiles are an **on-demand window**
+    there; the 64 GB peer runs the full set concurrently.
+  - **Ollama's keepalive cold-loads a ~9.6 GB model** → stays stopped on the
+    master while the 7B model is resident (`ollama-keepalive.timer`).
+  - **The control plane's admin surface must bind to loopback** — goSpark
+    refuses `0.0.0.0:8899`; the composes set `GOSPARK_ADMIN_LISTEN:
+    127.0.0.1:8899` and the host mapping is loopback-only.
+  - **The chat precontext must be capped** (`SPARKNET_PRECONTEXT_MAX_BYTES=
+    16000`) or the 8 192-token context overflows; **jinja2 must be in the
+    image** (the chat template refuses to render without it) — it is installed
+    in its own **late** layer so a jinja2 bump never invalidates the
+    multi-hour vLLM compile.
+  - `bootstrap-agx.sh` takes `--gospark <path>` (the goSpark repo is private;
+    the on-host build enters the image as a named BuildKit context) and the
+    overlay bind comes from `SPARKNET_BIND_API`, not a `--bind-api` flag.
 
 ## Security / secrets
 
@@ -177,7 +204,12 @@ Updated: 2026-10-20
   Xavier from a clone of the published `reallife-spark/goagx` (bootstrap →
   setup), real tok/s inside 16 GB, and the full-node bring-up (overlay anchor +
   guard/bridge units) on that host — publishing and verifying the repo does not
-  prove the silicon.
+  prove the silicon. **Partially answered 2026-10-21** (see "Live fabric"):
+  the source build completed on both real Orin nodes and real tok/s were
+  measured (~5 tok/s, 4 771-token prompts), the goSpark path was built
+  on-host and the whole stack passed its battery — but from a **fabric tree,
+  not a published-clone**, and on 32/64 GB Orins rather than a 16 GB Xavier.
+  The clone-from-published-repo leg and the 16 GB budget leg stay open.
 - **Branch protection requiring the `gate` check** — unavailable on this plan
   (needs Pro or a public repo), so no check is enforced as required today;
   revisit if visibility or plan changes. **Live GitHub CI itself is proven**
@@ -187,7 +219,13 @@ Updated: 2026-10-20
   handshake.
 - **Step 56 AGX legs**: the source build (vLLM/xformers hours) completing on
   the Xavier, real tok/s inside 16 GB, NVML/tegra sidecar telemetry on Jetson,
-  whisper `detect_language` through the audio shim.
+  whisper `detect_language` through the audio shim. **Partially answered
+  2026-10-21**: the source build and real tok/s are proven on both real Orin
+  nodes, and the GPU sidecar's honest Jetson degradation is observed
+  (`gpu_telemetry.available=false`, reason `libdcgm.so.4 not found` /
+  `ERROR_LIBRARY_NOT_FOUND` — DCGM/NVML are absent on r35 by contract);
+  whisper's route through the shim answers 200. Still open: the 16 GB budget
+  and whisper's per-request `detect_language` behaviour.
 - Full power-cycle reboot of a cluster2 node (peer Step 10 leg).
 - Phase 9's destructive legs (rollback / replace-Master re-formation) are
   documented in `contracts/deployment-runbook.md` and deliberately unexecuted.

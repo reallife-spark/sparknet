@@ -30,8 +30,16 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response
 UPSTREAM = os.environ.get("WHISPER_UPSTREAM", "http://127.0.0.1:8004")
 # A transcription may outlast any default client timeout on the A57 cluster;
 # whisper is the rate limiter here, not the proxy. Override with
-# WHISPER_FORWARD_TIMEOUT (seconds).
-FORWARD_TIMEOUT = httpx.Timeout(connect=10.0, read=float(os.environ.get("WHISPER_FORWARD_TIMEOUT", "1800")))
+# WHISPER_FORWARD_TIMEOUT (seconds). All four phases are set explicitly:
+# httpx rejects a Timeout that mixes named phases with an implicit default,
+# and a long write matters just as much as a long read here — the upload is
+# one pre-buffered multipart body over a link that may be slow.
+FORWARD_TIMEOUT = httpx.Timeout(
+    connect=10.0,
+    read=float(os.environ.get("WHISPER_FORWARD_TIMEOUT", "1800")),
+    write=float(os.environ.get("WHISPER_FORWARD_TIMEOUT", "1800")),
+    pool=10.0,
+)
 # Uploads are read into memory before forwarding (whisper wants one
 # multipart body), so bound them: an unbounded read lets any client that
 # reaches the docker network exhaust a 16 GB machine. Starlette has already

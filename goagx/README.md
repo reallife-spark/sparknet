@@ -89,7 +89,7 @@ carries over unchanged.
 2. **vLLM v0.2.7 from source**, with build-time requirement relaxations
    (`ARG TORCH_CUDA_ARCH_LIST`, `ARG XFORMERS_PIP_SPEC`,
    `ARG TRANSFORMERS_PIP_SPEC`): torch comes from the base (2.0.0/cu114),
-   `xformers==0.0.20`, `transformers==4.37.2`. xformers is built from its
+   `xformers==0.0.18`, `transformers==4.37.2`. xformers is built from its
    sdist here — expect **hours** of compilation on the Xavier, not minutes.
    Gate after install: `import vllm, vllm._C`.
 3. **`VLLM_CLI` env decides the engine command** (image default
@@ -119,6 +119,57 @@ Everything else — service names, container names, profiles, published
 ports, the env-key surface of the core services, precontext/rag, the
 stub/CPU overlay, `--engine stub` smoke — is identical by test
 (`tests/test_agx_node.py` asserts the parity).
+
+## Measured on real AGX Orin nodes (2026-10-21)
+
+Two Jetson AGX Orin nodes ran the whole battery end to end: `agx64` (Orin
+64 GB, peer) and `agx32` (Orin 32 GB, master, elected signing role). Numbers
+below are measured, not estimated.
+
+| | agx64 (peer) | agx32 (master) |
+|---|---|---|
+| RAM | 64 GB unified | 32 GB unified |
+| `VLLM_GPU_MEM_UTIL` | 0.4 | 0.8 |
+| Throughput (7B, fp16, 300 completion tokens) | 61.6 s (~4.9 tok/s) | 60.2 s (~5.0 tok/s) |
+| Prompt tokens after the precontext cap | 4 771 | 4 771 |
+| Profiles resident at once | vLLM + embed + rerank + audio + core | vLLM + core (aux staged) |
+| Steady-state RAM | ~25 GB used of 61 GB | ~27 GB used of 30 GB |
+
+Image facts that hold on both: vLLM 0.2.7, torch
+`2.0.0a0+ec3941ad.nv23.02`, transformers 4.37.2, xformers 0.0.20, jinja2
+3.1.6, whisper.cpp 1.9.5, llama.cpp 0.7.0, goSpark `f547751`, goagx
+`5cfe888`.
+
+Four findings that change how the node is run:
+
+1. **`VLLM_GPU_MEM_UTIL` is a fraction of system RAM, not of the GPU.** On
+   Jetson, `torch.cuda.mem_get_info()` reports unified RAM, and vLLM 0.2.7
+   computes `num_gpu_blocks = (total * util - peak_memory) // block_size`
+   with a *system-wide* `peak_memory`. A util of 0.85 on the 32 GB master
+   asks for a cache that does not exist: the engine dies with
+   `No available memory for the cache blocks`. 0.4 fits the 64 GB peer, 0.8
+   fits the 32 GB master — with the aux profiles stopped.
+2. **The 32 GB master cannot host Mistral-7B and the aux profiles at the
+   same time.** With embed + rerank + audio resident, the engine dies mid
+   generation with `torch.cuda.OutOfMemoryError` (18.04 GiB allocated,
+   1.87 GiB free). The aux profiles are therefore an *on-demand window* on
+   that node: bring them up for the embed/rerank/audio probes, stop them for
+   the text battery. The 64 GB peer runs every profile concurrently.
+3. **Ollama's keepalive is a 9.6 GB cold load** (`hack1ng-131k`), which does
+   not fit beside the resident 7B model on the 32 GB master. The timer
+   (`ollama-keepalive.timer`) stays stopped there while vLLM runs; the
+   daemon itself is a separate unit and may stay up.
+4. **The control plane's admin surface must bind to loopback.** goSpark
+   refuses `0.0.0.0:8899` outright (`admin: listen "0.0.0.0:8899" is not
+   loopback; the admin surface grants full registry control and must not be
+   exposed`), so the compose sets `GOSPARK_ADMIN_LISTEN: 127.0.0.1:8899`
+   and the host mapping is loopback-only. Reach it over an SSH tunnel.
+
+Two more that are about the request path rather than the hardware: the chat
+precontext has to be capped (`SPARKNET_PRECONTEXT_MAX_BYTES=16000`, ~4 771
+prompt tokens) or the 8 192-token context overflows, and the audio shim's
+`httpx.Timeout` has to set all four phases explicitly — httpx rejects a
+timeout that mixes named phases with an implicit default.
 
 ## Build
 

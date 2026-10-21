@@ -66,10 +66,14 @@ ARG WHISPER_CPP_REPO=https://github.com/ggml-org/whisper.cpp.git
 ARG WHISPER_CPP_REF=v1.9.5
 
 # --- aux engines (llama.cpp + whisper.cpp) -----------------------------------
-# Built once here, shipped as two executables: llama-server with
-# BUILD_SHARED_LIBS=OFF (static llama/ggml/common), whisper-server via its own
-# install rule (whisper links static by default). No toolchain and no .so set
-# from this stage enters the final image — only the binaries.
+# Built once here, shipped as two executables. Both force BUILD_SHARED_LIBS=OFF
+# so each server is a single self-contained binary — the final stage copies
+# binaries only and gates on ldd. Deliberately no `cmake --install` for
+# whisper: v1.9.5's top-level install walk covers every example's install
+# rule (whisper-cli, libparakeet, …), so a selective --target build plus a
+# full install can never succeed; `install -D` of the one binary matches the
+# llama.cpp pattern above and is all the final image needs.
+# No toolchain and no .so set from this stage enters the final image.
 FROM ${L4T_BASE} AS aux-build
 
 ARG LLAMA_CPP_REPO
@@ -90,9 +94,10 @@ RUN git clone --depth 1 --branch "${LLAMA_CPP_REF}" "${LLAMA_CPP_REPO}" /src/lla
  && /opt/aux/bin/llama-server -h 2>&1 | grep -q -e '--port'
 
 RUN git clone --depth 1 --branch "${WHISPER_CPP_REF}" "${WHISPER_CPP_REPO}" /src/whisper.cpp \
- && cmake -S /src/whisper.cpp -B /src/whisper.cpp/build -DCMAKE_BUILD_TYPE=Release \
+ && cmake -S /src/whisper.cpp -B /src/whisper.cpp/build \
+      -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
  && cmake --build /src/whisper.cpp/build --parallel "$(nproc)" --target whisper-server \
- && cmake --install /src/whisper.cpp/build --prefix /opt/aux \
+ && install -D -m 0755 /src/whisper.cpp/build/bin/whisper-server /opt/aux/bin/whisper-server \
  && /opt/aux/bin/whisper-server -h 2>&1 | grep -q -e '--port'
 
 # --- the node image ----------------------------------------------------------
@@ -110,7 +115,11 @@ ARG VLLM_GIT_REF=v0.2.7
 ARG TORCH_CUDA_ARCH_LIST="7.0+PTX"
 # The xformers release matched to torch 2.0.0. vLLM imports xformers
 # unconditionally (model_executor/layers/attention.py), so this is mandatory,
-# not an optimisation — built from sdist against this image's nvcc.
+# not an optimisation — built from sdist against this image's nvcc. On sm_72
+# xformers has no FlashAttention kernel, so its cutlass fallback serves prefill;
+# 0.0.20's cutlass path accepts only 4-D BMHK, which is why vLLM's GQA prefill
+# is patched to that layout below rather than pinning a different xformers
+# (0.0.18/0.0.19 sdists are yanked from PyPI and carry the same 4-D-only check).
 ARG XFORMERS_PIP_SPEC="xformers==0.0.20"
 # The transformers release contemporary with vLLM 0.2.7 — pip's py3.8 ceiling
 # would otherwise float it years past what this codebase expects.
@@ -299,7 +308,74 @@ RUN mkdir -p "${SPARKNET_CONTEXT_DIR}" \
       --out "${SPARKNET_CONTEXT_DIR}/fabric-digest.md" \
  && python3 /srv/sparknet/scripts/sparknet-rag-corpus.py /srv/sparknet \
       --out "${SPARKNET_CONTEXT_DIR}/rag-corpus" \
- && test -s "${SPARKNET_CONTEXT_DIR}/fabric-digest.md"
+  && test -s "${SPARKNET_CONTEXT_DIR}/fabric-digest.md"
+
+# --- jinja2 for the chat template --------------------------------------------
+# transformers' apply_chat_template() refuses to render a template without
+# jinja2 ("apply_chat_template requires jinja2 to be installed"), and the
+# precontext wrapper builds exactly such a template at container start — so a
+# missing jinja2 is a hard failure of every chat request, not a soft one.
+# It is installed in its own late layer, after the vLLM build, so a jinja2
+# bump never invalidates the (multi-hour, CUDA-compiling) vLLM layer.
+RUN python3 -m pip install --no-cache-dir "jinja2" \
+ && python3 -c "import jinja2; print('jinja2', jinja2.__version__)"
+
+# --- single-rank torch.distributed for the L4T wheel -------------------------
+# NVIDIA's L4T r35 pytorch wheel is built without USE_DISTRIBUTED, so the
+# callable torch.distributed API is absent — but vLLM 0.2.7 drives it
+# unconditionally, even at tensor-parallel size 1 where every other collective
+# is a guarded no-op. Append the documented single-rank compat layer (its own
+# module docstring explains the semantics) and gate it at build time, so a
+# regression here is a build error and never a crash-looping container. The
+# block is inert on any torch build that does have distributed support.
+COPY torch-dist-l4t-compat.py /tmp/spark-torch-dist-compat.py
+RUN cat /tmp/spark-torch-dist-compat.py \
+      >> /usr/local/lib/python3.8/dist-packages/torch/distributed/__init__.py \
+ && python3 -c "import torch; assert not torch.distributed.is_available(); \
+torch.distributed.init_process_group(backend='nccl', world_size=1, rank=0); \
+assert torch.distributed.is_initialized(); assert torch.distributed.get_world_size() == 1; \
+z = torch.zeros(1); assert torch.distributed.all_reduce(z) is z; \
+from vllm.model_executor.parallel_utils.parallel_state import \
+initialize_model_parallel, get_tensor_model_parallel_world_size, get_tensor_model_parallel_rank; \
+initialize_model_parallel(1, 1); assert get_tensor_model_parallel_world_size() == 1; \
+assert get_tensor_model_parallel_rank() == 0; print('l4t-dist-compat ok')" \
+ && rm /tmp/spark-torch-dist-compat.py
+
+# --- vLLM model_loader for the L4T wheel's missing torch.device context ------
+# The nv23.02 torch.device C type has no context-manager protocol (and is
+# unsubclassable), so vLLM 0.2.7's `with torch.device("cuda")` around model
+# construction raises AttributeError at load time. The documented patch
+# switches the default tensor type instead — same placement semantics for the
+# empty params — and asserts the exact upstream block before rewriting, so a
+# vLLM version drift fails the build rather than silently patching.
+COPY spark-vllm-l4t-patch.py /tmp/spark-vllm-l4t-patch.py
+RUN python3 /tmp/spark-vllm-l4t-patch.py \
+ && python3 -m py_compile \
+      /usr/local/lib/python3.8/dist-packages/vllm/model_executor/model_loader.py \
+ && ! grep -q 'with torch.device(' \
+      /usr/local/lib/python3.8/dist-packages/vllm/model_executor/model_loader.py \
+ && rm /tmp/spark-vllm-l4t-patch.py
+
+# --- vLLM prefill attention for xformers on sm_72 ----------------------------
+# sm_72 has no xformers FlashAttention kernel, so the cutlass fallback serves
+# prefill — and it accepts only 4-D BMHK. vLLM 0.2.7's GQA branch hands it a
+# 5-D [B,S,H_kv,G,K] layout, which cutlass rejects ("Query/Key/Value should all
+# have BMHK or BMK shape"). The documented patch re-lays that as
+# [B,S,H_kv*G,K] — identical math — and asserts the exact upstream block, so a
+# vLLM drift fails the build rather than silently patching an unknown tree.
+# The gate is deliberately CPU-only: docker build has no GPU here (verified),
+# so it proves the patch applied, the module byte-compiles and imports, and the
+# rewritten source is what ships. The CUDA-path proof is the live smoke test
+# below (`make -C peer-node smoke` / the first prefill).
+COPY spark-vllm-xformers-gqa-patch.py /tmp/spark-vllm-xformers-gqa-patch.py
+RUN python3 /tmp/spark-vllm-xformers-gqa-patch.py \
+ && python3 -m py_compile \
+      /usr/local/lib/python3.8/dist-packages/vllm/model_executor/layers/attention.py \
+ && python3 -c "import vllm.model_executor.layers.attention as m; \
+import inspect; s = inspect.getsource(m.PagedAttention.forward); \
+assert 'sparknet L4T' in s and 'is_hip()' in s; \
+print('l4t-xformers-gqa-patch applied')" \
+ && rm /tmp/spark-vllm-xformers-gqa-patch.py
 
 # --- entrypoint + dispatcher -------------------------------------------------
 # The same dispatcher as the Spark image, plus the three aux-engine

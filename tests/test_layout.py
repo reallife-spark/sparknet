@@ -102,6 +102,13 @@ EXPECTED_TOP_LEVEL = {
     # the AGX Xavier twin of the node surface: image + compose + audio shim +
     # README, retargeted from GB10 to sm_72 with the same service contract.
     "goagx",
+    # the L4T/r35 build-time patches for the AGX image. They sit at the root
+    # because the image build context IS the root: the Dockerfile COPYs each
+    # one in and gates it (torch.distributed single-rank compat, the
+    # model_loader torch.device fix, the xformers GQA prefill fix).
+    "torch-dist-l4t-compat.py",
+    "spark-vllm-l4t-patch.py",
+    "spark-vllm-xformers-gqa-patch.py",
     # per-clone hooks (activated by `make hooks`) — pre-commit runs keys-check
     ".githooks",
     # curated navigation + the daily-update cache. index.md is hand-maintained,

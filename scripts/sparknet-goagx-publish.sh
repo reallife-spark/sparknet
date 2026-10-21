@@ -102,6 +102,7 @@ SUBTREES=(peer-node master-node contracts shared scripts .opencode/skills .openc
 # .env.example is what env-init copies into every role vault.
 ROOT_FILES=(
   spark-entrypoint.sh spark-precontext.py spark.compose.cpu.yml
+  torch-dist-l4t-compat.py spark-vllm-l4t-patch.py spark-vllm-xformers-gqa-patch.py
   sparknet-node-setup.sh bootstrap-agx.sh
   spark.docker spark.compose.yml
   .env.example
