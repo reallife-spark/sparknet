@@ -180,6 +180,71 @@ def test_the_corpus_has_no_duplicate_basenames(tmp_path: Path) -> None:
     assert len(names) == len(set(names)), f"duplicate basenames: {names}"
 
 
+# --- the two allow-lists ------------------------------------------------------
+
+
+def test_the_node_allow_list_is_unchanged() -> None:
+    """The node's corpus was defined before the fabric list existed; it stays put."""
+    expected = {
+        "AGENTS.md",
+        "MISSION.md",
+        "README.md",
+        "index.md",
+        "hot.md",
+        "schema.yaml",
+        "CLUSTER_INFERENCE_DESIGN.md",
+        "COMPUTE_CAPABILITY_DESIGN.md",
+        "MCP_A2A_DESIGN.md",
+    }
+    assert sorted(rag.NODE_ROOTS) == sorted(expected)
+
+
+def test_the_fabric_allow_list_adds_the_design_documents() -> None:
+    """A strict superset: the fabric adds documents, it never relaxes the rule."""
+    assert rag.NODE_ROOTS < rag.FABRIC_ROOTS
+    for name in (
+        "USER_MANUAL.md",
+        "CLUSTER_JOB_REALIZATION_DESIGN.md",
+        "PER_USER_VAULTS_DESIGN.md",
+        "ADMIN_FEDERATION_DESIGN.md",
+        "STYLE_GUIDE.md",
+    ):
+        assert name in rag.FABRIC_ROOTS
+        assert name not in rag.NODE_ROOTS
+
+
+def test_the_allow_lists_are_addressed_by_name() -> None:
+    assert rag.ALLOW_LISTS == {"node": rag.NODE_ROOTS, "fabric": rag.FABRIC_ROOTS}
+    assert rag.allow_list_name(rag.NODE_ROOTS) == "node"
+    assert rag.allow_list_name(rag.FABRIC_ROOTS) == "fabric"
+    assert rag.allow_list_name(None) == "node"
+
+
+def test_the_allow_list_argument_selects_the_corpus(tmp_path: Path) -> None:
+    _write(tmp_path, "AGENTS.md")
+    _write(tmp_path, "USER_MANUAL.md")
+    _write(tmp_path, "STYLE_GUIDE.md")
+    node = {str(p) for p in rag.corpus_entries(tmp_path, rag.NODE_ROOTS)}
+    fabric = {str(p) for p in rag.corpus_entries(tmp_path, rag.FABRIC_ROOTS)}
+    assert node == {"AGENTS.md"}
+    assert fabric == {"AGENTS.md", "USER_MANUAL.md", "STYLE_GUIDE.md"}
+
+
+def test_the_real_repository_fabric_corpus_carries_the_design_documents() -> None:
+    entries = rag.corpus_entries(REPO_ROOT, rag.FABRIC_ROOTS)
+    names = {p.name for p in entries}
+    assert "USER_MANUAL.md" in names
+    assert "CLUSTER_JOB_REALIZATION_DESIGN.md" in names
+    assert "AGENTS.md" in names
+
+
+def test_the_inventory_records_which_allow_list_was_applied(tmp_path: Path) -> None:
+    _write(tmp_path, "AGENTS.md")
+    out = tmp_path / "corpus"
+    rag.build_corpus(tmp_path, out, rag.FABRIC_ROOTS)
+    assert "Allow-list applied: `fabric`." in (out / "INVENTORY.md").read_text()
+
+
 # --- the real repository ------------------------------------------------------
 
 
