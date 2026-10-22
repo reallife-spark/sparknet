@@ -5,11 +5,11 @@
 > own it. **All history lives in `log.md` and `sessions/YYYY-MM-DD.md`** — an
 > entry here is a durable fact you still need, never a record of what happened.
 
-Updated: 2026-10-21
+Updated: 2026-10-22
 
 ## Plan cursors
 
-- **root `PLAN.md` `current: 62`.** Step 57 (clean-slate peer pair on both
+- **root `PLAN.md` `current: done`.** Step 57 (clean-slate peer pair on both
   AGXes + manual 2/2 Master escalation over the direct sparknet cable) delivered
   **2026-10-19**, Phases 0–11 executed and verified; live legs stay
   `DoD: confirm: user` (physical cable move done; human review of the ceremony
@@ -36,7 +36,11 @@ Updated: 2026-10-21
   generated, never hand-edited); fabric DoD legs 1–5 verified (fresh-clone
   `--verify`, repo CI 3× success, `make ci`/`test-all`/`drift-check` green) —
   its silicon legs are parked below with Step 56's.** Cursor `done`. Step 56 (`goagx/`) is delivered+reviewed; its hardware legs
-  are `DoD: confirm: user` (below). New roadmap work gets a **new** step.
+  are `DoD: confirm: user` (below). **Step 63 (the vector substrate: bounded
+  Chroma pin, stamped index, allow-listed `fabric` corpus) delivered
+  2026-10-22** — the substrate half of Step 61's increment 2; the 4223 service
+  itself is untouched and `4223` stays `spec-only`. Cursor `done`. New roadmap
+  work gets a **new** step.
   Steps 1–54 closed/parked.
 - **`peer-node/PLAN.md` `current: done`** — the peer arc is terminal; its last
   work (Steps 2–12: container, grants, bridge, Open WebUI surface, conversation
@@ -72,6 +76,20 @@ Updated: 2026-10-21
   a full-tree release; fixes go into the fabric and get republished. Its root
   README/manifest carry the pinned sparknet SHA, the goSpark pin
   (`goagx/GOSPARK_PIN`) and the image ARG pins.
+- **The local vector index is derived state, and it is stamped.** The corpus
+  in the vault is the source of truth; the index under `.state/chroma/` is
+  rebuilt from it, never patched. The collection carries
+  `embedding_model`/`embedding_sha256`/`chroma_version`/`corpus_digest`, and the
+  embedder is named explicitly (`ONNXMiniLM_L6_V2` = `all-MiniLM-L6-v2`) on
+  every open — Chroma's default embedder cannot identify itself, so a stamp
+  written from it is not a stamp. A mismatch in the model, its hash or the
+  corpus digest **refuses** (exit 3 → 503 on the wire); a `chroma_version`
+  difference is only *reported*. `make chroma-stamp` checks it.
+- **One corpus policy, two allow-lists.** `scripts/sparknet-rag-corpus.py`
+  holds the rule set once: `NODE_ROOTS` (a node's own Open WebUI) and
+  `FABRIC_ROOTS` (the node's roots plus the fabric's design documents — a
+  strict superset). The `fabric` scope uses the allow-list; the deny-list it
+  replaced served 1,090 personal/runtime chunks (64% of 1,699).
 - **Vaults: three, not one.** Fabric root plus `peer-node/` and `master-node/`,
   each with its own `.env`, category skeleton and `AGENTS.md`. Resolve which one
   you are in before writing. Both role vaults store content in `00_System`–

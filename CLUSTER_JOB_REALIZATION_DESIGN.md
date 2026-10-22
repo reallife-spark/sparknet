@@ -288,7 +288,7 @@ were considered against the measured facts of this fabric:
 
 | Pattern | Verdict | The number that decides it |
 |---|---|---|
-| **Native distributed VDB** (Milvus / Qdrant, compute–storage separation: stateless query nodes, sharded index nodes, shared object-store persistence) | **Rejected for v1. Designated upgrade path, with a numeric trigger.** | The `fabric` corpus is **3.3 MB across 257 files, ≈2,300 chunks** at `scripts/sparknet-chroma.py`'s 2000-char default. A query-node pool, a sharded HNSW index and a MinIO tier is roughly a hundred times more infrastructure than there is data. |
+| **Native distributed VDB** (Milvus / Qdrant, compute–storage separation: stateless query nodes, sharded index nodes, shared object-store persistence) | **Rejected for v1. Designated upgrade path, with a numeric trigger.** | The allow-listed `fabric` corpus is **28 markdown files, 381 KiB, 242 chunks** at `scripts/sparknet-chroma.py`'s 2000-char default (measured 2026-10-22; `make chroma-inspect CHROMA_SCOPE=fabric` prints the count and the corpus digest). A query-node pool, a sharded HNSW index and a MinIO tier is roughly a hundred times more infrastructure than there is data. The trigger that re-opens the question is in F2. |
 | **HA clustered deployment** (hash or vector-space sharding + 2–3× replication + etcd/Raft consensus) | **Rejected outright** | The live fleet is **two Jetson AGX Xavier hosts, 16 GB each, on a 1 Gbit cable**. A replication factor of two across two hosts tolerates no failure at all — the second replica is on the box that is down. And the fabric already runs a consensus domain for *authority* (`shared/sparknet-consensus.py`); a second one for vectors would create two membership truths, which is the defect the whole authority model exists to avoid. |
 | **PostgreSQL + pgvector** (primary/replica streaming, or Citus for horizontal scale; one transaction boundary for relational metadata and vectors) | **Rejected** | Its real value is that you already run postgres. This tree runs no postgres, so it buys a new daemon, a new backup story, and strands the `chroma` extra and the substrate script that already exists. |
 
@@ -335,6 +335,34 @@ check and no capability gate, and its authentication model is a static API key �
 the wrong shape entirely for a fabric whose authority comes from key possession
 and a signed registry.
 
+**The upgrade trigger, numeric and checkable.** Milvus or Qdrant is re-opened
+when *any* of these holds, and not before:
+
+| Trigger | Value | Why that number |
+|---|---|---|
+| corpus size | **> 100,000 chunks** | 238 today. At 384 dimensions a float32 vector is 1.5 KB, so 100k chunks is ~150 MB of vectors — the point where a single-node HNSW index stops being "tens of MB of RAM" and starts being the thing that decides the node's memory budget. |
+| query latency | **p95 > 200 ms** over 1,000 queries | below the model's own generation latency, so a slower store is invisible next to the answer it feeds. |
+| fleet | **a third host joins the fabric** | two hosts is a failover story; three is a cluster, and a cluster needs a clustered store. |
+
+Until one of them is true, the embedded client *is* the store — no daemon, no
+port, no second membership truth.
+
+**What the store costs the node.** Measured for 242 chunks on the development
+host: the index is **8 MB on NVMe** under `.state/chroma/` (6.6 MB of it the
+sqlite metadata) and a query process peaks at **115 MB RSS** — most of which is
+the interpreter and chromadb itself, not the vectors (242 × 384 floats is
+372 KB). It is not free, but it is not a service either: nothing to supervise,
+nothing to authenticate, nothing to back up beyond the source files — the index
+is derived state and is rebuildable.
+
+**One ARM64 caveat, measured.** chromadb's `chroma-hnswlib` has no aarch64
+wheel, so `pip` builds it from source on the node (several minutes, and the
+build must run with bounded parallelism — an unbounded native build pins every
+core, and the node's failure mode for that is a thermal reset with no kernel
+trace). The fork also provides the `hnswlib` import name that chromadb expects
+and carries `Index.file_handle_count`; the plain PyPI `hnswlib` must never be
+installed alongside it.
+
 ### F3 — embedding, and the model-consistency rule
 
 Query embedding is **server-side only**: the caller sends query text, the service
@@ -351,14 +379,37 @@ above**, and Chroma's default embedding function is fetched by that library. A
 chromadb upgrade can therefore change the embedding model under a live index and
 every distance returned afterwards is meaningless while looking entirely healthy.
 
-Three consequences, all in the design so the builder does not have to find them:
+Four consequences, all in the design so the builder does not have to find them:
 
 1. The pin becomes bounded (`>=0.5,<1`) and the resolved model name is recorded
    in the docstring of the reindex target.
 2. The collection carries **stamp metadata** — `embedding_model`,
-   `chroma_version`, `corpus_digest` — written at index time.
+   `embedding_sha256`, `chroma_version`, `corpus_digest` — written at index
+   time.
 3. The serve path **checks the stamp on every query and refuses with 503 on
    mismatch.** A stale index is a loud failure, never a quiet wrong answer.
+4. The embedder is **passed explicitly on every open**, never taken from the
+   library default.
+
+Point 4 is the one the first three do not cover, and it is the reason the
+stamp has a model field at all. Chroma's default embedding function cannot
+identify itself: on 0.6.x the object carries no usable name, and on 1.5.x it
+reports itself as `default` with an empty configuration. A stamp written from a
+name like that is not a stamp. So the substrate names the embedder itself —
+`ONNXMiniLM_L6_V2`, i.e. `all-MiniLM-L6-v2`, sha256
+`913d7300ceae3b2dbc2c50d1de4baacab4be7b9380491c27fab7418616a16ec3` — and
+records *that* name and *that* hash, so a mismatch is decidable rather than
+merely detectable. The same explicit embedder is passed on every open, so the
+library default can never decide the model behind an existing collection.
+
+**Which differences refuse and which only report.** `embedding_model`,
+`embedding_sha256` and `corpus_digest` are refusals: the index was written by a
+different model or holds a different corpus, so a distance from it means
+nothing and the answer is refused (503 on the wire, exit code 3 in the
+substrate script). `chroma_version` is reported, not enforced: the library
+version is not what makes a distance meaningful — the model and the corpus
+are. Refusing on a version difference would train every operator to ignore the
+refusal.
 
 The base runtime allow-list stays `cryptography`. 4223 requires the opt-in
 `chroma` extra and must fail closed with a 503 and a `make chroma-dev` hint when
@@ -385,6 +436,25 @@ only the second failure mode is survivable.
 
 A test in the spirit of `tests/test_rag_corpus.py` proves that no excluded path
 reaches the 4223 index. That test is part of increment 2, not this commit.
+
+**Implemented (2026-10-22, increment 1).** The allow-list is the policy in
+`scripts/sparknet-rag-corpus.py`, written once, with two lists: `NODE_ROOTS`
+(what a node ingests into its own Open WebUI) and `FABRIC_ROOTS` (the node's
+roots plus the fabric's own design documents — `USER_MANUAL.md`,
+`CLUSTER_JOB_REALIZATION_DESIGN.md`, `PER_USER_VAULTS_DESIGN.md`,
+`ADMIN_FEDERATION_DESIGN.md`, `STYLE_GUIDE.md`). `FABRIC_ROOTS` is a strict
+superset; the exclusion rules, the contract tree and the role charters are
+identical for both, so naming the fabric list cannot buy a laxer policy.
+
+The measured difference is the argument for the rule. Under the old whole-tree
+deny-list the `fabric` scope served **138 markdown files and 1,699 chunks**, of
+which **1,090 chunks (64%) were personal or runtime pages** that no node should
+ever have been handed. The allow-listed corpus is **28 markdown files, 381 KiB,
+242 chunks**.
+
+`tests/test_vector_corpus.py` proves it against the real repository: only
+allowed paths reach the index, and the contract tree, both role charters and
+the design documents are all present.
 
 ### F5 — the API
 
@@ -431,6 +501,23 @@ because the reasoning is the same:
 v1 ships an **explicit action**, not a timer: `make -C master-node
 vector-reindex`, wrapping `sparknet-chroma.py` with `CHROMA_SCOPE=fabric`.
 Upsert is idempotent, so re-running is free and a partial run is not a hazard.
+
+**"Idempotent" is only true if the index is made *equal* to the corpus.** An
+upsert writes the ids that are in the corpus; it does not remove the ids that
+have *left* it. A passage that was shortened or deleted leaves its old chunks
+behind, and the corpus digest still matches — it hashes what was written, not
+what is stored — so the index would serve text the corpus no longer contains
+while claiming to be exactly it. The substrate therefore deletes the stale ids
+too, and the count follows the corpus.
+
+**An index this build cannot account for is rebuilt, not served.** The on-disk
+format belongs to the chromadb that wrote it, so a library change can leave an
+index unreadable (0.6.3 reads a 1.5.9 collection as an unknown segment type,
+not as an error message). The version that wrote the index is recorded next to
+it, and an index whose marker is missing or names another version is discarded
+and written again — before any client opens the directory, because chroma
+caches its storage system per path and a cached system hands back the state
+that was just deleted.
 
 The systemd timer is a **separate, named increment** — deliberately not bundled
 into the first build step, because Master `units-check`
@@ -498,6 +585,12 @@ them. The order is the dependency chain, not the section order above.
    `master-node/plans/MASTER_ADMIN_PLAN.md`; `contracts/ports.json` flips
    `4223` to `provisioned` and `make render` regenerates the manifest in the same
    commit.
+   **Substrate half taken (2026-10-22, PLAN Step 63):** the bounded pin, the
+   explicit embedder, the stamp and its refusal, the allow-list corpus and the
+   proof test are implemented in `scripts/sparknet-chroma.py` and
+   `scripts/sparknet-rag-corpus.py`. The 4223 service itself, the registry
+   check and the `provisioned` flip are **not** part of that step — `4223`
+   stays `spec-only` and no port changes.
 3. **Task ingress (Seam E).** The loopback `submit`/`status`/`result` routes on
    the dispatch bridge, the acceptance checks, and `--execute-enabled` off by
    default.
@@ -518,7 +611,7 @@ them. The order is the dependency chain, not the section order above.
 
 | Option | Verdict | Reason |
 |---|---|---|
-| Milvus or Qdrant as the v1 store | **rejected for v1** | ~2,300 chunks. The infrastructure dwarfs the data. Designated as the upgrade path with a numeric trigger rather than dismissed. |
+| Milvus or Qdrant as the v1 store | **rejected for v1** | 242 chunks in the allow-listed corpus (1,699 under the old deny-list). The infrastructure dwarfs the data. Designated as the upgrade path with the numeric trigger in F2 rather than dismissed. |
 | Sharding + replication + etcd for availability | **rejected** | Two hosts, replication factor two, tolerates no failure. And a second consensus domain alongside `sparknet-consensus.py` creates two membership truths. |
 | pgvector | **rejected** | Buys a new daemon and a backup story to save a process the tree does not have. |
 | Bind the `chromadb` server on 4223 | **rejected** | No registry check, no capability gate, API-key auth — the wrong authority model for this fabric. |
@@ -555,9 +648,12 @@ deny-list), `scripts/sparknet-rag-corpus.py` (the allow-list rule),
 fabric-root design document must satisfy).
 
 The measured figures this note leans on were taken on the development host on
-2026-10-20: the `fabric` corpus is 3.3 MB across 257 files, ≈2,300 chunks at
-the 2000-char default; no Milvus, Qdrant, pgvector, Kubernetes or k3s appears in
-any tracked Python, YAML, JSON, Markdown or TOML file.
+2026-10-22: the allow-listed `fabric` corpus is **28 markdown files, 381 KiB,
+242 chunks** at the 2000-char default (`make chroma-inspect CHROMA_SCOPE=fabric`
+prints the count and the corpus digest); under the pre-2026-10-22 whole-tree
+deny-list it was 138 files and 1,699 chunks, 64% of them personal or runtime
+pages. No Milvus, Qdrant, pgvector, Kubernetes or k3s appears as a dependency or
+a configured service in any tracked Python, YAML, JSON, Markdown or TOML file.
 
 Nothing here binds `contracts/` until an increment above adopts it, in its own
 commit, with both roles edited together and `make contract-test` green.

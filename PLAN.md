@@ -1,6 +1,6 @@
 ---
 title: sparknet Plan
-updated: 2026-10-20
+updated: 2026-10-22
 current: done
 ---
 
@@ -2365,7 +2365,8 @@ and has no forge on a node, so there is nowhere a workflow file would ever run.
       native distributed VDB (Milvus/Qdrant), HA sharding+replication+etcd, and
       pgvector — all **rejected for v1**, with Qdrant designated the upgrade
       path under a numeric trigger. The deciding number: the `fabric` corpus is
-      **3.3 MB / 257 files / ≈2,300 chunks** (measured 2026-10-20) on a
+      **3.3 MB / 257 files / ≈2,300 chunks** (measured 2026-10-20 — *superseded
+      by Step 63: the allow-listed corpus is 28 markdown files / 242 chunks*) on a
       two-host Xavier fleet with no k8s, no object store and no postgres in
       tree. The chosen shape is the **inverse** of all three patterns: the index
       is *derived state* (pure `plan_index`/`chunk_text`, idempotent upsert), so
@@ -2504,6 +2505,73 @@ and has no forge on a node, so there is nowhere a workflow file would ever run.
       `--verify` from a fresh clone of tip `73cf157`, repo private with its
       own `verify` workflow 3× green, `make ci`/`test-all`/`drift-check`
       green).
+
+## Step 63 — the vector substrate: bounded pin, stamped index, allow-listed corpus
+
+- [x] **Step 63 — make the local vector index self-describing, and stop it
+      serving what it should not** — the *substrate* half of Step 61's
+      increment 2, with the 4223 service itself untouched.
+      **Two live defects, both found by reading the tree.**
+      **(1)** `pyproject.toml:29` pinned `chromadb>=0.5`, **unbounded above**, and
+      Chroma's *default* embedding function is the one the library fetches — so a
+      library upgrade could swap the model under a live index, and every
+      distance returned afterwards would be meaningless while looking entirely
+      healthy. Worse, the default embedder cannot even name itself: on 0.6.x it
+      carries no usable name, on 1.5.x it reports `default` with an empty
+      configuration — a stamp written from that is not a stamp.
+      **(2)** The `fabric` scope was a whole-tree **deny-list** (`EXCLUDE_PARTS`)
+      where the peer charter and `sparknet-rag-corpus.py` mandate an
+      **allow-list**. Measured: 138 markdown files / 1,699 chunks, of which
+      **1,090 chunks (64%) were personal or runtime pages** handed to every node
+      in the fabric.
+      **Delivered, in four commits.** (a) The pin is bounded
+      `chromadb>=0.5,<1` and the resolved model (`all-MiniLM-L6-v2`) is recorded
+      on the reindex target. (b) The substrate **names the embedder itself**
+      (`ONNXMiniLM_L6_V2`, sha256 `913d7300…16ec3`) and passes it explicitly on
+      every open, so the library default can never decide the model behind an
+      existing collection. (c) The collection carries a **stamp** —
+      `embedding_model`, `embedding_sha256`, `chroma_version`, `corpus_digest` —
+      and a query **refuses** (exit 3 → 503 on the wire) when the model, its
+      hash or the corpus digest differ; the version difference is *reported*
+      only, because the model and the corpus are what make a distance
+      meaningful, and refusing on a version difference would train operators to
+      ignore refusals. (d) The corpus policy is **one policy with two
+      allow-lists** (`NODE_ROOTS` for a node's own Open WebUI, `FABRIC_ROOTS` for
+      the shared store — a strict superset), and `EXCLUDE_PARTS` becomes
+      belt-and-braces. (e) Two rough edges the real round trip found, both
+      closed: an index **written by another chromadb version is rebuilt, not
+      served** (the storage format belongs to the library, so 0.6.3 reads a
+      1.5.9 collection as an unknown segment type — a traceback, which is the
+      absence of a failure mode; the version that wrote the index is now
+      recorded next to it), and the index is made **equal** to the corpus
+      rather than merely containing it (an upsert does not remove the ids that
+      left the corpus, so a shortened passage left its old chunks behind while
+      the digest still matched — the digest hashes what was *written*).
+      **The corpus, measured 2026-10-22:** the allow-listed `fabric` scope is
+      **28 markdown files, 381 KiB, 242 chunks** — a seventh of the old chunk
+      count, and none of it personal. `make chroma-stamp` makes "reindex on any
+      change" checkable instead of a habit.
+      **The numeric trigger** for re-opening Milvus/Qdrant is now written down
+      (design F2): **>100,000 chunks**, or **p95 > 200 ms** over 1,000 queries,
+      or **a third host joining the fabric**. Until one of them holds, the
+      embedded client *is* the store.
+      **Scope:** `scripts/sparknet-chroma.py`, `scripts/sparknet-rag-corpus.py`,
+      `pyproject.toml`, `Makefile`, `tests/test_chroma.py`, the new
+      `tests/test_vector_corpus.py`, and the design doc's figures. **No contract
+      changes** — `4223` stays `spec-only`, `contracts/` and `shared/` are
+      untouched, and the runtime dependency allow-list stays `cryptography` only
+      (chromadb remains the opt-in `chroma` extra).
+      **DoD:** (1) `make chroma-inspect CHROMA_SCOPE=fabric` prints 242 documents
+      and a corpus digest, and `make chroma-index` + `make chroma-query` round
+      trip on a real chromadb (0.6.3) answering with contract pages; (2) a
+      tampered stamp makes `chroma-stamp` and `chroma-query` exit **3** with
+      `REFUSED`, while a version-only difference is reported and still answers;
+      (3) `tests/test_vector_corpus.py` proves against the real repository that
+      only allowed paths reach the index and that the contract tree, both role
+      charters and the design documents are all present; (4) `make test-all`,
+      `make lint`, `make format-check`, `make shellcheck`, `make validate`,
+      `make contract-test`, `make render-check` and `make ci CI_QUICK=1` green,
+      with `git diff --stat contracts/ shared/` **empty**.
 
 ## Next
 
