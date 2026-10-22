@@ -36,7 +36,7 @@ SCOPE ?= fabric
         render render-check sbom sbom-check nv-search drift-check \
         goagx-publish goagx-drift-check \
         devtools chroma-dev chroma-init chroma-inspect \
-        chroma-index chroma-query env-init wiki-sync wiki-verify \
+        chroma-index chroma-stamp chroma-query env-init wiki-sync wiki-verify \
         wiki-preflight bundle bundle-verify status-plan clean dist \
         keys-check shims-check hooks
 
@@ -275,6 +275,9 @@ chroma-inspect: ## Show what chroma-index WOULD index, without needing chromadb
 
 chroma-index: ## Build/upsert the CHROMA_SCOPE index (embedder all-MiniLM-L6-v2; reindex on ANY change)
 	@$(PY) scripts/sparknet-chroma.py "$(CHROMA_SCOPE)" index
+
+chroma-stamp: ## Compare the CHROMA_SCOPE index's stamp with this build (exit 3 = mismatch)
+	@$(PY) scripts/sparknet-chroma.py "$(CHROMA_SCOPE)" stamp
 
 chroma-query: ## Search the CHROMA_SCOPE index: make chroma-query CHROMA_SCOPE=fabric QUERY="..."
 	@$(PY) scripts/sparknet-chroma.py "$(CHROMA_SCOPE)" query "$(QUERY)"

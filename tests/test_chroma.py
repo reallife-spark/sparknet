@@ -120,20 +120,22 @@ def test_chunk_text_of_a_single_oversized_paragraph_is_split() -> None:
 # --- discovery ----------------------------------------------------------------
 
 
-def test_fabric_discovery_walks_the_scope_root_and_both_roles(tmp_path: Path) -> None:
-    root = tmp_path
+def test_fabric_discovery_is_an_allow_list_not_a_whole_tree_walk(tmp_path: Path) -> None:
+    """The shared scope indexes the structural fabric, not everything under it."""
     for path in (
-        root / "concepts" / "one.md",
-        root / "peer-node" / "05_Knowledge" / "concepts" / "peer.md",
-        root / "master-node" / "05_Knowledge" / "concepts" / "master.md",
-        root / ".opencode" / "skills" / "x" / "SKILL.md",  # vendored, not content
+        tmp_path / "AGENTS.md",
+        tmp_path / "concepts" / "one.md",  # distilled knowledge: not structural
+        tmp_path / "peer-node" / "05_Knowledge" / "concepts" / "peer.md",
+        tmp_path / "master-node" / "05_Knowledge" / "concepts" / "master.md",
+        tmp_path / ".opencode" / "skills" / "x" / "SKILL.md",  # vendored, not content
     ):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("content")
 
-    found = sorted(label for label, _ in chroma.iter_markdown(root, include_roles=True))
-    # .opencode is excluded; both roles are included, each once via its own walk.
-    assert found == ["", "master-node", "peer-node"]
+    policy = chroma._policy()
+    found = [p.name for p in chroma.iter_markdown(tmp_path, allow_list=policy.FABRIC_ROOTS)]
+    assert found == ["AGENTS.md"], "only the allowed root files survive"
+    assert not any(p.startswith("concepts") for p in found)
 
 
 def test_peer_scope_excludes_the_other_role_and_shared(tmp_path: Path) -> None:
@@ -153,8 +155,7 @@ def test_peer_scope_excludes_the_other_role_and_shared(tmp_path: Path) -> None:
 
 
 def test_doc_ids_are_stable_and_namespaced(tmp_path: Path) -> None:
-    (tmp_path / "concepts").mkdir()
-    (tmp_path / "concepts" / "one.md").write_text("alpha")
+    (tmp_path / "AGENTS.md").write_text("alpha")
     plan_a = chroma.plan_index("fabric", tmp_path)
     plan_b = chroma.plan_index("fabric", tmp_path)
     assert plan_a == plan_b
@@ -166,11 +167,69 @@ def test_doc_ids_are_stable_and_namespaced(tmp_path: Path) -> None:
 
 
 def test_plan_index_returns_paths_not_absolute(tmp_path: Path) -> None:
-    (tmp_path / "peer-node" / "05_Knowledge").mkdir(parents=True)
-    (tmp_path / "peer-node" / "05_Knowledge" / "a.md").write_text("x")
+    (tmp_path / "AGENTS.md").write_text("x")
+    (tmp_path / "contracts").mkdir(parents=True)
+    (tmp_path / "contracts" / "ports.json").write_text("{}")
     for entry in chroma.plan_index("fabric", tmp_path):
         assert not Path(str(entry["path"])).is_absolute()
         assert "/mnt/" not in str(entry["path"])
+
+
+# --- the stamp (pure logic; no chromadb) ---------------------------------------
+
+
+def _stamp(**over: str) -> dict[str, str]:
+    base = {
+        "embedding_model": "all-MiniLM-L6-v2",
+        "embedding_sha256": "913d7300",
+        "chroma_version": "0.6.3",
+        "corpus_digest": "deadbeef",
+    }
+    base.update(over)
+    return base
+
+
+def test_corpus_digest_is_deterministic_and_content_sensitive() -> None:
+    docs = [
+        {"id": "fabric:a.md#0", "document": "alpha"},
+        {"id": "fabric:b.md#0", "document": "beta"},
+    ]
+    first = chroma.corpus_digest(docs)
+    assert first == chroma.corpus_digest(list(reversed(docs))), "order must not matter"
+    assert first != chroma.corpus_digest([{"id": "fabric:a.md#0", "document": "alpha, edited"}])
+
+
+def test_a_matching_stamp_has_no_refusals_and_no_reports() -> None:
+    refusals, reports = chroma.stamp_mismatch(_stamp(), _stamp())
+    assert refusals == []
+    assert reports == []
+
+
+def test_a_different_embedding_model_refuses() -> None:
+    refusals, _ = chroma.stamp_mismatch(_stamp(embedding_model="other-model"), _stamp())
+    assert refusals and "embedding_model" in refusals[0]
+
+
+def test_a_different_weights_digest_refuses() -> None:
+    refusals, _ = chroma.stamp_mismatch(_stamp(embedding_sha256="0000"), _stamp())
+    assert refusals and "embedding_sha256" in refusals[0]
+
+
+def test_a_different_corpus_digest_refuses() -> None:
+    refusals, _ = chroma.stamp_mismatch(_stamp(corpus_digest="0000"), _stamp())
+    assert refusals and "corpus_digest" in refusals[0]
+
+
+def test_a_different_chroma_version_only_reports() -> None:
+    """A different library version changes the library, not the vectors."""
+    refusals, reports = chroma.stamp_mismatch(_stamp(chroma_version="0.5.0"), _stamp())
+    assert refusals == []
+    assert reports and "chroma_version" in reports[0]
+
+
+def test_a_missing_stamp_field_refuses() -> None:
+    refusals, _ = chroma.stamp_mismatch(_stamp(corpus_digest=""), _stamp())
+    assert refusals and "corpus_digest" in refusals[0]
 
 
 # --- CLI behaviour without chromadb -------------------------------------------
@@ -227,7 +286,7 @@ def test_index_and_query_round_trip(tmp_path: Path) -> None:
 
     data_dir = tmp_path / "chroma"
     proc = subprocess.run(
-        [*_run, "peer", "index", "--data-dir", str(data_dir)],
+        [*_run, "peer", "index", "--data-dir", str(data_dir), "--vault", str(vault)],
         capture_output=True,
         text=True,
     )
@@ -243,6 +302,8 @@ def test_index_and_query_round_trip(tmp_path: Path) -> None:
             "3",
             "--data-dir",
             str(data_dir),
+            "--vault",
+            str(vault),
         ],
         capture_output=True,
         text=True,
@@ -252,15 +313,133 @@ def test_index_and_query_round_trip(tmp_path: Path) -> None:
 
 
 @REAL_CHROMA
+def test_index_stamps_the_collection(tmp_path: Path) -> None:
+    """The index carries the model, the weights and the corpus it was built from."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    (vault / "AGENTS.md").write_text("the fabric's charter")
+
+    data_dir = tmp_path / "chroma"
+    proc = subprocess.run(
+        [*_run, "fabric", "index", "--data-dir", str(data_dir), "--vault", str(vault)],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+    import chromadb
+
+    collection = chromadb.PersistentClient(path=str(data_dir)).get_collection("sparknet-fabric")
+    metadata = dict(collection.metadata or {})
+    assert metadata.get("embedding_model"), "the model must be stamped"
+    assert metadata.get("embedding_sha256"), "the weights must be stamped"
+    assert metadata.get("corpus_digest"), "the corpus must be stamped"
+    assert metadata.get("corpus_digest") == chroma.corpus_digest(chroma.plan_index("fabric", vault))
+
+
+@REAL_CHROMA
+def test_a_tampered_stamp_refuses_the_query(tmp_path: Path) -> None:
+    """A stale index is a loud failure, never a quiet wrong answer."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    (vault / "AGENTS.md").write_text("the fabric's charter")
+
+    data_dir = tmp_path / "chroma"
+    assert (
+        subprocess.run(
+            [*_run, "fabric", "index", "--data-dir", str(data_dir), "--vault", str(vault)],
+            capture_output=True,
+            text=True,
+        ).returncode
+        == 0
+    )
+
+    import chromadb
+
+    collection = chromadb.PersistentClient(path=str(data_dir)).get_collection("sparknet-fabric")
+    metadata = dict(collection.metadata or {})
+    metadata["corpus_digest"] = "0" * 64
+    collection.modify(metadata=metadata)
+
+    proc = subprocess.run(
+        [
+            *_run,
+            "fabric",
+            "query",
+            "what is the fabric?",
+            "--data-dir",
+            str(data_dir),
+            "--vault",
+            str(vault),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 3, proc.stdout + proc.stderr
+    assert "REFUSED" in proc.stdout + proc.stderr
+    assert "corpus_digest" in proc.stdout + proc.stderr
+
+
+@REAL_CHROMA
+def test_the_stamp_verb_reports_a_mismatch_with_exit_3(tmp_path: Path) -> None:
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    (vault / "AGENTS.md").write_text("the fabric's charter")
+
+    data_dir = tmp_path / "chroma"
+    assert (
+        subprocess.run(
+            [*_run, "fabric", "index", "--data-dir", str(data_dir), "--vault", str(vault)],
+            capture_output=True,
+            text=True,
+        ).returncode
+        == 0
+    )
+
+    proc = subprocess.run(
+        [*_run, "fabric", "stamp", "--data-dir", str(data_dir), "--vault", str(vault)],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "stamp: match" in proc.stdout
+
+
+@REAL_CHROMA
+def test_query_against_a_missing_index_refuses_rather_than_answering(tmp_path: Path) -> None:
+    """An empty result set is a sentence; this tool must not write one by accident."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    (vault / "AGENTS.md").write_text("the fabric's charter")
+
+    proc = subprocess.run(
+        [
+            *_run,
+            "fabric",
+            "query",
+            "what is the fabric?",
+            "--data-dir",
+            str(tmp_path / "nope"),
+            "--vault",
+            str(vault),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 3, proc.stdout + proc.stderr
+    assert "no results" not in proc.stdout + proc.stderr
+
+
+@REAL_CHROMA
 def test_reindex_is_idempotent(tmp_path: Path) -> None:
     vault = tmp_path / "vault"
-    (vault / "concepts").mkdir(parents=True)
-    (vault / "concepts" / "stable.md").write_text("stable content")
+    vault.mkdir()
+    (vault / "AGENTS.md").write_text("stable content")
     data_dir = tmp_path / "chroma"
 
     for _ in range(2):
         proc = subprocess.run(
-            [*_run, "fabric", "index", "--data-dir", str(data_dir)],
+            [*_run, "fabric", "index", "--data-dir", str(data_dir), "--vault", str(vault)],
             capture_output=True,
             text=True,
         )
