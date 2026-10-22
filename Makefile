@@ -264,7 +264,7 @@ CHROMA_SCOPE ?= peer
 chroma-dev: ## Install the OPTIONAL chromadb package (sparknet[chroma]); allow-list untouched
 	@if [ ! -x "$(VENV_PY)" ]; then python3 -m venv "$(VAULT_ROOT)/.venv"; fi
 	@"$(VENV_PY)" -m pip install --quiet --upgrade pip
-	@"$(VENV_PY)" -m pip install --quiet 'chromadb>=0.5'
+	@"$(VENV_PY)" -m pip install --quiet 'chromadb>=0.5,<1'
 	@echo "chromadb ready. Run: make chroma-init / chroma-index / chroma-query CHROMA_SCOPE=fabric"
 
 chroma-init: ## Create the CHROMA_SCOPE collection (peer|master|fabric) in .state/chroma/
@@ -273,7 +273,7 @@ chroma-init: ## Create the CHROMA_SCOPE collection (peer|master|fabric) in .stat
 chroma-inspect: ## Show what chroma-index WOULD index, without needing chromadb
 	@$(PY) scripts/sparknet-chroma.py "$(CHROMA_SCOPE)" inspect
 
-chroma-index: ## Build/upsert the CHROMA_SCOPE index (requires chroma-dev)
+chroma-index: ## Build/upsert the CHROMA_SCOPE index (embedder all-MiniLM-L6-v2; reindex on ANY change)
 	@$(PY) scripts/sparknet-chroma.py "$(CHROMA_SCOPE)" index
 
 chroma-query: ## Search the CHROMA_SCOPE index: make chroma-query CHROMA_SCOPE=fabric QUERY="..."

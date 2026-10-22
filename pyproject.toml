@@ -25,8 +25,12 @@ dev = [
 # Opt-in via `make chroma-dev`. The fabric's runtime allow-list stays
 # `cryptography` only — chromadb backs the OPTIONAL local index in
 # scripts/sparknet-chroma.py and must never leak into `dependencies`.
+# The pin is bounded ABOVE on purpose: the index is built with a named
+# embedder (all-MiniLM-L6-v2) and a major upgrade could change the model
+# under a live index, which would make every distance meaningless while
+# looking healthy. A new major is a reindex, not a surprise.
 chroma = [
-    "chromadb>=0.5",
+    "chromadb>=0.5,<1",
 ]
 
 [tool.pytest.ini_options]
