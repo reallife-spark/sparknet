@@ -43,6 +43,7 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/overlay.json` | WireGuard addressing, MTU, keepalive |
 | `contracts/capabilities.json` | the closed capability vocabulary |
 | `contracts/identity-schema.json` | canonical form, fingerprint, signed envelope |
+| `contracts/registry-schema.json` | the shape of the signed node-authorization registry — fields, types, the `signature_b64` name |
 | `contracts/ports.json` | which role listens where |
 | `contracts/guard-protocol.md` | the approval conversation |
 | `contracts/share-protocol.md` | the cross-node sharing regime |

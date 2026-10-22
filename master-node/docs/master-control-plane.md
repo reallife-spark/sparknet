@@ -2,19 +2,20 @@
 title: Master control plane
 type: specification
 role: master
-status: unbuilt
-updated: 2026-10-04
+status: partially-built
+updated: 2026-10-22
 ---
 
 # Master control plane
 
-> [!warning] Specification only — nothing on this page is implemented
-> This role has no `scripts/`, `services/` or `systemd/` directory. The
-> components below describe what the Master **must** do, not what it does.
-> The work order is [`../plans/MASTER_BUILD_PLAN.md`](../plans/MASTER_BUILD_PLAN.md).
+> [!warning] Some of this page is not built — each unbuilt part is marked
+> This role **has** `scripts/`, `services/` and `systemd/` (Steps 15–18). The
+> components below describe what the Master **must** do; the table marks the
+> ones that do it today. The work order is
+> [`../plans/MASTER_BUILD_PLAN.md`](../plans/MASTER_BUILD_PLAN.md).
 >
-> The one thing that *is* implemented is the signed canonical form in
-> `../../../shared/sparknet-authz.py`, which this role will sign with.
+> The signed canonical form in [`../../shared/sparknet-authz.py`](../../shared/sparknet-authz.py)
+> is implemented and is what the Master signs with.
 
 ## What the Master owns
 
@@ -47,18 +48,18 @@ infrastructure service may not load, invoke or proxy to the signing key.
 
 ## Components
 
-| Component | Purpose | Build plan step |
-|---|---|---|
-| Key lifecycle | generate, rotate, and above all *not lose* the private key | 1 |
-| Registry schema | machine-checkable shape for the signed record | 2 |
-| Signing CLI | `authz-sign`, `registry-verify`, `revoke` | 3 |
-| Overlay listener | master `wg0`, one stanza per authorized peer | 4 |
-| Approval issuer | signs and delivers `guard-apply` payloads | 5 |
-| Registry distribution | how a signed registry reaches a peer | 6 |
-| Instant push (`8090`) | ACL changes POSTed to peers | 7 |
-| Cluster KillSwitch | fabric-wide containment | 8 |
-| Pooling scheduler | idle detection, pooled-memory batches | 9 |
-| Git / file share / NAT / vector DB (`4220`–`4223`) | infrastructure administration | `MASTER_ADMIN_PLAN.md` (spec-only) |
+| Component | Purpose | State | Build plan step |
+|---|---|---|---|
+| Key lifecycle | generate, rotate, and above all *not lose* the private key | built | 1 |
+| Registry schema | machine-checkable shape for the signed record | built (Step 2) | 2 |
+| Signing CLI | `authz-sign`, `registry-verify`, `revoke` | built | 3 |
+| Overlay listener | master `wg0`, one stanza per authorized peer | built | 4 |
+| Approval issuer | signs and delivers `guard-apply` payloads | **half built** — the payload is signed and nonces are tracked; nothing has delivered one to a listening peer, and no test applies an issued payload on a peer stub | 5 |
+| Registry distribution | how a signed registry reaches a peer | **not built** — the channel is unspecified (`distribution: UNSPECIFIED`); peers read an operator-placed registry | 6 |
+| Instant push (`8090`) | ACL changes POSTed to peers | **not built** — the listener is a stub and `contracts/ports.json` still records `8090` as `spec-only` | 7 |
+| Cluster KillSwitch | fabric-wide containment | built | 8 |
+| Pooling scheduler | idle detection, pooled-memory batches | built | 9 |
+| Git / file share / NAT / vector DB (`4220`–`4223`) | infrastructure administration | **not built** — all four are `spec-only` in `contracts/ports.json` | `MASTER_ADMIN_PLAN.md` |
 
 ## The signing path
 
@@ -170,9 +171,8 @@ protect, so the honest state is verify-only. Key custody is described in
 [`../security/key-management.md`](../security/key-management.md).
 
 **Not written yet**, and named here so their absence is visible rather than
-implied: `docs/registry-protocol.md`, `docs/network-posture.md`. Each is the
-subject of a numbered step in the build plan; do not read this page as covering
-them in the meantime.
+implied: `docs/network-posture.md`. (`docs/registry-protocol.md` exists since
+Step 2.) Do not read this page as covering the missing one in the meantime.
 
 [`killswitch-template.md`](killswitch-template.md) exists, but read its header
 first: it is the preserved earliest draft of the cluster KillSwitch, it logs its

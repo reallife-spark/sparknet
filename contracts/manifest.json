@@ -11,7 +11,7 @@
       "contract": "identity-schema",
       "file": "identity-schema.json",
       "schema_version": "1.0",
-      "sha256": "6d5b723d82eaddb8cb6d48522b9425073707670416d7dc0e551eb3b3cecb046f"
+      "sha256": "773bc6461e967a98fc4be9913d252280bdab212b86e9981160d8b2638190e72f"
     },
     {
       "contract": "overlay",
@@ -30,6 +30,12 @@
       "file": "proposal-schema.json",
       "schema_version": 1,
       "sha256": "223cd6772328658665ab10c6c4448859c02ae8cf4bcecdc30e8e1aa40cf40782"
+    },
+    {
+      "contract": "registry-schema",
+      "file": "registry-schema.json",
+      "schema_version": "1.0",
+      "sha256": "3fe75c4333a915dfdf8af5f58c437e1ea0a6aee73744be289e2face0c432b4dc"
     },
     {
       "contract": "tracking-schema",

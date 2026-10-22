@@ -14,3 +14,15 @@ forward. The root `log.md` is a symlink to this file.
   removal). Role `02_Daily/` stays empty until the master's own main is opened
   and used. The role also gains its own `.opencode/agents/chat.md` (read-only
   chat over this vault), mirroring the fabric root's config.
+- [2026-10-22] Plan cursor 2 -> 5 — **Step 2 closed** (registry schema and the
+  spec/impl boundary). The canonical registry shape was decided from the
+  implementation (`../shared/sparknet-authz.py`), not guessed: it is stated once
+  in `../contracts/registry-schema.json`, and
+  `master-node/manifests/registry.schema.json` is a symlink to it. The checker
+  `../shared/sparknet-registry-schema.py` is standard-library only (the runtime
+  allow-list is `cryptography` alone) and refuses a schema keyword it does not
+  implement. DoD (2) is asserted in its honest direction: the role *declares*
+  its build state (`MISSION.md`) and the declaration must agree with the tree
+  and the plan's open steps. Every `docs/` page now declares a `status:` from a
+  closed vocabulary, and two pages carrying stale claims in both directions were
+  corrected. Cross-role: `contracts/` + both roles in one commit.

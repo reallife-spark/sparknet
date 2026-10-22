@@ -1,7 +1,7 @@
 ---
 title: sparknet master-node Build Plan
-updated: 2026-10-08
-current: 2
+updated: 2026-10-22
+current: 5
 ---
 
 # sparknet master-node — Build Plan
@@ -13,8 +13,9 @@ current: 2
 >
 > **As of Step 3 these directories exist** (`scripts/`, `services/`,
 > `systemd/` — built Steps 3–4 and 15–18; the isolated signer runs live on
-> agx64). Steps 1 and 2 remain deliberately knowledge-and-contract work that
-> needs no code; the cursor sits at Step 2.
+> agx64). Steps 1 and 2 are knowledge-and-contract work that needed no code and
+> are both closed; the cursor sits at **Step 5** (`guard-apply` grantable in
+> practice — the highest-value unbuilt step).
 
 ## Status Legend
 
@@ -87,7 +88,7 @@ containment and scheduling.
 
 ## Step 2 — Registry schema and the spec/impl boundary
 
-- [ ] **Step 2** — Write `docs/registry-protocol.md` (it does not exist yet),
+- [x] **Step 2** — Write `docs/registry-protocol.md` (it does not exist yet),
       then turn it into a checkable schema and
       make the "specified, not built" status machine-detectable.
       - **DoD**: (1) `manifests/registry.schema.json` exists and validates the
@@ -120,6 +121,38 @@ containment and scheduling.
         marker is now stale in the other direction — it reads "specified, not
         built (Step 2)" while the Step 3/5/6 CLI exists, signs, verifies and
         publishes. Corrected in `docs/registry-protocol.md` with this step.
+      - **Status: complete 2026-10-22.** The canonical shape was **decided from
+        the implementation, not guessed**: it is what `../shared/sparknet-authz.py`
+        signs and evaluates — document `{schema_version "1.0",
+        master_public_key_b64, description?, authorizations[]}`, entry
+        `{fingerprint, identity, capabilities, overlay_ipv4, issued_at,
+        expires_at, revoked?, signature_b64}`. The contract now states it once,
+        in `../contracts/registry-schema.json`, and
+        `master-node/manifests/registry.schema.json` is a **symlink** to it (the
+        contracts README forbids a second copy; the ledger schema's copy is the
+        one precedent that predates that rule).
+      - **DoD (1)**: satisfied by `../shared/sparknet-registry-schema.py`, a
+        **standard-library-only** checker — the fabric's runtime dependency
+        allow-list is `cryptography` alone, so a validator needing `jsonschema`
+        would pass here and fail on a node. It checks the shipped registry, the
+        entries the implementation itself mints, and refuses the draft's three
+        mistakes (`role`, `1.0.0`, `signature`). `tests/test_registry_schema.py`
+        pins all of it.
+      - **DoD (2)**: asserted in the direction that is still true. The role
+        **declares** its build state (`MISSION.md`, `status:` frontmatter) and
+        the declaration must agree with the tree and with the plan's open steps,
+        so it cannot rot into a false claim in either direction — asserting
+        "unbuilt" would assert a lie.
+      - **DoD (3)**: every page in `docs/` now declares a `status:` from a
+        closed vocabulary, and any page that is not `built` carries a callout
+        marker. Two pages were carrying stale claims in *both* directions and
+        were corrected: `docs/master-control-plane.md` said the role "has no
+        `scripts/`, `services/` or `systemd/` directory" (false since Steps
+        15–16), and `docs/killswitch-template.md` said the role "carries no
+        executable surface" (Step 8 is built).
+      - **Cursor**: Step 2 is closed; the cursor advances to **Step 5**
+        (`guard-apply` grantable in practice — the highest-value unbuilt step).
+
 
 ## Step 3 — Signing and registry CLI
 

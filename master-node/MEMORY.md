@@ -5,14 +5,16 @@
 > mirrors it, it does not own it. Per-session detail belongs in
 > `sessions/YYYY-MM-DD.md`.
 
-Updated: 2026-10-05
+Updated: 2026-10-22
 
 ## Standing State
 
-- **Plan cursor**: `plans/MASTER_BUILD_PLAN.md` `current: 2`. Phase 0 (13–18) and
-  honest verification (19) are complete; **Step 1 (keypair/registry substrate) is
-  complete**. Steps 2–12 remain unbuilt — registry distribution, `10.100.0.1:8090`,
-  grantable `guard-apply`, the KillSwitch, the batch scheduler, the sharing regime.
+- **Plan cursor**: `plans/MASTER_BUILD_PLAN.md` `current: 5`. Phase 0 (13–18) and
+  honest verification (19) are complete; **Steps 1 and 2 are complete** (Step 2
+  closed 2026-10-22). Still unbuilt: grantable `guard-apply` (5), registry
+  distribution (6), `10.100.0.1:8090` (7), signer liveness (20), the admin
+  console's remaining leg (21). The KillSwitch (8), the pooling scheduler (9) and
+  the sharing regime (10–12) are built.
 - **`$SPARKNET_STATE_DIR` is outside the vault.** `$XDG_STATE_HOME/sparknet/master-node`
   or `~/.local/state/...`. Moving it was structural, not cosmetic: the admin surface
   bind-mounts the vault read-only into an LLM container, so the old default
@@ -26,9 +28,10 @@ Updated: 2026-10-05
 - **Fabric root**: parent directory, holding `contracts/` and `shared/`.
   Override with `SPARKNET_FABRIC_ROOT`.
 - **Blockers**: none technically; what is missing is a named step, not a fault.
-  **Election is not built** — `shared/sparknet-consensus.py` verifies a trust root
-  but produces none, so nothing yet makes a node Master. The signer therefore has
-  no root to bind to in practice, and refuses to start. A three-node cluster also
+  **The election is built and was proven live on real hosts on 2026-10-07** —
+  agx64 and agx32 co-formed a 2/2 trust root and the signer ran as
+  `sparknet-master-signer.service` on agx64; the signer was unit-tested before
+  that and is deployed only where an election put it. A three-node cluster still
   **cannot survive the loss of a member**; see the open question recorded in
   `contracts/consensus-protocol.md`. The admin page is **declared, and now
   deployed on the live Master at `10.100.0.1:8088`** (relocated from 8080, fabric
@@ -47,7 +50,10 @@ Updated: 2026-10-05
   multi-user surface exist at all, and it is asserted by tests rather than by
   prose. Admin agents are role-scoped in `master-node/.opencode/agents/` — never
   mirrored into the peer or the root agent set.
-- **The signer exists and is unit-tested; it has never run deployed.**
+- **The signer is the only process that holds the operational key, and it ran
+  live on 2026-10-07** — `sparknet-master-signer.service` on agx64, in the live
+  pair, after the election that named agx64 Master. It was unit-tested before
+  that, and it is deployed only where an election put it.
   `services/sparknet-signer.py` is the only process that holds the operational
   key. It is stricter than the plan asked: it never signs caller-supplied bytes at
   all, deriving canonical form from typed fields. Its unit is deliberately excluded
@@ -70,8 +76,13 @@ Updated: 2026-10-05
   the Master. It would blackhole the fabric. See `docs/network-posture.md`.
 - `../shared/sparknet-authz.py` is the single implementation of the signed
   canonical form. This role signs with it; peers verify with it. Never copy it.
-- `guard-apply` cannot be granted to any peer until Step 4 (approval issuer)
-  exists — the capability is defined and enforced, but nothing can issue it.
+- `guard-apply` cannot be granted to any peer until Step 5 (approval issuer)
+  exists — the capability is defined and enforced, and the payload is signed
+  with nonces tracked, but nothing has delivered one to a listening peer.
+- **A registry's shape is stated once**, in `../contracts/registry-schema.json`;
+  `master-node/manifests/registry.schema.json` is a **symlink** to it, never a
+  copy, and `../shared/sparknet-registry-schema.py` checks documents against it
+  (standard library only — the runtime allow-list is `cryptography` alone).
 - The peer's live WireGuard, nftables, `chattr +i` and systemd behaviour is
   unverified on the development host; do not claim otherwise.
 - **`opencode agent list` must be read from a file, never a pipe.** It emits

@@ -46,10 +46,14 @@ Updated: 2026-10-22
   work (Steps 2–12: container, grants, bridge, Open WebUI surface, conversation
   passing, `MASTERSPIKE`, sharing regime, node admin agent) closed 2026-10-11/12.
   New peer work gets a **new** step.
-- **`master-node/plans/MASTER_BUILD_PLAN.md` `current: 2`** — Phase 0 (13–18),
-  honest verification (19), keypair/registry substrate (1), and Steps 3–4
-  complete; Steps 2 and 5–12 unbuilt. Step 2's DoD is *contradicted*, not merely
-  unimplemented (two registry shapes, neither matching the shipped schema).
+- **`master-node/plans/MASTER_BUILD_PLAN.md` `current: 5`** — Phase 0 (13–18),
+  honest verification (19), keypair/registry substrate (1), Steps 3–4, and
+  **Step 2 (registry schema + the spec/impl boundary) closed 2026-10-22** are
+  complete. Steps 5–7, 20 and 21 remain unbuilt. The registry's canonical shape
+  is now stated **once**, in `contracts/registry-schema.json`; the Master's path
+  is a symlink to it and `shared/sparknet-registry-schema.py` checks documents
+  against it (standard library only — the runtime allow-list is `cryptography`
+  alone).
 
 ## What this repository is
 

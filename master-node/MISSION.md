@@ -1,31 +1,43 @@
+---
+title: sparknet master-node — MISSION
+status: partially-built
+updated: 2026-10-22
+---
+
 # sparknet master-node — MISSION
 
-The **Master role** of the Sparknet fabric: the node that holds signing
+The **Master role** of the sparknet fabric: the node that holds signing
 authority over the overlay.
 
 ## Status
 
-**Running, partially.** Build plan Steps 15–18 landed: this role has `scripts/`,
-`services/` and `systemd/`, loads the peer's services by path, keeps a
-hash-chained ledger, generates its own keys into the state directory, has an
-isolated signer for the operational key, and declares an admin surface and
-`MASTERSPIKE` knowledge manifest.
+**Built, and proven live — with named gaps.** Build plan Steps 15–18 landed: this
+role has `scripts/`, `services/` and `systemd/`, loads the peer's services by
+path, keeps a hash-chained ledger, generates its own keys into the state
+directory, has an isolated signer for the operational key, and declares an admin
+surface and `MASTERSPIKE` knowledge manifest.
+
+The election→signer→registry arc was **proven live on real hosts on
+2026-10-07**: agx64 and agx32 co-formed a 2/2 cluster trust root, the signer ran
+as `sparknet-master-signer.service` on agx64, signed a live registry entry a
+still-peer verified, survived a real reboot, and demonstrated a live
+revoke→peer-inert→re-authorize cycle. The overlay anchor came up unattended on a
+real reboot of each host on 2026-10-19.
 
 **Not yet running**, each a numbered step rather than an omission:
 
 | Missing | Step | Consequence |
 |---|---|---|
-| election | 14 (impl) | the trust-root schema exists; no node has voted, so no node is Master |
-| overlay anchoring | 3 | `10.100.0.1` is documented, not bound |
-| admin page deployed | 18 | the surface is declared, configured, and deployed on the live Master at `10.100.0.1:8088` (relocated from 8080, fabric Step 55); on the dev host nothing binds it |
-| registry distribution | 1–4 | peers read an operator-placed registry; nothing pushes one |
+| registry distribution | 6 | peers read an operator-placed registry; nothing pushes one |
+| `guard-apply` grantable in practice | 5 | the signer is isolated and tested; the approval conversation issues no live grant |
+| instant push (`8090`) | 7 | ACL changes are applied by hand, not POSTed to peers |
+| admin services (`4220`–`4223`) | `MASTER_ADMIN_PLAN.md` | git, file share, NAT and the vector DB are contracted `spec-only` |
+| the two destructive legs | — | rollback and a replace-Master re-formation are documented and deliberately unexecuted (`../../contracts/deployment-runbook.md`) |
 
-So this role can currently generate keys, prove parity, verify a chain, and sign
-against a *fixture* trust root. It cannot yet grant anything a peer would accept,
-because no real root exists to grant under. `plans/MASTER_BUILD_PLAN.md` is the
-work order for the rest.
-
-Two claims in this file are load-bearing and tested: the signer is
+On **this** development host none of the fabric runs: there is no cluster, no
+wireguard kernel module, nothing bound. The live claims above are dated claims
+about real hosts; what is verifiable here is the code, the tests, and the
+boundaries. Two claims in this file are load-bearing and tested: the signer is
 **implemented and unit-tested, never deployed**, and the admin surface carries no
 signing capability. `make validate` checks both.
 

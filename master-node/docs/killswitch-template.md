@@ -1,20 +1,23 @@
 ---
 title: Cluster KillSwitch — preserved template
-updated: 2026-10-04
+updated: 2026-10-22
 status: preserved-not-wired
 ---
 
 # Cluster KillSwitch — preserved template
 
-> **This is not the KillSwitch.** It is the earliest draft of it, kept here so
+> [!warning] **This is not the KillSwitch.**
+> It is the earliest draft of it, kept here so
 > Step 8 of [`../plans/MASTER_BUILD_PLAN.md`](../plans/MASTER_BUILD_PLAN.md) has
 > a concrete starting point instead of writing from nothing.
 >
-> It is a **fenced code block, not a file on disk.** That is deliberate: the
-> master role carries no executable surface, and a `.sh` that can be run is a
-> claim the role cannot honour yet. See
+> It is a **fenced code block, not a file on disk.** That was deliberate: the
+> master role carried no executable surface then, and a `.sh` that can be run is
+> a claim the role cannot honour. The real switch exists now — Step 8 is built,
+> and it is [`../scripts/sparknet-killswitch.sh`](../scripts/sparknet-killswitch.sh);
+> this draft is preserved as the starting point, and nothing invokes it. See
 > [`../../peer-node/AGENTS.md`](../../peer-node/AGENTS.md) for why a peer must not
-> be able to invoke this at all.
+> be able to invoke the real one at all.
 
 ## Scope, and the two switches that are easy to confuse
 
@@ -41,8 +44,8 @@ worth keeping:
   `log "INFO"` line. There is no `systemctl stop`, no `wg-quick down`, no
   `nft` rule. `--force` is accepted and still only logs.
 - It was therefore **safe to ship and useless in practice**: it looked like a
-  containment control while containing nothing. Step 8 must close that gap, and
-  its DoD requires the real actions.
+  containment control while containing nothing. Step 8 closed that gap, and its
+  DoD requires the real actions.
 
 Two defects to fix rather than inherit:
 
@@ -127,9 +130,13 @@ log "INFO" "sparknet-killswitch completed"
 exit 0
 ```
 
-## Step 8 DoD, unchanged
+## Step 8 DoD, and what met it
 
 `EUID 0`; halts the fabric control planes and drops nftables policy; documented as
 cluster-wide and explicitly distinct from the peer node-containment switch; and
 not invocable by a peer at all. The draft satisfies only the first, and satisfies
 the third only by existing — which is why it is a document and not a script.
+
+Step 8 is **built**: [`../scripts/sparknet-killswitch.sh`](../scripts/sparknet-killswitch.sh)
+performs the real actions under the same root gate. This page is not that
+switch, and this draft is not wired to anything.

@@ -12,6 +12,7 @@ the tests then prove both roles still agree.
 | `overlay.json` | addressing, MTU, keepalive, AllowedIPs discipline |
 | `capabilities.json` | the closed capability vocabulary and who may hold each |
 | `identity-schema.json` | canonical identity, fingerprinting, signed envelope |
+| `registry-schema.json` | the shape of the registry document and its entries: required fields, types, the `signature_b64` field name, and what is still unspecified (the distribution channel) |
 | `ports.json` | every listener and dial target, with `implementation_state` (code) kept separate from `runtime` (observed on a given host) |
 | `guard-protocol.md` | the Master↔peer approval conversation |
 | `health-protocol.md` | peer liveness and eviction: probe rhythm, activity-trumps-eviction, the full-dark rule, no-authority guarantee |

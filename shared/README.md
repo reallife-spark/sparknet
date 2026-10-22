@@ -77,6 +77,33 @@ uses.
 `max_age_seconds` of the timestamp it names, and the clock is injectable so the
 window is testable without sleeping.
 
+## `sparknet-registry-schema.py`
+
+The checker for the **shape** of a node-authorization registry: it reads
+`contracts/registry-schema.json` — the one statement of what a registry looks
+like — and reports every way a document departs from it. Fields present and
+absent, types, the fingerprint that must match the identity it carries, the
+closed capability vocabulary, and each entry's signature under the
+`master_public_key_b64` the document names.
+
+**Why it is here and not in a role.** The Master signs a registry and a peer
+verifies it. If the two checked against different expectations, a registry the
+Master considered good would be rejected by the peer — and the failure would
+look like a signature problem, not a shape problem, which is the worst place to
+debug it. One checker, one contract, both roles.
+
+**Why it reads the standard library only.** The fabric's runtime dependency
+allow-list is `cryptography` alone, and the CI gate installs exactly that plus
+pytest and ruff. A validator that needed `jsonschema` would pass here and fail
+on a node, so this one interprets the small schema vocabulary the contract
+declares — and **refuses** a keyword it does not implement rather than ignoring
+it. A rule nobody enforces is a rule that quietly stops being true.
+
+**It never re-implements the scheme.** The canonical form, the fingerprint and
+the signature check all come from `sparknet-authz.py`, loaded by path from this
+directory — the same loader pattern the other modules use, and the same refusal
+to fall back to a local copy.
+
 ## Adding to this directory
 
 Only if **both** roles need the same code and any divergence would be a

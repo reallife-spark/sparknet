@@ -40,7 +40,12 @@
     "path": "manifests/node-authorizations.json",
     "author": "master",
     "reader": "peer",
-    "distribution": "UNSPECIFIED \u2014 the channel by which a signed registry reaches peers is not yet built. Peers currently read a local copy.",
+    "schema": "contracts/registry-schema.json",
+    "schema_note": "The registry document's own shape - its fields, its entries' fields, the signature field name - is stated in contracts/registry-schema.json and checked by shared/sparknet-registry-schema.py. This file names the identity and the signed envelope; that one names the document around them. The Master reaches the same file at master-node/manifests/registry.schema.json, which is a symlink rather than a copy: two copies of a shape would be two answers to what a registry looks like, and they would drift.",
+    "document_schema_version": "1.0",
+    "signature_field": "signature_b64",
+    "signature_field_note": "The field the Master writes and the peer reads. It was named 'signature' in a draft schema that nothing produced and nothing read; the implementation says signature_b64, so the implementation is what the contract says.",
+    "distribution": "UNSPECIFIED — the channel by which a signed registry reaches peers is not yet built. Peers currently read a local copy.",
     "empty_by_default": true,
     "empty_by_default_rationale": "No node gets privileges by default. The shipped registry has no entries on purpose, so a fresh deployment is fail-closed."
   },

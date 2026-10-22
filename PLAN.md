@@ -848,9 +848,10 @@ exceptions — work that touches contracts and both roles at once belongs here.
 
 **A green fabric is not a finished Master.** The election/signer arc is proven
 live (agx64/agx32, 2026-10-07: signed registry entry, revoke/restore, reboot
-survival), but the Master build plan's Steps 2 and 5–12 are unbuilt, the admin
-page is declared and not bound, and the registry ships **empty** on purpose —
-fail-closed until the Master signs each grant.
+survival), but the Master build plan's Steps 5–7, 20 and 21 are unbuilt (Step 2's
+registry schema closed 2026-10-22), the admin page is deployed on the live Master
+at `10.100.0.1:8088` but binds nothing on the dev host, and the registry ships
+**empty** on purpose — fail-closed until the Master signs each grant.
 
 Container packaging, the bridge, session grants, conversation passing, the
 sharing regime and `MASTERSPIKE` are peer-side work and are tracked in
