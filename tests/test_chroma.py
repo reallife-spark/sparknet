@@ -450,3 +450,103 @@ def test_reindex_is_idempotent(tmp_path: Path) -> None:
     client = chromadb.PersistentClient(path=str(data_dir))
     collection = client.get_collection("sparknet-fabric")
     assert collection.count() == len(chroma.plan_index("fabric", vault))
+
+
+@REAL_CHROMA
+def test_the_index_records_the_chromadb_version_that_wrote_it(tmp_path: Path) -> None:
+    """A version marker is what makes an unreadable index explainable."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    (vault / "AGENTS.md").write_text("stable content")
+    data_dir = tmp_path / "chroma"
+
+    proc = subprocess.run(
+        [*_run, "fabric", "index", "--data-dir", str(data_dir), "--vault", str(vault)],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+    import chromadb
+
+    marker = data_dir / chroma.VERSION_MARKER
+    assert marker.is_file()
+    assert marker.read_text(encoding="utf-8").strip() == chromadb.__version__
+
+
+@REAL_CHROMA
+def test_an_index_with_an_unknown_provenance_is_rebuilt_not_trusted(tmp_path: Path) -> None:
+    """An index nobody can account for is not one this tool may serve."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    (vault / "AGENTS.md").write_text("stable content")
+    data_dir = tmp_path / "chroma"
+
+    first = subprocess.run(
+        [*_run, "fabric", "index", "--data-dir", str(data_dir), "--vault", str(vault)],
+        capture_output=True,
+        text=True,
+    )
+    assert first.returncode == 0, first.stdout + first.stderr
+
+    # the marker goes missing: the index's provenance is now unknown
+    (data_dir / chroma.VERSION_MARKER).unlink()
+
+    second = subprocess.run(
+        [*_run, "fabric", "index", "--data-dir", str(data_dir), "--vault", str(vault)],
+        capture_output=True,
+        text=True,
+    )
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert "rebuilding it from source" in second.stderr
+
+    # and a marker from another library version is equally refused
+    (data_dir / chroma.VERSION_MARKER).write_text("0.0.0\n", encoding="utf-8")
+    third = subprocess.run(
+        [*_run, "fabric", "index", "--data-dir", str(data_dir), "--vault", str(vault)],
+        capture_output=True,
+        text=True,
+    )
+    assert third.returncode == 0, third.stdout + third.stderr
+    assert "written by chromadb 0.0.0" in third.stderr
+
+
+@REAL_CHROMA
+def test_a_chunk_that_left_the_corpus_leaves_the_index(tmp_path: Path) -> None:
+    """The index must equal the corpus, not merely contain it.
+
+    An upsert-only rebuild leaves the chunks of a passage that was shortened
+    or deleted behind — and the corpus digest still matches, because it hashes
+    what was *written*. A stale chunk would then answer a query with text the
+    corpus no longer contains.
+    """
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    doc = vault / "AGENTS.md"
+    doc.write_text("the first passage, which is quite long. " * 80)
+    data_dir = tmp_path / "chroma"
+
+    before = subprocess.run(
+        [*_run, "fabric", "index", "--data-dir", str(data_dir), "--vault", str(vault)],
+        capture_output=True,
+        text=True,
+    )
+    assert before.returncode == 0, before.stdout + before.stderr
+
+    import chromadb
+
+    client = chromadb.PersistentClient(path=str(data_dir))
+    count_before = client.get_collection("sparknet-fabric").count()
+    assert count_before > 1
+
+    doc.write_text("now short")
+    after = subprocess.run(
+        [*_run, "fabric", "index", "--data-dir", str(data_dir), "--vault", str(vault)],
+        capture_output=True,
+        text=True,
+    )
+    assert after.returncode == 0, after.stdout + after.stderr
+
+    count_after = client.get_collection("sparknet-fabric").count()
+    assert count_after < count_before
+    assert count_after == len(chroma.plan_index("fabric", vault))

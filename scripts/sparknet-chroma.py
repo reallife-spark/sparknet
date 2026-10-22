@@ -85,6 +85,7 @@ import hashlib
 import importlib.util
 import os
 import re
+import shutil
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -111,6 +112,15 @@ REFUSAL_FIELDS = ("embedding_model", "embedding_sha256", "corpus_digest")
 #: Stamp fields that are reported but never refuse: a different chromadb
 #: version changes the library, not the meaning of the vectors.
 REPORT_FIELDS = ("chroma_version",)
+
+#: File next to the index that records which chromadb version wrote it.
+#:
+#: It is a plain file rather than a field of the collection metadata because
+#: the metadata cannot be read when the index is unreadable — which is the
+#: case the marker exists to answer. An index whose marker is missing or names
+#: another version is discarded and written again: the storage format belongs
+#: to the library, and only the library that wrote it can read it.
+VERSION_MARKER = ".sparknet-chroma-version"
 
 #: Directories that are never vault content. Generated dirs, caches, the
 #: vendored skills (not knowledge) and role trees that belong to another scope.
@@ -388,6 +398,17 @@ def expected_stamp(docs: list[dict[str, object]]) -> dict[str, str]:
     return {**embedding_identity(), "corpus_digest": corpus_digest(docs)}
 
 
+class _UnusableIndex(Exception):
+    """The on-disk index cannot be read by this chromadb.
+
+    The usual cause is a different library version: the storage format
+    changed, and the failure surfaces as an unknown segment type rather than
+    as a readable error. The index is derived state — the corpus in the vault
+    is the source of truth — so the answer to an unreadable index is always
+    to rebuild it, never to serve what is there.
+    """
+
+
 def _open_collection(scope: str, data_dir: Path, *, create: bool):
     """Open the scope's collection, with the named embedder attached.
 
@@ -400,26 +421,77 @@ def _open_collection(scope: str, data_dir: Path, *, create: bool):
     ``create=False`` never creates a collection. A query against a missing
     index must fail loudly, not return an empty result set: an empty result
     set is a sentence, and this tool must not be able to write one by accident.
+
+    Raises ``_UnusableIndex`` when the collection cannot be opened or read —
+    including when it was written by another chromadb version, which is a
+    rebuild, not an error to hide behind a traceback.
     """
     _require()
     import chromadb  # type: ignore[import-not-found]
 
-    client = chromadb.PersistentClient(path=str(data_dir))
     try:
+        client = chromadb.PersistentClient(path=str(data_dir))
         if create:
             return client.get_or_create_collection(name=f"sparknet-{scope}", embedding_function=_embedding_function())
         return client.get_collection(name=f"sparknet-{scope}", embedding_function=_embedding_function())
     except SystemExit:
         raise
     except Exception as exc:
-        verb = "build" if create else "there is no index at"
-        print(
-            f"sparknet-chroma: cannot open the '{scope}' collection in {data_dir}: {exc}\n"
-            f"({verb} {data_dir}). The index is derived state — rebuild it with:\n"
-            f"  scripts/sparknet-chroma.py {scope} index",
-            file=sys.stderr,
-        )
-        raise SystemExit(3) from exc
+        raise _UnusableIndex(str(exc)) from exc
+
+
+def _no_usable_index(scope: str, data_dir: Path, exc: Exception) -> None:
+    """Report an index that cannot be used, and exit 3.
+
+    Exit 3 is the refusal code everywhere in this tool, so "there is no index
+    I can trust" and "the index does not match this build" are the same
+    answer to the caller: refuse, and say how to fix it.
+    """
+    sys.stdout.flush()
+    print(
+        f"sparknet-chroma: the '{scope}' index in {data_dir} cannot be used: {exc}\n"
+        f"(it may not exist, or it may have been written by a different chromadb "
+        f"version). The index is derived state — rebuild it with:\n"
+        f"  scripts/sparknet-chroma.py {scope} index",
+        file=sys.stderr,
+    )
+    raise SystemExit(3) from exc
+
+
+def _reset_index(scope: str, data_dir: Path) -> None:
+    """Remove an unusable index directory so it can be written again.
+
+    Only the index lives in the scope's state directory (the peer's key store
+    is a sibling under `.state/keys/`), so removing it loses derived state and
+    nothing else.
+    """
+    shutil.rmtree(data_dir, ignore_errors=True)
+    _data_dir(data_dir)
+
+
+def _chromadb_version() -> str:
+    """The chromadb version this build would use."""
+    import chromadb  # type: ignore[import-not-found]
+
+    return str(chromadb.__version__)
+
+
+def _index_version(data_dir: Path) -> str | None:
+    """The chromadb version that wrote the index, or None if it is unknown.
+
+    Read from a plain file rather than from the collection's metadata on
+    purpose: the metadata cannot be read when the index is unreadable, which
+    is exactly the case this answers.
+    """
+    marker = data_dir / VERSION_MARKER
+    if not marker.is_file():
+        return None
+    return marker.read_text(encoding="utf-8").strip() or None
+
+
+def _write_index_version(data_dir: Path) -> None:
+    """Record which chromadb version wrote this index."""
+    (data_dir / VERSION_MARKER).write_text(f"{_chromadb_version()}\n", encoding="utf-8")
 
 
 def _data_dir(path: Path) -> Path:
@@ -439,7 +511,18 @@ def _data_dir(path: Path) -> Path:
 
 def cmd_init(scope: str, data_dir: Path) -> None:
     _data_dir(data_dir)
-    collection = _open_collection(scope, data_dir, create=True)
+    try:
+        collection = _open_collection(scope, data_dir, create=True)
+    except _UnusableIndex:
+        print(
+            f"init: the existing index in {data_dir} cannot be read — rebuilding it",
+            file=sys.stderr,
+        )
+        _reset_index(scope, data_dir)
+        try:
+            collection = _open_collection(scope, data_dir, create=True)
+        except _UnusableIndex as exc:
+            _no_usable_index(scope, data_dir, exc)
     print(f"init: collection '{collection.name}' ready in {data_dir}")
 
 
@@ -458,25 +541,76 @@ def cmd_inspect(scope: str, vault: Path) -> int:
 
 
 def cmd_index(scope: str, vault: Path, data_dir: Path) -> None:
+    """Build (or rebuild) the scope's index, and stamp it.
+
+    The index is derived state — the corpus in the vault is the source of
+    truth — so this command makes the collection *equal* the corpus rather
+    than patching it: chunks that are no longer in the corpus are removed, so
+    a query can never return a passage the corpus does not contain.
+
+    An index written by another chromadb version cannot be read by this one:
+    the storage format differs, and the failure surfaces as an unknown segment
+    type rather than as a readable error. So the version that wrote the index
+    is recorded next to it, and an index whose provenance is unknown or does
+    not match this build is discarded and written again — *before* any client
+    opens it, because chroma caches its storage system per path and a cached
+    system would hand back the very state we just deleted.
+    """
     docs = plan_index(scope, vault)
-    collection = _open_collection(scope, data_dir, create=True)
-    collection.upsert(
-        ids=[str(d["id"]) for d in docs],
-        documents=[str(d["document"]) for d in docs],
-        metadatas=[{"path": d["path"]} for d in docs],
-    )
+    _data_dir(data_dir)
+    written = _index_version(data_dir)
+    current = _chromadb_version()
+    if written != current:
+        reason = (
+            "its provenance is unknown (no version marker)"
+            if written is None
+            else f"it was written by chromadb {written}, this build has {current}"
+        )
+        print(
+            f"index: {data_dir} is not this build's index — {reason} — rebuilding it from source",
+            file=sys.stderr,
+        )
+        _reset_index(scope, data_dir)
+    try:
+        _write_index(scope, data_dir, docs)
+    except _UnusableIndex as exc:
+        _no_usable_index(scope, data_dir, exc)
+    _write_index_version(data_dir)
     stamp = expected_stamp(docs)
-    collection.modify(metadata=stamp)
-    print(f"index: upserted {len(docs)} chunks into '{collection.name}'")
+    print(f"index: upserted {len(docs)} chunks into '{scope}'")
     print(f"index: stamped {stamp['embedding_model']} / {stamp['chroma_version']} / {stamp['corpus_digest'][:12]}")
+
+
+def _write_index(scope: str, data_dir: Path, docs: list[dict[str, object]]) -> None:
+    """Upsert the corpus, drop what is no longer in it, and stamp it.
+
+    Raises ``_UnusableIndex`` when the collection cannot be read or written.
+    """
+    collection = _open_collection(scope, data_dir, create=True)
+    ids = [str(d["id"]) for d in docs]
+    try:
+        collection.upsert(
+            ids=ids,
+            documents=[str(d["document"]) for d in docs],
+            metadatas=[{"path": d["path"]} for d in docs],
+        )
+        stale = set(collection.get(include=["metadatas"])["ids"]) - set(ids)
+        if stale:
+            collection.delete(ids=sorted(stale))
+        collection.modify(metadata=expected_stamp(docs))
+    except Exception as exc:
+        raise _UnusableIndex(str(exc)) from exc
 
 
 def cmd_stamp(scope: str, vault: Path, data_dir: Path) -> int:
     """Show the index's stamp and whether it matches this build."""
     docs = plan_index(scope, vault)
     expected = expected_stamp(docs)
-    collection = _open_collection(scope, data_dir, create=False)
-    stamp = dict(collection.metadata or {})
+    try:
+        collection = _open_collection(scope, data_dir, create=False)
+        stamp = dict(collection.metadata or {})
+    except _UnusableIndex as exc:
+        _no_usable_index(scope, data_dir, exc)
     refusals, reports = stamp_mismatch(stamp, expected)
     print(f"stamp: collection '{collection.name}' in {data_dir}")
     for field in (*REFUSAL_FIELDS, *REPORT_FIELDS):
@@ -497,8 +631,11 @@ def cmd_stamp(scope: str, vault: Path, data_dir: Path) -> int:
 def cmd_query(scope: str, vault: Path, data_dir: Path, query: str, top_k: int) -> int:
     docs = plan_index(scope, vault)
     expected = expected_stamp(docs)
-    collection = _open_collection(scope, data_dir, create=False)
-    stamp = dict(collection.metadata or {})
+    try:
+        collection = _open_collection(scope, data_dir, create=False)
+        stamp = dict(collection.metadata or {})
+    except _UnusableIndex as exc:
+        _no_usable_index(scope, data_dir, exc)
     refusals, reports = stamp_mismatch(stamp, expected)
     for report in reports:
         print(f"query: note: {report}")
@@ -512,7 +649,10 @@ def cmd_query(scope: str, vault: Path, data_dir: Path, query: str, top_k: int) -
             print(f"  {refusal}", file=sys.stderr)
         print(f"  reindex it: scripts/sparknet-chroma.py {scope} index", file=sys.stderr)
         return 3
-    result = collection.query(query_texts=[query], n_results=top_k)
+    try:
+        result = collection.query(query_texts=[query], n_results=top_k)
+    except Exception as exc:
+        _no_usable_index(scope, data_dir, exc)
     ids = result.get("ids", [[]])[0]
     distances = result.get("distances", [[]])[0]
     docs_found = result.get("documents", [[]])[0]
