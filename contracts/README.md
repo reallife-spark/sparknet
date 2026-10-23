@@ -15,6 +15,7 @@ the tests then prove both roles still agree.
 | `registry-schema.json` | the shape of the registry document and its entries: required fields, types, the `signature_b64` field name, and what is still unspecified (the distribution channel) |
 | `ports.json` | every listener and dial target, with `implementation_state` (code) kept separate from `runtime` (observed on a given host) |
 | `guard-protocol.md` | the Master↔peer approval conversation |
+| `guard-approval.json` | the approval envelope itself: the eight signed fields, the canonicalisation rule, where the capability comes from, and the transport (route, port, envelope fields) |
 | `health-protocol.md` | peer liveness and eviction: probe rhythm, activity-trumps-eviction, the full-dark rule, no-authority guarantee |
 | `share-protocol.md` | the peer↔peer sharing regime: offers, share types, the four clocks, trust levels, isolation, evidence |
 | `consensus-protocol.md` | how three nodes agree on who holds the signing key: election, the cluster trust root, re-formation |

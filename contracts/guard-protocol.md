@@ -2,11 +2,14 @@
 
 Both roles implement this conversation. The peer side exists
 (`peer-node/services/sparknet-guard-d.py`); the Master side that *produces*
-these payloads does not exist yet and is specced in
-`master-node/plans/MASTER_BUILD_PLAN.md`.
+these payloads was built in master-node build-plan Step 5
+(`master-node/scripts/sparknet-approval-issue.sh`,
+`sparknet-approval-sign-socket.sh`, `sparknet-approval-deliver.sh`).
 
 The normative machine-readable policy is `contracts/capabilities.json` and
-`contracts/identity-schema.json`. This page is the narrative contract.
+`contracts/identity-schema.json`. The approval envelope itself is stated
+normatively in `contracts/guard-approval.json`; this page is the narrative
+contract.
 
 ## The asymmetry is a role state, not a structure
 
@@ -57,20 +60,48 @@ signature or it refuses.
 
 ## Approval payload
 
-A payload the Master signs to authorise one mutation:
+A payload the Master signs to authorise one mutation. The normative field list
+is `contracts/guard-approval.json`; the rule that turns it into the bytes the
+signature covers lives once, in `shared/sparknet-authz.py`
+(`guard_approval_message`), which both the Master and the peer import.
 
 | Field | Purpose |
 |---|---|
-| `fingerprint` | SHA-256 of the peer's canonical identity (`contracts/identity-schema.json`) |
-| `capabilities` | must include `guard-apply`, or the guard refuses |
-| `target_path` | must appear in the peer's `critical-manifest.json` `protected_paths` |
-| `content` | the new file content |
+| `peer_fingerprint` | SHA-256 of the peer's canonical identity (`contracts/identity-schema.json`) — the peer the approval is addressed to |
+| `file_path` | must appear in the peer's `critical-manifest.json` `protected_paths` |
+| `content_b64` | the new file content, base64, **inside** the signed message |
+| `content_sha256` | SHA-256 of the new content; the peer recomputes it and refuses a mismatch |
 | `nonce` | single-use value; replay refused |
 | `request_id` | correlates plan → permission → execute |
 | `issued_at` / `expires_at` | validity window |
 
-`content` is **inside** the signed message (`content_in_signature: true`).
+`content_b64` is **inside** the signed message (`content_in_signature: true`).
 Signing only a request id would let anyone replay it against different content.
+For the same reason the envelope carries **no capabilities**: the peer reads
+`guard-apply` from its own signed registry entry, never from the payload. An
+approval that could grant the authority it is checked against would be a
+privilege-escalation channel wearing a signature.
+
+The envelope is *exactly* these eight fields. A payload with a missing field is
+refused, and so is one with an extra field: the signature covers exactly this
+projection, so anything outside it is unsigned.
+
+### One rule, two implementations of it — no longer
+
+The rule used to exist three times: the signer listed
+`peer_fingerprint, guard_protocol_version, target_path, action, expires_at`, the
+guard verified `file_path, content_b64, content_sha256, issued_at, expires_at,
+nonce, request_id`, and the contract above named a third set. Every side was
+internally consistent and the conversation still could not happen: no approval
+the Master could produce was one a peer would accept. The rule now lives in
+`shared/sparknet-authz.py` and is imported by both.
+
+### The peer binding
+
+`peer_fingerprint` is not decoration. Without it a signature says only *that*
+the Master signed something, not that the Master meant *this* node — and an
+approval minted for one peer would be applied by another that protects the same
+path. The peer refuses an approval addressed to anyone else.
 
 ## What the guard checks, in order
 
@@ -82,15 +113,25 @@ and every failure is fail-closed:
    overlay address, so a legitimate Master request arrives from `10.100.0.1`.
    The node's own overlay address and neighbouring clients are rejected.
 2. **Master signature** — Ed25519 over the canonical payload.
-3. **Not revoked** — checked *before* signature validity, so a tampered
-   registry fails closed: clearing `revoked` by hand breaks the signature.
+3. **Addressed to this peer** — the `peer_fingerprint` in the envelope is this
+   node's own fingerprint. Checked right after the signature, before anything
+   is spent on the request.
 4. **Not expired / not replayed** — nonce unused, within the TTL.
-5. **`guard-apply` capability** — present in the signed envelope.
+5. **Content integrity** — `content_b64` decodes and hashes to
+   `content_sha256`.
 6. **Target is protected** — the path is in this node's manifest. An unprotected
    path is refused even with a perfect signature.
-7. **`euid 0`** — the apply path requires root.
-8. **`--apply-enabled`** — off by default in the shipped unit. Arming the guard
+7. **`guard-apply` capability** — granted in this node's own signed registry
+   entry, not asserted by the payload. The entry's own signature is verified
+   first, and it covers `revoked`, so a tampered registry fails closed: clearing
+   `revoked` by hand breaks the signature.
+8. **`euid 0`** — the apply path requires root.
+9. **`--apply-enabled`** — off by default in the shipped unit. Arming the guard
    to mutate is an explicit operator decision, not a default.
+
+The canonical bytes are a function of the parsed fields, so the body is parsed
+before the signature is checked. Parsing is not a trust decision: no value is
+read before the signature over the canonical projection has verified.
 
 ## Two personalities, one listener
 
@@ -138,14 +179,27 @@ That asymmetry is deliberate: a node that has lost its Master has lost its
 authority, and the correct response is to keep it useful but inert, not to let
 it carry on with stale permissions.
 
-## Master side (not yet built)
+## Master side
 
-The Master must be able to:
+The Master mints, signs and delivers the payload:
 
-- render this payload for a specific peer, signed with its private key
-- POST it to that peer's `10.100.0.x:9090`
-- track issued nonces so it never signs the same one twice
-- revoke: sign `revoked: true` and redistribute the registry
+- `make approval-issue TARGET=<path> CONTENT=<file> PEER_FINGERPRINT=<fp>`
+  renders the envelope for one peer and signs it with the operational key. The
+  offline path loads the key into the calling process; the production path is
+  `make approval-sign-socket APPROVAL=<file>`, which hands the envelope to the
+  isolated signer so the key never enters a calling process and every issued
+  approval lands in the Master's hash-chained ledger.
+- `make approval-deliver FINGERPRINT=<fp> APPROVAL=<file>` POSTs it to that
+  peer's `10.100.0.x:9090`, on the route
+  `POST /api/v1/critical-file/patch`, with `{"payload": <base64 canonical
+  bytes>, "signature": <base64>}`. The peer's address comes from the signed
+  registry; the fingerprint names the peer, the registry entry names its
+  address.
+- The Master tracks the nonces it has issued
+  (`$SPARKNET_STATE_DIR/approval_nonces.json`) and refuses to issue one twice.
+- Revocation stays with the registry: the Master signs `revoked: true` and
+  redistributes it (build-plan Step 6 is the distribution channel).
 
-Until that exists, `guard-apply` cannot be granted to any peer in practice. The
-capability is defined and enforced, but nothing can issue it.
+`guard-apply` is therefore grantable in practice — the capability is defined,
+enforced, and now exercisable end to end, and the integration test proves the
+two sides agree rather than assuming it.

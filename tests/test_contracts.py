@@ -562,12 +562,67 @@ def test_master_documents_the_manifest_gap_instead_of_hiding_it():
 # --- prose cannot drift into claiming things work ------------------------------
 
 
-def test_guard_protocol_states_the_master_side_is_unbuilt():
-    """Otherwise the document reads as though approvals are issuable today."""
+def test_guard_protocol_states_the_master_side_is_built():
+    """The Master side exists (build plan Step 5); a protocol that still calls it
+    unbuilt sends a reader looking for something that is already there."""
     text = (CONTRACTS / "guard-protocol.md").read_text()
-    assert re.search(r"does not exist yet|not yet built|unbuilt|not built", text, re.I), (
-        "guard-protocol.md must say the Master side does not exist yet"
+    assert not re.search(r"does not exist yet|not yet built|unbuilt|not built", text, re.I), (
+        "guard-protocol.md must not describe the Master side as unbuilt"
     )
+    for name in ("approval-issue", "approval-deliver"):
+        assert name in text, f"guard-protocol.md does not name the {name} command"
+
+
+# --- the guard approval envelope: one rule, checked against the contract ------
+
+
+@pytest.fixture(scope="module")
+def guard_approval() -> dict:
+    return load("guard-approval.json")
+
+
+def test_the_contract_names_the_canonical_approval_fields(guard_approval: dict) -> None:
+    """The contract states the envelope; the code must match it byte for byte."""
+    fields = guard_approval["approval"]["fields"]
+    assert fields == sorted(fields), "the field list is a projection and must be sorted"
+    assert "peer_fingerprint" in fields, "an approval that names no peer can be applied by any peer"
+    assert "content_b64" in fields, "the content must be inside the signature, not beside it"
+    assert "nonce" in fields and "request_id" in fields, "replay protection needs both"
+
+
+def test_the_shared_implementation_is_the_rule_the_contract_states(guard_approval: dict, authz) -> None:
+    """One rule, in one place. The contract and the implementation must agree."""
+    assert tuple(guard_approval["approval"]["fields"]) == authz.GUARD_APPROVAL_FIELDS
+    assert tuple(guard_approval["approval"]["required_non_empty"]) == authz.GUARD_APPROVAL_REQUIRED
+
+
+def test_neither_role_carries_a_second_copy_of_the_approval_rule() -> None:
+    """A second copy of the field list is how the signer and the guard drifted
+    apart: each signed and verified a different shape, and both kept working."""
+    peer = (PEER / "services" / "sparknet-guard-d.py").read_text()
+    assert "APPROVAL_FIELDS =" not in peer, "the peer guard carries its own copy of the approval field list"
+    assert "guard_approval_message" in peer, "the peer guard must canonicalise through the shared rule"
+    signer = (MASTER / "services" / "sparknet-signer.py").read_text()
+    assert "APPROVAL_FIELDS =" not in signer, "the signer carries its own copy of the approval field list"
+    assert "guard_approval_message" in signer, "the signer must canonicalise through the shared rule"
+
+
+def test_the_guard_route_and_port_match_the_contract(guard_approval: dict, ports: dict) -> None:
+    transport = guard_approval["transport"]
+    source = (PEER / "services" / "sparknet-guard-d.py").read_text()
+    assert transport["path"] in source, "the peer guard does not serve the route the contract names"
+    matches = [(int(p), s) for p, s in ports["ports"].items() if s["service"] == "guard"]
+    assert len(matches) == 1, f"expected exactly one guard port, found {matches}"
+    assert matches[0][0] == int(transport["port"]), "the contract's approval port is not the guard's port"
+
+
+def test_the_contract_says_where_the_capability_comes_from(guard_approval: dict) -> None:
+    """The envelope must not carry the capability it is checked against."""
+    source = guard_approval["capability_source"]
+    assert "capabilities" not in guard_approval["approval"]["fields"], (
+        "an approval that carries its own capabilities is a privilege-escalation channel"
+    )
+    assert source["where"], "the contract must say where guard-apply is granted"
 
 
 def test_master_identity_manifest_flags_the_placeholder_key(identity_schema: dict):
@@ -601,6 +656,7 @@ def test_contracts_readme_names_every_contract_file():
         "identity-schema.json",
         "ports.json",
         "guard-protocol.md",
+        "guard-approval.json",
         "share-protocol.md",
         "consensus-protocol.md",
         "tracking-schema.json",

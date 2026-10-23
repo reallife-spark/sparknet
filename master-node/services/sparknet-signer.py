@@ -120,8 +120,11 @@ SIGN_OPERATIONS = ("sign-registry-entry", "sign-guard-approval", "sign-cluster-j
 READ_OPERATIONS = ("capabilities", "public-key", "root-id", "ping")
 OPERATIONS = SIGN_OPERATIONS + READ_OPERATIONS
 
-#: Fields a guard-approval must name, so an approval cannot be a blank cheque.
-APPROVAL_FIELDS = ("peer_fingerprint", "guard_protocol_version", "target_path", "action", "expires_at")
+#: The guard-approval envelope is *not* defined here. Its rule lives in
+#: shared/sparknet-authz.py (GUARD_APPROVAL_FIELDS, guard_approval_message),
+#: because the peer verifies approvals with that same rule. A local copy of the
+#: field list is how the signer and the guard drifted apart in the first place:
+#: each signed and verified a different shape, and both kept working.
 
 
 class SignerError(Exception):
@@ -589,11 +592,17 @@ class Signer:
         approval = request.get("approval")
         if not isinstance(approval, dict):
             return self._refuse("sign-guard-approval requires an 'approval' object")
-        missing = [f for f in APPROVAL_FIELDS if not approval.get(f)]
-        if missing:
+        # The canonical bytes come from the one implementation in shared/. It
+        # refuses an approval that names no peer, no path or no nonce, and it
+        # refuses one that carries a field outside the envelope — an unsigned
+        # field in an envelope that carries authority is how a second, unchecked
+        # channel into the guard would appear.
+        try:
+            message = self.authz.guard_approval_message(approval)
+        except self.authz.AuthzError as exc:
             return self._refuse(
-                f"guard approval missing {', '.join(missing)}. An approval names "
-                f"one peer, one version, one path and one action; a blank approval "
+                f"refusing to sign this approval: {exc}. An approval names one peer, one "
+                f"protected path and one piece of content, and nothing else; a blank approval "
                 f"would be a key that signs whatever it is handed."
             )
         # An approval whose expiry is already in the past would be signed into the
@@ -602,16 +611,16 @@ class Signer:
         if expires < (self.clock or (lambda: datetime.now(timezone.utc)))().isoformat():
             return self._refuse(f"refusing to sign an approval that expired at {expires}")
 
-        message = json.dumps(
-            {k: approval[k] for k in sorted(approval)},
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("utf-8")
         signature_b64 = self.authz.sign_bytes(self.key, message)
         block = self._record(op, str(approval["peer_fingerprint"]), signature_b64)
+        # The signature travels beside the envelope, never inside it. The
+        # canonical rule covers exactly the envelope's fields and refuses an
+        # extra one, so an approval that carried its own signature would be an
+        # approval the peer refuses — signed by the Master itself.
         return {
             "ok": True,
-            "approval": {**approval, "signature_b64": signature_b64},
+            "approval": dict(approval),
+            "signature_b64": signature_b64,
             "ledger_block": block["hash"],
         }
 

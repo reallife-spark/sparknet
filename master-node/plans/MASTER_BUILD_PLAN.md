@@ -1,7 +1,7 @@
 ---
 title: sparknet master-node Build Plan
 updated: 2026-10-22
-current: 5
+current: 6
 ---
 
 # sparknet master-node — Build Plan
@@ -13,9 +13,8 @@ current: 5
 >
 > **As of Step 3 these directories exist** (`scripts/`, `services/`,
 > `systemd/` — built Steps 3–4 and 15–18; the isolated signer runs live on
-> agx64). Steps 1 and 2 are knowledge-and-contract work that needed no code and
-> are both closed; the cursor sits at **Step 5** (`guard-apply` grantable in
-> practice — the highest-value unbuilt step).
+> agx64). Steps 1, 2 and 5 are knowledge-and-contract work that needed no code and
+> are all closed; the cursor sits at Step 6 (registry distribution channel).
 
 ## Status Legend
 
@@ -150,8 +149,9 @@ containment and scheduling.
         `scripts/`, `services/` or `systemd/` directory" (false since Steps
         15–16), and `docs/killswitch-template.md` said the role "carries no
         executable surface" (Step 8 is built).
-      - **Cursor**: Step 2 is closed; the cursor advances to **Step 5**
-        (`guard-apply` grantable in practice — the highest-value unbuilt step).
+      - **Cursor**: Step 2 is closed; the cursor advanced to Step 5
+        (`guard-apply` grantable in practice), which closed the same day. The
+        cursor now sits at Step 6 (registry distribution channel).
 
 
 ## Step 3 — Signing and registry CLI
@@ -205,25 +205,78 @@ containment and scheduling.
 
 ## Step 5 — Guard approval issuer
 
-- [ ] **Step 5** — Make `guard-apply` grantable in practice.
+- [x] **Step 5** — Make `guard-apply` grantable in practice.
       - **DoD**: (1) `make approval-issue TARGET=<path> CONTENT=<file>` produces
         a signed approval payload per `../contracts/guard-protocol.md`;
         (2) `make approval-deliver FINGERPRINT=<fp>` POSTs it to that peer's
         `10.100.0.x:9090`; (3) the Master tracks issued nonces and refuses to
         issue the same nonce twice; (4) an integration test signs on this side
         and applies on a peer stub, proving the two agree.
-      - **Status**: reopened 2026-10-06 — half built, half missing. (1) and (3)
-        are real and tested: `tests/test_approval.py` proves issue produces the
-        contract's payload shape and that a second issue with the same nonce is
-        refused. (2) is intent-only: `sparknet-approval-deliver.sh` records the
-        delivery and POSTs only when given `--url`, and it has never pointed at a
-        listening peer. (4) does not exist at all — no test in this subvault
-        constructs a peer-side `guard-apply` stub and applies what was issued.
-        Until (4) exists, "the two agree" is an inference from reading both
-        implementations, not a fact the suite enforces.
-      - **Note**: until this exists, `guard-apply` is defined and enforced but
-        ungrantable. This is the highest-value step in the plan — and, measured,
-        the highest-value *unbuilt* one.
+      - **Status**: complete 2026-10-22 — measured green (`make ci`,
+        `make test-all`, both role bundles rebuilt and verified).
+      - **What the step found, which the plan did not anticipate.** The step was
+        reopened as "half built, half missing", but the half that existed was
+        built against a shape **no peer accepted**. Three implementations of "an
+        approval" were live at once: the Master's issuer signed
+        `{target, content_digest}`, the isolated signer signed
+        `{peer_fingerprint, guard_protocol_version, target_path, action,
+        expires_at}`, and the peer's guard verified
+        `{file_path, content_b64, content_sha256, issued_at, expires_at, nonce,
+        request_id}`. Each was internally consistent, each passed its own
+        tests, and no approval the Master could mint was one a peer would
+        accept. "Half built" was generous: the two halves had never met.
+      - **The fix is structural, not a patch.** The projection now lives once, in
+        `../shared/sparknet-authz.py::guard_approval_message`: exactly eight
+        fields — `peer_fingerprint`, `file_path`, `content_b64`, `content_sha256`,
+        `issued_at`, `expires_at`, `nonce`, `request_id` — serialised as compact
+        sorted JSON and strict in **both** directions. A missing field is
+        refused, and so is an *extra* one: the signature covers exactly the
+        projection, so anything outside it is unsigned, and an unsigned field in
+        an envelope that carries authority is how a second, unchecked channel
+        into the guard would appear. The signer and the guard both call it, and
+        `../tests/test_contracts.py` fails the build if a second copy of the
+        field list appears in either role. The contract is
+        `../contracts/guard-approval.json` (machine-readable) beside the
+        narrative `../contracts/guard-protocol.md`.
+      - **Two holes closed while the shape was being fixed.** (1) *Peer
+        binding*: the envelope names the peer it is for, and the peer refuses an
+        approval addressed to anybody else. Before, an approval minted for peer A
+        was a valid approval peer B could apply, as long as it protected the
+        same path — the signature said nothing about who it was for. (2) *The
+        capability is not in the payload*: the peer reads `guard-apply` from its
+        own signed registry entry, so an approval can never grant the authority
+        it is checked against.
+      - **DoD (1) and (3)**: `make approval-issue` mints the canonical envelope
+        and spends the nonce (`$SPARKNET_STATE_DIR/approval_nonces.json`); a
+        second issue with the same nonce is refused. The production path is
+        `make approval-sign-socket`, which signs **through the isolated
+        signer's socket** and leaves a `signature_issued` ledger block; the
+        issue script signs directly with the operational key and is for hosts
+        with no running signer.
+      - **DoD (2)**: `make approval-deliver` resolves the peer's overlay
+        address from the signed registry — the fingerprint names the peer, the
+        registry entry names its address — and POSTs to
+        `http://10.100.0.x:9090/api/v1/critical-file/patch`. `--url` overrides
+        it. It refuses an approval that addresses a different peer *before*
+        anything is sent, and writes a record that quotes the peer's own answer.
+      - **DoD (4)**: `tests/test_approval.py` signs here and applies there — the
+        peer's **own** guard daemon, loaded by path, on loopback, against a
+        temporary vault whose registry entry grants `guard-apply`. The peer
+        verifies the signature, checks the peer binding, recomputes the content
+        digest, finds the path protected, finds the capability in its own
+        registry and answers `PATCH_VERIFIED_DRY_RUN`; the audit ledger records
+        the decision. The negative legs are there too: an approval addressed to
+        another peer is refused (`wrong_peer`), and a peer whose registry entry
+        does not grant `guard-apply` stays inert.
+      - **DoD (4) amended, not quietly dropped**: the peer stub runs
+        `--dry-run`, so the *write* of a protected file is not exercised — that
+        needs euid 0 and `chattr` on a target node, and the peer's own suite
+        records the same limit. What the test proves is that the two sides
+        **agree**: the Master's bytes are the peer's bytes, and the peer
+        accepts the Master's signature while refusing everything else. The
+        write leg is a target-node checklist item, not a claim made here.
+      - **Cross-role**: `contracts/` + `shared/` + both roles in one commit,
+        then `make contract-test`.
 
 ## Step 6 — Registry distribution channel
 
@@ -714,21 +767,22 @@ containment and scheduling.
         - *WireGuard, nftables, `chattr +i`, systemd on this host* — no `wg`,
           `wg-quick`, `nft` or `nvidia-smi` on this machine, and one peer only.
         - *Steps 1–12* — after the 2026-10-06 audit this is no longer a blanket
-          claim. **Built and measured: Steps 1, 3, 4** (keypair, signing/registry
-          CLI, master overlay renderer). **Still specified, not built: Step 2**
-          (the schema is orphaned and disagrees with both roles' registries),
-          **Step 5** (issue + nonces only; delivery is intent-only, no peer-stub
-          test), **Step 6** (channel still `UNSPECIFIED`, peer-side tamper
-          unproven), **Steps 7–12** (scaffolds of 2–8 lines, or nothing).
+          claim. **Built and measured: Steps 1, 3, 4, 8, 9, 10–12** (keypair,
+          signing/registry CLI, master overlay renderer, the KillSwitch, the
+          pooling scheduler, the sharing regime), and since then **Steps 2 and
+          5** (the registry schema and the guard approval issuer — the latter
+          closed 2026-10-22). **Still specified, not built: Step 6** (channel
+          still `UNSPECIFIED`, peer-side tamper unproven), Step 7 (a
+          scaffold, and the listener is not bound), **Steps 20 and 21** (the
+          signer's read timeout and the admin console's remaining leg).
           Nothing in this page implies otherwise.
       - **Where the cursor goes.** Phase 0 (13–18) and honest verification (19) are
-        done. The 2026-10-06 audit reopened Steps 2 and 5–12 on evidence, so the
-        cursor sits at **Step 2** — the first unbuilt step, and the one whose DoD
-        is contradicted rather than merely unimplemented. Steps 3 and 4 sit
-        complete behind it, which is not a regression: the sequencing note below
-        already said Steps 1–4 assume a Master that 13–14 had not yet produced.
-        Election itself lives in the fabric plan (root `PLAN.md` Step 11), not
-        here — this role consumes it.
+        done. The 2026-10-06 audit reopened Steps 2 and 5–12 on evidence; Step 2
+        closed on 2026-10-22 and Step 5 followed it the same day, so the cursor
+        sits at Step 6 — the registry distribution channel, still the first
+        unbuilt step, and the one whose DoD is contradicted rather than merely
+        unimplemented. Election itself lives in the fabric plan (root `PLAN.md`
+        Step 11), not here — this role consumes it.
 
 ## Step 20 — Signer liveness: client timeouts and a non-blocking accept loop
 

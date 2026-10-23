@@ -136,8 +136,18 @@ def harness(authorized_vault: Path):
     instance.stop()
 
 
-def _packet(
-    master_key: Ed25519PrivateKey,
+def _own_fingerprint(vault: Path = VAULT_ROOT) -> str:
+    """The fingerprint of the node identity in `vault`.
+
+    An approval names the peer it is addressed to; the daemon refuses one that
+    names anybody else, so every packet this file builds must carry it.
+    """
+    authz = guardmod._load_authz_module()
+    identity = json.loads((vault / "manifests" / "node-identity.json").read_text())
+    return authz.fingerprint(identity)
+
+
+def _payload(
     *,
     file_path: str = PROTECTED_TARGET,
     content: bytes = b"# patched\n",
@@ -145,12 +155,14 @@ def _packet(
     nonce: str = "n1",
     request_id: str = "r1",
     issued_delta: timedelta = timedelta(0),
-    omit_signature: bool = False,
+    peer_fingerprint: str | None = None,
 ) -> dict:
+    """The canonical approval envelope, as the Master would mint it."""
     now = datetime.now(timezone.utc) + issued_delta
     import hashlib
 
-    payload = {
+    return {
+        "peer_fingerprint": peer_fingerprint if peer_fingerprint is not None else _own_fingerprint(),
         "file_path": file_path,
         "content_b64": base64.b64encode(content).decode(),
         "content_sha256": hashlib.sha256(content).hexdigest(),
@@ -159,7 +171,15 @@ def _packet(
         "nonce": nonce,
         "request_id": request_id,
     }
-    message = guardmod.approval_message(payload)
+
+
+def _packet(
+    master_key: Ed25519PrivateKey,
+    *,
+    omit_signature: bool = False,
+    **kwargs,
+) -> dict:
+    message = guardmod.approval_message(_payload(**kwargs))
     packet = {"payload": base64.b64encode(message).decode()}
     if not omit_signature:
         packet["signature"] = base64.b64encode(master_key.sign(message)).decode()
@@ -181,6 +201,51 @@ def test_status_endpoint_reports_capabilities(harness: Harness) -> None:
     assert status == 200
     assert body["protected_paths"] >= 1
     assert "guard-apply" in body["capabilities"]
+
+
+# --- the approval must be addressed to this peer ------------------------------
+
+
+def test_an_approval_addressed_to_another_peer_is_refused(harness: Harness, master_key) -> None:
+    """A signature says the Master signed something, not that it meant *this* node.
+
+    Without the peer binding, an approval minted for one peer is a valid
+    approval any peer could apply — as long as it protects the same path.
+    """
+    status, body = harness.post(_packet(master_key, peer_fingerprint="a" * 64))
+    assert status == 403, body
+    assert body["code"] == "wrong_peer"
+
+
+def test_the_refusal_is_audited(harness: Harness, master_key) -> None:
+    harness.post(_packet(master_key, peer_fingerprint="a" * 64))
+    ledger = json.loads((harness.vault / "blockchain" / "guard-audit.json").read_text())
+    assert ledger["blocks"][-1]["event"] == "patch_refused"
+    assert ledger["blocks"][-1]["detail"]["code"] == "wrong_peer"
+
+
+def test_a_payload_with_a_field_outside_the_envelope_is_refused(harness: Harness, master_key) -> None:
+    """The signature covers exactly the canonical projection, so an extra field
+    is unsigned — and an unsigned field in an envelope that carries authority is
+    how a second, unchecked channel into the guard would appear."""
+    message = guardmod.approval_message(_payload())
+    payload = json.loads(message)
+    payload["capabilities"] = ["guard-apply"]
+    packet = {
+        "payload": base64.b64encode(json.dumps(payload).encode()).decode(),
+        "signature": base64.b64encode(master_key.sign(message)).decode(),
+    }
+    status, body = harness.post(packet)
+    assert status == 400, body
+    assert body["code"] == "malformed_approval"
+
+
+def test_the_envelope_carries_no_capabilities() -> None:
+    """The peer reads guard-apply from its own registry entry. An approval that
+    carried capabilities would be able to grant the authority it is checked
+    against."""
+    assert "capabilities" not in json.loads(guardmod.approval_message(_payload()))
+    assert "capabilities" not in _payload()
 
 
 def test_audit_ledger_records_the_decision(harness: Harness, master_key) -> None:

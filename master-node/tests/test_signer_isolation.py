@@ -572,6 +572,28 @@ def test_it_refuses_a_signature_the_caller_supplied(signer):
     )
 
 
+def _guard_approval(**overrides) -> dict:
+    """A guard approval in the canonical envelope.
+
+    The envelope is the one rule in ``shared/sparknet-authz.py``: exactly these
+    eight fields, nothing else. Building it here from the shared field list —
+    rather than hand-writing a dict — means a change to the envelope breaks
+    this fixture loudly instead of producing an approval the peer would refuse.
+    """
+    approval = {
+        "peer_fingerprint": "f" * 64,
+        "file_path": "/srv/sparknet/ledger.json",
+        "content_b64": base64.b64encode(b'{"replaced": true}\n').decode(),
+        "content_sha256": hashlib.sha256(b'{"replaced": true}\n').hexdigest(),
+        "issued_at": CLOCK.isoformat(),
+        "expires_at": (CLOCK + timedelta(minutes=10)).isoformat(),
+        "nonce": "nonce-0123456789abcdef",
+        "request_id": "req-0123456789abcdef",
+    }
+    approval.update(overrides)
+    return approval
+
+
 def test_it_refuses_a_blank_guard_approval(signer):
     response = signer.handle(
         {
@@ -580,7 +602,21 @@ def test_it_refuses_a_blank_guard_approval(signer):
             "approval": {"peer_fingerprint": "f" * 64},
         }
     )
-    assert not response["ok"] and "blank approval" in response["error"]
+    assert not response["ok"] and "refusing to sign this approval" in response["error"]
+
+
+def test_it_refuses_an_approval_carrying_a_field_outside_the_envelope(signer):
+    """An unsigned extra field in an envelope that carries authority is how a
+    second, unchecked channel into the guard would appear."""
+    response = signer.handle(
+        {
+            "op": "sign-guard-approval",
+            "root_id": signer.root_id,
+            "approval": _guard_approval(capabilities=["guard-apply"]),
+        }
+    )
+    assert not response["ok"]
+    assert "refusing to sign this approval" in response["error"]
 
 
 def test_it_refuses_an_already_expired_approval(signer):
@@ -588,13 +624,7 @@ def test_it_refuses_an_already_expired_approval(signer):
         {
             "op": "sign-guard-approval",
             "root_id": signer.root_id,
-            "approval": {
-                "peer_fingerprint": "f" * 64,
-                "guard_protocol_version": "1.0",
-                "target_path": "/srv/sparknet/ledger.json",
-                "action": "replace",
-                "expires_at": (CLOCK - timedelta(hours=1)).isoformat(),
-            },
+            "approval": _guard_approval(expires_at=(CLOCK - timedelta(hours=1)).isoformat()),
         }
     )
     assert not response["ok"] and "expired" in response["error"]
@@ -605,17 +635,44 @@ def test_a_valid_guard_approval_is_signed(signer):
         {
             "op": "sign-guard-approval",
             "root_id": signer.root_id,
-            "approval": {
-                "peer_fingerprint": "f" * 64,
-                "guard_protocol_version": "1.0",
-                "target_path": "/srv/sparknet/ledger.json",
-                "action": "replace",
-                "expires_at": (CLOCK + timedelta(minutes=10)).isoformat(),
-            },
+            "approval": _guard_approval(),
         }
     )
     assert response["ok"], response.get("error")
-    assert response["approval"]["signature_b64"]
+    assert response["signature_b64"]
+
+
+def test_a_signed_guard_approval_verifies_over_the_canonical_bytes(signer, authz, operational_key):
+    """The signer's bytes are the peer's bytes: one rule, two implementations."""
+    response = signer.handle(
+        {
+            "op": "sign-guard-approval",
+            "root_id": signer.root_id,
+            "approval": _guard_approval(),
+        }
+    )
+    assert response["ok"], response.get("error")
+    signed = response["approval"]
+    _, public_b64 = operational_key
+    message = authz.guard_approval_message(signed)
+    assert authz.verify_signature(authz.public_key_from_b64(public_b64), response["signature_b64"], message)
+
+
+def test_the_signer_returns_the_envelope_it_signed_unchanged(signer):
+    """The signature covers the canonical projection; a field the signer changed
+    on the way past would not be what was signed."""
+    approval = _guard_approval()
+    response = signer.handle(
+        {
+            "op": "sign-guard-approval",
+            "root_id": signer.root_id,
+            "approval": approval,
+        }
+    )
+    assert response["ok"], response.get("error")
+    signed = response["approval"]
+    for field, value in approval.items():
+        assert signed[field] == value, f"the signer altered {field}"
 
 
 def test_a_valid_cluster_job_is_signed_over_its_canonical_bytes(signer, authz, operational_key):
@@ -1039,6 +1096,62 @@ def test_a_second_connection_is_served_while_the_first_is_silent(signer, tmp_pat
         assert elapsed < 0.75, f"second client waited {elapsed:.2f}s behind a silent one"
     finally:
         thread.join(timeout=0.3)
+
+
+def test_the_sign_socket_script_produces_a_canonical_artifact(signer, authz, operational_key, tmp_path):
+    """The production path: the key stays in the signer, the approval comes back signed.
+
+    The script is the only path that leaves a ledger block, so it is the one that
+    makes an issued approval accountable. The artifact it writes is the one
+    ``sparknet-approval-deliver.sh`` reads, and the signature must verify over
+    the canonical bytes the peer will rebuild.
+    """
+    socket_dir = tmp_path / "state" / "signer"
+    socket_dir.mkdir(parents=True)
+    socket_path = socket_dir / "signer.sock"
+    thread = threading.Thread(target=_serve_forever, args=(signer, socket_path), daemon=True)
+    thread.start()
+    _wait_for_socket(socket_path)
+
+    try:
+        envelope = tmp_path / "approval.json"
+        envelope.write_text(json.dumps(_guard_approval(), indent=2) + "\n")
+        out = tmp_path / "signed.json"
+
+        result = subprocess.run(
+            [
+                "bash",
+                str(ROLE_ROOT / "scripts" / "sparknet-approval-sign-socket.sh"),
+                "--approval",
+                str(envelope),
+                "--socket",
+                str(socket_path),
+                "--out",
+                str(out),
+            ],
+            capture_output=True,
+            text=True,
+            env={**os.environ, "SPARKNET_STATE_DIR": str(tmp_path / "state")},
+        )
+        assert result.returncode == 0, result.stderr
+
+        artifact = json.loads(out.read_text())
+        assert set(artifact) == {"approval", "signature_b64"}
+        assert set(artifact["approval"]) == set(authz.GUARD_APPROVAL_FIELDS), (
+            "the signed envelope must carry exactly the canonical fields — a signature "
+            "inside it would be a field the peer refuses"
+        )
+
+        _, public_b64 = operational_key
+        message = authz.guard_approval_message(artifact["approval"])
+        assert authz.verify_signature(authz.public_key_from_b64(public_b64), artifact["signature_b64"], message), (
+            "the signature must verify over the canonical bytes"
+        )
+
+        ledger = json.loads((tmp_path / "ledger.json").read_text())
+        assert ledger["blocks"][-1]["data"]["operation"] == "sign-guard-approval"
+    finally:
+        thread.join(timeout=1)
 
 
 def test_a_silent_client_is_answered_timeout_and_closed(signer, tmp_path):

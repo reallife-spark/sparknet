@@ -15,7 +15,10 @@ authority over the overlay.
 role has `scripts/`, `services/` and `systemd/`, loads the peer's services by
 path, keeps a hash-chained ledger, generates its own keys into the state
 directory, has an isolated signer for the operational key, and declares an admin
-surface and `MASTERSPIKE` knowledge manifest.
+surface and `MASTERSPIKE` knowledge manifest. Steps 2 and 5 followed on
+2026-10-22: the registry has a single stated shape, and `guard-apply` is now
+grantable — the approval envelope is one rule in `../shared/sparknet-authz.py`,
+signed by the isolated signer and accepted by the peer's own guard.
 
 The election→signer→registry arc was **proven live on real hosts on
 2026-10-07**: agx64 and agx32 co-formed a 2/2 cluster trust root, the signer ran
@@ -29,10 +32,17 @@ real reboot of each host on 2026-10-19.
 | Missing | Step | Consequence |
 |---|---|---|
 | registry distribution | 6 | peers read an operator-placed registry; nothing pushes one |
-| `guard-apply` grantable in practice | 5 | the signer is isolated and tested; the approval conversation issues no live grant |
 | instant push (`8090`) | 7 | ACL changes are applied by hand, not POSTed to peers |
 | admin services (`4220`–`4223`) | `MASTER_ADMIN_PLAN.md` | git, file share, NAT and the vector DB are contracted `spec-only` |
 | the two destructive legs | — | rollback and a replace-Master re-formation are documented and deliberately unexecuted (`../../contracts/deployment-runbook.md`) |
+
+`guard-apply` left this list on 2026-10-22 (build plan Step 5): the Master
+mints a canonical approval, the isolated signer signs it, the Master delivers
+it to the peer it names, and the peer's own guard accepts it — proven by a test
+that signs on this side and applies on the peer's guard daemon, loaded by
+path. What that does **not** claim: no approval has been delivered on a real
+overlay, and the protected-file *write* needs euid 0 and `chattr` on a target
+node, so the exercised path ends at the peer's dry-run verification.
 
 On **this** development host none of the fabric runs: there is no cluster, no
 wireguard kernel module, nothing bound. The live claims above are dated claims

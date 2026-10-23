@@ -46,14 +46,20 @@ Updated: 2026-10-22
   work (Steps 2–12: container, grants, bridge, Open WebUI surface, conversation
   passing, `MASTERSPIKE`, sharing regime, node admin agent) closed 2026-10-11/12.
   New peer work gets a **new** step.
-- **`master-node/plans/MASTER_BUILD_PLAN.md` `current: 5`** — Phase 0 (13–18),
-  honest verification (19), keypair/registry substrate (1), Steps 3–4, and
-  **Step 2 (registry schema + the spec/impl boundary) closed 2026-10-22** are
-  complete. Steps 5–7, 20 and 21 remain unbuilt. The registry's canonical shape
-  is now stated **once**, in `contracts/registry-schema.json`; the Master's path
-  is a symlink to it and `shared/sparknet-registry-schema.py` checks documents
-  against it (standard library only — the runtime allow-list is `cryptography`
-  alone).
+- **`master-node/plans/MASTER_BUILD_PLAN.md` `current: 6`** — Phase 0 (13–18),
+  honest verification (19), keypair/registry substrate (1), Steps 3–4,
+  **Step 2 (registry schema + the spec/impl boundary) closed 2026-10-22**, and
+  **Step 5 (guard approval issuer) closed the same day** are complete. The
+  registry's canonical shape is stated **once**, in
+  `contracts/registry-schema.json`; the Master's path is a symlink to it and
+  `shared/sparknet-registry-schema.py` checks documents against it (standard
+  library only — the runtime allow-list is `cryptography` alone). The
+  guard-approval envelope is likewise stated once, in
+  `shared/sparknet-authz.py::guard_approval_message` and
+  `contracts/guard-approval.json` — before Step 5 the issuer, the signer and the
+  peer each had a different idea of its shape and **none was acceptable to the
+  other**, with every side's own tests green. Steps 6–7, 20 and 21 remain
+  unbuilt; the cursor sits at **6** (registry distribution).
 
 ## What this repository is
 

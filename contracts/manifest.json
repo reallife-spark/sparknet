@@ -8,6 +8,12 @@
       "sha256": "c60eeea238ffe0a638a123f2c4c60a9be1d12f14823237c729bd491fb51d0271"
     },
     {
+      "contract": "guard-approval",
+      "file": "guard-approval.json",
+      "schema_version": "1.0",
+      "sha256": "2b7f4f5e656ad17ce5c5494d4b7e3c7beaa76d3f1825d7b0c7dca026bbf534b1"
+    },
+    {
       "contract": "identity-schema",
       "file": "identity-schema.json",
       "schema_version": "1.0",

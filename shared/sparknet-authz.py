@@ -449,6 +449,93 @@ def sign_authorization(
     return entry
 
 
+# --- guard approvals (guard-apply) --------------------------------------------
+
+
+#: The whole guard-approval envelope. An approval names one peer, one protected
+#: path and one piece of content, and nothing else.
+#:
+#: `peer_fingerprint` binds the approval to the peer that may apply it. Without
+#: it an approval minted for one peer is a valid approval *any* peer could
+#: apply, as long as it protects the same path — the signature would still
+#: verify, because it says nothing about who it is for.
+#:
+#: The content is inside the envelope (`content_b64`), not beside it: signing a
+#: digest alone would let anything on the path substitute the bytes and still
+#: match.
+#:
+#: This list lives here, once, because the Master signs it and the peer verifies
+#: it. Two copies of this rule is exactly how the two sides drift apart, each
+#: keeping "working" against its own assumption — which is what happened before
+#: the rule was lifted out of the signer and the guard into this module.
+#:
+#: Sorted, because it is a projection and not a sequence: the canonical bytes
+#: sort the keys anyway, so the order here is only about the contract and this
+#: module being able to state the same list in the same words. The reading
+#: order — what an approval means, field by field — is the contract's
+#: `field_semantics` map, which keeps it.
+GUARD_APPROVAL_FIELDS = (
+    "content_b64",
+    "content_sha256",
+    "expires_at",
+    "file_path",
+    "issued_at",
+    "nonce",
+    "peer_fingerprint",
+    "request_id",
+)
+
+#: Fields that must be present and non-empty before an approval can be
+#: canonicalised. `content_b64` is deliberately not here: an empty file is a
+#: legitimate target, so the key must be present but its value may be empty.
+GUARD_APPROVAL_REQUIRED = (
+    "content_sha256",
+    "expires_at",
+    "file_path",
+    "issued_at",
+    "nonce",
+    "peer_fingerprint",
+    "request_id",
+)
+
+
+def guard_approval_message(approval: dict[str, Any]) -> bytes:
+    """Canonical bytes a guard-approval signature covers.
+
+    One projection rule, shared by the signer and by every peer that verifies
+    an approval — the same anti-drift pattern as ``cluster_job_message``,
+    ``admin_request_message`` and ``grant_message``.
+
+    The rule is strict in both directions:
+
+    * a missing field is refused, because an approval naming no path or no
+      nonce would authorise an unbounded change;
+    * an *extra* field is refused too. The signature covers exactly this
+      projection, so anything outside it is unsigned — and an unsigned field in
+      an envelope that carries authority is how a second, unchecked channel
+      into the guard would appear later.
+
+    Serialised with sort_keys and tight separators, so the bytes depend on the
+    values alone and not on how the sender happened to serialise them.
+    """
+    if not isinstance(approval, dict):
+        raise AuthzError("guard approval must be an object")
+    missing = [f for f in GUARD_APPROVAL_REQUIRED if not approval.get(f)]
+    if missing:
+        raise AuthzError(f"guard approval missing required field(s): {', '.join(missing)}")
+    absent = [f for f in GUARD_APPROVAL_FIELDS if f not in approval]
+    if absent:
+        raise AuthzError(f"guard approval missing field(s): {', '.join(absent)}")
+    extra = sorted(set(approval) - set(GUARD_APPROVAL_FIELDS))
+    if extra:
+        raise AuthzError(f"guard approval carries field(s) outside the canonical envelope: {', '.join(extra)}")
+    projected = {name: approval[name] for name in sorted(GUARD_APPROVAL_FIELDS)}
+    for name, value in projected.items():
+        if not isinstance(value, str):
+            raise AuthzError(f"guard approval field {name!r} must be a string")
+    return json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
 # --- cluster jobs ------------------------------------------------------------
 
 

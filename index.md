@@ -46,6 +46,7 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/registry-schema.json` | the shape of the signed node-authorization registry — fields, types, the `signature_b64` name |
 | `contracts/ports.json` | which role listens where |
 | `contracts/guard-protocol.md` | the approval conversation |
+| `contracts/guard-approval.json` | the guard-apply approval envelope — the eight fields, the canonical bytes, the transport |
 | `contracts/share-protocol.md` | the cross-node sharing regime |
 | `contracts/consensus-protocol.md` | master election and the cluster trust root |
 | `contracts/health-protocol.md` | peer liveness and eviction (probe rhythm, activity-trumps-eviction) |

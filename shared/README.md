@@ -26,6 +26,30 @@ Neither role re-implements the algorithm. Neither role may edit this file to
 serve a local need; a change belongs in `contracts/` first, with both roles
 updated in the same commit.
 
+### The guard-approval projection
+
+`guard_approval_message()` is a second canonical form in the same module: the
+bytes a Master signature over a guard approval covers. It is here for exactly
+the reason the rest of the module is — the Master **signs** the approval and
+the peer **verifies** it, so the two must agree on the projection byte for
+byte.
+
+It is strict in both directions: a missing field is refused, and so is an
+*extra* one. The signature covers exactly the projection, so anything outside
+it is unsigned, and an unsigned field in an envelope that carries authority is
+how a second, unchecked channel into the guard would appear later.
+
+This projection was **not** here before Master build-plan Step 5, and its
+absence was the defect: the Master's issuer, the isolated signer and the
+peer's guard each carried their own idea of an approval's shape — three
+different field sets, each internally consistent, each passing its own tests.
+No approval the Master could mint was one a peer would accept, and nothing
+failed loudly, because every side agreed with itself.
+
+The contract is `contracts/guard-approval.json` (machine-readable) and
+`contracts/guard-protocol.md` (narrative). `tests/test_contracts.py` fails the
+build if a second copy of the field list appears in either role.
+
 ## `sparknet-consensus.py`
 
 How the cluster agrees on who holds the signing key: master election, the

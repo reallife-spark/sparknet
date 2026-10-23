@@ -141,6 +141,9 @@ What exists today:
 - [`../../contracts/guard-protocol.md`](../../contracts/guard-protocol.md) — the
   approval conversation, and why the Master side of it is the isolated signer
   (Step 17) rather than another service
+- [`../../contracts/guard-approval.json`](../../contracts/guard-approval.json) —
+  the approval envelope as a machine-readable contract: the eight fields, the
+  canonical bytes, the transport
 - [`../../contracts/ports.json`](../../contracts/ports.json) — which role listens
   where, and which of those listeners are still declared-but-unimplemented.
   `implementation_state` travels with the contract; `runtime` is measured per host
@@ -156,6 +159,9 @@ line of it.
 | `services/sparknet-ledger.py` | verifies the Master's hash chain | `make ledger` |
 | `scripts/sparknet-master-env.sh` | resolves vault + peer paths | `make env-show` |
 | `scripts/sparknet-master-keygen.sh` | writes 3 Ed25519 keys to `$SPARKNET_STATE_DIR/keys`, 0600 | `make keygen`, `make keys-check` |
+| `scripts/sparknet-approval-issue.sh` | mints a canonical guard approval and spends its nonce | `make approval-issue`, `tests/test_approval.py` |
+| `scripts/sparknet-approval-sign-socket.sh` | signs an approval **through the signer socket**, recording a ledger block | `make approval-sign-socket`, `tests/test_signer_isolation.py` |
+| `scripts/sparknet-approval-deliver.sh` | POSTs the approval to the peer it names | `make approval-deliver`, `tests/test_approval.py` |
 | `systemd/*.service` | parity check and chain verification at boot | `make units`, `make units-check` |
 
 The parity loader is the load-bearing one. It is what makes "a Master is a peer"

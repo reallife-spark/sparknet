@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "description": "The guard-apply approval envelope: what the Master signs, what the peer verifies, and how the two exchange it. The narrative contract is guard-protocol.md; this file is the machine-readable statement of the same rules, so a drift between the two implementations of the rule fails the contract test instead of failing a peer at 3am.",
+  "approval": {
+    "fields": [
+      "content_b64",
+      "content_sha256",
+      "expires_at",
+      "file_path",
+      "issued_at",
+      "nonce",
+      "peer_fingerprint",
+      "request_id"
+    ],
+    "required_non_empty": [
+      "content_sha256",
+      "expires_at",
+      "file_path",
+      "issued_at",
+      "nonce",
+      "peer_fingerprint",
+      "request_id"
+    ],
+    "empty_allowed": [
+      "content_b64"
+    ],
+    "extra_fields": "refused",
+    "canonicalisation": "json.dumps(projected, sort_keys=True, separators=(',', ':')).encode('utf-8')",
+    "implementation": "shared/sparknet-authz.py::guard_approval_message",
+    "signature_covers": "the whole envelope, and nothing outside it",
+    "content_in_signature": true
+  },
+  "field_semantics": {
+    "peer_fingerprint": "sha256 of the target peer's canonical identity (contracts/identity-schema.json). Binds the approval to one peer: an approval minted for peer A is refused by peer B.",
+    "file_path": "the protected path on the peer. The peer's own manifests/critical-manifest.json decides what is protected; the Master cannot widen it.",
+    "content_b64": "the new file content, base64, inside the signature. Signing a digest alone would let anything on the path substitute the bytes.",
+    "content_sha256": "sha256 hex of the new content. The peer recomputes it and refuses a mismatch.",
+    "issued_at": "ISO-8601 UTC, when the Master minted the approval.",
+    "expires_at": "ISO-8601 UTC, when the approval stops being valid. The peer's security policy bounds the window (manifests/security-policies.json).",
+    "nonce": "single-use. The peer refuses a replayed nonce/request_id pair, and the Master refuses to issue the same nonce twice.",
+    "request_id": "correlates plan -> permission -> execute."
+  },
+  "capability_source": {
+    "where": "the peer's own signed registry entry (manifests/node-authorizations.json)",
+    "why_not_the_payload": "The envelope carries no capabilities. A peer that read 'guard-apply' out of the payload would let an approval grant the very authority it is supposed to be checked against. The Master grants guard-apply once, in the registry; an approval only ever exercises it."
+  },
+  "transport": {
+    "method": "POST",
+    "path": "/api/v1/critical-file/patch",
+    "port": 9090,
+    "bound_by": "peer",
+    "envelope_fields": [
+      "payload",
+      "signature"
+    ],
+    "payload_encoding": "base64 of the canonical approval bytes",
+    "signature_encoding": "base64 of the Ed25519 signature over those canonical bytes",
+    "source_gate": "the peer accepts loopback and the Master's overlay address (10.100.0.1); every other source is refused with 403 off_overlay before the body is read",
+    "peer_binding": "the peer refuses an approval whose peer_fingerprint is not its own"
+  }
+}

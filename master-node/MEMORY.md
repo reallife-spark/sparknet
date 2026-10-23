@@ -9,12 +9,12 @@ Updated: 2026-10-22
 
 ## Standing State
 
-- **Plan cursor**: `plans/MASTER_BUILD_PLAN.md` `current: 5`. Phase 0 (13–18) and
-  honest verification (19) are complete; **Steps 1 and 2 are complete** (Step 2
-  closed 2026-10-22). Still unbuilt: grantable `guard-apply` (5), registry
-  distribution (6), `10.100.0.1:8090` (7), signer liveness (20), the admin
-  console's remaining leg (21). The KillSwitch (8), the pooling scheduler (9) and
-  the sharing regime (10–12) are built.
+- **Plan cursor**: `plans/MASTER_BUILD_PLAN.md` `current: 6`. Phase 0 (13–18) and
+  honest verification (19) are complete; **Steps 1, 2 and 5 are complete**
+  (Steps 2 and 5 both closed 2026-10-22). Still unbuilt: registry distribution
+  (6), `10.100.0.1:8090` (7), signer liveness (20), the admin console's
+  remaining leg (21). The KillSwitch (8), the pooling scheduler (9) and the
+  sharing regime (10–12) are built.
 - **`$SPARKNET_STATE_DIR` is outside the vault.** `$XDG_STATE_HOME/sparknet/master-node`
   or `~/.local/state/...`. Moving it was structural, not cosmetic: the admin surface
   bind-mounts the vault read-only into an LLM container, so the old default
@@ -76,9 +76,27 @@ Updated: 2026-10-22
   the Master. It would blackhole the fabric. See `docs/network-posture.md`.
 - `../shared/sparknet-authz.py` is the single implementation of the signed
   canonical form. This role signs with it; peers verify with it. Never copy it.
-- `guard-apply` cannot be granted to any peer until Step 5 (approval issuer)
-  exists — the capability is defined and enforced, and the payload is signed
-  with nonces tracked, but nothing has delivered one to a listening peer.
+- **The guard-approval envelope is stated once**, in
+  `../shared/sparknet-authz.py::guard_approval_message` and
+  `../contracts/guard-approval.json`: eight fields, compact sorted JSON,
+  missing *and* extra fields refused. Both the signer and the peer's guard call
+  it; `../tests/test_contracts.py` fails the build on a second copy. Before
+  Step 5 three shapes were live at once (issuer, signer, guard), each
+  internally consistent and none acceptable to the others — "the two sides
+  agree" was an inference from reading both files, and it was false.
+- **An approval is bound to one peer and carries no capability.**
+  `peer_fingerprint` is the peer's canonical-identity hash; the peer refuses an
+  approval addressed to anybody else (`wrong_peer`). `guard-apply` comes from
+  the peer's own signed registry entry, never from the approval, so an approval
+  can never grant the authority it is checked against.
+- **Issuing spends a nonce.** `make approval-issue` tracks nonces in
+  `$SPARKNET_STATE_DIR/approval_nonces.json` and refuses a repeat;
+  `make approval-sign-socket` is the production path (through the isolated
+  signer, leaving a ledger block); `make approval-deliver` resolves the peer's
+  overlay address from the signed registry and POSTs to
+  `10.100.0.x:9090/api/v1/critical-file/patch`. The exercised path ends at the
+  peer's `--dry-run` verification: the protected-file *write* needs euid 0 and
+  `chattr`, so it is a target-node item, not a claim made here.
 - **A registry's shape is stated once**, in `../contracts/registry-schema.json`;
   `master-node/manifests/registry.schema.json` is a **symlink** to it, never a
   copy, and `../shared/sparknet-registry-schema.py` checks documents against it

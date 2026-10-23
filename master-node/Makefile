@@ -327,19 +327,30 @@ wg-render-master: ## Render Master wg0 from registry (needs REGISTRY, optional O
 	  $$(test -n "$(OUT)" && echo --out "$(OUT)")
 
 # --- Step 5: guard approval ---
-.PHONY: approval-issue approval-deliver
+.PHONY: approval-issue approval-deliver approval-sign-socket
 
-approval-issue: ## Issue signed approval (needs TARGET, CONTENT, optional OUT)
+approval-issue: ## Issue signed approval (needs TARGET, CONTENT, PEER_FINGERPRINT or IDENTITY; optional TTL_SECONDS, OUT)
 	@test -n "$(TARGET)" || (echo "TARGET=<path> required" >&2; exit 1)
 	@test -n "$(CONTENT)" || (echo "CONTENT=<file> required" >&2; exit 1)
+	@test -n "$(PEER_FINGERPRINT)$(IDENTITY)" || (echo "PEER_FINGERPRINT=<fp> or IDENTITY=<identity.json> required" >&2; exit 1)
 	@$(ROLE_ROOT)/scripts/sparknet-approval-issue.sh --target "$(TARGET)" --content "$(CONTENT)" \
+	  $$(test -n "$(PEER_FINGERPRINT)" && echo --peer-fingerprint "$(PEER_FINGERPRINT)") \
+	  $$(test -n "$(IDENTITY)" && echo --identity "$(IDENTITY)") \
+	  $$(test -n "$(TTL_SECONDS)" && echo --ttl-seconds "$(TTL_SECONDS)") \
 	  $$(test -n "$(OUT)" && echo --out "$(OUT)")
 
-approval-deliver: ## Deliver approval (needs FINGERPRINT, optional PAYLOAD, URL, OUT)
+approval-deliver: ## Deliver approval to a peer (needs FINGERPRINT, APPROVAL; optional REGISTRY, URL, OUT)
 	@test -n "$(FINGERPRINT)" || (echo "FINGERPRINT=<fp> required" >&2; exit 1)
+	@test -n "$(APPROVAL)" || (echo "APPROVAL=<approval.json> required" >&2; exit 1)
 	@$(ROLE_ROOT)/scripts/sparknet-approval-deliver.sh --fingerprint "$(FINGERPRINT)" \
-	  $$(test -n "$(PAYLOAD)" && echo --payload "$(PAYLOAD)") \
+	  --approval "$(APPROVAL)" \
+	  $$(test -n "$(REGISTRY)" && echo --registry "$(REGISTRY)") \
 	  $$(test -n "$(URL)" && echo --url "$(URL)") \
+	  $$(test -n "$(OUT)" && echo --out "$(OUT)")
+
+approval-sign-socket: ## Sign an approval THROUGH the isolated signer (needs APPROVAL, optional OUT)
+	@test -n "$(APPROVAL)" || (echo "APPROVAL=<approval.json> required" >&2; exit 1)
+	@$(ROLE_ROOT)/scripts/sparknet-approval-sign-socket.sh --approval "$(APPROVAL)" \
 	  $$(test -n "$(OUT)" && echo --out "$(OUT)")
 
 # --- Step 6: registry distribution ---
