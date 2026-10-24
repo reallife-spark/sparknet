@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
-updated: 2026-10-23
-current: 64
+updated: 2026-10-24
+current: done
 ---
 
 # sparknet — Active Plan
@@ -2651,8 +2651,9 @@ consult it.
       agreement@5 **0.962**, abstain **0.000**, p95 **7.7 ms**, cost/1k
       **$0.0000** (no egress). Assist is safe for fabric RAG; broker/Jev stays
       shadow until 64F. Plain queries without `--reflex` are unchanged.
-- [ ] **64F — live pilot (local-first; cloud optional)** — **executed
-      2026-10-23; awaiting user confirmation.** Local backends are the default
+- [x] **64F — live pilot (local-first; cloud optional)** — **executed
+      2026-10-23; measurements accepted by the operator 2026-10-24.** Local
+      backends are the default
       and need neither governance approval nor a credential: `make
       reflex-live-check` then gates only on broker `/healthz`. `REFLEX_LIVE=1
       make reflex-eval [REFLEX_MODE=assist]` scores up to `--live-candidates`
@@ -2673,24 +2674,50 @@ consult it.
       the distance-aware batch rerank that produced 64E's 0.786; assist served
       0.757, a small regression. Broker/LLM stays **shadow**; the in-process
       chroma reranker keeps **assist**. **DoD:** measurements recorded;
-      `DoD: confirm: user`.
-- [ ] **64G — later, each its own step** — `reflex-consult` + peer broker
-      access; goSpark router client; Open WebUI filter; opencode tool-guard
-      plugin; groundedness; agent-callable MCP tool.
+      `DoD: confirm: user` — **confirmed 2026-10-24**. The step closes with the
+      split the measurements forced: the in-process chroma reranker holds
+      **assist** on the fabric scope, and the broker/local-LLM path stays on
+      **shadow** because one query+chunk per call cannot reproduce a
+      distance-aware batch rerank. No mode was promoted on the strength of the
+      probe alone.
+- [ ] **64G — deferred; each leg becomes its own step** — `reflex-consult` +
+      peer broker access; goSpark router client; Open WebUI filter; opencode
+      tool-guard plugin; groundedness; agent-callable MCP tool. Not part of
+      Step 64's closure: the plan protocol's rule is that new roadmap work gets
+      a **new** step rather than being folded into a finished one.
 
-**Status:** 64A–64F executed 2026-10-23; TypeSafe replaced by a local-first
-default (local reranker/LLM, no egress, no credential). 64F measurements are
-recorded and await user confirmation; 64G not started. Cursor `done -> 64`.
+**Status:** 64A–64F **done**. TypeSafe was replaced by a local-first default
+(local reranker/LLM, no egress, no credential), and 64F's live measurements
+were accepted by the operator on 2026-10-24, which closes the step. 64G stays
+open and deferred, as above. Cursor `64 -> done`.
 
 ## Next
 
-64F needs only the user's confirmation that the recorded live measurements are
-accepted. Keep the local RAG reranker on **assist** for the in-process fabric
-scope and the broker/local-LLM path on **shadow**: the broker gets one
-query+chunk per call, so its local-rerank is lexical and measured 0.757 versus
-the 0.771 baseline, while the batch chroma reranker measured 0.786. The broker
-unit remains staged and works without a credential in local mode. The cloud/Jev
-leg is optional and egress-gated. Do not add the `reflex-consult` capability
-before its own cross-role commit. The next build work after 64F is 64G, each
-leg its own step.
+Step 64 is closed, so reflex work is now roadmap work and needs its own step.
+Two things carry forward as constraints rather than tasks:
+
+**The mode split is settled by measurement, not preference.** The in-process
+chroma reranker holds **assist** on the allow-listed `fabric` scope (0.771 →
+0.786 precision@5, no egress). The broker/local-LLM path stays on **shadow**
+(0.757, a regression) for a structural reason that a faster endpoint would not
+fix: the broker receives one query+chunk per call, so it can only rerank
+lexically and cannot see the distances the batch reranker uses. Promoting it
+would need the broker to score a batch, which is a design change, not a tuning
+one. The broker unit remains staged and works without a credential in local
+mode; the cloud/Jev leg is optional and egress-gated behind
+`SPARKNET_REFLEX_ALLOW_EGRESS=1` plus `backend=jev`.
+
+**The invariant is load-bearing.** Reflex output may rank, annotate, route or
+flag; it may never sign, grant or revoke, approve a guard application, or widen
+a permission. It may only tighten, and it abstains on doubt. The guard, signer
+and registry never consult it. Any 64G leg that would put reflex in an
+authority path is a contract change and belongs in `contracts/` first.
+
+The nearest genuinely open cross-role item is **Master Step 7 reconciliation**:
+Step 6 marked the 8090 instant-push listener *superseded in direction*, because
+the signed registry is now pushed Master → peer guard on 9090 and needs no
+peer-pull listener for distribution. `contracts/ports.json` retains 8090 as
+`spec-only` until Step 7 decides whether it survives for ACL pushes, is
+re-scoped, or is retired. Do not add the `reflex-consult` capability before its
+own cross-role commit.
 
