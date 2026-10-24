@@ -2574,20 +2574,23 @@ and has no forge on a node, so there is nowhere a workflow file would ever run.
       `make contract-test`, `make render-check` and `make ci CI_QUICK=1` green,
       with `git diff --stat contracts/ shared/` **empty**.
 
-## Step 64 — Jev reflex layer (design + phased adoption)
+## Step 64 — reflex layer (design + phased adoption)
 
 Opened 2026-10-23 on operator direction: beside the agentic layer, add a fast
-System One decision layer (Jev / TypeSafe) that screens, ranks and flags, but
-never holds authority. The design record is `REFLEX_DECISION_DESIGN.md`;
-this step tracks adoption in dependency order.
+System One decision layer that screens, ranks and flags, but never holds
+authority. The design record is `REFLEX_DECISION_DESIGN.md`; this step tracks
+adoption in dependency order.
 
 **Operator decisions (2026-10-23):**
 1. **Local-only is the default.** The reflex layer runs rules / the node's own
-   reranker with no egress; cloud Jev is opt-in.
-2. **The Master broker is the cloud path** for the unified "massive task"
-   workload. Peers never call `api.typesafe.ai` directly; per-node direct cloud
-   is ruled out by the one-address `AllowedIPs` rule
-   (`contracts/overlay.json:14`).
+   reranker with no egress. A hosted cloud sensor was opt-in at the time;
+   Step 65 removed it outright, so local-only is now the *only* mode rather than
+   the default one.
+2. **The Master broker is the shared path** for the unified "massive task"
+   workload. Peers never call an outside API directly; per-node direct cloud was
+   ruled out by the one-address `AllowedIPs` rule (`contracts/overlay.json:14`).
+   With the cloud leg gone the broker answers locally too — what it centralises
+   now is the budget, the redaction point and the audit trail.
 3. **RAG relevance is the first touchpoint**, on the allow-listed `fabric`
    corpus only (28 files / 242 chunks; no personal material).
 4. **Shadow -> assist -> enforce**, per question class. No class skips shadow.
@@ -2649,9 +2652,9 @@ consult it.
       candidate-k 50, local rules backend: baseline precision@5 **0.771**,
       reranked **0.786** (assist delta **+0.015**), recall@5 **0.946**, shadow
       agreement@5 **0.962**, abstain **0.000**, p95 **7.7 ms**, cost/1k
-      **$0.0000** (no egress). Assist is safe for fabric RAG; broker/Jev stays
+      **$0.0000** (no egress). Assist is safe for fabric RAG; the broker path stays
       shadow until 64F. Plain queries without `--reflex` are unchanged.
-- [x] **64F — live pilot (local-first; cloud optional)** — **executed
+- [x] **64F — live pilot (local-only)** — **executed
       2026-10-23; measurements accepted by the operator 2026-10-24.** Local
       backends are the default
       and need neither governance approval nor a credential: `make
@@ -2660,9 +2663,10 @@ consult it.
       fabric chunks per query through the Master broker; `make
       reflex-live-query QUERY="…"` runs one broker-backed fabric query. Live
       scoring is fail-open (transport or shape error → abstain) and reports
-      measured tokens plus cost. The optional TypeSafe cloud leg still requires
-      `SPARKNET_REFLEX_GOVERNANCE=approved`, a 0600 key and
-      `SPARKNET_REFLEX_ALLOW_EGRESS=1`; it is not the pilot default.
+      measured tokens plus cost. An optional hosted cloud leg existed at the
+      time behind a governance flag, a 0600 key and an explicit egress opt-in;
+      it was never the pilot default, was never promoted past shadow, and
+      Step 65 removed it entirely.
       **Live setup:** loopback broker (`127.0.0.1:4224`, local backend, no key)
       plus a LAN Ollama OpenAI endpoint at `192.168.178.21:11434`; local LLM
       tag `sparknet-reflex:v1` (copy of `qwen2.5-3b-32k`). **Measured (14 query
@@ -2686,10 +2690,99 @@ consult it.
       Step 64's closure: the plan protocol's rule is that new roadmap work gets
       a **new** step rather than being folded into a finished one.
 
-**Status:** 64A–64F **done**. TypeSafe was replaced by a local-first default
-(local reranker/LLM, no egress, no credential), and 64F's live measurements
+**Status:** 64A–64F **done**. The hosted cloud sensor this step was opened
+against was replaced by a local-only default (local reranker/LLM, no egress, no
+credential) and then removed outright in Step 65. 64F's live measurements
 were accepted by the operator on 2026-10-24, which closes the step. 64G stays
 open and deferred, as above. Cursor `64 -> done`.
+
+## Step 65 — Naming purge, and the pins the rename exposed
+
+Opened 2026-10-24 on operator direction: remove a retired vendor name and the
+old editor name from the fabric, and finish the rebrand consistently. Kept as one
+step because a rename touching a contract, a service, a unit, four test suites and
+a golden-vector set has to land atomically — the tree does not build between the
+pieces.
+
+- [x] **65A — the cloud reflex leg is deleted, not disabled.** The vendor name was
+      not prose: it was a member of the backend enum in
+      `contracts/reflex-schema.json`, a hard prefix check in the broker (`model
+      must be a jev-* tag`), the default model tag, a systemd `Environment=`, and
+      an `ALLOW_EGRESS` opt-in. All of it is gone, and the backend vocabulary now
+      reads `broker | local-rerank | local-llm | rules | null` with **no member
+      that can leave the fabric**. `broker` takes over as the label for "the
+      Master answered", which is what it always did: the broker was already local,
+      and what it centralises is the budget, the redaction point and the audit
+      trail — never a credential. Removed alongside it: the broker's HTTP client,
+      `read_key`, `vendor_payload`, `_vendor_backend`, `--key-file`, `--endpoint`,
+      the `allow_egress` posture flag, and the eval harness's governance and
+      0600-key preflight gates (a gate nothing can trip is decoration, not a
+      control).
+      **DoD:** (1) no vendor reference remains in any live artifact; (2) the two
+      surviving test mentions are *negative* assertions
+      (`"api.typesafe.ai" not in source`, `"jev" not in BACKENDS`) plus proof that
+      a stale `SPARKNET_REFLEX_BACKEND=jev` falls back to local instead of
+      selecting a removed backend; (3) the contract enum and
+      `shared/sparknet-reflex.py::BACKENDS` still agree, which
+      `tests/test_reflex_contract.py` pins; (4) the golden cache-key vectors were
+      regenerated **only after** each original expectation was reproduced from the
+      original model tag, proving the hash function unchanged — so the
+      regeneration is a consequence of the rename and not a mask over real drift.
+      Verified 2026-10-24.
+
+- [x] **65B — the editor rebrand is finished, and its boundary is now enforced.**
+      The rebrand to `orchestrator` already existed as the dialect in
+      `scripts/sync-wiki-skills.py`, with four documented exclusions for artifacts
+      this repo does not own: the editor's `.obsidian/` config dir, its CLI, its
+      `help.*` documentation URLs, and the upstream repo it is vendored from.
+      Auditing all 127 mentions found the exclusions
+      correct and the vendored suite already rewritten — the residue is not
+      sloppiness. But the boundary lived only in a comment, so it is now a test:
+      `tests/test_wiki_skills.py` sweeps every file we author and refuses a mention
+      matching none of the four categories, with the exemption list itself pinned
+       so it cannot grow quietly. The sweep found one real miss
+       (a callout named for the editor's old brand, in
+       `master-node/tests/test_master_spec.py`) and
+      deliberately left `peer-node/manifests/user-env-manifest.json` alone: it is a
+      generated host snapshot whose `PATH` names a directory that exists, recorded
+      as by-design in `log.md` (2026-10-08), and editing it would make the manifest
+      lie about the machine.
+      **DoD:** the sweep passes, its exemptions are pinned, and it is proven
+      non-vacuous (it reports the six mentions it examined). Verified 2026-10-24.
+
+- [x] **65C — every image this fabric deploys names a fixed release.** The rename
+      turned up a defect of exactly the class it was meant to prevent:
+      `sparknet-node-setup.sh` carries the rule in a comment ("WEBUI_TAG is a
+      stable release, never `main`/`latest`") and `tests/test_contracts.py`
+      enforced it — for the two *node-stack* composes only.
+      `peer-node/configs/ai-stack/docker-compose.yml` and
+      `master-node/configs/admin-surface/docker-compose.admin.yml` shipped
+      `open-webui:main`, and three agent composes shipped `alpine:latest`. All five
+      are pinned now (`${WEBUI_TAG:-v0.12.2}`, and `alpine:3.20` to match
+      `peer-node/container/anchor/Dockerfile`), and `tests/test_hardening.py`
+      sweeps the tree instead of naming files. A rule one test applies to a
+      hand-picked subset is a rule the other files can break silently.
+      **DoD:** the sweep passes, and was shown to fail on a planted
+      `${WEBUI_TAG:-latest}` before the plant was removed. Verified 2026-10-24.
+
+- [x] **65D — two claims the tree no longer supported.**
+      `contracts/share-protocol.md` opened "Nothing here is built yet" while peer
+      Steps 6 and 8 **and** Master Steps 10–12 are all closed. It now separates
+      what is built (the offer lifecycle, four clocks, trust levels and
+      reconciliation, tested against in-process node pairs with injected clocks)
+      from what is not (the live 4201/4202/4203 listeners, stanza application, the
+      ratification service, the evidence repo — `wired, not deployed`), citing
+      `share-regime.json` and `ports.json` rather than asserting a mood.
+
+**A bug this step caught in its own new test.** The first version of the image-tag
+sweep resolved `${WEBUI_TAG:-v0.12.2}` by splitting on the *last* colon, which
+lands inside the interpolation's `:-` and yields `-v0.12.2}` — never a rolling tag,
+so the sweep passed while proving nothing. It now splits on the first colon of the
+last path segment, and a resolver test pins ten references including the two that
+must be *caught*. Recorded here because a gate that fails open is worse than no
+gate: from the outside the two are indistinguishable.
+
+**Status:** 65A–65D done, full `make ci` green. Cursor `done -> 65 -> done`.
 
 ## Next
 
@@ -2703,9 +2796,9 @@ chroma reranker holds **assist** on the allow-listed `fabric` scope (0.771 →
 fix: the broker receives one query+chunk per call, so it can only rerank
 lexically and cannot see the distances the batch reranker uses. Promoting it
 would need the broker to score a batch, which is a design change, not a tuning
-one. The broker unit remains staged and works without a credential in local
-mode; the cloud/Jev leg is optional and egress-gated behind
-`SPARKNET_REFLEX_ALLOW_EGRESS=1` plus `backend=jev`.
+one. The broker unit remains staged and needs no credential; Step 65 removed
+the cloud leg, so there is no egress flag left to set and no backend in the
+vocabulary that could leave the fabric.
 
 **The invariant is load-bearing.** Reflex output may rank, annotate, route or
 flag; it may never sign, grant or revoke, approve a guard application, or widen
@@ -2720,4 +2813,60 @@ peer-pull listener for distribution. `contracts/ports.json` retains 8090 as
 `spec-only` until Step 7 decides whether it survives for ACL pushes, is
 re-scoped, or is retired. Do not add the `reflex-consult` capability before its
 own cross-role commit.
+
+**The remaining arc, approved 2026-10-24, becomes Steps 66+.** Step 65 was
+Phase 1 of a six-phase review of what this fabric is for: a development
+environment for the `peer-node` and `master-node` templates, with goSpark
+supplying the node surface. Each later phase gets its own step, because each
+needs its own DoD and its own cross-role commit.
+
+- **Phase 2 — identity contracts.** A `department` field on the user record
+  (shared freely inside a department, extra permission to cross out of one), a
+  platform declaration in `00_System/`, and OS-level permissions *enforced*
+  against agent permissions rather than merely recorded beside them. The
+  department field is a signed-schema change: `USER_RECORD_KEYS` is an allowlist
+  pinned to `contracts/tracking-schema.json`, and every tracking block is signed,
+  so it needs a `sparknet-tracking/2` bump with a stated migration for signatures
+  already made.
+- **Phase 3 — intake.** The RFI channel (a peer asks, the Master answers into
+  `01_Inbox/`), the inbox transport that `tracking-schema.json`'s
+  `phase_boundary` still lists as `not_built`, the `inbox_acceptance` ledger
+  event, reviewer-agent sanitisation setting `validity: sanitized`, and
+  notification on arrival. The registry publication is the shape to mirror:
+  signed envelope, digest-bound payload, monotonic sequence, and one shared
+  install rule serving both the online and the offline path.
+- **Phase 4 — Master observability without touching the data path.** Peers talk
+  directly by design and the Master is authority-plane only at `10.100.0.1/32`,
+  so monitoring means *signed evidence pushed to the Master*, never interception:
+  wire the existing `telemetry` capability, deploy
+  `shared/sparknet-liveness.py` (reference code that has no unit), anchor
+  `checkpoint` Merkle roots, and make the retained `flagged` trust levels
+  actionable. Fabric-wide vault maintenance rides the existing `guard-apply` plus
+  `critical-manifest.json` `protected_paths` mechanism rather than a new write
+  path.
+- **Phase 5 — the Open WebUI surface.** Pin first (65C did), then build the
+  Plan/Build panels against the permission API peer Step 5 already shipped,
+  replace the two-line `docs/openwebui-plan-permission-execute.md` stub, and hook
+  the node's skills, tools and knowledge in. Extend rather than fork unless a
+  panel proves impossible: a fork of a fast-moving upstream is a perpetual
+  rebase, and the Approve/Deny card an operator needs is reachable through the
+  supported extension points.
+- **Phase 6 — data lake, media, distillation.** Build 4223 `vector-embed`, already
+  specified as the fabric's single semantic store; add image/video/audio ingest
+  (audio has `goagx/sparknet-audio-shim.py` and node port 8003); then distillation
+  as its own workstream, extending `MASTERSPIKE` from prompt-injection on
+  `llama3.2` to a genuinely trained artifact with a corpus, a harness and an eval.
+
+**Two things this arc deliberately does not do.** Fabric-wide KV-cache collection
+is rejected: port 9100 `node-kvrouter` is node-local by design ("an in-stack
+optimization plane, not an API. No fabric number shares 9100"), KV state is
+model- and shape-specific so cross-node reuse needs identical models, and vLLM's
+prefix caching already captures the local benefit. And containers do **not** get
+admin access to the host: that would void `deny_root_escalation_attempts`, the
+guard's `euid_0` requirement and `chattr +i` in one move, and because ingested
+content is untrusted under this repo's own schema (`validity: sanitized` exists
+for exactly that) a single injected document would then own the machine. Scoped
+host access — a bind-mount allowlist plus a signed `guard-apply` for privileged
+mutations — delivers the same capability as an auditable exception instead of a
+standing one.
 

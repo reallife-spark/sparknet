@@ -51,8 +51,8 @@ DOC_PAGES = tuple(sorted((VAULT_ROOT / "docs").glob("*.md")))
 #: six different spellings cannot be checked by anything, least of all by a reader.
 BUILD_STATUSES = ("built", "partially-built", "unbuilt", "preserved-not-wired")
 
-#: An Obsidian callout. A page that is not built carries one, so a reader meets
-#: the caveat before the prose it caveats.
+#: An orchestrator callout. A page that is not built carries one, so a reader
+#: meets the caveat before the prose it caveats.
 CALLOUT = re.compile(r"^>\s*\[!(warning|caution|important|note|info|tip)\]", re.MULTILINE)
 
 

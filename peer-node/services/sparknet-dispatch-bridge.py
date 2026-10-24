@@ -1222,9 +1222,10 @@ class Bridge:
         if mode in ("local", "auto"):
             backend_name = self.reflex.backend_from_env(request.get("question_class", "rag.relevance"))
             # `local` mode must never open a socket off-node, so an operator who
-            # named the cloud backend there gets an abstain rather than egress;
-            # `auto` falls through to the broker path below.
-            if backend_name == "jev":
+            # named the Master's broker there gets an abstain rather than a
+            # request leaving this node; `auto` falls through to the broker path
+            # below, which is the one mode that may leave.
+            if backend_name == "broker":
                 if mode != "auto":
                     return self.reflex.abstain_decision(model, "null", "", request, reason="backend-misconfigured")
             elif backend_name == "null":
@@ -1263,7 +1264,7 @@ class Bridge:
 
         broker = os.environ.get("SPARKNET_REFLEX_BROKER_URL", "http://10.100.0.1:4224").strip().rstrip("/")
         if not broker:
-            return self.reflex.abstain_decision(model, "jev", "", request, reason="broker-not-configured")
+            return self.reflex.abstain_decision(model, "broker", "", request, reason="broker-not-configured")
         try:
             timeout = float(os.environ.get("SPARKNET_REFLEX_TIMEOUT", "2.0"))
         except ValueError:
@@ -1283,10 +1284,10 @@ class Bridge:
             with urllib.request.urlopen(broker_request, timeout=timeout) as response:
                 result = json.loads(response.read().decode("utf-8"))
         except Exception:  # noqa: BLE001 - a broker failure must abstain, never raise into the caller
-            return self.reflex.abstain_decision(model, "jev", "", request, reason="broker-error")
+            return self.reflex.abstain_decision(model, "broker", "", request, reason="broker-error")
 
         if not isinstance(result, dict) or result.get("verdict") not in self.reflex.VERDICTS:
-            return self.reflex.abstain_decision(model, "jev", "", request, reason="broker-malformed")
+            return self.reflex.abstain_decision(model, "broker", "", request, reason="broker-malformed")
         result.setdefault("latency_ms", (time.monotonic() - started) * 1000.0)
         return result
 

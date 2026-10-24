@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
-"""The Master's reflex broker — local-first, with an optional TypeSafe egress path.
+"""The Master's reflex broker — a local sensor the fabric can consult.
 
 Why a broker at all
 ~~~~~~~~~~~~~~~~~~~
 The reflex layer is local-first: a node can answer `rag.relevance` with a local
-reranker and never call the network. The hosted Jev/System One model is the
-*cloud path* for the unified massive-task workload, and only the Master holds
-the credential. A peer never calls `api.typesafe.ai` directly: it asks this
-broker over the overlay, in Phase 2, after `reflex-consult` is granted.
+reranker and never call the network. This broker is the one place a *sibling*
+can ask for that judgement over the overlay instead of running its own, so the
+fabric has a single sensor to budget, audit and pin. It never leaves the fabric:
+every backend in the contract's vocabulary is local, and there is no egress path
+here to configure, enable or leak a credential through.
 
 What this process is not
 ~~~~~~~~~~~~~~~~~~~~~~~~
 It is not an authority. It validates the contract, redacts the state it sends,
 pins the exact model tag, honours a hard timeout and a daily budget, and returns
-a decision. Timeout, backend error, budget exhaustion or malformed vendor output
-all return `abstain`; the caller falls back to deterministic behavior. Nothing
-here signs, grants, revokes or approves.
+a decision. Timeout, backend error, budget exhaustion or malformed backend
+output all return `abstain`; the caller falls back to deterministic behavior.
+Nothing here signs, grants, revokes or approves.
 
 Phase 1 source policy
 ~~~~~~~~~~~~~~~~~~~~~
@@ -26,8 +27,7 @@ the `reflex-consult` capability lands, which is a separate cross-role commit.
 
 Usage::
 
-    sparknet-reflex-broker.py --serve --bind 10.100.0.1 --port 4224 \
-        --key-file "$SPARKNET_STATE_DIR/secrets/typesafe-api-key"
+    sparknet-reflex-broker.py --serve --bind 10.100.0.1 --port 4224
     sparknet-reflex-broker.py --check
 """
 
@@ -37,10 +37,8 @@ import argparse
 import importlib.util
 import json
 import os
-import stat
 import sys
 import time
-import urllib.request
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -52,8 +50,7 @@ REFLEX_PATH = REPO_ROOT / "shared" / "sparknet-reflex.py"
 
 DEFAULT_BIND = "10.100.0.1"
 DEFAULT_PORT = 4224
-DEFAULT_ENDPOINT = "https://api.typesafe.ai/v1/systemone"
-DEFAULT_MODEL = os.environ.get("SPARKNET_REFLEX_MODEL", "jev-1.13.0")
+DEFAULT_MODEL = os.environ.get("SPARKNET_REFLEX_MODEL", "local")
 DEFAULT_AUDIT = Path("/mnt/log/sparknet-reflex.jsonl")
 MAX_BODY = 256 * 1024
 # A local LLM answer must land inside the caller's own timeout, so it is the
@@ -83,19 +80,13 @@ class BrokerError(Exception):
 
 
 def validate_model(model: str) -> str:
-    """A pinned, vendor-namespaced tag. Never a moving `latest` alias."""
-    model = (model or "").strip()
-    if not model:
-        raise BrokerError("model must be non-empty")
-    if "latest" in model.lower():
-        raise BrokerError("model must be an exact tag, not a moving 'latest' alias")
-    if not model.startswith("jev-"):
-        raise BrokerError("model must be a jev-* tag")
-    return model
+    """An exact tag for whatever this node runs; only moving aliases are refused.
 
-
-def validate_local_model(model: str) -> str:
-    """A local backend may name any exact model; only moving aliases are refused."""
+    There is one validator because there is one kind of backend. The previous
+    pair existed to enforce a vendor namespace on the cloud leg and nothing on
+    the local one; with the cloud leg gone, a single rule covers every model the
+    broker can be pointed at, and `SPARKNET_REFLEX_MODEL=local` still starts.
+    """
     model = (model or "").strip()
     if not model:
         raise BrokerError("model must be non-empty")
@@ -106,26 +97,6 @@ def validate_local_model(model: str) -> str:
 
 def source_allowed(address: str) -> bool:
     return address in ALLOWED_SOURCES
-
-
-def read_key(path: Path) -> str:
-    """Read the credential; refuse a file group/other can read."""
-    path = Path(path)
-    if not path.is_file():
-        raise BrokerError(f"credential file is missing: {path}")
-    mode = stat.S_IMODE(path.stat().st_mode)
-    if mode & 0o077:
-        raise BrokerError(f"credential file must be 0600 (found {oct(mode)}): {path}")
-    key = path.read_text(encoding="utf-8").strip()
-    if not key:
-        raise BrokerError(f"credential file is empty: {path}")
-    return key
-
-
-def vendor_payload(request: dict[str, Any]) -> dict[str, Any]:
-    """Exactly the three fields the vendor documents, with redacted content."""
-    safe = reflex.redact_request(request)
-    return {"state": safe["state"], "model": request["model"], "questions": safe["questions"]}
 
 
 @dataclass
@@ -156,32 +127,15 @@ def audit(path: Path, decision: dict[str, Any], request: dict[str, Any], latency
         print(f"reflex-broker: audit write failed: {exc}", file=sys.stderr)
 
 
-def _vendor_backend(key: str, endpoint: str, timeout_s: float) -> Any:
-    def backend(request: dict[str, Any]) -> dict[str, Any]:
-        payload = json.dumps(vendor_payload(request), sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode(
-            "utf-8"
-        )
-        req = urllib.request.Request(
-            endpoint,
-            data=payload,
-            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=timeout_s) as response:
-            return json.loads(response.read().decode("utf-8"))
-
-    return backend
-
-
-def backend_posture() -> tuple[str, bool]:
-    """The configured backend, and whether cloud egress is explicitly allowed.
+def backend_posture() -> str:
+    """The configured backend.
 
     One reader for both `decide` and `main`, so the startup check and the
-    per-request check can never disagree about which mode the broker is in.
+    per-request check can never disagree about which mode the broker is in. It
+    returns a name and not a posture pair: there is no egress flag left to read,
+    because every backend in the vocabulary is local.
     """
-    backend_env = os.environ.get("SPARKNET_REFLEX_BACKEND", "local").strip().lower()
-    allow_egress = os.environ.get("SPARKNET_REFLEX_ALLOW_EGRESS", "0").strip().lower() in ("1", "true", "yes")
-    return backend_env, allow_egress
+    return os.environ.get("SPARKNET_REFLEX_BACKEND", "local").strip().lower()
 
 
 def _local_llm_timeout() -> float:
@@ -213,8 +167,6 @@ def decide(
     request: dict[str, Any],
     *,
     call: Any | None = None,
-    key: str | None,
-    endpoint: str,
     timeout_s: float,
     budget: BudgetLedger,
     audit_path: Path,
@@ -223,19 +175,18 @@ def decide(
 ) -> dict[str, Any]:
     """Validate, budget, consult and audit one request. Always returns a decision."""
     reflex.validate_request(request)
-    backend_env, allow_egress = backend_posture()
-    local_mode = backend_env in ("local", "local-rerank", "local-llm", "rules") or not allow_egress
-    model = (
-        validate_local_model(request.get("model") or "local")
-        if local_mode
-        else validate_model(request.get("model") or "")
-    )
+    backend_env = backend_posture()
+    model = validate_model(request.get("model") or reflex.LOCAL_MODEL_SENTINEL)
 
-    if model_pin and model != model_pin and not local_mode:
+    # The pin is enforced against a *named* model. A request carrying the local
+    # sentinel is asking for whatever this node runs, which is the pin, so it
+    # cannot mismatch it — and refusing it would make the default request shape
+    # the bridge sends unanswerable.
+    if model_pin and model != model_pin and model != reflex.LOCAL_MODEL_SENTINEL:
         raise BrokerError(f"request model {model!r} does not match the pinned {model_pin!r}")
     node_id = request["node_id"]
 
-    if offline or backend_env in ("off",):
+    if offline or backend_env == "off":
         decision = reflex.abstain_decision(model, "null", "", request, reason="offline")
         audit(audit_path, decision, request, 0.0)
         return decision
@@ -248,29 +199,14 @@ def decide(
         return decision
 
     started = time.monotonic()
-    if local_mode:
-        backend_name = reflex.backend_from_env(request.get("question_class", "rag.relevance"))
-        backend_call = call or (lambda r: _local_backend(r))
-        decision = reflex.consult(
-            backend_call,
-            request,
-            timeout_s=timeout_s,
-            backend=backend_name,
-            model=model,
-        )
-    else:
-        if not key:
-            decision = reflex.abstain_decision(model, "jev", "", request, reason="no-credential")
-            audit(audit_path, decision, request, 0.0)
-            return decision
-        backend_call = call or _vendor_backend(key, endpoint, timeout_s)
-        decision = reflex.consult(
-            backend_call,
-            request,
-            timeout_s=timeout_s,
-            backend="jev",
-            model=model,
-        )
+    backend_name = reflex.backend_from_env(request.get("question_class", "rag.relevance"))
+    decision = reflex.consult(
+        call or _local_backend,
+        request,
+        timeout_s=timeout_s,
+        backend=backend_name,
+        model=model,
+    )
     if decision["verdict"] != "abstain":
         budget.charge(node_id)
     latency_ms = (time.monotonic() - started) * 1000.0
@@ -326,8 +262,6 @@ class _Handler(BaseHTTPRequestHandler):
             decision = decide(
                 request,
                 call=self.server.call,  # type: ignore[attr-defined]
-                key=self.server.key,  # type: ignore[attr-defined]
-                endpoint=self.server.endpoint,  # type: ignore[attr-defined]
                 timeout_s=self.server.timeout_s,  # type: ignore[attr-defined]
                 budget=self.server.budget,  # type: ignore[attr-defined]
                 audit_path=self.server.audit_path,  # type: ignore[attr-defined]
@@ -347,8 +281,6 @@ def serve(
     bind: str,
     port: int,
     *,
-    key: str | None,
-    endpoint: str,
     timeout_s: float,
     budget: BudgetLedger,
     audit_path: Path,
@@ -359,8 +291,6 @@ def serve(
     if bind != DEFAULT_BIND and bind not in {"127.0.0.1", "::1"}:
         raise BrokerError("refuse to bind a non-overlay address (Phase 1 is overlay-only)")
     server = ThreadingHTTPServer((bind, port), _Handler)
-    server.key = key  # type: ignore[attr-defined]
-    server.endpoint = endpoint  # type: ignore[attr-defined]
     server.timeout_s = timeout_s  # type: ignore[attr-defined]
     server.budget = budget  # type: ignore[attr-defined]
     server.audit_path = audit_path  # type: ignore[attr-defined]
@@ -377,43 +307,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true", help="print posture and exit")
     parser.add_argument("--bind", default=os.environ.get("SPARKNET_REFLEX_BIND", DEFAULT_BIND))
     parser.add_argument("--port", type=int, default=int(os.environ.get("SPARKNET_REFLEX_PORT", DEFAULT_PORT)))
-    parser.add_argument("--key-file", default=os.environ.get("SPARKNET_REFLEX_KEY_FILE", ""))
-    parser.add_argument("--endpoint", default=os.environ.get("SPARKNET_REFLEX_ENDPOINT", DEFAULT_ENDPOINT))
     parser.add_argument("--model", default=os.environ.get("SPARKNET_REFLEX_MODEL", DEFAULT_MODEL))
     parser.add_argument("--timeout", type=float, default=float(os.environ.get("SPARKNET_REFLEX_TIMEOUT", "2.0")))
     parser.add_argument("--audit", default=os.environ.get("SPARKNET_REFLEX_AUDIT", str(DEFAULT_AUDIT)))
     parser.add_argument("--node-budget", type=int, default=int(os.environ.get("SPARKNET_REFLEX_NODE_BUDGET", "0")))
     parser.add_argument("--global-budget", type=int, default=int(os.environ.get("SPARKNET_REFLEX_GLOBAL_BUDGET", "0")))
-    parser.add_argument("--offline", action="store_true", help="never call the vendor; every decision abstains")
+    parser.add_argument("--offline", action="store_true", help="never consult a backend; every decision abstains")
     args = parser.parse_args(argv)
 
-    backend_env, allow_egress = backend_posture()
-    egress_mode = backend_env == "jev" or allow_egress
-    # A local-first broker pins whatever exact tag the node runs; only the
-    # opt-in cloud leg must be an exact `jev-*` tag. Validating the cloud shape
-    # in local mode would make `SPARKNET_REFLEX_MODEL=local` refuse to start.
-    validate = validate_model if egress_mode else validate_local_model
+    backend_env = backend_posture()
     try:
-        model = validate(args.model)
+        model = validate_model(args.model)
     except BrokerError as exc:
         print(f"reflex-broker: {exc}", file=sys.stderr)
-        return 2
-
-    needs_credential = egress_mode and not args.offline
-
-    key = None
-    if args.key_file:
-        try:
-            key = read_key(Path(args.key_file))
-        except BrokerError as exc:
-            print(f"reflex-broker: {exc}", file=sys.stderr)
-            if args.check:
-                return 2
-    elif needs_credential:
-        print(
-            "reflex-broker: --key-file is required for egress (jev); the default local backend needs no credential",
-            file=sys.stderr,
-        )
         return 2
 
     if args.check:
@@ -423,12 +329,9 @@ def main(argv: list[str] | None = None) -> int:
                     "service": "reflex-broker",
                     "bind": args.bind,
                     "port": args.port,
-                    "endpoint": args.endpoint,
                     "model": model,
                     "offline": args.offline,
                     "backend": backend_env,
-                    "allow_egress": allow_egress,
-                    "credential": "present" if key else "absent",
                     "audit": args.audit,
                 },
                 indent=2,
@@ -444,8 +347,6 @@ def main(argv: list[str] | None = None) -> int:
         serve(
             args.bind,
             args.port,
-            key=key,
-            endpoint=args.endpoint,
             timeout_s=args.timeout,
             budget=budget,
             audit_path=Path(args.audit),

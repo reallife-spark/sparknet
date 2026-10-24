@@ -21,10 +21,10 @@ question a competent person answers in a few seconds: is this chunk relevant, is
 this tool call risky, does this paragraph cite its source, which queue should
 this prompt go to.
 
-Jev (TypeSafe's System One model) is built for exactly that second class. It
-takes a state and typed questions and returns typed answers with probabilities;
-it does not generate text. That is the whole reason it can be a **sensor** in a
-control loop rather than another prompt to parse.
+A System One sensor is built for exactly that second class. It takes a state and
+typed questions and returns typed answers with probabilities; it does not
+generate text. That is the whole reason it can be a **sensor** in a control loop
+rather than another prompt to parse.
 
 The four candidate touchpoints, in the order this note treats them:
 
@@ -61,43 +61,47 @@ Therefore, for every consumer of this design:
 If this invariant is not enforced in code, the most attractive touchpoint (tool
 safety) is also the one that turns a classifier into a bypass.
 
-## 3. What Jev is, and what that forces
+## 3. The answer primitives, and what they force
 
-Confirmed from the TypeSafe documentation (2026-10-23):
+The question types are the contract's own. They were originally shaped by a
+hosted System One API that this design no longer calls; the primitives outlived
+the vendor because they are the useful part, and they are now pinned by
+`contracts/reflex-schema.json` rather than by anyone's documentation.
 
-- Endpoint: `POST https://api.typesafe.ai/v1/systemone`
-- Auth: `Authorization: Bearer <API_KEY>`
-- Request: `{ "state": <text|object|array>, "model": <alias|version>,
+- Request: `{ "state": <text|object|array>, "model": <exact tag>,
   "questions": { <id>: <question> } }`
-- Response: `{ "model", "answers": { <id>: <answer> }, "usage": {...} }`, plus
-  an `x-typesafe-request-id` response header.
+- Response: `{ "model", "answers": { <id>: <answer> }, "usage": {...} }`
 - Primitives:
   - **Choice**: `choice`, full `probabilities`, `confidence`.
   - **Score**: `score`, `legend`, `probabilities`, `confidence`.
   - **Noul**: `noul` in `[0, 1]` and **no confidence field**.
-- The model is hosted; there are no local weights. The request may name an alias
-  (`jev-latest`) or an exact version (the docs' examples use `jev-1.13.0`).
+- Every backend is local: a reranker, the node's own LLM on loopback, or rules.
+  There are no hosted weights and no endpoint outside the fabric, so there is no
+  credential to hold, no egress to permit, and no vendor's availability to
+  become the fabric's availability.
 
 Consequences encoded in the design:
 
 1. **Ask atomic questions.** One judgment per question; combine results in code.
-   This is the vendor's own guidance and it matches the fabric's one-concern
-   style.
+   It matches the fabric's one-concern style, and a local backend answers an
+   atomic question cheaply enough that asking several is not a cost decision.
 2. **Noul needs a different abstain rule.** Threshold on `p` and on
    `abs(p - 0.5)`; Choice/Score use `confidence` and the top-two margin.
 3. **Pin an exact model tag.** Record the `model` the response actually names;
-   a mismatch is `model_drift`, not a silent new behavior. Do not ship
-   `jev-latest` in a policy file.
-4. **Do not hard-code vendor numbers in prose.** Context limits, price and
+   a mismatch is `model_drift`, not a silent new behavior. A moving `latest`
+   alias is refused, because the thing that answered yesterday has to be
+   provably the thing that answers today.
+4. **Do not hard-code model numbers in prose.** Context limits, price and
    latency belong in the policy file and the evaluation report, where they can
    be updated without editing this document.
 
-## 4. Topology: local-first, with one optional egress point
+## 4. Topology: local-only, with one shared sensor
 
 A peer's overlay admits exactly one address, the Master edge
 (`contracts/overlay.json:14`), and the peer charter states the same rule
-(`peer-node/AGENTS.md:43`). A peer calling `api.typesafe.ai` directly would
-break that invariant and scatter the API key.
+(`peer-node/AGENTS.md:43`). Nothing in this design needs to leave the fabric, so
+nothing does: the backend vocabulary in `contracts/reflex-schema.json` has no
+member that could, which is a stronger guarantee than a flag defaulting to off.
 
 ```
 opencode / goSpark / Open WebUI / chroma CLI
@@ -105,17 +109,13 @@ opencode / goSpark / Open WebUI / chroma CLI
         v
 peer dispatch bridge   /v1/reflex/*            (127.0.0.1:4096)
         |
-        +-- mode=local   -> local reranker / local LLM   DEFAULT, no egress
+        +-- mode=local   -> local reranker / local LLM   DEFAULT, never leaves
         +-- mode=broker  -> 10.100.0.1:4224             opt-in, large tasks
                                   |
                                   v
                      Master decision broker            (Master only)
-                     local backend by default, redacts,
-                     budgets, audits hashes
-                                  |  HTTPS only when
-                                  |  ALLOW_EGRESS=1
-                                  v
-                     api.typesafe.ai/v1/systemone      optional
+                     local backend, redacts, budgets,
+                     audits hashes — and stops there
 ```
 
 Three modes, settable per question class:
@@ -124,20 +124,23 @@ Three modes, settable per question class:
 |---|---|
 | `off` | no reflex call; existing behavior |
 | `local` | the node's own reranker and/or local LLM; no network |
-| `broker` | the Master's unified decision endpoint; local backend by default |
+| `broker` | the Master's decision endpoint; also local — it adds one budget, one redaction point and one audit trail, and still never leaves the fabric |
 | `auto` | local for small/interactive work; broker for configured massive-task classes or state above a token threshold |
 
 **Default: `local` + `shadow`.** The reflex layer runs on the node (or on the
-Master for broker traffic), makes **no network call by default**, and does not
-change an answer until the pilot is measured. `SPARKNET_REFLEX_BACKEND=local`
-with `SPARKNET_REFLEX_ALLOW_EGRESS=0` is the shipped posture; the TypeSafe cloud
-path exists only as an explicit, credentialed opt-in. The broker is opt-in for
+Master for broker traffic), makes **no call outside the fabric in any mode**, and
+does not change an answer until the pilot is measured.
+`SPARKNET_REFLEX_BACKEND=local` is the shipped posture, and there is no egress
+flag to set because there is no egress path to guard. The broker is opt-in for
 the "unified AI for massive tasks" workload — batch/corpus classification,
 cross-node synthesis, large-state judgments — not for every interactive turn.
 
-Why not per-node direct cloud: it violates the egress contract, puts a billable
-secret on every node, loses the central redaction/audit/budget point, and makes
-an offline node fail differently from an online one.
+Why keep a broker at all, if it answers locally too: it is the one place a
+sibling can ask for a judgment instead of running its own, so the fabric has a
+single budget, a single redaction point and a single audit trail to review. This
+design once justified the port as the only holder of a cloud credential; that
+justification is gone, and the one that replaces it — central audit and budget —
+is why 4224 stays in `contracts/ports.json`.
 
 Why not a new node daemon: the dispatch bridge already owns the local surface,
 already has the grant check and the loopback-only route class
@@ -153,7 +156,7 @@ implementation, loaded by path, canonical bytes pinned by a test.
 ```
 Request   {schema_version, question_class, state, questions, model,
            policy_version, node_id, request_id}
-Question  choice | score | noul        (mirrors Jev exactly)
+Question  choice | score | noul        (the contract's own vocabulary)
 Answer    choice | score | noul
 Decision  {verdict: accept|reject|abstain, confidence, backend, model,
            usage, latency_ms, cached, state_digest, model_drift}
@@ -167,8 +170,10 @@ Non-negotiable semantics:
   formatting); a golden-vector test pins them.
 - **Cache key** = hash(state) + hash(questions) + exact model + policy version.
   Never reuse a decision across models or policies.
-- **Backends**: `jev`, `local-rerank`, `local-llm`, `rules`, `null`. Tests use
-  fakes; `local-rerank`, `local-llm`, `rules` and `null` never leave loopback.
+- **Backends**: `broker`, `local-rerank`, `local-llm`, `rules`, `null`. Tests use
+  fakes; `local-rerank`, `local-llm`, `rules` and `null` never leave loopback, and
+  `broker` leaves the node but not the fabric. None of them can reach the internet,
+  which is a property of the vocabulary rather than of a setting.
 - **No authority fields.** The schema rejects `capability`, `grant`, `signature`,
   `approve` and `apply`.
 - **Budgets**: per-node/day and global/day, with a hard `abstain` when exhausted;
@@ -199,7 +204,8 @@ Design:
 1. Chroma returns `top_k` candidates (default 50).
 2. The local reranker (`bge-reranker-v2-m3`, already in the node stack) cuts to
    about 20. This is the default, offline path.
-3. With `mode=broker`, Jev scores each remaining chunk as a Noul: "is this chunk
+3. With `mode=broker`, the Master's broker scores each remaining chunk as a Noul:
+   "is this chunk
    sufficient to answer the query?" Batch 10–20 chunks per call; cache.
 4. Keep the top `reflex_top_k` above a probability threshold. On abstain, error
    or budget exhaustion, return the reranker order unchanged and mark the result
@@ -320,9 +326,9 @@ request digest. Never the state, never the API key, never a raw answer.
 | Denial of wallet | local default (zero marginal cost); per-node/global budgets; cache; circuit breaker; kill switch |
 | Latency stalls the agent | local default; short timeout; broker only for batch/large tasks |
 | Master outage | local fallback; no dependency for correctness |
-| Key leakage | no credential at all in local mode; optional egress key is a Master-only 0600 file; dedicated unit; no env dump; secret scan |
+| Key leakage | there is no credential to leak: the cloud leg was removed rather than disabled, so no mode holds a key. The unit still runs dedicated, with no env dump, and the secret scan still runs |
 | Source-address spoofing | overlay-only bind + existing AllowedIPs discipline; later a signed/capability check |
-| Vendor lock-in | local backends are the default; provider-neutral contract; Jev is one optional backend |
+| Vendor lock-in | closed rather than mitigated: no backend in the vocabulary is hosted, so no vendor's availability, pricing or retention terms can become the fabric's |
 
 ## 8. Ports, capabilities and contract footprint
 
@@ -387,27 +393,25 @@ The plan cursor opens at Step 64. Each phase is adopted by its own commit.
   precision@5, recall, abstain rate, p95, cost per 1k; no regression without
   `--reflex`.
 
-### 64F — live pilot (local-first; cloud optional)
+### 64F — live pilot (local-only)
 
-- Local backends are the default; TypeSafe is an explicit opt-in, not a
-  prerequisite.
-- Local mode needs **no** governance approval and **no** credential:
-  - `make reflex-live-check` — with `SPARKNET_REFLEX_BACKEND=local` (default)
-    the only gate is broker `/healthz`; the governance and 0600-key gates apply
-    only when the backend is `jev`/egress.
+- Every backend is local, so the pilot needed no governance approval and no
+  credential — and after the cloud leg's removal, nothing could have used one.
+  - `make reflex-live-check` — the only gate is broker `/healthz`. It carried two
+    more gates while an egress backend existed; they were removed with it,
+    because a gate nothing can trip is not a control, it is decoration.
   - `REFLEX_LIVE=1 make reflex-eval` — scores up to `--live-candidates` fabric
     chunks per golden query through the Master broker, fail-open on any
     transport/shape error.
   - `make reflex-live-query QUERY="…"` — one real broker-backed fabric query.
-- The cloud leg, if ever used, still requires `SPARKNET_REFLEX_GOVERNANCE=approved`
-  and the 0600 key; it is not the default and not required for the pilot.
-- State: **executed 2026-10-23; awaiting user confirmation.** A loopback
-  broker (`127.0.0.1:4224`, local backend, no credential) was paired with a LAN
-  Ollama OpenAI endpoint at `192.168.178.21:11434`; the local LLM tag is
-  `sparknet-reflex:v1` (a copy of `qwen2.5-3b-32k`). The live CLI surface is the
-  eval harness for now; `chroma-query --backend broker` is a later convenience,
-  not a 64F requirement.
-- DoD: measured accuracy/calibration/cost recorded; `DoD: confirm: user`.
+- State: **executed 2026-10-23; measurements accepted by the operator
+  2026-10-24, which closed Step 64.** A loopback broker (`127.0.0.1:4224`, local
+  backend) was paired with a LAN Ollama OpenAI endpoint at
+  `192.168.178.21:11434`; the local LLM tag is `sparknet-reflex:v1` (a copy of
+  `qwen2.5-3b-32k`). The live CLI surface is the eval harness for now;
+  `chroma-query --backend broker` is a later convenience, not a 64F requirement.
+- DoD: measured accuracy/calibration/cost recorded; `DoD: confirm: user` —
+  **confirmed 2026-10-24**.
 
 **Live pilot result (Step 64F, 2026-10-23).** 14 fabric golden queries,
 candidate-k 50, top-k 5, loopback broker with the `local-rerank` backend (no
@@ -456,8 +460,8 @@ cost per 1,000 decisions, and agreement with the deterministic baseline. A
 threshold change is a policy-version change, not a code edit.
 
 Gates: `make reflex-eval` is offline by default (rules/fake backend); the live
-harness runs against the local broker backend with `REFLEX_LIVE=1`, and the
-TypeSafe cloud leg additionally requires a key and an explicit egress opt-in.
+harness runs against the local broker backend with `REFLEX_LIVE=1` and needs
+nothing but a reachable broker, because no backend can leave the fabric.
 No class moves from `shadow` to `assist` until its golden set and the operator
 review agree.
 
@@ -465,15 +469,18 @@ review agree.
 
 1. Which local model endpoint peers should standardise on (vLLM/Ollama/Open
    WebUI) and its default `SPARKNET_REFLEX_LOCAL_MODEL`.
-2. If the optional cloud leg is ever enabled: the exact Jev tag (not
-   `jev-latest`), the vendor's data-retention terms, and who provisions the
-   0600 key on the Master.
-3. The default local RAG backend: `local-rerank` (shipped in 64E) or `rules`.
-4. Whether the Phase 1 broker accepts only the Master's own bridge or also a
+2. The default local RAG backend: `local-rerank` (shipped in 64E) or `rules`.
+3. Whether the Phase 1 broker accepts only the Master's own bridge or also a
    same-host operator CLI.
-5. The master-plan step number the `4224` status string will reference.
-6. Whether the `SPARKNET_REFLEX_*` knobs enter `sparknet-node-setup.sh` in 64D
+4. The master-plan step number the `4224` status string will reference.
+5. Whether the `SPARKNET_REFLEX_*` knobs enter `sparknet-node-setup.sh` in 64D
    or stay manual for the pilot.
+
+The former item 2 — the exact cloud model tag, the vendor's data-retention terms
+and who provisions the Master's 0600 key — is **closed rather than answered**:
+the cloud leg was removed, so there is no tag to pin, no retention terms to
+negotiate and no key to provision. It is recorded here because "we decided not
+to need this" and "we never decided" age very differently.
 
 ## 12. References
 
@@ -491,5 +498,7 @@ review agree.
   filesystem-isolation precedent for the broker.
 - `CLUSTER_JOB_REALIZATION_DESIGN.md` — the design-only pattern and the
   vector-substrate context.
-- TypeSafe documentation: `https://docs.typesafe.ai/` (API reference and
-  primitives, read 2026-10-23).
+- The hosted System One API this design was first written against (read
+  2026-10-23) is no longer called and is deliberately not named here; the answer
+  primitives it contributed are pinned by `contracts/reflex-schema.json` instead,
+  so nothing in this design depends on that documentation staying reachable.

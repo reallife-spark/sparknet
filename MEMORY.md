@@ -9,7 +9,7 @@ Updated: 2026-10-23
 
 ## Plan cursors
 
-- **root `PLAN.md` `current: done`.** Step 64 (the Jev reflex layer) opened
+- **root `PLAN.md` `current: done`.** Step 64 (the reflex layer) opened
   **2026-10-23**: local-only default, Master broker (`4224`) for the unified
   massive-task workload, RAG relevance first on the fabric corpus,
   shadow → assist → enforce, Master-local before peer access. 64A is
@@ -18,9 +18,10 @@ Updated: 2026-10-23
   vectors); 64C is delivered (`master-node/services/sparknet-reflex-broker.py`,
   `4224` overlay-only, unit staged not enabled); 64D is delivered (loopback-only,
   grant-checked `/v1/reflex/*`; local RAG reranker pilot measured, assist on
-  for fabric). **2026-10-23: TypeSafe replaced by a local-first default** —
-  peers and Master use a local reranker/LLM, no egress, no credential;
-  `SPARKNET_REFLEX_ALLOW_EGRESS=1` + a 0600 key are the only opt-in cloud path.
+  for fabric). **2026-10-23: the hosted cloud sensor was replaced by a
+  local-only default; Step 65 (2026-10-24) removed it outright** — peers and
+  Master use a local reranker/LLM, and there is no egress flag and no
+  credential, because no backend in the vocabulary can leave the fabric.
   64F **executed 2026-10-23** on a loopback broker + LAN Ollama endpoint
   (`sparknet-reflex:v1`): live shadow precision 0.757 vs 0.771 baseline,
   agreement 0.817, abstain 0, p95 115.7 ms, $0; local-LLM Noul probe accept
@@ -58,9 +59,14 @@ Updated: 2026-10-23
   are `DoD: confirm: user` (below). **Step 63 (the vector substrate: bounded
   Chroma pin, stamped index, allow-listed `fabric` corpus) delivered
   2026-10-22** — the substrate half of Step 61's increment 2; the 4223 service
-  itself is untouched and `4223` stays `spec-only`. Cursor `done` (64A–64F
-  closed; 64F's measurements accepted 2026-10-24, 64G deferred). New roadmap
-  work gets a **new** step.
+  itself is untouched and `4223` stays `spec-only`. **Step 65 (the naming purge)
+  closed 2026-10-24**: the reflex cloud leg is *deleted*, not disabled, so the
+  backend vocabulary has no member that can leave the fabric; the editor rebrand's
+  boundary is a test rather than a comment; all five rolling image tags are pinned
+  and swept tree-wide. Cursor `done` (64A–64F closed, 64F's measurements accepted
+  2026-10-24, 64G deferred; 65A–65D closed). New roadmap work gets a **new** step
+  — the approved six-phase arc continues as Phases 2–6, scoped in PLAN.md's
+  `## Next`.
   Steps 1–54 closed/parked.
 - **`peer-node/PLAN.md` `current: done`** — the peer arc is terminal; its last
   work (Steps 2–12: container, grants, bridge, Open WebUI surface, conversation

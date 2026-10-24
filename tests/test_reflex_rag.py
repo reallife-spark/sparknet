@@ -177,11 +177,9 @@ def test_abstain_falls_back_to_the_baseline():
 
 
 LIVE_CONFIG = {
-    "backend": "jev",
+    "backend": "broker",
     "broker_url": "http://127.0.0.1:1",
-    "governance": "approved",
-    "key_file": "",
-    "model": "jev-1.13.0",
+    "model": "local",
     "node_id": "test-node",
     "policy_version": "rag-relevance-v1",
     "timeout": 0.1,
@@ -189,23 +187,45 @@ LIVE_CONFIG = {
 }
 
 
-def test_live_preflight_requires_governance_and_a_0600_key(tmp_path):
-    key = tmp_path / "typesafe-api-key"
-    key.write_text("not-read", encoding="utf-8")
-    key.chmod(0o600)
-    config = {**LIVE_CONFIG, "key_file": str(key)}
-    assert eval_mod.live_preflight(config=config, check_health=False) == []
-    key.chmod(0o644)
-    assert any("0600" in problem for problem in eval_mod.live_preflight(config=config, check_health=False))
-    missing = {**config, "governance": ""}
-    assert any("governance" in problem for problem in eval_mod.live_preflight(config=missing, check_health=False))
-    key.unlink()
-    assert any("missing" in problem for problem in eval_mod.live_preflight(config=config, check_health=False))
+def test_live_preflight_has_one_gate_and_no_credential_to_leak():
+    """The pilot gates on the broker answering, and on nothing else.
+
+    It used to gate on three things because one backend could carry fabric text
+    off the fabric, which made a governance approval and a 0600 credential
+    meaningful. No backend can now, so those gates would only be theatre — and a
+    config that has no key field cannot name a key to leak.
+    """
+    assert eval_mod.live_preflight(config=LIVE_CONFIG, check_health=False) == []
+    assert "key_file" not in LIVE_CONFIG
+    assert "governance" not in LIVE_CONFIG
+    assert "key_file" not in eval_mod.live_config()
+    assert "governance" not in eval_mod.live_config()
 
 
-def test_live_preflight_local_mode_needs_no_governance_or_key():
-    config = {**LIVE_CONFIG, "backend": "local", "governance": "", "key_file": ""}
-    assert eval_mod.live_preflight(config=config, check_health=False) == []
+def test_live_preflight_reports_an_unreachable_broker(monkeypatch):
+    def explode(*_args, **_kwargs):
+        raise OSError("nothing listening")
+
+    monkeypatch.setattr(eval_mod.urllib.request, "urlopen", explode)
+    problems = eval_mod.live_preflight(config=LIVE_CONFIG, check_health=True)
+    assert any("unreachable" in problem for problem in problems)
+
+
+def test_live_preflight_refuses_a_healthz_that_is_not_ok(monkeypatch):
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+        @staticmethod
+        def read():
+            return b'{"ok": false}'
+
+    monkeypatch.setattr(eval_mod.urllib.request, "urlopen", lambda *_a, **_k: _Response())
+    problems = eval_mod.live_preflight(config=LIVE_CONFIG, check_health=True)
+    assert any("healthz" in problem for problem in problems)
 
 
 def test_post_decision_maps_transport_failure_to_abstain(monkeypatch):
@@ -213,7 +233,7 @@ def test_post_decision_maps_transport_failure_to_abstain(monkeypatch):
         raise OSError("broker down")
 
     monkeypatch.setattr(eval_mod.urllib.request, "urlopen", explode)
-    decision = eval_mod.post_decision({}, {**LIVE_CONFIG, "key_file": "unused"})
+    decision = eval_mod.post_decision({}, LIVE_CONFIG)
     assert decision["verdict"] == "abstain"
     assert decision["_reason"] == "broker-error"
     assert decision["backend"] == "null", "an unreachable broker must not be reported as a cloud backend"
@@ -282,7 +302,7 @@ def test_live_evaluate_measures_tokens_and_cost():
     reflex = eval_mod._load_reflex()
 
     def post(_request):
-        return {"verdict": "accept", "confidence": 0.9, "backend": "jev", "usage": {"total_tokens": 100}}
+        return {"verdict": "accept", "confidence": 0.9, "backend": "broker", "usage": {"total_tokens": 100}}
 
     summary = eval_mod.evaluate(
         _FakeChroma(),
@@ -303,7 +323,7 @@ def test_live_evaluate_measures_tokens_and_cost():
     assert summary["live"] is True
     assert summary["tokens_per_1k_queries"] == 200_000.0
     assert summary["cost_per_1k_usd"] == 100.0
-    assert summary["backend"] == "jev"
+    assert summary["backend"] == "broker"
 
 
 def test_load_golden_rejects_malformed_sets(tmp_path):

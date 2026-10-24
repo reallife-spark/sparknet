@@ -1,8 +1,19 @@
 # Share protocol — the contract between two peers, arbitrated by a Master
 
-Both roles implement this conversation when they build it. Nothing here is built
-yet: the peer side is specced in `peer-node/PLAN.md` Steps 6 and 8, the Master
-side in `master-node/plans/MASTER_BUILD_PLAN.md` Steps 10–12.
+Both roles implement this conversation. The peer side landed in
+`peer-node/PLAN.md` Steps 6 and 8, the Master side in
+`master-node/plans/MASTER_BUILD_PLAN.md` Steps 10–12, so the offer lifecycle, the
+four clocks, the trust levels and the reconciliation rules are built and tested —
+against in-process node pairs with injected clocks, on a host that has no
+overlay.
+
+What is **not** built is the deployment. `peer-node/manifests/share-regime.json`
+records the status as `wired, not deployed`, and its `not_built_yet` names the
+live 4201/4202/4203 listeners, the stanza application and nftables exception, the
+Master's ratification service and the Master-hosted evidence repo; those are
+target-node legs marked `DoD: confirm: user`. `contracts/ports.json` says the same
+thing in its own vocabulary — 4201 and 4202 are `implemented` in code and
+`not-listening` at runtime, and 4203 is still `spec-only`.
 
 The normative machine-readable policy is `contracts/capabilities.json`
 (`share_types`, `trust_levels`), `contracts/identity-schema.json` (`grant`),

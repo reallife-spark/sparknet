@@ -24,11 +24,11 @@ Usage::
     REFLEX_LIVE=1 scripts/sparknet-reflex-eval.py --mode shadow
     REFLEX_LIVE=1 scripts/sparknet-reflex-eval.py --query "guard approval"
 
-The live path is **operator-gated**. It refuses unless
-``SPARKNET_REFLEX_GOVERNANCE=approved`` is set and the Master's broker
-credential exists at ``$SPARKNET_STATE_DIR/secrets/typesafe-api-key`` with mode
-0600. It then sends only fabric-allow-listed chunks to the Master broker, which
-forwards them to Jev; no node or personal vault is read.
+The live path is **operator-gated**. It refuses unless the Master's broker
+answers ``/healthz`` with ``{"ok": true}``. It then sends only
+fabric-allow-listed chunks to that broker, which answers them locally: there is
+no credential to provision and no path off the fabric, so nothing this script
+reads can leave it. No node or personal vault is read.
 
 Exit codes: 0 ok, 1 user/golden error, 2 chromadb missing, 3 the index's
 stamp does not match this build, 4 the live preflight is not satisfied.
@@ -42,7 +42,6 @@ import importlib.util
 import json
 import math
 import os
-import stat
 import sys
 import time
 import urllib.request
@@ -84,12 +83,9 @@ def _load_reflex():
 
 def live_config(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
     """The live pilot's settings, from the environment by default."""
-    state_dir = Path(os.environ.get("SPARKNET_STATE_DIR", str(REPO_ROOT / ".state"))).expanduser()
     config = {
         "backend": os.environ.get("SPARKNET_REFLEX_BACKEND", "local"),
         "broker_url": os.environ.get("SPARKNET_REFLEX_BROKER_URL", "http://10.100.0.1:4224"),
-        "governance": os.environ.get("SPARKNET_REFLEX_GOVERNANCE", ""),
-        "key_file": str(state_dir / "secrets" / "typesafe-api-key"),
         "model": os.environ.get("SPARKNET_REFLEX_MODEL", "local"),
         "node_id": os.environ.get("SPARKNET_NODE_ID", "reflex-eval"),
         "policy_version": "rag-relevance-v1",
@@ -102,23 +98,14 @@ def live_config(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
 
 
 def live_preflight(*, config: dict[str, Any], check_health: bool = True) -> list[str]:
-    """Everything that must be true before fabric text may leave the node."""
+    """Everything that must be true before fabric text may leave the node.
+
+    One gate rather than three: the broker has to answer. There is no credential
+    to check and no governance flag to require, because nothing on this path can
+    reach outside the fabric — the broker answers locally, so the only question
+    worth asking is whether it is there.
+    """
     problems: list[str] = []
-    backend = str(config.get("backend", "local")).strip().lower()
-    egress = backend in {"jev", "broker", "cloud"}
-    if egress:
-        if config["governance"] != "approved":
-            problems.append(
-                "data-governance approval missing: set SPARKNET_REFLEX_GOVERNANCE=approved "
-                "only after the REFLEX_DECISION_DESIGN.md §7 review"
-            )
-        key_file = Path(config["key_file"])
-        if not key_file.is_file():
-            problems.append(f"broker credential missing: {key_file}")
-        else:
-            mode = stat.S_IMODE(key_file.stat().st_mode)
-            if mode & 0o077:
-                problems.append(f"broker credential must be 0600 (found {oct(mode)}): {key_file}")
     if check_health:
         try:
             with urllib.request.urlopen(config["broker_url"].rstrip("/") + "/healthz", timeout=2.0) as response:
@@ -384,11 +371,7 @@ def _print_preflight(config: dict[str, Any], problems: list[str]) -> None:
         "reflex-live-check: "
         f"backend={config.get('backend', 'local')} "
         f"broker={config['broker_url']} model={config['model']} "
-        + (
-            f"governance={'approved' if config['governance'] == 'approved' else 'missing'} key={config['key_file']}"
-            if str(config.get("backend", "local")).strip().lower() in {"jev", "broker", "cloud"}
-            else "egress=disabled (local backend)"
-        )
+        "egress=none (every backend in the vocabulary is local)"
     )
     if problems:
         for problem in problems:
@@ -441,7 +424,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true", help="print live posture and exit")
     parser.add_argument("--query", default=None, help="run one broker-backed fabric query and print it")
     parser.add_argument("--broker-url", default=None)
-    parser.add_argument("--key-file", default=None)
     parser.add_argument("--model", default=None)
     parser.add_argument("--node-id", default=None)
     parser.add_argument("--usd-per-1k-tokens", type=float, default=None)
@@ -451,7 +433,6 @@ def main(argv: list[str] | None = None) -> int:
     config = live_config(
         {
             "broker_url": args.broker_url,
-            "key_file": args.key_file,
             "model": args.model,
             "node_id": args.node_id,
             "usd_per_1k_tokens": args.usd_per_1k_tokens,

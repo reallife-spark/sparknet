@@ -3,7 +3,7 @@
 
 This module is the single implementation of the reflex decision contract.
 It is loaded by path (like shared/sparknet-authz.py) and must remain stdlib only.
-Jev/System One answers are untrusted input; the module makes abstain
+A backend's answers are untrusted input; the module makes abstain
 first-class, forbids authority fields, and keeps audit logs free of state.
 
 The contract lives in contracts/reflex-schema.json.
@@ -29,7 +29,7 @@ QUESTION_TYPES = ("noul", "choice", "score")
 VERDICTS = ("accept", "reject", "abstain")
 MODES = ("off", "local", "broker", "auto")
 LOCAL_BACKENDS = ("local-rerank", "local-llm", "rules")
-BACKENDS = ("jev", "local-rerank", "local-llm", "rules", "null")
+BACKENDS = ("broker", "local-rerank", "local-llm", "rules", "null")
 LOCAL_MODEL_SENTINEL = "local"
 
 FORBIDDEN_FIELDS = {"capability", "grant", "signature", "approve", "apply", "secret", "token", "key"}
@@ -321,7 +321,7 @@ def decision_from_answer(
     answer: dict[str, Any],
     request: dict[str, Any],
     *,
-    backend: str = "jev",
+    backend: str = "broker",
     model: str | None = None,
     latency_ms: float = 0.0,
     usage: dict[str, Any] | None = None,
@@ -381,7 +381,7 @@ def consult(
     *,
     timeout_s: float = 2.0,
     budget: Budget | None = None,
-    backend: str = "jev",
+    backend: str = "broker",
     model: str | None = None,
     positive_choice: Any = None,
     score_threshold: float = 0.5,
@@ -450,10 +450,10 @@ def backend_from_env(question_class: str = "rag.relevance") -> str:
     """The backend this node's environment selects. Local is the default.
 
     The selector vocabulary is ``off | local | broker | local-rerank |
-    local-llm | rules``, with ``jev`` accepted as an alias of ``broker`` because
-    the Master broker reads that spelling too — the two must not disagree about
-    which mode is the cloud one. Anything unrecognised falls back to local, so a
-    typo can never become egress.
+    local-llm | rules``. ``broker`` names the Master's reflex broker, which is
+    itself local — there is no egress backend in the vocabulary at all, so no
+    spelling a node can select reaches outside the fabric. Anything unrecognised
+    falls back to local, so a typo can never widen what runs.
     """
     backend = os.environ.get("SPARKNET_REFLEX_BACKEND", "").strip().lower()
     if backend in LOCAL_BACKENDS:
@@ -462,8 +462,8 @@ def backend_from_env(question_class: str = "rag.relevance") -> str:
         if question_class == "rag.relevance":
             return "local-rerank"
         return "local-llm"
-    if backend in ("broker", "jev"):
-        return "jev"
+    if backend == "broker":
+        return "broker"
     if backend == "off":
         return "null"
     # default local

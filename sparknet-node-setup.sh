@@ -282,11 +282,11 @@ NATS_IMAGE_TAG=${NATS_IMAGE_TAG:-2.14.2-alpine}
 WEBUI_TAG=${WEBUI_TAG:-v0.12.2}
 SPARKNET_MASTER_PUB=${JOIN_MASTER_PUB:-}
 GOSPARK_REGISTRY_FILE=${JOIN_REGISTRY_PATH:-}
-# Reflex is local-first: local reranker/LLM, no egress, no credential. Broker
-# mode and the TypeSafe cloud path are opt-in. No new published port.
+# Reflex is local-only: a local reranker/LLM, or the Master's broker, which
+# answers locally too. There is no egress path and no credential. No new
+# published port.
 SPARKNET_REFLEX_MODE=${SPARKNET_REFLEX_MODE:-local}
 SPARKNET_REFLEX_BACKEND=${SPARKNET_REFLEX_BACKEND:-local}
-SPARKNET_REFLEX_ALLOW_EGRESS=${SPARKNET_REFLEX_ALLOW_EGRESS:-0}
 SPARKNET_REFLEX_LOCAL_URL=${SPARKNET_REFLEX_LOCAL_URL:-http://127.0.0.1:8000}
 SPARKNET_REFLEX_LOCAL_MODEL=${SPARKNET_REFLEX_LOCAL_MODEL:-local}
 SPARKNET_REFLEX_BROKER_URL=${SPARKNET_REFLEX_BROKER_URL:-http://10.100.0.1:4224}

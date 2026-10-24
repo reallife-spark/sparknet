@@ -53,7 +53,7 @@ def _request(reflex: ModuleType) -> dict:
         "rag.relevance",
         "alpha",
         {"q": {"type": "noul", "instructions": "relevant?"}},
-        "jev-1.13.0",
+        "local",
         "policy-1",
         "node-a",
         "req-1",
@@ -147,10 +147,10 @@ def test_score_abstains_on_low_confidence(reflex: ModuleType) -> None:
 
 def test_abstain_decision_is_first_class(reflex: ModuleType) -> None:
     req = _request(reflex)
-    decision = reflex.abstain_decision("jev-1.13.0", "jev", "policy-1", req)
+    decision = reflex.abstain_decision("local", "broker", "policy-1", req)
     assert decision["verdict"] == "abstain"
     assert decision["confidence"] is None
-    assert decision["backend"] == "jev"
+    assert decision["backend"] == "broker"
     assert decision["state_digest"] == reflex._digest(req["state"])
 
 
@@ -159,7 +159,7 @@ def test_cache_key_changes_with_model_policy_and_state(reflex: ModuleType) -> No
     base = reflex.cache_key(req)
 
     req2 = _request(reflex)
-    req2["model"] = "jev-1.14.0"
+    req2["model"] = "mistral-7b"
     assert reflex.cache_key(req2) != base
 
     req3 = _request(reflex)
@@ -177,7 +177,7 @@ def test_cache_key_changes_with_model_policy_and_state(reflex: ModuleType) -> No
 
 def test_audit_line_carries_no_state_or_questions(reflex: ModuleType) -> None:
     req = _request(reflex)
-    decision = reflex.abstain_decision("jev-1.13.0", "jev", "policy-1", req)
+    decision = reflex.abstain_decision("local", "broker", "policy-1", req)
     line = json.loads(reflex.audit_line(decision, req, "rag.relevance", 12.5))
     assert line["class"] == "rag.relevance"
     assert line["verdict"] == "abstain"
@@ -301,7 +301,7 @@ def test_consult_backend_error_abstains(reflex: ModuleType) -> None:
     req = _request(reflex)
 
     def boom(_req):
-        raise RuntimeError("vendor down")
+        raise RuntimeError("backend down")
 
     assert reflex.consult(boom, req, timeout_s=1.0)["_reason"] == "backend-error"
 
@@ -321,10 +321,10 @@ def test_consult_success_charges_the_budget(reflex: ModuleType) -> None:
     assert reflex.consult(lambda _r: {"type": "noul", "noul": 0.9}, req, budget=budget)["_reason"] == "budget-exhausted"
 
 
-def test_consult_handles_the_vendor_envelope(reflex: ModuleType) -> None:
+def test_consult_handles_a_backend_envelope(reflex: ModuleType) -> None:
     req = _request(reflex)
     envelope = {
-        "model": "jev-1.13.0",
+        "model": "local",
         "answers": {"q": {"type": "noul", "noul": 0.9}},
         "usage": {"input_tokens": 10, "output_tokens": 2},
     }
@@ -339,9 +339,12 @@ def test_backend_selection_defaults_to_local(reflex: ModuleType, monkeypatch) ->
     assert reflex.backend_from_env("rag.relevance") == "local-rerank"
     assert reflex.backend_from_env("routing") == "local-llm"
     monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "broker")
-    assert reflex.backend_from_env("rag.relevance") == "jev"
+    assert reflex.backend_from_env("rag.relevance") == "broker"
     monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "jev")
-    assert reflex.backend_from_env("rag.relevance") == "jev", "the broker reads this spelling; the two must agree"
+    assert reflex.backend_from_env("rag.relevance") == "local-rerank", (
+        "a retired cloud spelling must fall back to local; an operator's stale env var cannot select a backend "
+        "that leaves the node"
+    )
     monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "off")
     assert reflex.backend_from_env("rag.relevance") == "null"
     monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "rules")

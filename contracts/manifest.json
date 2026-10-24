@@ -29,7 +29,7 @@
       "contract": "ports",
       "file": "ports.json",
       "schema_version": "2.0",
-      "sha256": "ebb2b0737b9b46d9000367b366045d34bc478ab29ffce9dabd1a3b81e045f709"
+      "sha256": "c325866cdab5df5da64304d99a777875935d36ceebad6ff71b6cec4cb462d0bc"
     },
     {
       "contract": "proposal-schema",
@@ -41,7 +41,7 @@
       "contract": "reflex",
       "file": "reflex-schema.json",
       "schema_version": "1.0",
-      "sha256": "747841a94b75415217bb3604cc201230ad55e799b5599d696fa4d68e5808ac9e"
+      "sha256": "204ebcb1cff0fac1266a7e13c8f0b08c89889e9f971b77f73674ef09fe2277ae"
     },
     {
       "contract": "registry-publication",

@@ -54,7 +54,7 @@ class Stub:
         return {"node_id": "peer-0001"}
 
 
-def _request(model: str = "jev-1.13.0") -> dict:
+def _request(model: str = "local") -> dict:
     return {
         "schema_version": "1.0",
         "question_class": "rag.relevance",
@@ -92,7 +92,7 @@ def test_no_new_published_port_is_added() -> None:
     assert ports["ports"]["4224"]["bound_by"] == "master"
 
 
-def test_local_is_the_default_and_abstains_without_egress(bridge: ModuleType, monkeypatch) -> None:
+def test_local_is_the_default_and_never_leaves_the_node(bridge: ModuleType, monkeypatch) -> None:
     monkeypatch.delenv("SPARKNET_REFLEX_MODE", raising=False)
     monkeypatch.delenv("SPARKNET_REFLEX_BACKEND", raising=False)
     stub = Stub(bridge)
@@ -117,8 +117,8 @@ def test_broker_mode_forwards_and_binds_node_id(bridge: ModuleType, monkeypatch)
                 {
                     "verdict": "accept",
                     "confidence": 0.9,
-                    "backend": "jev",
-                    "model": "jev-1.13.0",
+                    "backend": "broker",
+                    "model": "local",
                     "usage": None,
                     "latency_ms": 1.0,
                     "cached": False,
@@ -140,8 +140,7 @@ def test_broker_mode_forwards_and_binds_node_id(bridge: ModuleType, monkeypatch)
     thread.start()
     try:
         monkeypatch.setenv("SPARKNET_REFLEX_MODE", "broker")
-        monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "jev")
-        monkeypatch.setenv("SPARKNET_REFLEX_ALLOW_EGRESS", "1")
+        monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "broker")
         monkeypatch.setenv("SPARKNET_REFLEX_BROKER_URL", f"http://127.0.0.1:{server.server_address[1]}")
         decision = Stub(bridge).reflex_decide(_request(), {})
         assert decision["verdict"] == "accept"
@@ -153,8 +152,7 @@ def test_broker_mode_forwards_and_binds_node_id(bridge: ModuleType, monkeypatch)
 
 def test_broker_failure_abstains(bridge: ModuleType, monkeypatch) -> None:
     monkeypatch.setenv("SPARKNET_REFLEX_MODE", "broker")
-    monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "jev")
-    monkeypatch.setenv("SPARKNET_REFLEX_ALLOW_EGRESS", "1")
+    monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "broker")
     monkeypatch.setenv("SPARKNET_REFLEX_BROKER_URL", "http://127.0.0.1:1")
     monkeypatch.setenv("SPARKNET_REFLEX_TIMEOUT", "0.05")
     reason = Stub(bridge).reflex_decide(_request(), {})["_reason"]
@@ -228,10 +226,9 @@ def test_local_rerank_abstains_on_silence_and_on_a_malformed_state(bridge: Modul
     assert malformed["_reason"] == "low-signal"
 
 
-def test_local_mode_refuses_the_cloud_backend_without_opening_a_socket(bridge: ModuleType, monkeypatch) -> None:
+def test_local_mode_refuses_the_broker_backend_without_opening_a_socket(bridge: ModuleType, monkeypatch) -> None:
     monkeypatch.setenv("SPARKNET_REFLEX_MODE", "local")
-    monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "jev")
-    monkeypatch.setenv("SPARKNET_REFLEX_ALLOW_EGRESS", "1")
+    monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "broker")
 
     def explode(*_args, **_kwargs):
         raise AssertionError("local mode must not open a socket, whatever the backend env says")

@@ -300,6 +300,106 @@ def test_readme_documents_exclusions_and_provenance():
     assert (SKILLS_DIR / "LICENSE").is_file(), "MIT license text must ship with the vendored copy"
 
 
+# --- the editor rebrand: what may still say the old name, and why --------------
+
+# The vault's editor was rebranded to "orchestrator" by the sync script's dialect
+# rewrite. What survives is the *product*, which this repo does not own and
+# cannot rename: its config directory, its CLI, its documentation URLs and its
+# upstream repository. Each pattern below is one of those, and a match outside
+# them means the dialect missed a mention or someone reintroduced the old name
+# as ours.
+OBSIDIAN_EXTERNAL_ARTIFACTS = (
+    re.compile(r"\.obsidian"),  # the editor's own config directory
+    re.compile(r"obsidian-wiki"),  # the upstream repository this suite is vendored from
+    re.compile(r"obsidian\.md|obsidianmd"),  # documentation and GitHub-org URLs
+    re.compile(r"Obsidian CLI"),  # the external command-line tool some skills drive
+    re.compile(r"obsidian-(?:bases|cli|markdown)"),  # upstream skill names the dialect maps FROM
+)
+
+# Files whose entire job is the rename, so they must name what they rename from.
+OBSIDIAN_RENAME_MECHANISM = {
+    "scripts/sync-wiki-skills.py",
+    ".opencode/skills/README.md",
+    ".opencode/skills/.sync.json",
+}
+
+# A generated snapshot of the host it was captured on. Its PATH names a real
+# directory; rewriting the value would make the manifest lie about the machine.
+# Recorded as by-design in log.md (2026-10-08, EXPANSION Phase G).
+OBSIDIAN_HOST_SNAPSHOTS = {"peer-node/manifests/user-env-manifest.json"}
+
+# Append-only history states what was true when it was written and is never
+# rewritten to suit a later rename.
+OBSIDIAN_HISTORY_PARTS = {"log.md", "sessions", "journal", "02_Daily"}
+
+
+def _ours_with_old_editor_name() -> list[tuple[str, int, str]]:
+    out: list[tuple[str, int, str]] = []
+    for path in sorted(REPO_ROOT.rglob("*")):
+        if not path.is_file() or path.suffix not in {".py", ".md", ".json", ".sh", ".yml", ".yaml", ".service"}:
+            continue
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        parts = set(rel.split("/"))
+        if parts & {"__pycache__", ".git", ".venv", "dist", "node_modules", ".pytest_cache", ".ruff_cache"}:
+            continue
+        if parts & OBSIDIAN_HISTORY_PARTS:
+            continue
+        if path == Path(__file__).resolve():
+            continue  # this file names the boundary it enforces
+        if rel.startswith(".opencode/skills/") or rel in OBSIDIAN_RENAME_MECHANISM:
+            continue  # vendored (sha256-pinned, dialect applied) or the dialect itself
+        if rel in OBSIDIAN_HOST_SNAPSHOTS:
+            continue
+        for lineno, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
+            if "obsidian" in line.lower():
+                out.append((rel, lineno, line.strip()))
+    return out
+
+
+def test_the_old_editor_name_survives_only_as_an_external_artifact() -> None:
+    """Our own files name the editor only where the product itself is meant.
+
+    The rebrand is applied by `scripts/sync-wiki-skills.py`'s dialect rewrite,
+    which deliberately leaves four categories alone because they are real
+    external artifacts rather than sparknet prose. This asserts that boundary
+    holds in the files *we* author, so the rebrand cannot quietly regress and so
+    the exemptions stay a short, reviewable list instead of a shrug.
+
+    The vendored suite is not swept here: it is pinned by sha256 and verified by
+    `make wiki-verify`, and hand-editing it would break that pin.
+    """
+    offenders = [
+        (rel, lineno, line)
+        for rel, lineno, line in _ours_with_old_editor_name()
+        if not any(pattern.search(line) for pattern in OBSIDIAN_EXTERNAL_ARTIFACTS)
+    ]
+    assert not offenders, (
+        "the editor was rebranded to 'orchestrator'; these mentions name neither an "
+        "external artifact nor an exempt file:\n"
+        + "\n".join(f"  {rel}:{lineno}: {line[:110]}" for rel, lineno, line in offenders)
+    )
+
+
+def test_the_rebrand_exemptions_are_still_narrow() -> None:
+    """An exemption list that grows silently stops being an exemption list."""
+    expected_mechanism = {
+        "scripts/sync-wiki-skills.py",
+        ".opencode/skills/README.md",
+        ".opencode/skills/.sync.json",
+    }
+    expected_snapshots = {"peer-node/manifests/user-env-manifest.json"}
+    assert expected_mechanism == OBSIDIAN_RENAME_MECHANISM, (
+        "the rename-mechanism exemptions changed; an entry belongs there only if the file's whole job is the rename"
+    )
+    assert expected_snapshots == OBSIDIAN_HOST_SNAPSHOTS, (
+        "the host-snapshot exemptions changed; only a generated snapshot of a real host belongs there"
+    )
+    for rel in OBSIDIAN_RENAME_MECHANISM | OBSIDIAN_HOST_SNAPSHOTS:
+        assert (REPO_ROOT / rel).is_file(), f"exempt file {rel} no longer exists; drop the exemption"
+    # The sweep must actually reach files, or it passes vacuously.
+    assert len(_ours_with_old_editor_name()) >= 3, "the sweep found almost nothing; its glob is broken"
+
+
 # --- vault scoping: the part that silently files knowledge in the wrong place --
 
 

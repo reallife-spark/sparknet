@@ -738,11 +738,37 @@ def share_policy() -> dict:
     return load("capabilities.json")
 
 
-def test_share_protocol_says_nothing_there_is_built(ports: dict):
-    """Same honesty guard as guard-protocol.md: no built side is implied."""
+def test_share_protocol_states_its_own_build_boundary(ports: dict):
+    """Same honesty guard as guard-protocol.md, aimed at the real boundary.
+
+    This used to require the literal phrase "nothing here is built", which was
+    true while the regime was only specced and became false the moment peer Steps
+    6 and 8 and Master Steps 10-12 closed. A guard that pins a *sentence* keeps
+    that sentence alive past its truth — it made the contract page lie, and the
+    test then failed anyone who tried to correct it. So this pins the fact
+    instead: the code exists, the deployment does not, and the page must say
+    which is which and cite something checkable.
+    """
     text = (CONTRACTS / "share-protocol.md").read_text()
-    assert re.search(r"not built|Nothing here is built|does not exist", text, re.I), (
-        "share-protocol.md must say plainly that no side is implemented yet"
+    assert re.search(r"not built|not deployed", text, re.I), (
+        "share-protocol.md must state plainly what is still unbuilt"
+    )
+    for source in ("share-regime.json", "ports.json"):
+        assert source in text, f"share-protocol.md must cite {source} for its build state"
+
+    # Neither direction may drift: the manifest's status and ports.json's
+    # code-vs-runtime split are what the page's claim rests on.
+    regime = json.loads((PEER / "manifests" / "share-regime.json").read_text())
+    assert regime["status"] == "wired, not deployed", (
+        "share-regime.json's status moved; re-check share-protocol.md's build boundary against it"
+    )
+    for port in ("4201", "4202"):
+        assert ports["ports"][port]["implementation_state"] == "implemented", port
+        assert ports["ports"][port]["runtime"] == "not-listening", (
+            f"{port} is listening now, so 'wired, not deployed' understates the build state"
+        )
+    assert ports["ports"]["4203"]["implementation_state"] == "spec-only", (
+        "4203 gained an implementation; the ratification side is no longer spec-only"
     )
 
 

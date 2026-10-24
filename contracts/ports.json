@@ -218,7 +218,7 @@
      "bound_by": "master",
      "overlay_only": true,
      "binds_to": "10.100.0.1",
-     "note": "The Master's reflex broker: the only holder of the TypeSafe/Jev credential. Local reflex is the default; this broker is the cloud path for the unified massive-task workload. A peer asks it only after reflex-consult is granted (Phase 2).",
+     "note": "The Master's reflex broker: one local sensor the fabric can consult instead of every node running its own. Local reflex is the default and this broker is local too — the backend vocabulary has no member that egresses, so there is no cloud path to enable here. A peer asks it only after reflex-consult is granted (Phase 2).",
      "implementation_state": "implemented",
      "runtime": "not-verifiable-here",
      "runtime_why": "master-node/services/sparknet-reflex-broker.py implements the listener and master-node/systemd/sparknet-reflex-broker.service stages it, but this host has no WireGuard interface, so 10.100.0.1 cannot be observed. The service is not enabled until the credential is provisioned (Step 64F)."

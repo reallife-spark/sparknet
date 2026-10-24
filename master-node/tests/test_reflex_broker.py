@@ -1,10 +1,15 @@
-"""The Master reflex broker: overlay-only, pinned, fail-open, no authority.
+"""The Master reflex broker: overlay-only, local, fail-open, no authority.
 
-The broker is the only holder of the TypeSafe credential, so these tests pin the
-things that would turn a sensor into a liability: it refuses a non-overlay bind,
-refuses a peer source in Phase 1, refuses a moving model tag and a credential
-readable by anyone else, and abstains on timeout, error, missing credential or
-budget exhaustion. The audit line must carry hashes, never state.
+These tests pin the things that would turn a sensor into a liability: it refuses
+a non-overlay bind, refuses a peer source in Phase 1, refuses a moving model tag,
+and abstains on timeout, backend error or budget exhaustion. The audit line must
+carry hashes, never state.
+
+They also pin an absence. The broker once held a cloud credential and an egress
+path behind a flag that defaulted to off; a flag can be turned on, so the cloud
+leg was removed rather than disabled. `test_the_broker_has_no_egress_surface`
+asserts the removal structurally, so restoring it is a deliberate act that fails
+a test rather than a configuration change nobody reviews.
 """
 
 from __future__ import annotations
@@ -26,6 +31,8 @@ BROKER_PATH = ROLE_ROOT / "services" / "sparknet-reflex-broker.py"
 UNIT_PATH = ROLE_ROOT / "systemd" / "sparknet-reflex-broker.service"
 PORTS = ROLE_ROOT.parent / "contracts" / "ports.json"
 
+PINNED_MODEL = "qwen2.5-3b-32k"
+
 
 @pytest.fixture(scope="module")
 def broker() -> ModuleType:
@@ -40,7 +47,7 @@ def broker() -> ModuleType:
     return module
 
 
-def _request(broker: ModuleType, model: str = "jev-1.13.0", node_id: str = "master") -> dict:
+def _request(broker: ModuleType, model: str = "local", node_id: str = "master") -> dict:
     return broker.reflex.make_request(
         "rag.relevance",
         "alpha",
@@ -50,6 +57,16 @@ def _request(broker: ModuleType, model: str = "jev-1.13.0", node_id: str = "mast
         node_id,
         "req-1",
     )
+
+
+def _decide(broker: ModuleType, request: dict, tmp_path: Path, **kwargs) -> dict:
+    common = {
+        "timeout_s": 1.0,
+        "budget": broker.BudgetLedger(),
+        "audit_path": tmp_path / "a.jsonl",
+    }
+    common.update(kwargs)
+    return broker.decide(request, **common)
 
 
 def test_the_contract_declares_4224_overlay_only() -> None:
@@ -62,17 +79,36 @@ def test_the_contract_declares_4224_overlay_only() -> None:
     assert spec["implementation_state"] == "implemented"
 
 
-def test_the_unit_binds_the_overlay_and_names_the_credential() -> None:
+def test_the_unit_binds_the_overlay_and_carries_no_credential() -> None:
     unit = UNIT_PATH.read_text()
     assert "10.100.0.1" in unit
     assert "4224" in unit
-    assert "typesafe-api-key" in unit
     assert "0.0.0.0" not in unit
+    assert "--key-file" not in unit, "the cloud leg is gone, so the unit must not pass a credential"
+    assert "ALLOW_EGRESS" not in unit
+    assert "typesafe" not in unit.lower()
 
 
-def test_model_must_be_an_exact_jev_tag(broker: ModuleType) -> None:
-    assert broker.validate_model("jev-1.13.0") == "jev-1.13.0"
-    for bad in ("", "jev-latest", "latest", "gpt-4o"):
+def test_the_broker_has_no_egress_surface(broker: ModuleType) -> None:
+    """Nothing in this process can open a socket toward the internet.
+
+    Asserted structurally: an HTTP client that is absent cannot be enabled by an
+    environment variable, which is the property a defaulted-off flag never had.
+    """
+    source = BROKER_PATH.read_text()
+    assert "urllib" not in source, "the broker must not carry an HTTP client"
+    assert "api.typesafe.ai" not in source
+    for name in ("read_key", "vendor_payload", "_vendor_backend", "DEFAULT_ENDPOINT", "validate_local_model"):
+        assert not hasattr(broker, name), f"{name} survived the cloud-leg removal"
+    assert "jev" not in broker.reflex.BACKENDS
+    assert "broker" in broker.reflex.BACKENDS
+
+
+def test_model_must_be_an_exact_tag(broker: ModuleType) -> None:
+    assert broker.validate_model("local") == "local"
+    assert broker.validate_model(PINNED_MODEL) == PINNED_MODEL
+    assert broker.validate_model("bge-reranker-v2-m3") == "bge-reranker-v2-m3"
+    for bad in ("", "   ", "latest", "jev-latest", "some-model:latest"):
         with pytest.raises(broker.BrokerError):
             broker.validate_model(bad)
 
@@ -84,27 +120,6 @@ def test_only_loopback_and_the_master_overlay_are_accepted(broker: ModuleType) -
     assert broker.source_allowed("0.0.0.0") is False
 
 
-def test_credential_must_be_0600(broker: ModuleType, tmp_path: Path) -> None:
-    key = tmp_path / "key"
-    key.write_text("secret")
-    key.chmod(0o600)
-    assert broker.read_key(key) == "secret"
-    key.chmod(0o644)
-    with pytest.raises(broker.BrokerError, match="0600"):
-        broker.read_key(key)
-    with pytest.raises(broker.BrokerError, match="missing"):
-        broker.read_key(tmp_path / "nope")
-
-
-def test_vendor_payload_is_three_fields_and_redacted(broker: ModuleType) -> None:
-    req = _request(broker)
-    req["state"] = {"text": "api_key=supersecret", "ok": "visible"}
-    payload = broker.vendor_payload(req)
-    assert set(payload) == {"state", "model", "questions"}
-    assert "supersecret" not in json.dumps(payload)
-    assert "visible" in json.dumps(payload)
-
-
 def test_decide_returns_a_decision_and_audits_hashes_only(broker: ModuleType, tmp_path: Path) -> None:
     req = _request(broker)
     req["state"] = "api_key=supersecret"
@@ -112,12 +127,10 @@ def test_decide_returns_a_decision_and_audits_hashes_only(broker: ModuleType, tm
     decision = broker.decide(
         req,
         call=lambda _r: {"type": "noul", "noul": 0.9},
-        key="k",
-        endpoint="https://example.invalid",
         timeout_s=1.0,
         budget=broker.BudgetLedger(per_node_per_day=10, global_per_day=10),
         audit_path=audit,
-        model_pin="jev-1.13.0",
+        model_pin="local",
     )
     assert decision["verdict"] == "accept"
     line = audit.read_text()
@@ -126,74 +139,52 @@ def test_decide_returns_a_decision_and_audits_hashes_only(broker: ModuleType, tm
     assert json.loads(line)["verdict"] == "accept"
 
 
-def test_a_model_that_does_not_match_the_pin_is_refused(broker: ModuleType, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "jev")
-    monkeypatch.setenv("SPARKNET_REFLEX_ALLOW_EGRESS", "1")
-    req = _request(broker, model="jev-1.14.0")
+def test_a_model_that_does_not_match_the_pin_is_refused(broker: ModuleType, tmp_path: Path) -> None:
+    req = _request(broker, model="mistral-7b")
     with pytest.raises(broker.BrokerError, match="does not match"):
-        broker.decide(
-            req,
-            call=lambda _r: {"type": "noul", "noul": 0.9},
-            key="k",
-            endpoint="https://example.invalid",
-            timeout_s=1.0,
-            budget=broker.BudgetLedger(),
-            audit_path=tmp_path / "a.jsonl",
-            model_pin="jev-1.13.0",
-        )
+        _decide(broker, req, tmp_path, call=lambda _r: {"type": "noul", "noul": 0.9}, model_pin=PINNED_MODEL)
 
 
-def test_offline_abstains_without_calling_the_vendor(broker: ModuleType, tmp_path: Path) -> None:
+def test_the_local_sentinel_always_matches_the_pin(broker: ModuleType, tmp_path: Path) -> None:
+    """`local` means "whatever this node runs", so it cannot mismatch a pin.
+
+    The bridge sends the sentinel by default; refusing it would make the ordinary
+    request shape unanswerable and the pin a denial-of-service on its own fabric.
+    """
+    decision = _decide(
+        broker,
+        _request(broker, model="local"),
+        tmp_path,
+        call=lambda _r: {"type": "noul", "noul": 0.9},
+        model_pin=PINNED_MODEL,
+    )
+    assert decision["verdict"] == "accept"
+
+
+def test_offline_abstains_without_calling_the_backend(broker: ModuleType, tmp_path: Path) -> None:
     called = []
 
     def call(_r):
         called.append(1)
         return {"type": "noul", "noul": 0.9}
 
-    decision = broker.decide(
-        _request(broker),
-        call=call,
-        key=None,
-        endpoint="https://example.invalid",
-        timeout_s=1.0,
-        budget=broker.BudgetLedger(),
-        audit_path=tmp_path / "a.jsonl",
-        offline=True,
-    )
+    decision = _decide(broker, _request(broker), tmp_path, call=call, offline=True)
     assert decision["verdict"] == "abstain"
     assert decision["_reason"] == "offline"
     assert called == []
 
 
 def test_budget_exhaustion_abstains(broker: ModuleType, tmp_path: Path) -> None:
-    req = _request(broker, node_id="n1")
     budget = broker.BudgetLedger(per_node_per_day=1, global_per_day=10)
     budget.charge("n1")
-    decision = broker.decide(
-        req,
+    decision = _decide(
+        broker,
+        _request(broker, node_id="n1"),
+        tmp_path,
         call=lambda _r: {"type": "noul", "noul": 0.9},
-        key="k",
-        endpoint="https://example.invalid",
-        timeout_s=1.0,
         budget=budget,
-        audit_path=tmp_path / "a.jsonl",
     )
     assert decision["_reason"] == "budget-exhausted"
-
-
-def test_missing_credential_abstains(broker: ModuleType, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "jev")
-    monkeypatch.setenv("SPARKNET_REFLEX_ALLOW_EGRESS", "1")
-    decision = broker.decide(
-        _request(broker),
-        call=lambda _r: {"type": "noul", "noul": 0.9},
-        key=None,
-        endpoint="https://example.invalid",
-        timeout_s=1.0,
-        budget=broker.BudgetLedger(),
-        audit_path=tmp_path / "a.jsonl",
-    )
-    assert decision["_reason"] == "no-credential"
 
 
 def test_timeout_and_backend_error_abstain(broker: ModuleType, tmp_path: Path) -> None:
@@ -204,38 +195,34 @@ def test_timeout_and_backend_error_abstain(broker: ModuleType, tmp_path: Path) -
         return {"type": "noul", "noul": 0.9}
 
     def boom(_r):
-        raise RuntimeError("vendor down")
+        raise RuntimeError("backend down")
 
-    common = {
-        "key": "k",
-        "endpoint": "https://example.invalid",
-        "timeout_s": 0.05,
-        "budget": broker.BudgetLedger(),
-        "audit_path": tmp_path / "a.jsonl",
-    }
+    common = {"timeout_s": 0.05, "budget": broker.BudgetLedger(), "audit_path": tmp_path / "a.jsonl"}
     assert broker.decide(_request(broker), call=slow, **common)["_reason"] == "timeout"
     assert broker.decide(_request(broker), call=boom, **common)["_reason"] == "backend-error"
 
 
-def test_check_posture_does_not_print_the_key(broker: ModuleType, capsys, tmp_path: Path) -> None:
-    key = tmp_path / "key"
-    key.write_text("supersecret")
-    key.chmod(0o600)
-    rc = broker.main(["--check", "--key-file", str(key), "--bind", "127.0.0.1"])
-    assert rc == 0
-    out = capsys.readouterr().out
-    assert "supersecret" not in out
-    assert '"credential": "present"' in out
+def test_check_posture_reports_no_credential_surface(broker: ModuleType, capsys) -> None:
+    assert broker.main(["--check", "--bind", "127.0.0.1"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["service"] == "reflex-broker"
+    assert "credential" not in payload
+    assert "endpoint" not in payload
+    assert "allow_egress" not in payload
+
+
+def test_the_credential_flag_is_gone(broker: ModuleType) -> None:
+    """`--key-file` is not accepted, so an old unit fails loudly instead of silently."""
+    with pytest.raises(SystemExit):
+        broker.main(["--check", "--key-file", "/nonexistent/key"])
 
 
 def test_healthz_says_nothing_and_decide_serves(broker: ModuleType, tmp_path: Path) -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 0), broker._Handler)
-    server.key = None
-    server.endpoint = "https://example.invalid"
     server.timeout_s = 1.0
     server.budget = broker.BudgetLedger()
     server.audit_path = tmp_path / "a.jsonl"
-    server.model_pin = "jev-1.13.0"
+    server.model_pin = "local"
     server.offline = True
     server.call = None
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -266,36 +253,11 @@ def test_healthz_says_nothing_and_decide_serves(broker: ModuleType, tmp_path: Pa
         server.server_close()
 
 
-def test_local_mode_needs_no_credential(broker: ModuleType, tmp_path: Path, monkeypatch) -> None:
+def test_the_default_backend_is_local(broker: ModuleType, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "local")
-    monkeypatch.setenv("SPARKNET_REFLEX_ALLOW_EGRESS", "0")
-    decision = broker.decide(
-        _request(broker, model="local"),
-        call=lambda _r: {"type": "noul", "noul": 0.9},
-        key=None,
-        endpoint="https://example.invalid",
-        timeout_s=1.0,
-        budget=broker.BudgetLedger(),
-        audit_path=tmp_path / "a.jsonl",
-    )
+    decision = _decide(broker, _request(broker, model="local"), tmp_path, call=lambda _r: {"type": "noul", "noul": 0.9})
     assert decision["verdict"] == "accept"
     assert decision["backend"] == "local-rerank"
-
-
-def test_egress_without_credential_still_abstains(broker: ModuleType, tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "jev")
-    monkeypatch.setenv("SPARKNET_REFLEX_ALLOW_EGRESS", "1")
-    decision = broker.decide(
-        _request(broker),
-        call=lambda _r: {"type": "noul", "noul": 0.9},
-        key=None,
-        endpoint="https://example.invalid",
-        timeout_s=1.0,
-        budget=broker.BudgetLedger(),
-        audit_path=tmp_path / "a.jsonl",
-    )
-    assert decision["verdict"] == "abstain"
-    assert decision["_reason"] == "no-credential"
 
 
 def _relevance(broker: ModuleType, state: object, model: str = "local") -> dict:
@@ -310,20 +272,8 @@ def _relevance(broker: ModuleType, state: object, model: str = "local") -> dict:
     )
 
 
-def _decide(broker: ModuleType, request: dict, tmp_path: Path) -> dict:
-    return broker.decide(
-        request,
-        key=None,
-        endpoint="https://example.invalid",
-        timeout_s=1.0,
-        budget=broker.BudgetLedger(),
-        audit_path=tmp_path / "a.jsonl",
-    )
-
-
 def test_local_rerank_accepts_coverage_and_abstains_on_silence(broker: ModuleType, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "local")
-    monkeypatch.setenv("SPARKNET_REFLEX_ALLOW_EGRESS", "0")
 
     covering = _decide(
         broker, _relevance(broker, {"query": "guard nonce", "chunk": "the guard envelope nonce expired"}), tmp_path
@@ -342,7 +292,6 @@ def test_local_rerank_accepts_coverage_and_abstains_on_silence(broker: ModuleTyp
 
 def test_a_local_backend_failure_abstains_and_never_rejects(broker: ModuleType, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "local-llm")
-    monkeypatch.setenv("SPARKNET_REFLEX_ALLOW_EGRESS", "0")
     monkeypatch.delenv("SPARKNET_REFLEX_LOCAL_MODEL", raising=False)
     monkeypatch.delenv("SPARKNET_LOCAL_MODEL", raising=False)
 
@@ -359,20 +308,23 @@ def test_an_off_backend_abstains_without_calling_anything(broker: ModuleType, tm
     assert decision["_reason"] == "offline"
 
 
-def test_main_accepts_a_local_model_in_local_mode(broker: ModuleType, monkeypatch, capsys) -> None:
+def test_a_broker_selector_is_local_too(broker: ModuleType, tmp_path: Path, monkeypatch) -> None:
+    """`broker` names this process's own kind: local, not a route off the fabric."""
+    monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "broker")
+    assert broker.backend_posture() == "broker"
+    assert broker.reflex.backend_from_env("rag.relevance") == "broker"
+
+
+def test_main_accepts_a_local_model(broker: ModuleType, monkeypatch, capsys) -> None:
     monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "local")
-    monkeypatch.setenv("SPARKNET_REFLEX_ALLOW_EGRESS", "0")
     monkeypatch.setenv("SPARKNET_REFLEX_MODEL", "local")
     assert broker.main(["--check"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["backend"] == "local"
     assert payload["model"] == "local"
-    assert payload["credential"] == "absent"
 
 
-def test_main_still_pins_an_exact_jev_tag_for_egress(broker: ModuleType, monkeypatch, capsys) -> None:
-    monkeypatch.setenv("SPARKNET_REFLEX_BACKEND", "jev")
-    monkeypatch.setenv("SPARKNET_REFLEX_ALLOW_EGRESS", "1")
-    monkeypatch.setenv("SPARKNET_REFLEX_MODEL", "local")
+def test_main_refuses_a_moving_model_tag(broker: ModuleType, monkeypatch, capsys) -> None:
+    monkeypatch.setenv("SPARKNET_REFLEX_MODEL", "some-model:latest")
     assert broker.main(["--check"]) == 2
-    assert "jev-*" in capsys.readouterr().err
+    assert "latest" in capsys.readouterr().err

@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "contract": "reflex",
-  "description": "The typed decision contract for the Jev/System One reflex layer. Reflex is a sensor, never an authority: it may rank, annotate, route or flag, but never sign, grant/revoke, approve a guard application or widen a permission. On timeout, low confidence, budget exhaustion or any doubt it abstains and the caller falls back to deterministic behavior.",
+  "description": "The typed decision contract for the reflex layer. Reflex is a sensor, never an authority: it may rank, annotate, route or flag, but never sign, grant/revoke, approve a guard application or widen a permission. On timeout, low confidence, budget exhaustion or any doubt it abstains and the caller falls back to deterministic behavior. Every backend in the vocabulary is local to the fabric.",
   "why": "The agentic layer is System Two; a fast typed-decision plane sits beside it for questions answerable in seconds. The contract pins the request/answer shape to what the vendor exposes (Choice/Score/Noul), makes abstain first-class, forbids authority fields, and keeps the vocabulary closed so a caller cannot smuggle a grant into a classification.",
   "canonical_source": {
     "implementation": "shared/sparknet-reflex.py",
@@ -54,7 +54,7 @@
       "model": {
         "type": "string",
         "minLength": 1,
-        "purpose": "Exact model tag (e.g. jev-1.13.0). Do not use 'jev-latest' in policy files."
+        "purpose": "Exact model tag the node runs. Never a moving 'latest' alias in a policy file: an unpinned tag means the thing that answered yesterday is not provably the thing that answers today."
       },
       "policy_version": {
         "type": "string",
@@ -188,7 +188,7 @@
           "maximum": 1
         }
       },
-      "abstain": "Use p and abs(p - 0.5) because Jev returns no confidence for Noul."
+      "abstain": "Use p and abs(p - 0.5) because a Noul answer carries no confidence of its own."
     },
     "choice": {
       "required": [
@@ -275,12 +275,13 @@
       },
       "backend": {
         "enum": [
-          "jev",
+          "broker",
           "local-rerank",
           "local-llm",
           "rules",
           "null"
-        ]
+        ],
+        "purpose": "What actually answered. `broker` names the Master's reflex broker, which is itself local. The vocabulary deliberately has no member that egresses: a node cannot select a cloud backend by spelling, because none exists to spell."
       },
       "model": {
         "type": "string"

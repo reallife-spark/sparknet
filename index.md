@@ -40,7 +40,7 @@ by its own commit, with both roles edited together where the contract changes.
 
 | Document | Scope |
 |---|---|
-| `REFLEX_DECISION_DESIGN.md` | the Jev/System One reflex layer: senses and ranks, never holds authority |
+| `REFLEX_DECISION_DESIGN.md` | the System One reflex layer: senses and ranks, never holds authority |
 | `CLUSTER_INFERENCE_DESIGN.md` | cluster inference modes and envelopes |
 | `COMPUTE_CAPABILITY_DESIGN.md` | delegated compute and `cluster-serve` |
 | `CLUSTER_JOB_REALIZATION_DESIGN.md` | job realization, the shared index, F0–F10 |
@@ -60,7 +60,7 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/identity-schema.json` | canonical form, fingerprint, signed envelope |
 | `contracts/registry-schema.json` | the shape of the signed node-authorization registry — fields, types, the `signature_b64` name |
 | `contracts/registry-publication.json` | the Master→peer registry publication channel: envelope, digest, sequence, refusals, the 60 s re-delivery window |
-| `contracts/reflex-schema.json` | the typed decision contract for the reflex layer — Jev/System One sensor, never authority; abstain first-class |
+| `contracts/reflex-schema.json` | the typed decision contract for the reflex layer — a local sensor, never authority; abstain first-class |
 | `contracts/ports.json` | which role listens where |
 | `contracts/guard-protocol.md` | the approval conversation |
 | `contracts/guard-approval.json` | the guard-apply approval envelope — the eight fields, the canonical bytes, the transport |

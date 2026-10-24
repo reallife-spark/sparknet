@@ -142,3 +142,127 @@ def test_anchors_require_the_interface_instead_of_defaulting() -> None:
             f"{role} anchor still defaults SPARKNET_WG_INTERFACE; a missing env file "
             f"must fail, not silently target another interface"
         )
+
+
+# --- 3. rolling image tags -----------------------------------------------------
+
+# A tag that names a moving target. Pulling one twice can yield two different
+# filesystems, which is the opposite of what a node image exists to guarantee.
+_ROLLING_TAGS = {"latest", "main", "master", "dev", "stable", "edge", "nightly"}
+
+_IMAGE_LINE = re.compile(r"^\s*image:\s*(?P<image>\S+)\s*$", re.MULTILINE)
+_TAG_DEFAULT = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*:-(?P<default>[^}]+)\}$")
+
+# Built here rather than pulled, so their tag is whatever this build stamped.
+# Still required to be overridable, so a deployment can pin what it ships.
+_LOCAL_BUILD_IMAGES = {"sparknet-agx-node", "sparknet-spark-node"}
+
+# Captured source material: a transcript quoting someone else's compose is a
+# record of what was run, not a declaration of what this fabric deploys.
+_IMMUTABLE_SOURCES = ("03_Sources", "_raw")
+
+
+def _compose_files() -> list[Path]:
+    out: list[Path] = []
+    for path in REPO_ROOT.rglob("*.y*ml"):
+        if not path.is_file() or SKIP_DIRS & set(path.parts):
+            continue
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        if any(part in rel.split("/") for part in _IMMUTABLE_SOURCES):
+            continue
+        if _IMAGE_LINE.search(path.read_text(encoding="utf-8", errors="replace")):
+            out.append(path)
+    return sorted(out)
+
+
+def _effective_tag(image: str) -> str | None:
+    """The tag an image reference resolves to, or None when it is digest-pinned.
+
+    An overridable ``${VAR:-default}`` resolves to its default, because that is
+    what a deployment which sets nothing actually pulls. The split is on the
+    *first* colon of the last path segment: splitting on the last one lands
+    inside the ``:-`` of an interpolation and silently yields garbage, which
+    once made this resolver return ``'-v0.12.2}'`` — never a rolling tag, so the
+    sweep below passed while proving nothing.
+    """
+    if "@sha256:" in image:
+        return None
+    ref = image.rsplit("/", 1)[-1]
+    _name, sep, tag = ref.partition(":")
+    if not sep or not tag:
+        return "latest"  # an untagged reference *is* :latest
+    overridable = _TAG_DEFAULT.match(tag)
+    return overridable.group("default") if overridable else tag
+
+
+def test_the_tag_resolver_reads_an_overridable_default() -> None:
+    """Pin the resolver, because a resolver that returns junk fails open.
+
+    Every branch the sweep depends on, including the two that a naive
+    last-colon split gets wrong.
+    """
+    cases = {
+        "ghcr.io/open-webui/open-webui:main": "main",
+        "alpine:latest": "latest",
+        "alpine": "latest",
+        "alpine:3.20": "3.20",
+        "ghcr.io/open-webui/open-webui:${WEBUI_TAG:-v0.12.2}": "v0.12.2",
+        "ghcr.io/open-webui/open-webui:${WEBUI_TAG:-latest}": "latest",
+        "nats:${NATS_IMAGE_TAG:-2.14.2-alpine}": "2.14.2-alpine",
+        "sparknet-spark-node:${SPARKNET_IMAGE_TAG:-dev}": "dev",
+        "localhost:5000/team/img:1.2.3": "1.2.3",
+        "foo/bar@sha256:deadbeef": None,
+    }
+    for image, expected in cases.items():
+        assert _effective_tag(image) == expected, f"{image} resolved to {_effective_tag(image)!r}"
+    # The two that must be *caught*, not merely parsed.
+    assert _effective_tag("ghcr.io/open-webui/open-webui:${WEBUI_TAG:-latest}") in _ROLLING_TAGS
+    assert _effective_tag("ghcr.io/open-webui/open-webui:main") in _ROLLING_TAGS
+
+
+def test_no_tracked_compose_deploys_a_rolling_image_tag() -> None:
+    """Every image this fabric deploys names a fixed release.
+
+    Two composes shipped ``open-webui:main`` and three shipped ``alpine:latest``
+    while ``sparknet-node-setup.sh`` carried the rule in a comment ("WEBUI_TAG is
+    a stable release, never main/latest") and a test enforced it for the two
+    *node-stack* composes only. A rule one test applies to a hand-picked subset
+    is a rule the other files can break silently, so this sweeps the tree instead
+    of naming files.
+
+    A rolling tag is not a style preference here: the node image is the
+    reproducibility boundary, and ``:main`` means the thing that ran yesterday is
+    not provably the thing that runs after a redeploy. Captured material under
+    ``03_Sources``/``_raw`` is exempt because it is immutable evidence, not
+    deployment config.
+    """
+    seen: list[str] = []
+    for path in _compose_files():
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        for match in _IMAGE_LINE.finditer(path.read_text(encoding="utf-8", errors="replace")):
+            image = match.group("image")
+            name = image.rsplit("/", 1)[-1].split(":", 1)[0]
+            tag = _effective_tag(image)
+            if tag is None:
+                seen.append(f"{rel}: {image} (digest-pinned)")
+                continue
+            if name in _LOCAL_BUILD_IMAGES:
+                assert "${" in image, (
+                    f"{rel}: {image} is built here, so its tag must stay overridable "
+                    f"(${{SPARKNET_IMAGE_TAG:-...}}) for a deployment to pin what it ships"
+                )
+                seen.append(f"{rel}: {image} (local build)")
+                continue
+            assert tag not in _ROLLING_TAGS, (
+                f"{rel}: {image} resolves to the rolling tag {tag!r}; pin a release "
+                f"(the repo's convention is an overridable default, e.g. ${{WEBUI_TAG:-v0.12.2}})"
+            )
+            seen.append(f"{rel}: {image}")
+
+    # The sweep must actually sweep: a glob that silently matched nothing would
+    # pass forever. Four composes carry the webui image alone.
+    assert len(seen) >= 10, f"the compose sweep found only {len(seen)} images; the glob is broken"
+    assert any("open-webui" in entry for entry in seen), "the sweep no longer sees the webui image"
+    assert sum("open-webui" in entry for entry in seen) == 4, (
+        "expected the four composes that deploy Open WebUI; a new one needs the same pin"
+    )
