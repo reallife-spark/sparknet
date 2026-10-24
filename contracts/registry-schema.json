@@ -79,11 +79,16 @@
       "required": false,
       "purpose": "False when absent. Inside the signed envelope, so only the Master can flip it - an attacker with registry write access can revoke a node (a safe denial) but cannot reinstate one, which would need a fresh signature."
     },
+    "department": {
+      "type": ["string", "null"],
+      "required": false,
+      "purpose": "The department this node's owner belongs to, attested by the Master. Null or absent when no department has been attested. Inside the signed envelope for the same reason capabilities are: it decides who may share with whom, so an unsigned one would let anyone with registry write access move a node into a department and read what that department shares. Never self-declared - a node's own user record may name a department for attribution, but only this field authorises anything, and crossing departments needs the `cross-department-share` capability."
+    },
     "signature_b64": {
       "type": "string",
       "required": true,
       "format": "base64_64",
-      "purpose": "The Master's Ed25519 signature over the signed envelope (fingerprint, identity, capabilities, overlay_ipv4, issued_at, expires_at, revoked). The field is named signature_b64 because that is what shared/sparknet-authz.py emits and verifies; a draft schema called it signature, and no implementation ever read that name."
+      "purpose": "The Master's Ed25519 signature over the signed envelope (fingerprint, identity, capabilities, overlay_ipv4, issued_at, expires_at, revoked, department). The field is named signature_b64 because that is what shared/sparknet-authz.py emits and verifies; a draft schema called it signature, and no implementation ever read that name."
     }
   },
 
@@ -104,9 +109,10 @@
     "overlay_ipv4",
     "issued_at",
     "expires_at",
-    "revoked"
+    "revoked",
+    "department"
   ],
-  "signed_envelope_note": "What the Master's signature covers. Signing only the identity would leave capabilities and overlay_ipv4 mutable by anyone who can edit the registry file, escalating a node to guard-apply without the Master ever approving it. revoked is inside the envelope so only the Master can flip it.",
+  "signed_envelope_note": "What the Master's signature covers. Signing only the identity would leave capabilities and overlay_ipv4 mutable by anyone who can edit the registry file, escalating a node to guard-apply without the Master ever approving it. revoked is inside the envelope so only the Master can flip it. department joined it when crossing departments became a grantable privilege: it decides who may share with whom, so an unsigned one would be a privilege boundary anyone with registry write access could move. Adding a field to the envelope changes the bytes the Master signs, so every signature made under the previous envelope stops verifying - adopting this contract means re-signing the registry and re-publishing it at a higher sequence, never editing entries in place.",
 
   "signature_field": "signature_b64",
   "signature_field_note": "The one field name the two roles must agree on byte-for-byte. It is read by shared/sparknet-authz.py, shared/sparknet-consensus.py and the peer's services; a registry that names it differently is not signed by anybody.",

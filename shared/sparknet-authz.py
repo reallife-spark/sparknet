@@ -67,6 +67,7 @@ KNOWN_CAPABILITIES = frozenset(
         "cluster-dispatch",
         "cluster-serve",
         "admin-supervise",
+        "cross-department-share",
     }
 )
 
@@ -122,7 +123,19 @@ def canonical_bytes(identity: dict[str, Any]) -> bytes:
 #: included deliberately: it means only the Master (holding the private key) can
 #: flip it, so an attacker with registry write access can revoke a node (a safe
 #: false denial) but cannot reinstate one (which would need a fresh signature).
-SIGNED_FIELDS = ("fingerprint", "identity", "capabilities", "overlay_ipv4", "issued_at", "expires_at", "revoked")
+#: `department` is included for the same reason: it decides who may share with
+#: whom, so an unsigned one is a privilege boundary anyone able to edit the
+#: registry file could move.
+SIGNED_FIELDS = (
+    "fingerprint",
+    "identity",
+    "capabilities",
+    "overlay_ipv4",
+    "issued_at",
+    "expires_at",
+    "revoked",
+    "department",
+)
 
 
 def authorization_message(entry: dict[str, Any]) -> bytes:
@@ -131,6 +144,12 @@ def authorization_message(entry: dict[str, Any]) -> bytes:
     Signing only the identity would leave `capabilities` and `overlay_ipv4`
     mutable by anyone who can edit the registry file, which would let them
     escalate a node to guard-apply without the Master ever approving it.
+
+    `department` is always present in the envelope, as null when the Master has
+    attested none. One message shape rather than one-per-optional-field: two
+    canonical forms for the same logical entry is exactly the ambiguity the
+    byte-for-byte agreement rule exists to prevent, and a verifier should never
+    have to guess which form it is looking at.
     """
     try:
         envelope = {
@@ -141,6 +160,7 @@ def authorization_message(entry: dict[str, Any]) -> bytes:
             "issued_at": entry["issued_at"],
             "expires_at": entry["expires_at"],
             "revoked": bool(entry.get("revoked", False)),
+            "department": entry.get("department"),
         }
     except (KeyError, AuthzError, TypeError) as exc:
         raise AuthzError(f"authorization entry is malformed: {exc}") from exc

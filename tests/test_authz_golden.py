@@ -46,6 +46,7 @@ GOLDEN_FINGERPRINT = "140e0dc554e18b883922bd5164f576eee0c1d6d08ebf5f7d3c05294825
 
 GOLDEN_AUTHORIZATION_MESSAGE = (
     b'{"capabilities":["dispatch-bridge","guard-verify"],'
+    b'"department":null,'
     b'"expires_at":1893456000,'
     b'"fingerprint":"140e0dc554e18b883922bd5164f576eee0c1d6d08ebf5f7d3c052948257c36c7",'
     b'"identity":{"node_id":"peer-fixture-01","overlay_ipv4":"10.77.0.11/32",'

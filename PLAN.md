@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
 updated: 2026-10-24
-current: done
+current: 66
 ---
 
 # sparknet — Active Plan
@@ -2785,6 +2785,101 @@ must be *caught*. Recorded here because a gate that fails open is worse than no
 gate: from the outside the two are indistinguishable.
 
 **Status:** 65A–65D done, full `make ci` green. Cursor `done -> 65 -> done`.
+
+## Step 66 — Department as a Master-attested, signed privilege boundary
+
+Opened 2026-10-24 on operator direction (Phase 2 of the six-phase arc). Two
+operator decisions shape it: a node's department is **attested by the Master in
+the signed registry**, never self-declared; and crossing a department boundary is
+**a new capability in the closed vocabulary**, not a share type and not a local
+convention.
+
+The first decision is the security one. In-department sharing is the *easier*
+path, so a self-declared department would let a node claim its way into whichever
+department it wanted to read — the exact direction an attacker pushes. Attestation
+belongs where the rest of authority belongs: inside the envelope the Master signs.
+
+- [x] **66A — the contract and both implementations, in one change.**
+      `department` joins `entry_fields` (optional, `["string","null"]`, modelled on
+      `revoked`) and `signed_envelope_fields` in **both**
+      `contracts/registry-schema.json` and `contracts/identity-schema.json`, and
+      `cross-department-share` joins `known_capabilities` with a definition in
+      `contracts/capabilities.json`. `shared/sparknet-authz.py` gains the field in
+      `SIGNED_FIELDS`, in `authorization_message`'s envelope, and in
+      `KNOWN_CAPABILITIES`.
+      The envelope carries `department` **always**, as `null` when unattested. One
+      message shape rather than one-per-optional-field: two canonical forms for
+      the same logical entry is precisely the ambiguity the byte-for-byte
+      agreement rule exists to prevent, and a verifier should never have to guess
+      which form it holds.
+      **This is a cross-language contract, so it is not one repo's change.**
+      goSpark mirrors the envelope in `internal/authz/registry.go` and the
+      vocabulary in `internal/authz/capabilities.go`, with `spec/sparknet/`
+      holding verbatim snapshots whose `PROVENANCE.md` rule is that the Go code
+      and the snapshot move together or not at all. Both moved: the snapshots were
+      re-copied, `CapCrossDepartmentShare` added (and marked sensitive, since the
+      holder bears the risk), `apiv1.NodeAuthorization` gained `Department`, and
+      `TestVocabularyMatchesFabric` was updated.
+      **DoD:** (1) `tests/test_registry_crossverify.py` passes in **both**
+      directions — the fabric's Python signs and goSpark verifies, and goSpark
+      signs and the fabric verifies — which is the only proof that two
+      implementations of one signature agree; (2) the golden bytes were updated on
+      both sides only after the delta was shown to be exactly the added
+      `department: null` key, with no key removed and no value changed;
+      (3) `make render` re-ran, so `contracts/manifest.json` projects the new
+      vocabulary; (4) `make ci` green here and `make ci` → `ci: ok` in goSpark.
+      Verified 2026-10-24.
+
+- [ ] **66B — enforcement.** The capability is grantable and nothing yet checks
+      it. The share regime (`peer-node/services/sparknet-share-regime.py`) must
+      compare the two nodes' attested departments and require
+      `cross-department-share` when they differ, refusing otherwise. Deliberately
+      inert until then, which is this repo's normal posture — `admin-supervise`
+      and `cluster-dispatch` are granted-able and authorise nothing until a real
+      registry carries them. The rule to encode: the boundary binds **only** when
+      both sides carry an attested department and the two differ, so a fresh
+      deployment where the Master has attested none shares exactly as it does
+      today instead of needing a grant nobody has issued.
+      **DoD:** same-department share needs no extra capability; cross-department
+      without it is refused with a stable reason; with it, it proceeds and still
+      obeys the four clocks and ratification; unattested on either side behaves as
+      before; `share-regime.json` declares the rule.
+
+- [ ] **66C — the platform declaration in `00_System/`.** A file stating the
+      computer system type the agent is operating on. The data already exists —
+      `manifests/user-env-manifest.json` carries `system.platform`, `machine`,
+      `release` and `privilege_boundaries` — but it lives in `manifests/`, is a
+      generated host snapshot, and nothing reads it as a declaration.
+      **DoD:** `00_System/` names the platform, the schema in
+      `contracts/tracking-schema.json` declares it, and a test pins that the
+      declaration and the captured snapshot cannot disagree.
+
+- [ ] **66D — OS permissions bound to agent permissions.** Today
+      `user-env-manifest.json` *records* `privilege_boundaries.is_root` and
+      `security-policies.json` *declares* `deny_root_escalation_attempts`, but
+      nothing checks the operator's actual OS identity against what the agent is
+      about to do. The requirement is that local user permissions **dictate**
+      agent permissions, which means an enforced check at the mutating path, not a
+      recorded fact beside it.
+      **DoD:** a mutating request is refused when the operating user lacks the OS
+      permission it would exercise; the check is on the guard/bridge path and not
+      advisory; `DoD: confirm: user` for the live leg, since this host cannot
+      exercise a privilege boundary it does not have.
+
+**Deployment hazard this step creates, and does not resolve.** Adding a field to
+the signed envelope changes the bytes the Master signs, so **every existing entry
+signature stops verifying**. In this repo that costs nothing — the shipped
+registry is empty by design and fail-closed. On a live node it means re-signing
+and re-publishing at a higher sequence, never editing entries in place. Worse,
+`goagx/GOSPARK_PIN` still points at `f547751`, which predates the Go half of this
+change: a device bootstrapped from that pin would build a goSpark whose envelope
+disagrees with the fabric's, and its agent would reject a correctly signed
+registry. The pin must be bumped and `make goagx-publish` re-run **before** any
+node deployment. Left open deliberately, because the pin file's own rule is that a
+bump is a reviewed commit accompanied by a republish, and that is a release act
+rather than a code change.
+
+**Status:** 66A done. 66B–66D open. Cursor `done -> 66`.
 
 ## Next
 

@@ -9,7 +9,7 @@ Updated: 2026-10-23
 
 ## Plan cursors
 
-- **root `PLAN.md` `current: done`.** Step 64 (the reflex layer) opened
+- **root `PLAN.md` `current: 66`.** Step 64 (the reflex layer) opened
   **2026-10-23**: local-only default, Master broker (`4224`) for the unified
   massive-task workload, RAG relevance first on the fabric corpus,
   shadow → assist → enforce, Master-local before peer access. 64A is
@@ -66,7 +66,15 @@ Updated: 2026-10-23
   and swept tree-wide. Cursor `done` (64A–64F closed, 64F's measurements accepted
   2026-10-24, 64G deferred; 65A–65D closed). New roadmap work gets a **new** step
   — the approved six-phase arc continues as Phases 2–6, scoped in PLAN.md's
-  `## Next`.
+  `## Next`. **Step 66 (department as a signed privilege boundary) opened
+  2026-10-24**: 66A done — `department` is in the signed registry envelope and
+  `cross-department-share` is in the closed vocabulary, changed in *both* repos
+  because the envelope is implemented twice (Python here, Go in goSpark) and
+  `tests/test_registry_crossverify.py` is the only proof the two agree. 66B
+  enforcement, 66C platform declaration, 66D OS→AI permission binding are open.
+  **Hazard:** `goagx/GOSPARK_PIN` predates the Go half, so a device built from
+  that pin would reject a correctly signed registry — bump the pin and republish
+  goagx before any node deployment.
   Steps 1–54 closed/parked.
 - **`peer-node/PLAN.md` `current: done`** — the peer arc is terminal; its last
   work (Steps 2–12: container, grants, bridge, Open WebUI surface, conversation

@@ -5,7 +5,7 @@
       "contract": "capabilities",
       "file": "capabilities.json",
       "schema_version": "1.0",
-      "sha256": "c60eeea238ffe0a638a123f2c4c60a9be1d12f14823237c729bd491fb51d0271"
+      "sha256": "16e4642022fb6f590f5eadeb6685b17e05c4f92399b2b0e2a6fa6684723fbc73"
     },
     {
       "contract": "guard-approval",
@@ -17,7 +17,7 @@
       "contract": "identity-schema",
       "file": "identity-schema.json",
       "schema_version": "1.0",
-      "sha256": "858df42f32c223dfe00da71c9b4bf1e79ca1cd276c73d0955a0c86d0eec69c9f"
+      "sha256": "0073b887b92a407cc6c0d6ebd75871cbfc81bf3eda45dabe95548cf5bb3932b3"
     },
     {
       "contract": "overlay",
@@ -53,7 +53,7 @@
       "contract": "registry-schema",
       "file": "registry-schema.json",
       "schema_version": "1.0",
-      "sha256": "cf588c1c660ec9575762b987ad0d7ff0e5e2a8b750230d8309237b148af741ee"
+      "sha256": "c5da6abd1578314bce9cccdeb4cf30b5568d07216a749b8e5ba5ea6e27641b22"
     },
     {
       "contract": "tracking-schema",
@@ -69,6 +69,7 @@
     "cluster-dispatch",
     "cluster-serve",
     "cluster-vote",
+    "cross-department-share",
     "guard-apply",
     "p2p-sync",
     "push-receive",
