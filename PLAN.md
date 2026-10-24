@@ -2706,8 +2706,9 @@ pieces.
 
 - [x] **65A — the cloud reflex leg is deleted, not disabled.** The vendor name was
       not prose: it was a member of the backend enum in
-      `contracts/reflex-schema.json`, a hard prefix check in the broker (`model
-      must be a jev-* tag`), the default model tag, a systemd `Environment=`, and
+      `contracts/reflex-schema.json`, a hard prefix check in the broker that
+      refused any model tag outside the vendor's namespace, the default model
+      tag, a systemd `Environment=`, and
       an `ALLOW_EGRESS` opt-in. All of it is gone, and the backend vocabulary now
       reads `broker | local-rerank | local-llm | rules | null` with **no member
       that can leave the fabric**. `broker` takes over as the label for "the
@@ -2718,11 +2719,12 @@ pieces.
       the `allow_egress` posture flag, and the eval harness's governance and
       0600-key preflight gates (a gate nothing can trip is decoration, not a
       control).
-      **DoD:** (1) no vendor reference remains in any live artifact; (2) the two
-      surviving test mentions are *negative* assertions
-      (`"api.typesafe.ai" not in source`, `"jev" not in BACKENDS`) plus proof that
-      a stale `SPARKNET_REFLEX_BACKEND=jev` falls back to local instead of
-      selecting a removed backend; (3) the contract enum and
+      **DoD:** (1) no vendor reference remains in any live artifact; (2) the
+      surviving test mentions are *negative* assertions — that the vendor's
+      endpoint is absent from the broker's source, that its name is absent from
+      `BACKENDS`, and that a stale environment variable still naming the retired
+      backend falls back to local rather than selecting something removed;
+      (3) the contract enum and
       `shared/sparknet-reflex.py::BACKENDS` still agree, which
       `tests/test_reflex_contract.py` pins; (4) the golden cache-key vectors were
       regenerated **only after** each original expectation was reproduced from the
