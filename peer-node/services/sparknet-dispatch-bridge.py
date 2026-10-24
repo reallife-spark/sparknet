@@ -419,6 +419,7 @@ class Bridge:
         self.prov = _load_provenance()
         self.reflex = _load_shared("sparknet-reflex", "sparknet_reflex_bridge", ("sparknet-reflex.py",))
         self._registry: dict[str, Any] | None = None
+        self._registry_stamp: tuple[int, int] | None = None
         self._identity: dict[str, Any] | None = None
         self._regime: Any | None = None
         self._regime_mod: Any | None = None
@@ -463,11 +464,14 @@ class Bridge:
     def _share_regime(self) -> Any:
         """The one share-regime engine, built once against this node's state.
 
-        The mesh size is taken from the registry this node holds (DoD note:
-        mode is recomputed from the registry node count on every share request,
-        never cached). With the empty registry this host actually carries, the
-        mode is ``solo``: offers may be *drafted*, but acceptance is refused and
-        nothing on this host can open a cross-node share by itself.
+        The regime object is built once, but the mesh size it governs by is not:
+        ``node_count`` is ``_mesh_count``, which reads the registry on every call,
+        so ``mode_for()`` really is recomputed per share request rather than
+        frozen at construction. That used to be a captured constant, which made the
+        governance mode — and therefore whether a Master must ratify — stale for
+        the life of the process. With the empty registry this host actually
+        carries, the mode is ``solo``: offers may be *drafted*, but acceptance is
+        refused and nothing on this host can open a cross-node share by itself.
 
         The department resolvers are wired from the same registry, so the
         cross-department boundary the regime enforces reads Master-attested
@@ -477,12 +481,11 @@ class Bridge:
         if self._regime is None:
             mod = _load_regime()
             self._regime_mod = mod
-            count = 1 + len(list(self.registry().get("authorizations") or []))
             node_id = str(self.node_identity().get("node_id") or "peer-node-bridge")
             self._regime = mod.Regime(
                 node_id,
                 now=self._now,
-                node_count=lambda: count,
+                node_count=self._mesh_count,
                 department_of=self._department_of,
                 holds_capability=self._holds_capability,
             )
@@ -502,10 +505,40 @@ class Bridge:
     def _now(self) -> datetime:
         return (self.clock or _utcnow)()
 
+    def _registry_file_stamp(self) -> tuple[int, int] | None:
+        try:
+            info = self.registry_path.stat()
+        except OSError:
+            return None
+        return (info.st_mtime_ns, info.st_size)
+
     def registry(self) -> dict[str, Any]:
-        if self._registry is None:
+        """The registry this node holds, re-read whenever the file changes.
+
+        Caching it for the process lifetime looked harmless and was not. The mesh
+        size is derived from it, and `Regime.mode_for` derives the governance mode
+        from the mesh size — so a frozen copy froze the mode too. A third node
+        joining while the bridge ran left it computing `peer_pair`, the symmetric
+        mode with **no Master arbitration**, for shares that `master_governed`
+        requires ratification on. The guard installs registry publications under a
+        running bridge (contracts/registry-publication.json), so the file really
+        does change; and contracts/share-protocol.md says a third node joining
+        mid-share re-evaluates rather than grandfathers, which a cached count
+        cannot do.
+
+        Still cheap: one `stat` per call, and a parse only when the stamp moves.
+        An unreadable file propagates exactly as before — this changes *when* the
+        registry is read, not what happens when it cannot be.
+        """
+        stamp = self._registry_file_stamp()
+        if self._registry is None or stamp != self._registry_stamp:
             self._registry = json.loads(self.registry_path.read_text())
+            self._registry_stamp = stamp
         return self._registry
+
+    def _mesh_count(self) -> int:
+        """Live mesh size: this node plus every authorization the registry carries."""
+        return 1 + len(list(self.registry().get("authorizations") or []))
 
     def node_identity(self) -> dict[str, Any]:
         if self._identity is None:

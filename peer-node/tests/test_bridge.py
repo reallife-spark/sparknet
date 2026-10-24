@@ -722,3 +722,46 @@ def test_the_regime_binds_nothing_when_no_department_is_attested(ctx: dict) -> N
     recorded = regime.get(offer["share_id"])["departments"]
     assert recorded["crosses"] is False
     assert recorded["mine"] is None and recorded["theirs"] is None
+
+
+def test_the_governance_mode_tracks_a_registry_change_without_a_restart(ctx: dict) -> None:
+    """A third node joining must move the mode, or ratification is skipped.
+
+    `peer_pair` is symmetric and has **no Master arbitration**; `master_governed`
+    requires the Master to ratify every cross-node share. A bridge that froze the
+    mesh size at construction kept answering `peer_pair` after a third node
+    joined, which is the one direction a stale cache can err in that *removes a
+    check*. The guard installs registry publications under a running bridge, so
+    this is a reachable state rather than a hypothetical one.
+    """
+    bridge = _bridge(ctx)
+    regime = bridge._share_regime()
+    assert bridge._mesh_count() == 2, "ctx ships one authorization plus this node"
+    assert regime.mode_for() == "peer_pair"
+
+    # A second authorization lands on disk while the bridge is still running.
+    _registry_with_departments(ctx, self_caps=["telemetry"], self_dept=None, other_dept=None)
+    assert bridge._mesh_count() == 3
+    assert regime.mode_for() == "master_governed", (
+        "the same regime object must see the third node; a cached count would still say peer_pair"
+    )
+
+
+def test_a_department_attested_after_startup_is_seen(ctx: dict) -> None:
+    """Attestation is read live too, so granting a department needs no restart."""
+    bridge = _bridge(ctx)
+    own_id = str(bridge.node_identity()["node_id"])
+    assert bridge._department_of(own_id) is None, "the ctx registry attests no department"
+
+    _registry_with_departments(ctx, self_caps=["telemetry"], self_dept="research", other_dept="research")
+    assert bridge._department_of(own_id) == "research"
+    assert bridge._department_of("node-b") == "research"
+
+
+def test_an_unreadable_registry_still_propagates(ctx: dict) -> None:
+    """The freshness fix changes *when* the file is read, not what a failure does."""
+    bridge = _bridge(ctx)
+    bridge.registry()
+    ctx["vault"].joinpath("manifests", "node-authorizations.json").unlink()
+    with pytest.raises(OSError):
+        bridge.registry()

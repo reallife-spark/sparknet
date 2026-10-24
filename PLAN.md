@@ -2904,7 +2904,17 @@ bump is a reviewed commit accompanied by a republish, and that is a release act
 rather than a code change.
 
 **Status:** 66A–66B done, `make ci` green in both repos. 66C–66D open.
-Cursor `done -> 66`.
+Cursor `done -> 66`. Wiring 66B into the bridge also surfaced and fixed a
+security-relevant bug beside it: the mesh size was captured once and both the
+registry and the regime were cached with no invalidation, so `mode_for()` could
+never change after construction. `peer_pair` has **no Master arbitration** while
+`master_governed` requires ratification of every cross-node share, so a third node
+joining under a running bridge left it skipping a check it should have applied —
+reachable, because the guard installs registry publications while the bridge runs.
+`_share_regime`'s own docstring claimed the opposite, and nothing tested it. The
+registry now re-reads on a `(mtime_ns, size)` stamp change and `_mesh_count` is
+passed as the live callable; the regression test is negative-controlled against
+the captured-constant version. See `log.md` 2026-10-24.
 
 ## Next
 
