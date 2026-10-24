@@ -5,11 +5,28 @@
 > own it. **All history lives in `log.md` and `sessions/YYYY-MM-DD.md`** — an
 > entry here is a durable fact you still need, never a record of what happened.
 
-Updated: 2026-10-22
+Updated: 2026-10-23
 
 ## Plan cursors
 
-- **root `PLAN.md` `current: done`.** Step 57 (clean-slate peer pair on both
+- **root `PLAN.md` `current: 64`.** Step 64 (the Jev reflex layer) opened
+  **2026-10-23**: local-only default, Master broker (`4224`) for the unified
+  massive-task workload, RAG relevance first on the fabric corpus,
+  shadow → assist → enforce, Master-local before peer access. 64A is
+  **design-only and delivered** (`REFLEX_DECISION_DESIGN.md`); 64B is delivered
+  (`contracts/reflex-schema.json` + `shared/sparknet-reflex.py` + golden
+  vectors); 64C is delivered (`master-node/services/sparknet-reflex-broker.py`,
+  `4224` overlay-only, unit staged not enabled); 64D is delivered (loopback-only,
+  grant-checked `/v1/reflex/*`; local RAG reranker pilot measured, assist on
+  for fabric). **2026-10-23: TypeSafe replaced by a local-first default** —
+  peers and Master use a local reranker/LLM, no egress, no credential;
+  `SPARKNET_REFLEX_ALLOW_EGRESS=1` + a 0600 key are the only opt-in cloud path.
+  64F **executed 2026-10-23** on a loopback broker + LAN Ollama endpoint
+  (`sparknet-reflex:v1`): live shadow precision 0.757 vs 0.771 baseline,
+  agreement 0.817, abstain 0, p95 115.7 ms, $0; local-LLM Noul probe accept
+  0.80 in 1.23 s. The broker sees one query+chunk, so its rerank is lexical and
+  cannot reproduce the batch reranker's 0.786 — **keep broker/LLM shadow, keep
+  the in-process chroma reranker on assist**. Awaiting user confirmation. Step 57 (clean-slate peer pair on both
   AGXes + manual 2/2 Master escalation over the direct sparknet cable) delivered
   **2026-10-19**, Phases 0–11 executed and verified; live legs stay
   `DoD: confirm: user` (physical cable move done; human review of the ceremony
@@ -39,17 +56,19 @@ Updated: 2026-10-22
   are `DoD: confirm: user` (below). **Step 63 (the vector substrate: bounded
   Chroma pin, stamped index, allow-listed `fabric` corpus) delivered
   2026-10-22** — the substrate half of Step 61's increment 2; the 4223 service
-  itself is untouched and `4223` stays `spec-only`. Cursor `done`. New roadmap
-  work gets a **new** step.
+  itself is untouched and `4223` stays `spec-only`. Cursor `64` (64A–64F
+  executed; 64F awaits user confirmation, 64G next). New roadmap work gets a
+  **new** step.
   Steps 1–54 closed/parked.
 - **`peer-node/PLAN.md` `current: done`** — the peer arc is terminal; its last
   work (Steps 2–12: container, grants, bridge, Open WebUI surface, conversation
   passing, `MASTERSPIKE`, sharing regime, node admin agent) closed 2026-10-11/12.
   New peer work gets a **new** step.
-- **`master-node/plans/MASTER_BUILD_PLAN.md` `current: 6`** — Phase 0 (13–18),
+- **`master-node/plans/MASTER_BUILD_PLAN.md` `current: 7`** — Phase 0 (13–18),
   honest verification (19), keypair/registry substrate (1), Steps 3–4,
-  **Step 2 (registry schema + the spec/impl boundary) closed 2026-10-22**, and
-  **Step 5 (guard approval issuer) closed the same day** are complete. The
+  **Step 2 (registry schema + the spec/impl boundary) closed 2026-10-22**,
+  **Step 5 (guard approval issuer) closed the same day**, and **Step 6
+  (registry distribution channel) closed 2026-10-23** are complete. The
   registry's canonical shape is stated **once**, in
   `contracts/registry-schema.json`; the Master's path is a symlink to it and
   `shared/sparknet-registry-schema.py` checks documents against it (standard
@@ -58,8 +77,11 @@ Updated: 2026-10-22
   `shared/sparknet-authz.py::guard_approval_message` and
   `contracts/guard-approval.json` — before Step 5 the issuer, the signer and the
   peer each had a different idea of its shape and **none was acceptable to the
-  other**, with every side's own tests green. Steps 6–7, 20 and 21 remain
-  unbuilt; the cursor sits at **6** (registry distribution).
+  other**, with every side's own tests green. The registry now travels as a
+  **publication** the Master pushes to each peer's guard on 9090
+  (`contracts/registry-publication.json`, `shared/sparknet-registry-install.py`);
+  its monotonic `sequence` is what makes replaying an older, un-revoked registry
+  fail. Steps 7, 20 and 21 remain unbuilt; the cursor sits at **7**.
 
 ## What this repository is
 

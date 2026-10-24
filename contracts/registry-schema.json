@@ -54,8 +54,7 @@
       "type": "array",
       "required": true,
       "items": "string",
-      "nonempty": true,
-      "purpose": "What the Master granted. A closed vocabulary: contracts/capabilities.json. An entry naming a capability outside it is refused, not silently narrowed."
+      "purpose": "What the Master granted. A closed vocabulary: contracts/capabilities.json. An entry naming a capability outside it is refused, not silently narrowed. An *authorizing* entry must grant at least one capability; a revoked entry grants nothing on purpose and carries an empty list, because revocation is expressed inside the signed envelope (`revoked: true`) and a peer must be able to install the document that revokes it."
     },
     "overlay_ipv4": {
       "type": ["string", "null"],
@@ -133,8 +132,8 @@
 
   "status": {
     "shape": "specified and machine-checked - this file plus the checker",
-    "distribution": "UNSPECIFIED - how a signed registry reaches a peer has not been decided. contracts/identity-schema.json carries the same note on purpose, and it is Master build plan Step 6.",
-    "distribution_note": "A peer reads a local copy today. That is why the shipped registry exists in every vault and why nothing fetches it from anywhere.",
+    "distribution": "DECIDED (Master build plan Step 6, 2026-10-23): the Master wraps the registry in a signed publication and PUSHES it to each peer's guard on 9090 (POST /api/v1/registry). The channel is stated in contracts/registry-publication.json and the narrative is master-node/docs/registry-protocol.md.",
+    "distribution_note": "The shipped registry in every vault is the fail-closed starting point, not the channel. A live node's registry is the last publication it verified and installed; the installation record (peer-node/manifests/registry-installation.json) is its sequence watermark.",
     "empty_by_default": true,
     "empty_by_default_rationale": "No node gets privileges by default. The shipped registry has no entries on purpose, so a fresh deployment is fail-closed."
   }

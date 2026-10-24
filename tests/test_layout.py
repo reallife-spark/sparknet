@@ -89,6 +89,7 @@ EXPECTED_TOP_LEVEL = {
     "CLUSTER_JOB_REALIZATION_DESIGN.md",
     "PER_USER_VAULTS_DESIGN.md",
     "ADMIN_FEDERATION_DESIGN.md",
+    "REFLEX_DECISION_DESIGN.md",
     # the DGX Spark node image surface: the image Dockerfile, the one dispatcher
     # every service runs, the compose orchestration, the precontext baker, and
     # the host bring-up script. They sit at the fabric root because the image
@@ -127,6 +128,13 @@ EXPECTED_TOP_LEVEL = {
     "CODEOWNERS",
     "llms.txt",
     "CHANGELOG.md",
+    # the developer-facing manual for the whole fabric (fabric PLAN Step 63).
+    # It is the master manual: the peer/master role manuals live in their own
+    # subtrees and are published at the roots of sparknet-peer and
+    # sparknet-master; the AGX manual lives in goagx/; the Go plane's manual
+    # lives in the goSpark repository. This one is also published at the root
+    # of the goagx distribution, so its links must resolve in BOTH trees.
+    "USER_MANUAL.md",
     ".github",
 }
 
@@ -277,7 +285,18 @@ def test_no_empty_directory_outside_the_vault_categories():
         for p in REPO_ROOT.rglob("*")
         if p.is_dir()
         and not any(
-            part in {".git", ".venv", ".state", ".cache", "dist", "node_modules", "__pycache__", ".opencode"}
+            part
+            in {
+                ".git",
+                ".venv",
+                ".state",
+                ".cache",
+                "dist",
+                "node_modules",
+                "__pycache__",
+                ".opencode",
+                ".obsidian",
+            }
             for part in p.parts
         )
         and not any(p for p in p.iterdir())

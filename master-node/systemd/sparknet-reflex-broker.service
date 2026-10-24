@@ -1,0 +1,48 @@
+# The Master's reflex broker — local-first, with an optional cloud path.
+#
+# Not enabled by `make units`. The default backend is local (no credential,
+# no egress). Only an operator who sets SPARKNET_REFLEX_BACKEND=jev /
+# SPARKNET_REFLEX_ALLOW_EGRESS=1 and provisions the TypeSafe key at
+# ${SPARKNET_STATE_DIR}/secrets/typesafe-api-key (0600) opts into the cloud
+# path (Step 64F). `make reflex-unit` stages the file; enabling it is an
+# operator decision.
+#
+# It binds the Master's overlay address only. Loopback and the Master's own
+# overlay address are accepted; every peer overlay source is refused in Phase 1.
+# The broker is a sensor: timeout, backend error or budget exhaustion abstain,
+# and nothing here can sign, grant, revoke or approve.
+
+[Unit]
+Description=Sparknet Master reflex broker (local-first sensor, never authority)
+After=network-online.target sparknet-master-wireguard-anchor.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-%h/.env
+Environment=SPARKNET_REFLEX_BIND=10.100.0.1
+Environment=SPARKNET_REFLEX_PORT=4224
+Environment=SPARKNET_REFLEX_BACKEND=local
+Environment=SPARKNET_REFLEX_ALLOW_EGRESS=0
+Environment=SPARKNET_REFLEX_LOCAL_URL=http://127.0.0.1:8000
+Environment=SPARKNET_REFLEX_LOCAL_MODEL=local
+Environment=SPARKNET_REFLEX_MODEL=jev-1.13.0
+Environment=SPARKNET_REFLEX_TIMEOUT=2.0
+Environment=SPARKNET_REFLEX_AUDIT=/mnt/log/sparknet-reflex.jsonl
+ExecStart=/usr/bin/env python3 %h/services/sparknet-reflex-broker.py --serve \
+    --bind ${SPARKNET_REFLEX_BIND} \
+    --port ${SPARKNET_REFLEX_PORT} \
+    --key-file ${SPARKNET_REFLEX_KEY_FILE} \
+    --model ${SPARKNET_REFLEX_MODEL} \
+    --timeout ${SPARKNET_REFLEX_TIMEOUT} \
+    --audit ${SPARKNET_REFLEX_AUDIT}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+ReadWritePaths=/mnt/log
+
+[Install]
+WantedBy=multi-user.target

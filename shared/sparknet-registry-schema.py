@@ -345,6 +345,12 @@ def check_entry_semantics(entry: dict, index: int, authz, capabilities: set[str]
         outside = sorted(c for c in granted if c not in capabilities)
         if outside:
             problems.append(f"{where}.capabilities: {outside} are not in the closed vocabulary")
+        # An authorizing entry that grants nothing is a mistake; a *revoked*
+        # entry grants nothing on purpose, and that is how the Master's revoke
+        # path expresses it. Requiring a non-empty list here would make the
+        # document peers must install to learn about a revocation un-installable.
+        if not granted and not entry.get("revoked"):
+            problems.append(f"{where}.capabilities: an authorizing entry must grant at least one capability")
 
     return problems
 

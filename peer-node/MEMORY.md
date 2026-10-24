@@ -4,7 +4,7 @@
 > The plan and its cursor live in `PLAN.md` — this file mirrors it, it does not
 > own it. Per-session detail belongs in `sessions/YYYY-MM-DD.md`.
 
-Updated: 2026-10-11
+Updated: 2026-10-23
 
 ## Standing State
 
@@ -28,6 +28,16 @@ Updated: 2026-10-11
   Master role IS now built and its signer IS elected/proven live on node131
   (see `../master-node/plans/MASTER_BUILD_PLAN.md`); the old "Master unused /
   no usable keypair" facts below no longer hold and were removed.
+
+- **A registry arrives as a signed publication, pushed to this node's guard.**
+  `POST /api/v1/registry` on 9090 verifies the Master's signature under the
+  pinned key, the document against the registry contract, and a monotonic
+  sequence, then installs it (`manifests/node-authorizations.json` plus
+  `registry-installation.json`). It refuses a replay, so a revoked capability
+  cannot be restored by serving an older registry. The offline path is
+  `make registry-fetch PUBLICATION=…`; both use
+  `../shared/sparknet-registry-install.py`. Installing a registry needs no
+  `--apply-enabled` and no root — it writes the vault, not `/etc`.
 
 ## Key Standing Facts
 

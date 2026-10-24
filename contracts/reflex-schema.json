@@ -1,0 +1,387 @@
+{
+  "schema_version": "1.0",
+  "contract": "reflex",
+  "description": "The typed decision contract for the Jev/System One reflex layer. Reflex is a sensor, never an authority: it may rank, annotate, route or flag, but never sign, grant/revoke, approve a guard application or widen a permission. On timeout, low confidence, budget exhaustion or any doubt it abstains and the caller falls back to deterministic behavior.",
+  "why": "The agentic layer is System Two; a fast typed-decision plane sits beside it for questions answerable in seconds. The contract pins the request/answer shape to what the vendor exposes (Choice/Score/Noul), makes abstain first-class, forbids authority fields, and keeps the vocabulary closed so a caller cannot smuggle a grant into a classification.",
+  "canonical_source": {
+    "implementation": "shared/sparknet-reflex.py",
+    "rule": "Where this file and shared/sparknet-reflex.py could disagree, that module is what runs. The schema is the normative statement and tests enforce the rules."
+  },
+  "request": {
+    "required": [
+      "schema_version",
+      "question_class",
+      "state",
+      "questions",
+      "model",
+      "policy_version",
+      "node_id",
+      "request_id"
+    ],
+    "fields": {
+      "schema_version": {
+        "type": "string",
+        "const": "1.0",
+        "purpose": "Contract version for the request."
+      },
+      "question_class": {
+        "type": "string",
+        "enum": [
+          "rag.relevance",
+          "intent.route",
+          "input.injection",
+          "tool.risk",
+          "output.grounded"
+        ],
+        "purpose": "The consumer class; each class has its own default mode (off/local/broker) and thresholds."
+      },
+      "state": {
+        "type": [
+          "string",
+          "object",
+          "array"
+        ],
+        "purpose": "The context evaluated against the questions. Sensitive content must never be logged; the client/broker redact."
+      },
+      "questions": {
+        "type": "object",
+        "minProperties": 1,
+        "additionalProperties": {
+          "$ref": "#/definitions/question"
+        },
+        "purpose": "Atomic questions keyed by name. Each evaluated independently in parallel."
+      },
+      "model": {
+        "type": "string",
+        "minLength": 1,
+        "purpose": "Exact model tag (e.g. jev-1.13.0). Do not use 'jev-latest' in policy files."
+      },
+      "policy_version": {
+        "type": "string",
+        "minLength": 1,
+        "purpose": "Policy version used for cache keying and audit."
+      },
+      "node_id": {
+        "type": "string",
+        "minLength": 1,
+        "purpose": "The requesting node id for budgets/audit."
+      },
+      "request_id": {
+        "type": "string",
+        "minLength": 1,
+        "purpose": "Correlation id."
+      }
+    },
+    "forbidden": [
+      "capability",
+      "grant",
+      "signature",
+      "approve",
+      "apply",
+      "secret",
+      "token",
+      "key"
+    ]
+  },
+  "definitions": {
+    "question": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/noul_question"
+        },
+        {
+          "$ref": "#/definitions/choice_question"
+        },
+        {
+          "$ref": "#/definitions/score_question"
+        }
+      ]
+    },
+    "noul_question": {
+      "type": "object",
+      "required": [
+        "type",
+        "instructions"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "const": "noul"
+        },
+        "instructions": {
+          "type": [
+            "string",
+            "object",
+            "array"
+          ]
+        },
+        "criteria": {
+          "type": "object"
+        }
+      }
+    },
+    "choice_question": {
+      "type": "object",
+      "required": [
+        "type",
+        "instructions",
+        "criteria"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "const": "choice"
+        },
+        "instructions": {
+          "type": [
+            "string",
+            "object",
+            "array"
+          ]
+        },
+        "criteria": {
+          "type": "object"
+        }
+      }
+    },
+    "score_question": {
+      "type": "object",
+      "required": [
+        "type",
+        "instructions",
+        "criteria"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "const": "score"
+        },
+        "instructions": {
+          "type": [
+            "string",
+            "object",
+            "array"
+          ]
+        },
+        "criteria": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 10
+        }
+      }
+    }
+  },
+  "answer_types": {
+    "noul": {
+      "required": [
+        "type",
+        "noul"
+      ],
+      "forbidden_confidence": true,
+      "fields": {
+        "type": {
+          "const": "noul"
+        },
+        "noul": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "abstain": "Use p and abs(p - 0.5) because Jev returns no confidence for Noul."
+    },
+    "choice": {
+      "required": [
+        "type",
+        "choice",
+        "probabilities",
+        "confidence"
+      ],
+      "fields": {
+        "type": {
+          "const": "choice"
+        },
+        "choice": {
+          "type": "string"
+        },
+        "probabilities": {
+          "type": "object"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "abstain": "Use confidence and the top-two probability margin."
+    },
+    "score": {
+      "required": [
+        "type",
+        "score",
+        "legend",
+        "probabilities",
+        "confidence"
+      ],
+      "fields": {
+        "type": {
+          "const": "score"
+        },
+        "score": {
+          "type": "number"
+        },
+        "legend": {
+          "type": "object"
+        },
+        "probabilities": {
+          "type": "object"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "abstain": "Use confidence and the distribution spread."
+    }
+  },
+  "decision": {
+    "required": [
+      "verdict",
+      "confidence",
+      "backend",
+      "model",
+      "usage",
+      "latency_ms",
+      "cached",
+      "state_digest",
+      "model_drift"
+    ],
+    "fields": {
+      "verdict": {
+        "enum": [
+          "accept",
+          "reject",
+          "abstain"
+        ]
+      },
+      "confidence": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "minimum": 0,
+        "maximum": 1
+      },
+      "backend": {
+        "enum": [
+          "jev",
+          "local-rerank",
+          "local-llm",
+          "rules",
+          "null"
+        ]
+      },
+      "model": {
+        "type": "string"
+      },
+      "usage": {
+        "type": [
+          "object",
+          "null"
+        ]
+      },
+      "latency_ms": {
+        "type": "number"
+      },
+      "cached": {
+        "type": "boolean"
+      },
+      "state_digest": {
+        "type": "string"
+      },
+      "model_drift": {
+        "type": "boolean"
+      }
+    },
+    "rules": {
+      "abstain_first_class": true,
+      "tighten_only": "reflex may only tighten (allow -> confirm/deny), never loosen (deny -> allow)",
+      "never_authority": "verdicts are advisory/ranking only; guard/signer/registry never consult reflex"
+    }
+  },
+  "modes": {
+    "per_class_defaults": {
+      "rag.relevance": {
+        "mode": "local",
+        "rollout": "shadow"
+      },
+      "intent.route": {
+        "mode": "off",
+        "rollout": "shadow"
+      },
+      "input.injection": {
+        "mode": "off",
+        "rollout": "shadow"
+      },
+      "tool.risk": {
+        "mode": "off",
+        "rollout": "shadow"
+      },
+      "output.grounded": {
+        "mode": "off",
+        "rollout": "shadow"
+      }
+    },
+    "values": [
+      "off",
+      "local",
+      "broker",
+      "auto"
+    ]
+  },
+  "redaction": {
+    "when": "before the state leaves the process and before any audit line is written",
+    "removed": [
+      "PEM blocks",
+      "Bearer tokens",
+      "api_key/token/secret/password assignments",
+      "secret-named object keys"
+    ],
+    "implementation": "shared/sparknet-reflex.py::redact / redact_deep / redact_request"
+  },
+  "timeout": {
+    "default_seconds": 2.0,
+    "on_timeout": "abstain",
+    "on_backend_error": "abstain",
+    "on_budget_exhausted": "abstain",
+    "implementation": "shared/sparknet-reflex.py::consult"
+  },
+  "audit": {
+    "path": "/mnt/log/sparknet-reflex.jsonl",
+    "fields": [
+      "timestamp",
+      "class",
+      "backend",
+      "model",
+      "usage",
+      "latency_ms",
+      "verdict",
+      "cached",
+      "request_digest"
+    ],
+    "never_log": [
+      "state",
+      "questions_full",
+      "answers_full",
+      "api_key",
+      "token",
+      "grant"
+    ]
+  },
+  "budgets": {
+    "per_node_per_day": "configurable",
+    "global_per_day": "configurable",
+    "on_exhaust": "abstain"
+  }
+}

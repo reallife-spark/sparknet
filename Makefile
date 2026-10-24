@@ -36,7 +36,7 @@ SCOPE ?= fabric
         render render-check sbom sbom-check nv-search drift-check \
         goagx-publish goagx-drift-check \
         devtools chroma-dev chroma-init chroma-inspect \
-        chroma-index chroma-stamp chroma-query env-init wiki-sync wiki-verify \
+        chroma-index chroma-stamp chroma-query reflex-eval reflex-live-check reflex-live-query env-init wiki-sync wiki-verify \
         wiki-preflight bundle bundle-verify status-plan clean dist \
         keys-check shims-check hooks
 
@@ -264,7 +264,7 @@ CHROMA_SCOPE ?= peer
 chroma-dev: ## Install the OPTIONAL chromadb package (sparknet[chroma]); allow-list untouched
 	@if [ ! -x "$(VENV_PY)" ]; then python3 -m venv "$(VAULT_ROOT)/.venv"; fi
 	@"$(VENV_PY)" -m pip install --quiet --upgrade pip
-	@"$(VENV_PY)" -m pip install --quiet 'chromadb>=0.5,<1'
+	@./scripts/sparknet-safe-build.sh --pip -- "$(VENV_PY)" -m pip install 'chromadb>=0.5,<1'
 	@echo "chromadb ready. Run: make chroma-init / chroma-index / chroma-query CHROMA_SCOPE=fabric"
 
 chroma-init: ## Create the CHROMA_SCOPE collection (peer|master|fabric) in .state/chroma/
@@ -281,6 +281,20 @@ chroma-stamp: ## Compare the CHROMA_SCOPE index's stamp with this build (exit 3 
 
 chroma-query: ## Search the CHROMA_SCOPE index: make chroma-query CHROMA_SCOPE=fabric QUERY="..."
 	@$(PY) scripts/sparknet-chroma.py "$(CHROMA_SCOPE)" query "$(QUERY)"
+
+REFLEX_SCOPE ?= fabric
+REFLEX_MODE ?= shadow
+REFLEX_TOP_K ?= 5
+
+reflex-eval: ## Offline RAG reflex pilot (fabric only): precision@5, recall, abstain, p95, cost
+	@$(PY) scripts/sparknet-reflex-eval.py --scope "$(REFLEX_SCOPE)" --mode "$(REFLEX_MODE)" \
+		$(if $(REFLEX_JSON),--json "$(REFLEX_JSON)",)
+
+reflex-live-check: ## Live pilot preflight: broker health (governance+key only for egress)
+	@$(PY) scripts/sparknet-reflex-eval.py --check
+
+reflex-live-query: ## One broker-backed fabric query (operator-gated): QUERY="..."
+	@REFLEX_LIVE=1 $(PY) scripts/sparknet-reflex-eval.py --query "$(QUERY)" --top-k "$(REFLEX_TOP_K)"
 
 env-init: ## Write every vault's .env + wiki dirs from its .env.example
 	@./scripts/sparknet-env-init.sh "$(VAULT_ROOT)"

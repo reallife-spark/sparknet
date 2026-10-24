@@ -80,6 +80,7 @@ FORBIDDEN_PHRASES = (
     "no usable signing key",  # same claim, other phrasing
     "isolated signer is Step",  # Steps 15-18 are done and deployed
     "One peer, no master, no second node",  # disproven by the 2/2 live pair
+    "no node has been elected yet",  # the 2026-10-07 election disproved it
     "Nothing above is live-verified",
     "No `scripts/`, `services/` or `systemd/` directory exists yet",
 )

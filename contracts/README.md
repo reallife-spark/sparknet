@@ -12,7 +12,9 @@ the tests then prove both roles still agree.
 | `overlay.json` | addressing, MTU, keepalive, AllowedIPs discipline |
 | `capabilities.json` | the closed capability vocabulary and who may hold each |
 | `identity-schema.json` | canonical identity, fingerprinting, signed envelope |
-| `registry-schema.json` | the shape of the registry document and its entries: required fields, types, the `signature_b64` field name, and what is still unspecified (the distribution channel) |
+| `registry-schema.json` | the shape of the registry document and its entries: required fields, types, the `signature_b64` field name, and the decided distribution channel (a pointer to `registry-publication.json`) |
+| `registry-publication.json` | the channel that carries a registry: the five-field publication, the signed projection and digest, the monotonic sequence, the peer's acceptance order and refusal codes, and the documented re-delivery window |
+| `reflex-schema.json` | the typed decision contract for the reflex layer — Jev/System One sensor, never authority; abstain first-class |
 | `ports.json` | every listener and dial target, with `implementation_state` (code) kept separate from `runtime` (observed on a given host) |
 | `guard-protocol.md` | the Master↔peer approval conversation |
 | `guard-approval.json` | the approval envelope itself: the eight signed fields, the canonicalisation rule, where the capability comes from, and the transport (route, port, envelope fields) |

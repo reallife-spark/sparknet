@@ -45,7 +45,7 @@
     "document_schema_version": "1.0",
     "signature_field": "signature_b64",
     "signature_field_note": "The field the Master writes and the peer reads. It was named 'signature' in a draft schema that nothing produced and nothing read; the implementation says signature_b64, so the implementation is what the contract says.",
-    "distribution": "UNSPECIFIED — the channel by which a signed registry reaches peers is not yet built. Peers currently read a local copy.",
+    "distribution": "DECIDED (Step 6): the Master pushes a signed registry publication to each peer's guard on 9090 (POST /api/v1/registry). See contracts/registry-publication.json.",
     "empty_by_default": true,
     "empty_by_default_rationale": "No node gets privileges by default. The shipped registry has no entries on purpose, so a fresh deployment is fail-closed."
   },

@@ -100,6 +100,8 @@ SUBTREES=(peer-node master-node contracts shared scripts .opencode/skills .openc
 # spark.compose.yml stay: the setup script's default platform IS spark, and a
 # distribution shipping half the platform pair fails the moment it runs bare.
 # .env.example is what env-init copies into every role vault.
+# USER_MANUAL.md is the fabric's master manual: the goagx distribution is a
+# mirror of the fabric, so it carries the manual that describes the mirror.
 ROOT_FILES=(
   spark-entrypoint.sh spark-precontext.py spark.compose.cpu.yml
   torch-dist-l4t-compat.py spark-vllm-l4t-patch.py spark-vllm-xformers-gqa-patch.py
@@ -107,6 +109,7 @@ ROOT_FILES=(
   spark.docker spark.compose.yml
   .env.example
   .dockerignore .gitignore opencode.json requirements.txt
+  USER_MANUAL.md
 )
 TEMPLATES="$REPO_ROOT/goagx/publish-templates"
 
@@ -267,12 +270,12 @@ verify_tree() {  # <root>
   for p in \
     goagx/sparknet.agx.docker goagx/sparknet.agx.compose.yml \
     goagx/sparknet-audio-shim.py goagx/bootstrap-agx.sh goagx/GOSPARK_PIN \
-    goagx/README.md \
+    goagx/README.md goagx/USER_MANUAL.md \
     sparknet-node-setup.sh spark-entrypoint.sh spark-precontext.py \
     spark.compose.cpu.yml bootstrap-agx.sh \
     contracts shared scripts peer-node master-node \
     .opencode/skills .opencode/agents opencode.json requirements.txt \
-    README.md VERSIONS.json SHA256SUMS .github/workflows/verify.yml
+    README.md USER_MANUAL.md VERSIONS.json SHA256SUMS .github/workflows/verify.yml
   do
     [ -e "$root/$p" ] && ok "$p" || bad "missing $p"
   done

@@ -22,13 +22,14 @@ refuses to apply. That asymmetry is deliberate — a node that has lost its
 Master has lost its authority, and the correct response is to keep it useful
 but inert.
 
-The Master role lives in `master-node/` and its signing side is built but
-**unused**: the isolated signer exists, and Step 11 built the election that can
-elect a Master, but no node has been elected yet — nothing on disk is Master
-until the members run the ceremony and a unanimous signed cluster trust root
-lands (2 of 2 in a pair, 3 of 3 in the full cluster).
-Until then, `master-node/manifests/master-identity.json` correctly says
-`role: "peer"`.
+The Master role lives in `master-node/`, and its signing side is **deployed
+and proven live**: on 2026-10-07 a 2/2 pair co-formed a cluster trust root, the
+signer ran as `sparknet-master-signer.service`, signed a live registry and
+survived a real reboot. A node is Master because the members ran the ceremony
+and a unanimous signed cluster trust root landed (2 of 2 in a pair, 3 of 3 in
+the full cluster) — not because of anything on disk, which is why
+`master-node/manifests/master-identity.json` says `role: "peer"` until the
+ceremony does.
 
 ## Boundaries vs the Master
 
@@ -47,6 +48,18 @@ is not a property this design can prevent — it is why the useful protections
 are the ones that do not depend on the peer's cooperation: `chattr +i` on
 protected files, the nftables egress restriction, and the requirement for a
 Master signature that simply does not exist locally.
+
+## The manual
+
+[`USER_MANUAL.md`](USER_MANUAL.md) is the developer-facing manual for this
+role: what a peer is, the seven services, the 24 scripts, the nine units, the
+manifests, the vault, the gate, and how to make a change correctly. It is
+published at the root of the `sparknet-peer` repository.
+
+The **master manual** for the whole system lives in the `sparknet` repository
+as `USER_MANUAL.md`; the peer's contract and the shared implementation it
+obeys are named in prose there, because the published `sparknet-peer`
+repository carries this role and not the contract.
 
 ## Layout (numbered PARA layout; legacy names are shims)
 

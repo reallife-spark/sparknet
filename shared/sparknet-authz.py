@@ -424,11 +424,17 @@ def sign_authorization(
     capabilities: list[str],
     ttl_days: int = 365,
     now: datetime | None = None,
+    revoked: bool = False,
 ) -> dict[str, Any]:
     """Build a signed registry entry. MASTER-SIDE ONLY — needs the Master private key.
 
     Peers never call this. It exists so the Master has a reference
     implementation and so tests can mint fixtures without hand-rolling JSON.
+
+    ``revoked`` is a parameter rather than a field a caller may set afterwards
+    because ``revoked`` is *inside* the signed envelope: flipping it after
+    signing produces an entry whose signature no longer verifies. Revoking is
+    an act of the key, so it happens here, under the signature.
     """
     now = now or datetime.now(timezone.utc)
     unknown = [c for c in capabilities if c not in KNOWN_CAPABILITIES]
@@ -443,7 +449,7 @@ def sign_authorization(
         "overlay_ipv4": identity.get("overlay_ipv4"),
         "issued_at": stamp,
         "expires_at": (now + timedelta(days=ttl_days)).isoformat().replace("+00:00", "Z"),
-        "revoked": False,
+        "revoked": bool(revoked),
     }
     entry["signature_b64"] = base64.b64encode(master_private_key.sign(authorization_message(entry))).decode("ascii")
     return entry
@@ -534,6 +540,125 @@ def guard_approval_message(approval: dict[str, Any]) -> bytes:
         if not isinstance(value, str):
             raise AuthzError(f"guard approval field {name!r} must be a string")
     return json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+# --- registry publications (distribution) ------------------------------------
+
+
+#: The unsigned content of a registry publication. A publication is how a signed
+#: registry reaches a peer: the Master wraps the document, stamps it with a
+#: monotonic sequence and a publication time, and signs a digest of the document
+#: rather than the document itself.
+#:
+#: Why the digest and not the document: the entries are already signed, and the
+#: registry's canonical *byte* form is deliberately not an authority-bearing
+#: thing (only its shape is contracted, in contracts/registry-schema.json). The
+#: digest binds exactly the bytes the Master published without redefining the
+#: document's serialisation as a signature input.
+#:
+#: Why a sequence at all: signatures do not expire on their own, so an attacker
+#: who can write to the channel could replay an older, still-valid registry in
+#: which a peer was not yet revoked. The sequence turns that replay into a
+#: refusal: a peer remembers the highest sequence it has installed and refuses
+#: anything not strictly greater. The sequence is inside the signed projection,
+#: so it cannot be raised or lowered without the Master's key.
+REGISTRY_PUBLICATION_FIELDS = (
+    "published_at",
+    "registry",
+    "registry_sha256",
+    "sequence",
+)
+
+#: What the Master's signature over a publication covers. `registry` is bound by
+#: `registry_sha256`; it is not projected directly.
+REGISTRY_PUBLICATION_SIGNED_FIELDS = (
+    "published_at",
+    "registry_sha256",
+    "sequence",
+)
+
+
+def canonical_registry_bytes(registry: dict[str, Any]) -> bytes:
+    """The one serialisation a registry digest is computed over."""
+    if not isinstance(registry, dict):
+        raise AuthzError("a registry must be an object")
+    return json.dumps(registry, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def registry_digest(registry: dict[str, Any]) -> str:
+    """SHA-256 of the canonical registry bytes, hex."""
+    return hashlib.sha256(canonical_registry_bytes(registry)).hexdigest()
+
+
+def registry_publication_message(publication: dict[str, Any]) -> bytes:
+    """Canonical bytes a registry-publication signature covers.
+
+    Like ``guard_approval_message`` this is one rule, imported by the signer and
+    by every peer that installs a registry, so the two cannot drift apart while
+    each keeps working against its own assumption.
+
+    The artifact carries exactly ``REGISTRY_PUBLICATION_FIELDS``. A missing field
+    is refused, an extra one is refused, and ``registry_sha256`` must equal the
+    digest of the ``registry`` it travels with: a publication whose digest and
+    document disagree is refused here, before either side has to remember to
+    check it.
+    """
+    if not isinstance(publication, dict):
+        raise AuthzError("a registry publication must be an object")
+    missing = [f for f in REGISTRY_PUBLICATION_FIELDS if f not in publication]
+    if missing:
+        raise AuthzError(f"registry publication missing field(s): {', '.join(missing)}")
+    extra = sorted(set(publication) - set(REGISTRY_PUBLICATION_FIELDS))
+    if extra:
+        raise AuthzError(f"registry publication carries field(s) outside the envelope: {', '.join(extra)}")
+
+    sequence = publication["sequence"]
+    if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 1:
+        raise AuthzError("registry publication 'sequence' must be an integer >= 1")
+    published_at = publication["published_at"]
+    if not isinstance(published_at, str) or not published_at:
+        raise AuthzError("registry publication 'published_at' must be a non-empty string")
+    registry = publication["registry"]
+    if not isinstance(registry, dict):
+        raise AuthzError("registry publication 'registry' must be an object")
+    digest = publication["registry_sha256"]
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise AuthzError("registry publication 'registry_sha256' must be 64 lowercase hex characters")
+    actual = registry_digest(registry)
+    if actual != digest:
+        raise AuthzError(
+            f"registry publication digest {digest[:16]}... does not match the registry it carries ({actual[:16]}...)"
+        )
+
+    projected = {name: publication[name] for name in REGISTRY_PUBLICATION_SIGNED_FIELDS}
+    return json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def verify_registry_publication(publication: dict[str, Any], public_key: Ed25519PublicKey) -> str:
+    """Verify a publication under the pinned Master key; return its digest.
+
+    Checks the envelope, the signature over the canonical projection, and that
+    the registry names the same Master key this node has pinned. That last
+    check is not redundant: a document signed by a *different* key would fail
+    every entry check anyway, but it would fail with "bad signature", which
+    looks like corruption rather than "someone handed me another fabric's
+    registry".
+    """
+    if not isinstance(publication, dict):
+        raise AuthzError("a registry publication must be an object")
+    signature = publication.get("signature_b64")
+    if not isinstance(signature, str) or not signature:
+        raise AuthzError("registry publication has no signature")
+    # The signature travels beside the envelope; the canonical rule takes the
+    # envelope only, so strip it here rather than making every caller do it.
+    unsigned = {k: v for k, v in publication.items() if k != "signature_b64"}
+    message = registry_publication_message(unsigned)
+    if not verify_signature(public_key, signature, message):
+        raise AuthzError("registry publication signature does not verify under the pinned Master key")
+    claimed = publication["registry"].get("master_public_key_b64")
+    if claimed != public_key_b64(public_key):
+        raise AuthzError("the registry names a different Master key than the one pinned here")
+    return str(publication["registry_sha256"])
 
 
 # --- cluster jobs ------------------------------------------------------------

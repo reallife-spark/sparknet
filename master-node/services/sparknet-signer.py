@@ -16,11 +16,12 @@ recorded in `../security/key-management.md`; the topology is asserted in
 
 ## What it will sign
 
-Exactly four payload types, all built from structured input:
+Exactly five payload types, all built from structured input:
 
 | Operation | Signs |
 |---|---|
 | `sign-registry-entry` | a registry entry, via `authz.authorization_message` |
+| `sign-registry-publication` | a registry's distribution publication, via `authz.registry_publication_message` |
 | `sign-guard-approval` | a `guard-apply` approval for one named peer |
 | `sign-cluster-job` | a cluster job, via `authz.cluster_job_message` |
 | `sign-admin-request` | an `admin-supervise` admin request, via `authz.admin_request_message` |
@@ -116,7 +117,13 @@ SIGNER_CAPABILITIES = frozenset({"sign"})
 
 #: Operations this process answers. Anything else is refused, including future
 #: additions someone makes in a hurry while the socket is open.
-SIGN_OPERATIONS = ("sign-registry-entry", "sign-guard-approval", "sign-cluster-job", "sign-admin-request")
+SIGN_OPERATIONS = (
+    "sign-registry-entry",
+    "sign-registry-publication",
+    "sign-guard-approval",
+    "sign-cluster-job",
+    "sign-admin-request",
+)
 READ_OPERATIONS = ("capabilities", "public-key", "root-id", "ping")
 OPERATIONS = SIGN_OPERATIONS + READ_OPERATIONS
 
@@ -528,6 +535,8 @@ class Signer:
 
         if op == "sign-registry-entry":
             return self._sign_registry_entry(op, request)
+        if op == "sign-registry-publication":
+            return self._sign_registry_publication(op, request)
         if op == "sign-cluster-job":
             return self._sign_cluster_job(op, request)
         if op == "sign-admin-request":
@@ -586,6 +595,40 @@ class Signer:
             "entry": {**unsigned, "signature_b64": signature_b64},
             "ledger_block": block["hash"],
             "revoked": revoked,
+        }
+
+    def _sign_registry_publication(self, op: str, request: dict[str, Any]) -> dict[str, Any]:
+        publication = request.get("publication")
+        if not isinstance(publication, dict):
+            return self._refuse("sign-registry-publication requires a 'publication' object")
+
+        # The digest is computed *here*, never taken from the caller. A caller
+        # cannot hand the signer a digest that names one registry and a document
+        # that says another, because the digest is derived from the document.
+        unsigned = {k: publication.get(k) for k in ("sequence", "published_at")}
+        unsigned["registry"] = publication.get("registry")
+        if not isinstance(unsigned["registry"], dict):
+            return self._refuse("publication requires a 'registry' object")
+        try:
+            unsigned["registry_sha256"] = self.authz.registry_digest(unsigned["registry"])
+            message = self.authz.registry_publication_message(unsigned)
+        except self.authz.AuthzError as exc:
+            return self._refuse(f"refusing to sign this publication: {exc}")
+        except Exception as exc:
+            return self._refuse(f"publication is not canonicalisable: {exc}")
+
+        # Re-validating the entries here would duplicate the schema checker and
+        # the peer. The signer's job is the *publication*: sequence, digest and
+        # time. A registry whose entries were never signed is caught by
+        # registry-publish (which checks the document before calling this) and
+        # again by every peer (which evaluates each entry on install).
+        signature_b64 = self.authz.sign_bytes(self.key, message)
+        block = self._record(op, f"sequence-{unsigned['sequence']}", signature_b64)
+        return {
+            "ok": True,
+            "publication": unsigned,
+            "signature_b64": signature_b64,
+            "ledger_block": block["hash"],
         }
 
     def _sign_guard_approval(self, op: str, request: dict[str, Any]) -> dict[str, Any]:

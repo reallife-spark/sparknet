@@ -208,8 +208,26 @@ moves through draft → submitted → reviewed → decided, and the transitions
 
 ### `sparknet-registry-client.py` — the registry client
 
-Fetches and verifies the Master-signed registry, and keeps the peer's view of
-the cluster's authorisations current. It verifies; it never authorises.
+Installs a Master-signed registry **publication** after verifying it against the
+key pinned in `manifests/keys/master-ed25519.pub.b64`, and reports the installed
+sequence and this node's capabilities. It verifies; it never authorises.
+
+The live channel is a push: the Master posts the publication to this node's
+guard on 9090 and the guard installs it (see `docs/registry-protocol.md` in the
+master role). The client is the **offline** path — a node whose guard is not
+running, a recovery install, or an operator previewing what arrived:
+
+```sh
+make registry-fetch PUBLICATION=/path/to/current.json        # install
+make registry-fetch PUBLICATION=/path/to/current.json DRY_RUN=1
+make registry-status                                          # sequence + capabilities
+```
+
+The same acceptance rule runs on both paths
+(`shared/sparknet-registry-install.py`): exact envelope, signature under the
+pinned Master key, a registry the contract accepts, and a sequence strictly
+greater than the installed one. A replayed older publication is refused as
+`stale_publication` — that is what stops a revocation from being undone.
 
 ### `sparknet-vault-provisioner.py` — the vault provisioner
 
@@ -241,7 +259,7 @@ changing nothing when they do** (enforced by `tests/test_shell.py`).
 | `sparknet-wg-render-peer.sh`, `sparknet-wireguard-render.sh` | Render a WireGuard configuration from the template. Dry-run by default; `APPLY=1` writes at `0600`. |
 | `sparknet-wireguard-anchor.sh` | The anchor: render, bring up, pin. |
 | `sparknet-wg-bringup.sh` | Userspace `wireguard-go` bring-up for hosts without the kernel module. |
-| `sparknet-registry-fetch.sh` | Fetch the Master-signed registry. |
+| `sparknet-registry-fetch.sh` | Install a Master-signed registry publication (offline path); `--status` reports what is installed. |
 | `sparknet-registry-verify-peer.sh` | Verify the registry against the pinned Master key. |
 | `sparknet-chattr-preflight.sh` | Prove `chattr +i` holds on the state filesystem. |
 | `sparknet-firewall.sh` | The peer's egress policy: the peer may reach **only** the Master. |

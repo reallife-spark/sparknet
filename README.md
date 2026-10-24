@@ -31,6 +31,16 @@ node actually needs.
 The two roles are not symmetric, and their charters differ in substance. Read the
 role's own `AGENTS.md` before working inside it.
 
+## Documentation
+
+| Manual | Covers |
+|---|---|
+| [`USER_MANUAL.md`](USER_MANUAL.md) | **The master manual** — the whole system: the five repositories, the architecture, the authority model, the contracts, the node image, the vault, every gate, and how to change something without breaking the fabric. Start here. |
+| `peer-node/USER_MANUAL.md` | The peer role: its services, scripts, units, manifests and vault. Published at the root of `sparknet-peer`. |
+| `master-node/USER_MANUAL.md` | The master role: the election arc, the three keys, the isolated signer, the ledger and the admin surface. Published at the root of `sparknet-master`. |
+| `goagx/USER_MANUAL.md` | The AGX Xavier twin: the image, the compose surface, the audio shim, the bootstrap and the publish. Published at `goagx/USER_MANUAL.md`. |
+| `goSpark/USER_MANUAL.md` | The Go control and service plane, in the `goSpark` repository. |
+
 ## Quick start
 
 ```bash

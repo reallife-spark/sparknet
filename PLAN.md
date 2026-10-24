@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
-updated: 2026-10-22
-current: done
+updated: 2026-10-23
+current: 64
 ---
 
 # sparknet — Active Plan
@@ -2574,5 +2574,123 @@ and has no forge on a node, so there is nowhere a workflow file would ever run.
       `make contract-test`, `make render-check` and `make ci CI_QUICK=1` green,
       with `git diff --stat contracts/ shared/` **empty**.
 
+## Step 64 — Jev reflex layer (design + phased adoption)
+
+Opened 2026-10-23 on operator direction: beside the agentic layer, add a fast
+System One decision layer (Jev / TypeSafe) that screens, ranks and flags, but
+never holds authority. The design record is `REFLEX_DECISION_DESIGN.md`;
+this step tracks adoption in dependency order.
+
+**Operator decisions (2026-10-23):**
+1. **Local-only is the default.** The reflex layer runs rules / the node's own
+   reranker with no egress; cloud Jev is opt-in.
+2. **The Master broker is the cloud path** for the unified "massive task"
+   workload. Peers never call `api.typesafe.ai` directly; per-node direct cloud
+   is ruled out by the one-address `AllowedIPs` rule
+   (`contracts/overlay.json:14`).
+3. **RAG relevance is the first touchpoint**, on the allow-listed `fabric`
+   corpus only (28 files / 242 chunks; no personal material).
+4. **Shadow -> assist -> enforce**, per question class. No class skips shadow.
+5. **Master-local first.** Peer access needs its own `reflex-consult` capability
+   and is deferred.
+6. **sparknet now, goSpark later.** The Go router client is a separate commit
+   in the sibling repo.
+
+**Invariant:** reflex output may rank, annotate, route or flag; it may never
+sign, grant/revoke, approve a guard application, or widen a permission. It may
+only tighten, and it abstains on doubt. The guard, signer and registry never
+consult it.
+
+- [x] **64A — design record, nothing adopted** — `REFLEX_DECISION_DESIGN.md`
+      records the topology, the typed decision contract, the four touchpoints,
+      the data-governance rules, the threat model and the phase plan. It creates
+      no port, grants no capability and changes no contract.
+      **DoD:** (1) the doc is registered in
+      `tests/test_layout.py::EXPECTED_TOP_LEVEL` and linked from `index.md`;
+      (2) this step's edits touch **no file under `contracts/` or `shared/`** —
+      the "nothing adopted" invariant (the working tree already carried a
+      concurrent registry arc's 06:02–06:13 edits there; they are untouched);
+      (3) `make validate`, `make test-all` and `make ci CI_QUICK=1` are green.
+      Verified 2026-10-23.
+- [x] **64B — decision contract and shared client** — added
+      `contracts/reflex-schema.json`, `shared/sparknet-reflex.py`, golden
+      vectors (`tests/reflex/golden/vectors.json`) and `consult()`'s fake
+      backend seam. Cross-role: contract + both roles in one commit. **DoD:**
+      canonical round-trip; abstain on timeout/low confidence/budget; redaction;
+      audit writes hashes only; no authority fields; `make render`,
+      `contract-test`, `test-all` green. Verified 2026-10-23: 40 reflex tests,
+      `make ci CI_QUICK=1` green, `make test-all` green.
+- [x] **64C — Master broker and port 4224** — added
+      `master-node/services/sparknet-reflex-broker.py`, its unit, tests and the
+      `4224` port entry (overlay-only, `binds_to 10.100.0.1`). **DoD:**
+      overlay-only bind; peer source refused in Phase 1; local backend by
+      default; an optional credential only for explicit egress; exact model pin;
+      timeout -> abstain; budgets; `/healthz` leaks nothing; `units-check`
+      green. Verified 2026-10-23: 14 broker tests, master suite green,
+      `make contract-test`, `render-check`, `validate`, `lint`, `format-check`
+      green. The unit is staged (`make reflex-unit`), **not enabled**; local
+      mode needs no credential.
+- [x] **64D — node surface** — added `/v1/reflex/` to the dispatch bridge's
+      `PLAIN_PREFIXES` and `LOCAL_ONLY_PREFIXES`, the OpenAPI entry, the setup
+      env and tests. **DoD:** 401 without grant; 403 from overlay;
+      loopback-only; local default; broker opt-in; no new published port.
+      Verified 2026-10-23: 8 surface tests, peer suite green, `contract-test`,
+      `validate`, `lint`, `format-check`, `shellcheck` green. Local mode uses the
+      node's reranker/local LLM and never egresses; broker mode forwards to
+      `10.100.0.1:4224` and binds the caller's `node_id`.
+- [x] **64E — RAG pilot (shadow -> assist)** — added `--reflex` to
+      `scripts/sparknet-chroma.py`, the local reranker cascade (rules by
+      default, optional `SPARKNET_RERANK_URL`), the bounded on-disk cache
+      (`.state/reflex-cache.json`), `scripts/sparknet-reflex-eval.py`,
+      `tests/reflex/rag-golden.json` and `make reflex-eval`. **DoD:** fabric
+      scope only; shadow agreement reported; fail-open on abstain; precision@5,
+      recall, abstain rate, p95 and cost per 1k measured; no regression without
+      `--reflex`. Verified 2026-10-23 on 14 fabric queries, top-k 5,
+      candidate-k 50, local rules backend: baseline precision@5 **0.771**,
+      reranked **0.786** (assist delta **+0.015**), recall@5 **0.946**, shadow
+      agreement@5 **0.962**, abstain **0.000**, p95 **7.7 ms**, cost/1k
+      **$0.0000** (no egress). Assist is safe for fabric RAG; broker/Jev stays
+      shadow until 64F. Plain queries without `--reflex` are unchanged.
+- [ ] **64F — live pilot (local-first; cloud optional)** — **executed
+      2026-10-23; awaiting user confirmation.** Local backends are the default
+      and need neither governance approval nor a credential: `make
+      reflex-live-check` then gates only on broker `/healthz`. `REFLEX_LIVE=1
+      make reflex-eval [REFLEX_MODE=assist]` scores up to `--live-candidates`
+      fabric chunks per query through the Master broker; `make
+      reflex-live-query QUERY="…"` runs one broker-backed fabric query. Live
+      scoring is fail-open (transport or shape error → abstain) and reports
+      measured tokens plus cost. The optional TypeSafe cloud leg still requires
+      `SPARKNET_REFLEX_GOVERNANCE=approved`, a 0600 key and
+      `SPARKNET_REFLEX_ALLOW_EGRESS=1`; it is not the pilot default.
+      **Live setup:** loopback broker (`127.0.0.1:4224`, local backend, no key)
+      plus a LAN Ollama OpenAI endpoint at `192.168.178.21:11434`; local LLM
+      tag `sparknet-reflex:v1` (copy of `qwen2.5-3b-32k`). **Measured (14 query
+      fabric golden set, candidate-k 50, top-k 5, local-rerank):** shadow
+      baseline 0.771 → reranked 0.757, agreement@5 0.817, recall@5 0.946,
+      abstain 0.000, p95 115.7 ms (one outlier), cost $0. Direct local-LLM
+      probe (`tool.risk`, Noul): accept 0.80, 1.23 s. **Finding:** the broker
+      sees one query+chunk and therefore can only do lexical local-rerank, not
+      the distance-aware batch rerank that produced 64E's 0.786; assist served
+      0.757, a small regression. Broker/LLM stays **shadow**; the in-process
+      chroma reranker keeps **assist**. **DoD:** measurements recorded;
+      `DoD: confirm: user`.
+- [ ] **64G — later, each its own step** — `reflex-consult` + peer broker
+      access; goSpark router client; Open WebUI filter; opencode tool-guard
+      plugin; groundedness; agent-callable MCP tool.
+
+**Status:** 64A–64F executed 2026-10-23; TypeSafe replaced by a local-first
+default (local reranker/LLM, no egress, no credential). 64F measurements are
+recorded and await user confirmation; 64G not started. Cursor `done -> 64`.
+
 ## Next
+
+64F needs only the user's confirmation that the recorded live measurements are
+accepted. Keep the local RAG reranker on **assist** for the in-process fabric
+scope and the broker/local-LLM path on **shadow**: the broker gets one
+query+chunk per call, so its local-rerank is lexical and measured 0.757 versus
+the 0.771 baseline, while the batch chroma reranker measured 0.786. The broker
+unit remains staged and works without a credential in local mode. The cloud/Jev
+leg is optional and egress-gated. Do not add the `reflex-consult` capability
+before its own cross-role commit. The next build work after 64F is 64G, each
+leg its own step.
 

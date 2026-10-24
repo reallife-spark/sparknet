@@ -1,7 +1,7 @@
 ---
 title: sparknet master-node — MISSION
 status: partially-built
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # sparknet master-node — MISSION
@@ -18,7 +18,10 @@ directory, has an isolated signer for the operational key, and declares an admin
 surface and `MASTERSPIKE` knowledge manifest. Steps 2 and 5 followed on
 2026-10-22: the registry has a single stated shape, and `guard-apply` is now
 grantable — the approval envelope is one rule in `../shared/sparknet-authz.py`,
-signed by the isolated signer and accepted by the peer's own guard.
+signed by the isolated signer and accepted by the peer's own guard. Step 6
+followed on 2026-10-23: the registry now travels as a signed **publication** the
+Master pushes to each peer's guard on 9090, so distribution and revocation
+propagation are built rather than specified.
 
 The election→signer→registry arc was **proven live on real hosts on
 2026-10-07**: agx64 and agx32 co-formed a 2/2 cluster trust root, the signer ran
@@ -31,8 +34,7 @@ real reboot of each host on 2026-10-19.
 
 | Missing | Step | Consequence |
 |---|---|---|
-| registry distribution | 6 | peers read an operator-placed registry; nothing pushes one |
-| instant push (`8090`) | 7 | ACL changes are applied by hand, not POSTed to peers |
+| instant push (`8090`) | 7 | ACL changes are applied by hand, not POSTed to peers; Step 6's push channel already supersedes the pull direction |
 | admin services (`4220`–`4223`) | `MASTER_ADMIN_PLAN.md` | git, file share, NAT and the vector DB are contracted `spec-only` |
 | the two destructive legs | — | rollback and a replace-Master re-formation are documented and deliberately unexecuted (`../../contracts/deployment-runbook.md`) |
 

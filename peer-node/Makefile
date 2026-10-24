@@ -214,10 +214,19 @@ clean: ## Remove caches and build output
 	@rm -rf "$(VAULT_ROOT)/.pytest_cache" "$(VAULT_ROOT)/dist"
 	@echo "Cleaned caches and dist/ (left .venv, .state and .cache alone)."
 # --- peer registry/wg helpers ---
-.PHONY: registry-fetch registry-verify-peer wg-render-peer
+.PHONY: registry-fetch registry-status registry-verify-peer wg-render-peer
 
-registry-fetch:
-	@$(ROLE_ROOT)/scripts/sparknet-registry-fetch.sh
+# The live channel is the Master pushing a signed publication to the guard on
+# 9090. This target is the offline path: install one the Master delivered, or an
+# operator carried to a node whose guard is not running yet. Same acceptance
+# rule as the guard (shared/sparknet-registry-install.py).
+registry-fetch: ## install a signed registry publication (PUBLICATION=... [DRY_RUN=1])
+	@test -n "$(PUBLICATION)" || (echo "PUBLICATION=<publication.json> required" >&2; exit 1)
+	@$(ROLE_ROOT)/scripts/sparknet-registry-fetch.sh --publication "$(PUBLICATION)" \
+	  $(if $(DRY_RUN),--dry-run) $(if $(JSON),--json)
+
+registry-status: ## installed publication sequence and this node's capabilities
+	@$(ROLE_ROOT)/scripts/sparknet-registry-fetch.sh --status
 
 registry-verify-peer: ## verify registry (needs REGISTRY)
 	@test -n "$(REGISTRY)" || (echo "REGISTRY=<registry.json> required" >&2; exit 1)
@@ -227,8 +236,6 @@ wg-render-peer: ## render peer wg (needs REGISTRY)
 	@test -n "$(REGISTRY)" || (echo "REGISTRY=<registry.json> required" >&2; exit 1)
 	@$(ROLE_ROOT)/scripts/sparknet-wg-render-peer.sh --registry "$(REGISTRY)" $(if $(OUT),--out $(OUT))
 
-# reference for wiring
-# sparknet-registry-client.py wired via registry-fetch target
 
 # --- election ---
 .PHONY: election-request

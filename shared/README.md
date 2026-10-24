@@ -128,6 +128,47 @@ the signature check all come from `sparknet-authz.py`, loaded by path from this
 directory — the same loader pattern the other modules use, and the same refusal
 to fall back to a local copy.
 
+## `sparknet-registry-install.py`
+
+The peer-side **acceptance rule** for a registry publication: exact envelope,
+signature over the canonical projection, the registry naming the key the peer
+pinned, the document satisfying `registry-schema.json`, and a sequence strictly
+greater than the installed one. It installs atomically (registry, then the
+sequence record) and refuses a replay.
+
+**Why it is here and not in a role.** Both roles run it. The peer runs it on both
+receive paths — the guard's live `POST /api/v1/registry` and the offline
+`sparknet-registry-client.py` — and the Master runs the same function on its own
+output before writing `current.json`: *what the Master emits must be what the
+receiver's rule accepts*, checked by the receiver's code rather than by the
+emitter agreeing with itself. A second copy for the offline path is exactly how
+"the peer accepted it" would stop meaning one thing.
+
+**It never re-implements the signature rule.** The canonical projection, the
+digest and the envelope check come from `sparknet-authz.py`; the document shape
+comes from `sparknet-registry-schema.py`. This module owns only the *order* of
+acceptance, the sequence watermark and the two-write installation.
+
+## `sparknet-reflex.py`
+
+The **typed reflex decision contract**: request/answer shapes for the
+Choice/Score/Noul vocabulary, abstain as a first-class outcome, a cache key that
+names the exact model and policy, and an audit line that carries hashes rather
+than state. The contract is `contracts/reflex-schema.json`.
+
+**Why it is here and not in a role.** A peer and the Master must agree on what a
+reflex request and a reflex verdict are, or a decision produced on one side
+cannot be audited or compared on the other. The module is also the place the
+**no-authority invariant** is enforced: authority-shaped fields are refused, and
+`is_authority_path()` names the surfaces (guard, signer, registry, authz) that
+must never consult reflex at all. A verdict may rank, annotate, route or flag;
+it may not sign, grant, revoke, approve or widen.
+
+**It is deliberately standard library only.** The fabric's runtime allow-list is
+`cryptography` alone; this module needs neither the network nor crypto, so it
+adds no dependency. Transport and vendor calls belong to the caller
+(`sparknet-reflex-broker.py` on the Master), not here.
+
 ## Adding to this directory
 
 Only if **both** roles need the same code and any divergence would be a

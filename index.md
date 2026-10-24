@@ -1,6 +1,6 @@
 ---
 title: sparknet Knowledge Index
-updated: 2026-10-19
+updated: 2026-10-23
 ---
 
 # sparknet — Knowledge Index
@@ -33,6 +33,21 @@ This repository is a fabric. Each vault has its own categories and its own
 - [[log]] — append-only audit trail
 - `sessions/` — per-session agent memory
 
+## Design proposals
+
+Fabric-root design notes. They specify seams and tradeoffs; each is adopted only
+by its own commit, with both roles edited together where the contract changes.
+
+| Document | Scope |
+|---|---|
+| `REFLEX_DECISION_DESIGN.md` | the Jev/System One reflex layer: senses and ranks, never holds authority |
+| `CLUSTER_INFERENCE_DESIGN.md` | cluster inference modes and envelopes |
+| `COMPUTE_CAPABILITY_DESIGN.md` | delegated compute and `cluster-serve` |
+| `CLUSTER_JOB_REALIZATION_DESIGN.md` | job realization, the shared index, F0–F10 |
+| `PER_USER_VAULTS_DESIGN.md` | per-user knowledge vaults |
+| `ADMIN_FEDERATION_DESIGN.md` | cross-node admin requests |
+| `MCP_A2A_DESIGN.md` | MCP/A2A tool surface |
+
 ## The contract
 
 Single source of truth, read by both roles. Changing any of it is a **cross-role
@@ -44,6 +59,8 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/capabilities.json` | the closed capability vocabulary |
 | `contracts/identity-schema.json` | canonical form, fingerprint, signed envelope |
 | `contracts/registry-schema.json` | the shape of the signed node-authorization registry — fields, types, the `signature_b64` name |
+| `contracts/registry-publication.json` | the Master→peer registry publication channel: envelope, digest, sequence, refusals, the 60 s re-delivery window |
+| `contracts/reflex-schema.json` | the typed decision contract for the reflex layer — Jev/System One sensor, never authority; abstain first-class |
 | `contracts/ports.json` | which role listens where |
 | `contracts/guard-protocol.md` | the approval conversation |
 | `contracts/guard-approval.json` | the guard-apply approval envelope — the eight fields, the canonical bytes, the transport |

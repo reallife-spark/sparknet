@@ -1,0 +1,128 @@
+{
+  "description": "Golden vectors for contracts/reflex-schema.json and shared/sparknet-reflex.py. Regenerate only for an intentional contract change.",
+  "cache_keys": [
+    {
+      "name": "fabric-rag-relevance",
+      "question_class": "rag.relevance",
+      "state": "alpha",
+      "questions": {
+        "q": {
+          "type": "noul",
+          "instructions": "relevant?"
+        }
+      },
+      "model": "jev-1.13.0",
+      "policy_version": "policy-1",
+      "node_id": "node-a",
+      "request_id": "req-1",
+      "expected": "13301ab51f6c1faaa522e2acf30fcd15e7e6c45f5412d21918f33b95ff234d3d"
+    },
+    {
+      "name": "fabric-rag-relevance-beta",
+      "question_class": "rag.relevance",
+      "state": "beta",
+      "questions": {
+        "q": {
+          "type": "noul",
+          "instructions": "relevant?"
+        }
+      },
+      "model": "jev-1.13.0",
+      "policy_version": "policy-1",
+      "node_id": "node-a",
+      "request_id": "req-1",
+      "expected": "d07573d93e64203953c35f26ac8a1c5c47037f87d245a086d1dda44576f62c0e"
+    },
+    {
+      "name": "intent-route",
+      "question_class": "intent.route",
+      "state": "classify this",
+      "questions": {
+        "route": {
+          "type": "choice",
+          "instructions": "pick",
+          "criteria": {
+            "a": "x",
+            "b": "y"
+          }
+        }
+      },
+      "model": "jev-1.13.0",
+      "policy_version": "policy-1",
+      "node_id": "node-a",
+      "request_id": "req-1",
+      "expected": "76cbcc7e3937c7213f3c8e4950dfbbf573b81fc0a32ec653dced69fbec49ba67"
+    },
+    {
+      "name": "tool-risk",
+      "question_class": "tool.risk",
+      "state": "rm -rf /",
+      "questions": {
+        "risk": {
+          "type": "score",
+          "instructions": "score",
+          "criteria": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      },
+      "model": "jev-1.13.0",
+      "policy_version": "policy-1",
+      "node_id": "node-a",
+      "request_id": "req-1",
+      "expected": "8520cfe9e3f861c7aec5c45a284587bcc40ce372b2d9498d9b6fe912af6259e4"
+    }
+  ],
+  "noul": [
+    {
+      "p": 0.0,
+      "abstain": false
+    },
+    {
+      "p": 0.1,
+      "abstain": false
+    },
+    {
+      "p": 0.5,
+      "abstain": true
+    },
+    {
+      "p": 0.55,
+      "abstain": true
+    },
+    {
+      "p": 0.7,
+      "abstain": false
+    },
+    {
+      "p": 0.9,
+      "abstain": false
+    },
+    {
+      "p": 1.0,
+      "abstain": false
+    }
+  ],
+  "choice": [
+    {
+      "confidence": 0.9,
+      "top_p": 0.9,
+      "second_p": 0.1,
+      "abstain": false
+    },
+    {
+      "confidence": 0.5,
+      "top_p": 0.9,
+      "second_p": 0.1,
+      "abstain": true
+    },
+    {
+      "confidence": 0.9,
+      "top_p": 0.51,
+      "second_p": 0.49,
+      "abstain": true
+    }
+  ]
+}

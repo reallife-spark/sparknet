@@ -5,16 +5,16 @@
 > mirrors it, it does not own it. Per-session detail belongs in
 > `sessions/YYYY-MM-DD.md`.
 
-Updated: 2026-10-22
+Updated: 2026-10-23
 
 ## Standing State
 
-- **Plan cursor**: `plans/MASTER_BUILD_PLAN.md` `current: 6`. Phase 0 (13–18) and
-  honest verification (19) are complete; **Steps 1, 2 and 5 are complete**
-  (Steps 2 and 5 both closed 2026-10-22). Still unbuilt: registry distribution
-  (6), `10.100.0.1:8090` (7), signer liveness (20), the admin console's
-  remaining leg (21). The KillSwitch (8), the pooling scheduler (9) and the
-  sharing regime (10–12) are built.
+- **Plan cursor**: `plans/MASTER_BUILD_PLAN.md` `current: 7`. Phase 0 (13–18) and
+  honest verification (19) are complete; **Steps 1, 2, 5 and 6 are complete**
+  (Steps 2 and 5 on 2026-10-22, Step 6 on 2026-10-23). Still unbuilt:
+  `10.100.0.1:8090` (7, whose pull direction Step 6's push channel supersedes),
+  signer liveness (20), the admin console's remaining leg (21). The KillSwitch
+  (8), the pooling scheduler (9) and the sharing regime (10–12) are built.
 - **`$SPARKNET_STATE_DIR` is outside the vault.** `$XDG_STATE_HOME/sparknet/master-node`
   or `~/.local/state/...`. Moving it was structural, not cosmetic: the admin surface
   bind-mounts the vault read-only into an LLM container, so the old default
@@ -97,6 +97,22 @@ Updated: 2026-10-22
   `10.100.0.x:9090/api/v1/critical-file/patch`. The exercised path ends at the
   peer's `--dry-run` verification: the protected-file *write* needs euid 0 and
   `chattr`, so it is a target-node item, not a claim made here.
+- **A registry reaches a peer as a signed *publication*, pushed to its guard.**
+  `make registry-publish` wraps the registry with a monotonic `sequence` and a
+  `published_at`, signs that projection plus the registry digest, and writes
+  `<out>/current.json`; `make registry-deliver` POSTs it to each peer's
+  `9090/api/v1/registry`. The sequence is inside the signature, so an old
+  un-revoked registry cannot be replayed (`409 stale_publication`), and the
+  route is not gated on the peer's `guard-apply` — a revocation must reach the
+  node it revokes. The acceptance rule lives once, in
+  `../shared/sparknet-registry-install.py`, because the live guard and the
+  offline `registry-fetch` path must agree; the publisher checks its own output
+  with that same rule. `sparknet-registry-deliver.timer` re-pushes every 60 s
+  (the documented window). Proven end to end in `tests/test_registry_dist.py`
+  against the peer's own guard daemon. **`revoked` is inside the signed
+  envelope**: `sign_authorization(..., revoked=True)` is how revocation is
+  signed — flipping the field after signing yields an entry no peer accepts
+  (the old revoke script did exactly that).
 - **A registry's shape is stated once**, in `../contracts/registry-schema.json`;
   `master-node/manifests/registry.schema.json` is a **symlink** to it, never a
   copy, and `../shared/sparknet-registry-schema.py` checks documents against it

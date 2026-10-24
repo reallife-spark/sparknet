@@ -291,11 +291,28 @@ make console ARGS='users <node>'
 make console ARGS='feed --ping'
 ```
 
-### `sparknet-registry-listener.py` — the registry push listener
+### Distributing a registry
 
-Listens for a registry push from the Master and applies it. It is a **stub**
-today: it accepts the shape and validates it, and it is not yet the full
-push path. `tests/test_listener_8090.py` covers the port and the shape.
+The Master **pushes** a signed registry publication to each peer's guard on 9090
+(`POST /api/v1/registry`). Two commands:
+
+```sh
+make registry-publish REGISTRY=manifests/node-authorizations.json OUT=.state/registry
+make registry-deliver PUBLICATION=.state/registry/current.json
+```
+
+`registry-publish` validates the document, refuses one naming another Master's
+key, signs through the isolated signer (or `--offline`), and writes
+`current.json` with a sequence that only increases. `registry-deliver` reads
+each peer's address from the publication itself and pushes it; revoked entries
+are delivered to as well, because the node being revoked has to learn about it.
+A peer that refuses or is offline is recorded, and the command exits non-zero —
+the installed `sparknet-registry-deliver.timer` retries every 60 s.
+
+`sparknet-registry-listener.py` remains as a **superseded** stub for the Step 7
+pull design. It is not part of the registry channel: there is no pull surface,
+and the Master listens on no registry port. `tests/test_listener_8090.py` still
+covers the stub's bind rule until Step 7 is reconciled.
 
 ### `sparknet-killswitch.py` — the KillSwitch
 
@@ -335,7 +352,8 @@ changing nothing when they do**.
 | `sparknet-registry-sign.sh` | Sign a registry entry. |
 | `sparknet-registry-sign-socket.sh` | Sign a registry entry **through the signer socket**, recording a ledger block. |
 | `sparknet-registry-verify.sh` | Verify a registry. |
-| `sparknet-registry-publish.sh` | Publish the registry to the peers. |
+| `sparknet-registry-publish.sh` | Sign+emit a registry **publication** (`<out>/current.json`). |
+| `sparknet-registry-deliver.sh` | Push a signed publication to the peers' guards on 9090. |
 | `sparknet-registry-revoke.sh` | Sign a **revoked** entry for an identity. |
 | `sparknet-approval-issue.sh` | Issue a signed approval for a target and content. |
 | `sparknet-approval-sign-socket.sh` | Sign an approval **through the signer socket**, recording a ledger block. |
@@ -558,10 +576,10 @@ The suite:
 | `test_ledger.py` (via `make ledger`) | The hash-chained ledger. |
 | `test_approval.py` | Signed approvals: issue, deliver, verify, refuse. |
 | `test_registry_cli.py`, `test_registry_cli_step3.py` | The registry CLI: sign, verify, revoke. |
-| `test_registry_dist.py` | Registry distribution. |
+| `test_registry_dist.py` | Registry distribution end to end: publish → push → the peer's own guard installs, refuses a tampered artifact and refuses a replay. |
 | `test_admin_console.py` | The admin console. |
 | `test_killswitch.py` | The KillSwitch. |
-| `test_listener_8090.py` | The registry push listener and its port. |
+| `test_listener_8090.py` | The superseded 8090 pull-listener stub and its bind rule. |
 | `test_wg_anchor.py`, `test_wg_render.py` | The overlay anchor and the rendering. |
 | `test_step1_keypair.py` | The three-key generation. |
 | `test_master_scripts.py` | The role's scripts. |

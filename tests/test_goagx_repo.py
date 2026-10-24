@@ -54,6 +54,9 @@ ROOT_FILES = [
     ".gitignore",
     "opencode.json",
     "requirements.txt",
+    # the fabric's master manual: the goagx distribution mirrors the fabric,
+    # so it carries the manual that describes the mirror.
+    "USER_MANUAL.md",
 ]
 GENERATED = ["README.md", "VERSIONS.json", "SHA256SUMS", ".github/workflows/verify.yml"]
 

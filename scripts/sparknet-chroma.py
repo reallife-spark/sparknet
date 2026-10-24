@@ -73,6 +73,7 @@ Usage::
     scripts/sparknet-chroma.py <scope> index             # build the index
     scripts/sparknet-chroma.py <scope> stamp             # compare the index's stamp with this build
     scripts/sparknet-chroma.py <scope> query "text" [--top-k N] [--data-dir DIR]
+    scripts/sparknet-chroma.py <scope> query "text" --reflex shadow|assist
 
 Exit codes: 0 ok, 1 discovery/user error, 2 chromadb missing,
 3 the index's stamp does not match this build (refused).
@@ -83,10 +84,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib.util
+import json
+import math
 import os
 import re
 import shutil
 import sys
+import time
+import urllib.request
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -108,6 +113,260 @@ EMBEDDING_FUNCTION = "ONNXMiniLM_L6_V2"
 #: Stamp fields whose disagreement means the stored vectors cannot be trusted:
 #: a different model, different weights, or different content.
 REFUSAL_FIELDS = ("embedding_model", "embedding_sha256", "corpus_digest")
+
+#: The RAG reflex pilot (Step 64E) reranks the Chroma candidates locally. The
+#: upstream design names ``bge-reranker-v2-m3``; that model is already in the
+#: node stack behind ``SPARKNET_RERANK_URL``. When that URL is unset (the CLI's
+#: default, and every unit test), a deterministic lexical reranker stands in:
+#: it is offline, free, and its scores are reproducible. The HTTP reranker is
+#: an *option* on the same seam, never a requirement.
+_TOKEN_RE = re.compile(r"[a-z0-9_]+")
+_STOPWORDS = frozenset(
+    [
+        "the",
+        "a",
+        "an",
+        "of",
+        "to",
+        "and",
+        "or",
+        "in",
+        "on",
+        "for",
+        "is",
+        "are",
+        "be",
+        "with",
+        "from",
+        "by",
+        "as",
+        "at",
+        "this",
+        "that",
+        "it",
+        "its",
+        "was",
+        "were",
+        "which",
+        "who",
+        "whom",
+        "what",
+        "when",
+        "where",
+        "why",
+        "how",
+    ]
+)
+
+
+def _tokens(text: str) -> set[str]:
+    """Lower-cased content tokens, used by the offline reranker."""
+    return {tok for tok in _TOKEN_RE.findall(text.lower()) if len(tok) > 2 and tok not in _STOPWORDS}
+
+
+def lexical_relevance(query: str, text: str) -> float:
+    """How much of the query the passage covers, in ``[0, 1]``.
+
+    Coverage (not Jaccard) is the right bias for retrieval: a long chunk that
+    contains every query term should beat a short chunk that contains half of
+    them. The score is deliberately simple and deterministic so the pilot's
+    measurements are reproducible without a model download.
+    """
+    wanted = _tokens(query)
+    if not wanted:
+        return 0.0
+    return len(wanted & _tokens(text)) / len(wanted)
+
+
+def _distance(candidate: dict[str, Any]) -> float:
+    """Chroma distance for stable tie-breaking; infinite when absent."""
+    value = candidate.get("distance")
+    return float(value) if isinstance(value, (int, float)) else float("inf")
+
+
+def _normalised(scores: list[float]) -> list[float] | None:
+    """Min-max scores, or ``None`` when all values are equal (no signal)."""
+    if not scores:
+        return None
+    low, high = min(scores), max(scores)
+    if high <= low:
+        return None
+    return [(score - low) / (high - low) for score in scores]
+
+
+def _rerank_url() -> str | None:
+    """The operator-configured local reranker endpoint, if any."""
+    url = os.environ.get("SPARKNET_RERANK_URL", "").strip()
+    if not url.startswith(("http://", "https://")):
+        return None
+    return url
+
+
+def http_rerank_scores(query: str, documents: list[str]) -> list[float] | None:
+    """Ask the node's local reranker for scores; ``None`` on any failure.
+
+    The endpoint is opt-in via ``SPARKNET_RERANK_URL`` and must answer with
+    ``{"scores": [...]}`` in the same order as ``documents``. A timeout, a
+    malformed body or a non-2xx response falls back to the lexical reranker —
+    the reflex path is fail-open by contract, and the CLI must never fail a
+    query because an optional reranker is down.
+    """
+    url = _rerank_url()
+    if url is None or not documents:
+        return None
+    body = json.dumps({"query": query, "documents": documents}).encode("utf-8")
+    request = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+    timeout = float(os.environ.get("SPARKNET_RERANK_TIMEOUT", "2.0"))
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (OSError, ValueError, TimeoutError):
+        return None
+    scores = payload.get("scores") if isinstance(payload, dict) else None
+    if not isinstance(scores, list) or len(scores) != len(documents):
+        return None
+    if not all(isinstance(score, (int, float)) and not isinstance(score, bool) for score in scores):
+        return None
+    return [float(score) for score in scores]
+
+
+def rerank_candidates(query: str, candidates: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], bool, str, float]:
+    """Order candidates by local relevance.
+
+    Returns ``(ordered, abstained, backend, latency_ms)``. ``abstained`` means
+    the local signal was empty (no lexical overlap and no reranker scores), in
+    which case the caller must keep the Chroma order. The contract's
+    fail-open rule is implemented here, not by every caller.
+    """
+    if not candidates:
+        return [], True, "rules", 0.0
+    started = time.perf_counter()
+    documents = [str(candidate.get("document", "")) for candidate in candidates]
+    lexical = [lexical_relevance(query, document) for document in documents]
+    backend = "rules"
+    scores = lexical
+    signal = max(lexical, default=0.0)
+    remote = http_rerank_scores(query, documents)
+    normalised = _normalised(remote) if remote is not None else None
+    if normalised is not None:
+        scores = [0.7 * model + 0.3 * rule for model, rule in zip(normalised, lexical, strict=True)]
+        backend = "http-rerank"
+        signal = max(normalised)
+    else:
+        # Without a model, trust the embedding and let lexical overlap nudge
+        # ties. A pure lexical reorder measurably loses precision on the
+        # fabric golden set, so the rules backend is deliberately conservative.
+        closeness = _distance_scores(candidates)
+        scores = [0.9 * distance + 0.1 * rule for distance, rule in zip(closeness, lexical, strict=True)]
+    abstained = signal <= 0.0
+    order = sorted(
+        range(len(candidates)),
+        key=lambda i: (-scores[i], _distance(candidates[i]), str(candidates[i].get("id", ""))),
+    )
+    ordered = [{**candidates[i], "reflex_score": round(scores[i], 6)} for i in order]
+    return ordered, abstained, backend, (time.perf_counter() - started) * 1000
+
+
+def _distance_scores(candidates: list[dict[str, Any]]) -> list[float]:
+    """Min-max Chroma closeness, with missing/infinite distances neutralised."""
+    distances = [_distance(candidate) for candidate in candidates]
+    finite = [value for value in distances if math.isfinite(value)]
+    if not finite:
+        return [0.0] * len(candidates)
+    ceiling = max(finite)
+    safe = [-value if math.isfinite(value) else -ceiling for value in distances]
+    return _normalised(safe) or [0.0] * len(candidates)
+
+
+REFLEX_CACHE_VERSION = "rag-relevance-v1"
+REFLEX_CACHE_LIMIT = 256
+
+
+def _reflex_cache_path(data_dir: Path) -> Path:
+    """The cache lives beside the index (``.state/reflex-cache.json``)."""
+    return data_dir.parent / "reflex-cache.json"
+
+
+def _cache_key(query: str, candidates: list[dict[str, Any]]) -> str:
+    """Cache key: query + candidate ids + policy version, never the model output."""
+    payload = json.dumps(
+        {
+            "query": query,
+            "ids": [candidate.get("id") for candidate in candidates],
+            "policy": REFLEX_CACHE_VERSION,
+        },
+        sort_keys=True,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _cache_read(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _cache_write(path: Path, cache: dict[str, Any]) -> None:
+    if len(cache) > REFLEX_CACHE_LIMIT:
+        cache = dict(list(cache.items())[-REFLEX_CACHE_LIMIT:])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(cache, sort_keys=True), encoding="utf-8")
+    temporary.replace(path)
+
+
+def cached_rerank(
+    query: str,
+    candidates: list[dict[str, Any]],
+    data_dir: Path,
+    *,
+    use_cache: bool = True,
+) -> tuple[list[dict[str, Any]], bool, str, float, bool]:
+    """``rerank_candidates`` with a bounded on-disk cache.
+
+    Returns ``(ordered, abstained, backend, latency_ms, cached)``. The cache is
+    keyed by the query, the candidate ids and the policy version, so a changed
+    corpus, candidate set or policy never reuses a stale ordering. Cache writes
+    are atomic; a corrupt or unreadable cache is ignored, never fatal.
+    """
+    if not candidates:
+        return [], True, "rules", 0.0, False
+    path = _reflex_cache_path(data_dir)
+    cache = _cache_read(path) if use_cache else {}
+    key = _cache_key(query, candidates)
+    entry = cache.get(key)
+    if isinstance(entry, dict) and isinstance(entry.get("order"), list):
+        by_id = {candidate.get("id"): candidate for candidate in candidates}
+        ordered: list[dict[str, Any]] = []
+        for item in entry["order"]:
+            candidate = by_id.get(item.get("id")) if isinstance(item, dict) else None
+            if candidate is None:
+                ordered = []
+                break
+            ordered.append({**candidate, "reflex_score": item.get("score")})
+        if len(ordered) == len(candidates) and isinstance(entry.get("abstained"), bool):
+            return ordered, entry["abstained"], str(entry.get("backend", "rules")), 0.0, True
+    ordered, abstained, backend, latency_ms = rerank_candidates(query, candidates)
+    if use_cache:
+        cache[key] = {
+            "abstained": abstained,
+            "backend": backend,
+            "order": [{"id": candidate.get("id"), "score": candidate.get("reflex_score")} for candidate in ordered],
+        }
+        _cache_write(path, cache)
+    return ordered, abstained, backend, latency_ms, False
+
+
+def order_overlap(left: list[str], right: list[str]) -> float:
+    """Jaccard overlap of two result lists, for shadow agreement."""
+    if not left and not right:
+        return 1.0
+    if not left or not right:
+        return 0.0
+    return len(set(left) & set(right)) / len(set(left) | set(right))
+
 
 #: Stamp fields that are reported but never refuse: a different chromadb
 #: version changes the library, not the meaning of the vectors.
@@ -628,7 +887,12 @@ def cmd_stamp(scope: str, vault: Path, data_dir: Path) -> int:
     return 0
 
 
-def cmd_query(scope: str, vault: Path, data_dir: Path, query: str, top_k: int) -> int:
+def open_checked(scope: str, vault: Path, data_dir: Path, *, log_prefix: str = "query"):
+    """Open a collection whose stamp matches this build, or exit 3.
+
+    Query and evaluation must refuse the same stale index, so the check lives
+    here once instead of in each caller.
+    """
     docs = plan_index(scope, vault)
     expected = expected_stamp(docs)
     try:
@@ -638,36 +902,98 @@ def cmd_query(scope: str, vault: Path, data_dir: Path, query: str, top_k: int) -
         _no_usable_index(scope, data_dir, exc)
     refusals, reports = stamp_mismatch(stamp, expected)
     for report in reports:
-        print(f"query: note: {report}")
+        print(f"{log_prefix}: note: {report}")
     if refusals:
         sys.stdout.flush()
         print(
-            "query: REFUSED — the index's stamp does not match this build, so its distances cannot be trusted:",
+            f"{log_prefix}: REFUSED — the index's stamp does not match this build, so its distances cannot be trusted:",
             file=sys.stderr,
         )
         for refusal in refusals:
             print(f"  {refusal}", file=sys.stderr)
         print(f"  reindex it: scripts/sparknet-chroma.py {scope} index", file=sys.stderr)
-        return 3
+        raise SystemExit(3)
+    return collection
+
+
+def query_candidates(scope: str, data_dir: Path, collection, query: str, n_results: int) -> list[dict[str, Any]]:
+    """The Chroma candidates, in distance order, as plain dictionaries."""
     try:
-        result = collection.query(query_texts=[query], n_results=top_k)
+        result = collection.query(query_texts=[query], n_results=n_results)
     except Exception as exc:
         _no_usable_index(scope, data_dir, exc)
     ids = result.get("ids", [[]])[0]
     distances = result.get("distances", [[]])[0]
-    docs_found = result.get("documents", [[]])[0]
+    documents = result.get("documents", [[]])[0]
     metadatas = result.get("metadatas", [[]])[0]
-    if not ids:
+    candidates: list[dict[str, Any]] = []
+    for i, doc_id in enumerate(ids):
+        meta = metadatas[i] if i < len(metadatas) else {}
+        candidates.append(
+            {
+                "id": doc_id,
+                "path": meta.get("path", doc_id) if isinstance(meta, dict) else doc_id,
+                "document": documents[i] if i < len(documents) else "",
+                "distance": distances[i] if i < len(distances) else None,
+            }
+        )
+    return candidates
+
+
+def cmd_query(
+    scope: str,
+    vault: Path,
+    data_dir: Path,
+    query: str,
+    top_k: int,
+    reflex: str = "off",
+    candidate_k: int = 50,
+    reflex_top_k: int | None = None,
+    reflex_json: bool = False,
+    use_cache: bool = True,
+) -> int:
+    collection = open_checked(scope, vault, data_dir)
+    depth = candidate_k if reflex != "off" else top_k
+    candidates = query_candidates(scope, data_dir, collection, query, depth)
+    if not candidates:
         print(f"query: no results for {query!r} in '{collection.name}'")
         return 0
-    print(f"query: top {len(ids)} results in '{collection.name}'")
-    for i, doc_id in enumerate(ids):
-        score = distances[i] if i < len(distances) else None
-        meta = metadatas[i] if i < len(metadatas) else {}
-        path = meta.get("path", doc_id) if isinstance(meta, dict) else doc_id
-        text = docs_found[i] if i < len(docs_found) else ""
+    baseline = candidates[:top_k]
+    shown = baseline
+    if reflex != "off":
+        ordered, abstained, backend, latency_ms, cached = cached_rerank(
+            query, candidates, data_dir, use_cache=use_cache
+        )
+        keep = reflex_top_k or top_k
+        reflex_order = ordered[:keep]
+        agreement = order_overlap([c["path"] for c in baseline], [c["path"] for c in reflex_order])
+        if reflex == "assist" and not abstained:
+            shown = reflex_order
+        print(
+            f"query: reflex={reflex} backend={backend} abstain={str(abstained).lower()} "
+            f"agreement={agreement:.3f} latency_ms={latency_ms:.3f} cached={str(cached).lower()}"
+        )
+        if reflex_json:
+            payload = {
+                "agreement": round(agreement, 6),
+                "backend": backend,
+                "cached": cached,
+                "candidate_k": depth,
+                "latency_ms": round(latency_ms, 6),
+                "mode": reflex,
+                "paths": [c["path"] for c in shown],
+                "query": query,
+                "reflex_abstained": abstained,
+                "top_k": top_k,
+            }
+            print("reflex-json: " + json.dumps(payload, sort_keys=True))
+    print(f"query: top {len(shown)} results in '{collection.name}'")
+    for i, candidate in enumerate(shown):
+        score = candidate.get("distance")
+        path = candidate.get("path", candidate.get("id"))
+        text = candidate.get("document", "")
         snippet = " ".join(str(text).split())[:160]
-        print(f"  [{i + 1}] {path}  (dist={score:.4f})" if score is not None else f"  [{i + 1}] {path}")
+        print(f"  [{i + 1}] {path}  (dist={score:.4f})" if isinstance(score, float) else f"  [{i + 1}] {path}")
         print(f"      {snippet}")
     return 0
 
@@ -688,6 +1014,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("query_text", nargs="?", default="", help="search text for 'query'")
     p.add_argument("--top-k", type=int, default=5, help="results to return (default 5)")
+    p.add_argument(
+        "--reflex",
+        nargs="?",
+        const="shadow",
+        choices=("off", "shadow", "assist"),
+        default="off",
+        help=(
+            "rerank Chroma's candidates locally: shadow=log only (default when the flag "
+            "is bare); assist=return the reranked order unless the reflex abstains"
+        ),
+    )
+    p.add_argument("--candidate-k", type=int, default=50, help="candidates fetched before reranking (default 50)")
+    p.add_argument(
+        "--reflex-top-k",
+        type=int,
+        default=None,
+        help="results kept after reranking (default: --top-k)",
+    )
+    p.add_argument("--reflex-json", action="store_true", help="print one machine-readable reflex line")
+    p.add_argument("--no-reflex-cache", action="store_true", help="bypass the on-disk reflex ordering cache")
     p.add_argument(
         "--data-dir",
         default=None,
@@ -725,7 +1071,18 @@ def main(argv: list[str] | None = None) -> int:
         print("sparknet-chroma: 'query' needs text", file=sys.stderr)
         p.print_usage(file=sys.stderr)
         return 1
-    return cmd_query(args.scope, vault, data_dir, args.query_text, args.top_k)
+    return cmd_query(
+        args.scope,
+        vault,
+        data_dir,
+        args.query_text,
+        args.top_k,
+        args.reflex,
+        args.candidate_k,
+        args.reflex_top_k,
+        args.reflex_json,
+        not args.no_reflex_cache,
+    )
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 ---
 title: sparknet master-node Build Plan
-updated: 2026-10-22
-current: 6
+updated: 2026-10-23
+current: 7
 ---
 
 # sparknet master-node — Build Plan
@@ -13,8 +13,8 @@ current: 6
 >
 > **As of Step 3 these directories exist** (`scripts/`, `services/`,
 > `systemd/` — built Steps 3–4 and 15–18; the isolated signer runs live on
-> agx64). Steps 1, 2 and 5 are knowledge-and-contract work that needed no code and
-> are all closed; the cursor sits at Step 6 (registry distribution channel).
+> agx64). Steps 1, 2, 5 and 6 are closed; the cursor sits at Step 7 (which
+> Step 6's push channel partly supersedes — see Step 7's status).
 
 ## Status Legend
 
@@ -150,8 +150,9 @@ containment and scheduling.
         15–16), and `docs/killswitch-template.md` said the role "carries no
         executable surface" (Step 8 is built).
       - **Cursor**: Step 2 is closed; the cursor advanced to Step 5
-        (`guard-apply` grantable in practice), which closed the same day. The
-        cursor now sits at Step 6 (registry distribution channel).
+        (`guard-apply` grantable in practice), which closed the same day. Step 6
+        (registry distribution channel) closed on 2026-10-23; the cursor sits
+        at Step 7.
 
 
 ## Step 3 — Signing and registry CLI
@@ -280,22 +281,57 @@ containment and scheduling.
 
 ## Step 6 — Registry distribution channel
 
-- [ ] **Step 6** — Give peers a way to receive a signed registry.
+- [x] **Step 6** — Give peers a way to receive a signed registry.
       - **DoD**: (1) a documented distribution channel exists (the design
         decision is recorded in `docs/registry-protocol.md`);
         (2) `make registry-publish` emits it; (3) a peer-side target documents
         how to consume and verify it; (4) a tampered registry fails closed on
         the peer; (5) revocation propagates within the documented window.
-      - **Status**: reopened 2026-10-06 — (2) is done (`registry-publish` emits
-        the signed document) and (4) is done **on the master side only**: the
-        tamper test feeds a modified registry to *this* role's verifier. Nothing
-        exercises `../shared/sparknet-authz.py` as the peer calls it from
-        `../peer-node/services/sparknet-guard-d.py`, so "fails closed on the
-        peer" is still an inference. (5) has no test and no window — revocation
-        propagation cannot be measured without a channel, and (1) is exactly the
-        channel, which remains **unspecified**:
-        `contracts/identity-schema.json` carries `distribution: UNSPECIFIED` on
-        purpose, and the plan itself said choosing it is part of this step.
+      - **Decision (2026-10-23)**: **the Master pushes to each peer's guard on
+        9090** (`POST /api/v1/registry`). Rejected: a peer pull from a new
+        Master listener on 8091 (new port, unsigned GET, and a per-peer key
+        resolver the shared HTTP module does not have), and the fabric git repo
+        (spec-only). Push reuses the path Step 5 proved, adds no port, and — the
+        decisive point — can deliver a revocation *to the peer it revokes*,
+        which a route gated on that peer's capability could not.
+      - **DoD verified**:
+        (1) the channel is stated in
+        `../../contracts/registry-publication.json` (machine-checkable) and
+        `docs/registry-protocol.md` (narrative), with the alternatives and why
+        they were rejected; the "unspecified" notes in `registry-schema.json`
+        and `identity-schema.json` are replaced.
+        (2) `make registry-publish` emits a five-field publication (registry,
+        `registry_sha256`, monotonic `sequence`, `published_at`, `signature_b64`
+        beside the envelope) after validating the document and refusing one that
+        names a foreign Master key. The signature comes from the isolated signer
+        (`sign-registry-publication`) or `--offline`; the script then checks its
+        own output with `shared/sparknet-registry-install.py::verify_publication`
+        — the receiver's rule, not the emitter's own assumption.
+        (3) `make -C peer-node registry-fetch PUBLICATION=…` (and
+        `registry-status`) documents the operator path; the live path is the
+        guard's `POST /api/v1/registry`. Both call the same acceptance rule.
+        (4) `tests/test_registry_dist.py` drives the peer's **own guard daemon**
+        (loaded by path) and proves three tamper shapes refused without an
+        install: a document edited under its digest (`400
+        malformed_publication`), a consistent envelope signed by a foreign key
+        (`403 bad_signature`), and a registry naming a foreign Master key (`403
+        wrong_master_key`). A fourth test proves the replay refusal.
+        (5) the same suite publishes an authorising registry, delivers it, sees
+        the capability take effect, then publishes a revoked registry, delivers
+        it, and sees `evaluate` deny with `REASON_REVOKED`. The window is the
+        installed `sparknet-registry-deliver.timer` (60 s) and the contract
+        states it; a successful push is immediate.
+      - **Install order** is registry first, sequence record second, so a crash
+        between the writes makes the publication idempotent rather than
+        permanently refusable; re-delivering an installed publication is a
+        `409 stale_publication`, which is what makes equality the replay signal.
+        Registry installation needs neither `--apply-enabled` nor euid 0: it
+        writes the peer's own vault, not a protected `/etc` path.
+      - **Enabling change**: `sign_authorization` gained `revoked=`, because
+        `revoked` is inside the signed envelope and the old revoke script
+        flipped it *after* signing, producing an entry no peer would accept. The
+        schema now allows an empty `capabilities` list only on a revoked entry —
+        the document that carries a revocation must be installable.
 
 ## Step 7 — Instant-push listener (8090)
 
@@ -771,17 +807,17 @@ containment and scheduling.
           signing/registry CLI, master overlay renderer, the KillSwitch, the
           pooling scheduler, the sharing regime), and since then **Steps 2 and
           5** (the registry schema and the guard approval issuer — the latter
-          closed 2026-10-22). **Still specified, not built: Step 6** (channel
-          still `UNSPECIFIED`, peer-side tamper unproven), Step 7 (a
-          scaffold, and the listener is not bound), **Steps 20 and 21** (the
-          signer's read timeout and the admin console's remaining leg).
+          closed 2026-10-22) and **Step 6** (the registry distribution channel,
+          closed 2026-10-23). **Still specified, not built: Step 7** (a
+          scaffold, and the listener is not bound; Step 6's push channel
+          supersedes its pull direction), **Steps 20 and 21** (the signer's read
+          timeout and the admin console's remaining leg).
           Nothing in this page implies otherwise.
       - **Where the cursor goes.** Phase 0 (13–18) and honest verification (19) are
         done. The 2026-10-06 audit reopened Steps 2 and 5–12 on evidence; Step 2
-        closed on 2026-10-22 and Step 5 followed it the same day, so the cursor
-        sits at Step 6 — the registry distribution channel, still the first
-        unbuilt step, and the one whose DoD is contradicted rather than merely
-        unimplemented. Election itself lives in the fabric plan (root `PLAN.md`
+        closed on 2026-10-22 and Step 5 followed it the same day; Step 6 closed
+        on 2026-10-23, so the cursor sits at Step 7 — whose pull listener is now
+        partly superseded by the channel Step 6 chose. Election itself lives in the fabric plan (root `PLAN.md`
         Step 11), not here — this role consumes it.
 
 ## Step 20 — Signer liveness: client timeouts and a non-blocking accept loop

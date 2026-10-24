@@ -9,6 +9,13 @@ Read `AGENTS.md` first: it is the charter (roles, layout, Memory/Plan
 Protocol, boundaries). `STYLE_GUIDE.md` is how work is written. `index.md` is
 the curated knowledge index; `PLAN.md` is the plan cursor.
 
+`USER_MANUAL.md` is the developer-facing manual for the whole fabric: the
+five repositories, the architecture, the authority model, the contracts, the
+node image, the vault, every gate, and how to change something without
+breaking the fabric. The role manuals are `peer-node/USER_MANUAL.md` and
+`master-node/USER_MANUAL.md`; the AGX manual is `goagx/USER_MANUAL.md`; the
+Go control plane's manual is `USER_MANUAL.md` in the `goSpark` repository.
+
 ## Contracts and shared code
 
 - `contracts/` — the cross-role single source of truth: overlay, capabilities,

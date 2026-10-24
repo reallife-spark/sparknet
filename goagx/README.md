@@ -17,6 +17,11 @@ Xavier. The platform selection is a setup-script flag.
 | `bootstrap-agx.sh` | device-side entry: preflight, goSpark at the pin, hand over to the setup script |
 | `GOSPARK_PIN` | the one goSpark revision this distribution builds against |
 | `publish-templates/` | README + workflow templates for the standalone repo |
+| `USER_MANUAL.md` | the developer-facing manual for this surface: the hardware truth table, the deltas from `spark.docker`, the image, the compose surface, the audio shim, the bootstrap, the publish and the gates |
+
+The **master manual** for the whole system lives in the `sparknet` repository
+as `USER_MANUAL.md`, and is published at the root of the `goagx` distribution
+as well.
 
 ## Standalone deployment repo (reallife-spark/goagx)
 

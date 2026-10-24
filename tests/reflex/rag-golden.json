@@ -1,0 +1,62 @@
+{
+  "scope": "fabric",
+  "note": "Step 64E pilot: fabric-only queries and the pages a human judged relevant. Paths are corpus paths (files, not chunk ids).",
+  "queries": [
+    {
+      "query": "admin federation cross-node user supervision",
+      "expected": ["ADMIN_FEDERATION_DESIGN.md", "contracts/admin-federation-runbook.md"]
+    },
+    {
+      "query": "cluster inference placement edge dgx",
+      "expected": ["CLUSTER_INFERENCE_DESIGN.md"]
+    },
+    {
+      "query": "MCP A2A tool interface between agents",
+      "expected": ["MCP_A2A_DESIGN.md"]
+    },
+    {
+      "query": "per-user vault isolation",
+      "expected": ["PER_USER_VAULTS_DESIGN.md", "USER_MANUAL.md", "peer-node/AGENTS.md"]
+    },
+    {
+      "query": "guard approval envelope expired nonce fingerprint",
+      "expected": ["contracts/guard-protocol.md"]
+    },
+    {
+      "query": "provenance signed note chain approvals ledger",
+      "expected": ["contracts/provenance-protocol.md", "contracts/proposal-protocol.md"]
+    },
+    {
+      "query": "consensus master election trust root quorum",
+      "expected": ["contracts/consensus-protocol.md"]
+    },
+    {
+      "query": "health protocol eviction probe heartbeat",
+      "expected": ["contracts/health-protocol.md", "USER_MANUAL.md"]
+    },
+    {
+      "query": "share protocol deadman expiry",
+      "expected": ["contracts/share-protocol.md", "contracts/health-protocol.md", "USER_MANUAL.md"]
+    },
+    {
+      "query": "style guide python shell commits secrets",
+      "expected": ["STYLE_GUIDE.md", "AGENTS.md"]
+    },
+    {
+      "query": "deployment runbook agx bootstrap",
+      "expected": ["contracts/spark-node-runbook.md", "contracts/deployment-runbook.md", "README.md"]
+    },
+    {
+      "query": "per-user vaults bridge admin channel",
+      "expected": ["PER_USER_VAULTS_DESIGN.md", "ADMIN_FEDERATION_DESIGN.md", "peer-node/PLAN.md"]
+    },
+    {
+      "query": "capability vocabulary closed set",
+      "expected": ["COMPUTE_CAPABILITY_DESIGN.md", "contracts/README.md"]
+    },
+    {
+      "query": "master signer key possession authority",
+      "expected": ["contracts/provenance-protocol.md", "contracts/consensus-protocol.md", "master-node/AGENTS.md", "master-node/MISSION.md"]
+    }
+  ]
+}

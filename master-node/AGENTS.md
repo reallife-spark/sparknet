@@ -65,6 +65,19 @@ path instead of carrying its own versions.
 
 The peer role lives in `../peer-node/` and is implemented.
 
+## The manual
+
+[`USER_MANUAL.md`](USER_MANUAL.md) is the developer-facing manual for this
+role: the election arc, the three keys, the isolated signer and its socket,
+the ledger, the admin surface and its boundary, the vault, the gate, and how
+to make a change correctly. It is published at the root of the
+`sparknet-master` repository.
+
+The **master manual** for the whole system lives in the `sparknet` repository
+as `USER_MANUAL.md`; the contract and the shared implementation this role obeys
+are named in prose there, because the published `sparknet-master` repository
+carries this role and not the contract.
+
 ## Authority, precisely
 
 | Capability | Mechanism |

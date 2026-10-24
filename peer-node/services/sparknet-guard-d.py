@@ -429,6 +429,25 @@ def _load_authz_module():
     return _load_shared_module("sparknet-authz.py", "sparknet_authz")
 
 
+def _load_registry_schema_module():
+    """The shared registry checker: the shape a published registry must have.
+
+    The same module the Master runs before publishing, loaded by path. A peer
+    that installed a document this checker refuses would be installing a shape
+    no other node agrees with.
+    """
+    return _load_shared_module("sparknet-registry-schema.py", "sparknet_registry_schema")
+
+
+def _load_registry_install_module():
+    """The shared acceptance rule: what makes a publication installable.
+
+    Loaded by path, like every other shared module, so the guard and the offline
+    registry client cannot disagree about it.
+    """
+    return _load_shared_module("sparknet-registry-install.py", "sparknet_registry_install")
+
+
 def _load_http_module():
     """The shared sparknet-http.py: the one handler base every listener uses.
 
@@ -574,6 +593,63 @@ class Guard:
     def permitted_sources(self) -> set[str]:
         """Client addresses allowed to submit a patch request."""
         return {"127.0.0.1", "::1", self.master_anchor_address()}
+
+    # -- registry intake ----------------------------------------------------
+
+    def installed_sequence(self) -> int:
+        """The highest publication sequence this node has installed, 0 if none."""
+        install = _load_registry_install_module()
+        if install is None:
+            return 0
+        return install.installed_sequence(self.vault_root)
+
+    def handle_registry(self, artifact: Any) -> dict[str, Any]:
+        """Install one signed registry publication, or refuse it.
+
+        This is the peer's half of the distribution channel. It is deliberately
+        *not* gated on the peer's own ``guard-apply`` capability: the node being
+        revoked must be able to receive the registry that revokes it, and a
+        revocation the revoked node cannot hear is not a revocation.
+
+        The acceptance rule itself lives once in
+        ``shared/sparknet-registry-install.py``, because the offline registry
+        client installs publications too.
+        """
+        with self._apply_lock:
+            return self._handle_registry_locked(artifact)
+
+    def _handle_registry_locked(self, artifact: Any) -> dict[str, Any]:
+        authz = _load_authz_module()
+        schema = _load_registry_schema_module()
+        install = _load_registry_install_module()
+        if self.master_pubkey is None:
+            raise Refusal(503, "no_master_key", "guard has no Master public key loaded")
+        if authz is None or schema is None or install is None:
+            raise Refusal(503, "no_contract", "shared registry code is not available")
+        try:
+            result = install.accept_publication(
+                self.vault_root,
+                artifact,
+                authz,
+                schema,
+                self.master_pubkey,
+                dry_run=self.dry_run,
+            )
+        except install.InstallError as exc:
+            sequence = artifact.get("sequence") if isinstance(artifact, dict) else None
+            self.ledger.append("registry_refused", {"code": exc.code, "sequence": sequence, "detail": exc.detail[:500]})
+            raise Refusal(exc.status, exc.code, exc.detail) from exc
+
+        event = "registry_verified_dry_run" if self.dry_run else "registry_installed"
+        block = self.ledger.append(
+            event,
+            {
+                "sequence": result["sequence"],
+                "registry_sha256": result["registry_sha256"],
+                "entries": result["entries"],
+            },
+        )
+        return {**result, "audit_block": block["hash"]}
 
     # -- request handling ---------------------------------------------------
 
@@ -755,11 +831,12 @@ def _make_handler(guard: Guard, server_name: str):  # noqa: C901 - HTTP surface 
                     "dry_run": guard.dry_run,
                     "protected_paths": len(guard.protected_paths()),
                     "capabilities": guard.authorization_capabilities(),
+                    "registry_sequence": guard.installed_sequence(),
                 },
             )
 
         def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
-            if self.path != "/api/v1/critical-file/patch":
+            if self.path not in ("/api/v1/critical-file/patch", "/api/v1/registry"):
                 self._send(404, {"error": "not found"})
                 return
             client = self.client_address[0]
@@ -795,8 +872,9 @@ def _make_handler(guard: Guard, server_name: str):  # noqa: C901 - HTTP surface 
             except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                 self._send(400, {"error": str(exc), "code": "malformed_packet"})
                 return
+            handler = guard.handle_registry if self.path == "/api/v1/registry" else guard.handle_patch
             try:
-                self._send(200, guard.handle_patch(packet))
+                self._send(200, handler(packet))
             except Refusal as refusal:
                 self._send(refusal.status, {"error": refusal.detail or refusal.code, "code": refusal.code})
             except Exception as exc:  # pragma: no cover - defensive

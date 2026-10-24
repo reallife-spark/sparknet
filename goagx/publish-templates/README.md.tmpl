@@ -24,6 +24,20 @@ cross-role `contracts/` and the signed-authorization implementation in
 smallest tree that actually runs, assembled by the fabric's own bundle
 machinery.
 
+## Manuals
+
+| File | Covers |
+|---|---|
+| `USER_MANUAL.md` | the **master manual** — the whole system: the five repositories, the architecture, the authority model, the contracts, the node image, the vault, every gate, and how to change something without breaking the fabric |
+| `goagx/USER_MANUAL.md` | this surface: the hardware truth table, the deltas from `spark.docker`, the image, the compose surface, the audio shim, the bootstrap, the publish and the gates |
+| `peer-node/USER_MANUAL.md` | the peer role: its services, scripts, units, manifests and vault |
+| `master-node/USER_MANUAL.md` | the master role: the election arc, the three keys, the isolated signer, the ledger and the admin surface |
+| `contracts/deployment-runbook.md`, `contracts/spark-node-runbook.md` | how a real deployment is assembled and verified |
+
+Every one of these resolves inside this repository: the distribution carries
+`contracts/` and `shared/` precisely so that the manuals' references are real
+files and not promises.
+
 ## Deploy a fresh Xavier (full fabric node)
 
 Prerequisites: JetPack 5.x (L4T r35) with the docker runtime, BuildKit
@@ -78,7 +92,7 @@ push.
 
 | Path | Contents |
 |---|---|
-| `goagx/` | the AGX image surface: dockerfile, compose file, audio shim, `bootstrap-agx.sh`, `GOSPARK_PIN`, resource-first README |
+| `goagx/` | the AGX image surface: dockerfile, compose file, audio shim, `bootstrap-agx.sh`, `GOSPARK_PIN`, resource-first README, AGX manual |
 | `peer-node/` `master-node/` | both role subvaults (keys, units, guard, services) |
 | `contracts/` `shared/` | the cross-role contract and the signed-authorization implementation — a node cannot run without them |
 | `scripts/` | bundle, env-init, this repo's publish/verify tool |

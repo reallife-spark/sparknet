@@ -32,7 +32,7 @@ PY := $(if $(wildcard $(VENV_PY)),$(VENV_PY),$(if $(wildcard $(FABRIC_VENV_PY)),
 
 .PHONY: help env-init validate status plan test test-all lint spec-check \
         env-show parity ledger keygen keys-check units units-check \
-        signer signer-unit console \
+        signer signer-unit reflex-unit console \
         provenance-verify user-init provenance-append ingest precommit shims-check \
         bundle wiki-preflight wiki-status wiki-lint wiki-query clean
 
@@ -99,6 +99,16 @@ ledger: ## Verify the master's hash-chained ledger
 UNITS := sparknet-master-parity.service sparknet-master-ledger.service \
          sparknet-master-wireguard-anchor.service sparknet-master-firewall.service
 SIGNER_UNIT := sparknet-master-signer.service
+# The reflex broker is opt-in (local-only is the default) and needs a credential
+# provisioned in Step 64F, so it is staged, not enabled. units-check still sees
+# it here, which is what keeps the unit from being forgotten.
+REFLEX_UNIT := sparknet-reflex-broker.service
+# The delivery service must NOT be enabled with --now: its first run would push
+# to whatever peers exist at install time, and a single unreachable peer (a
+# normal condition) would make `make units` fail. The timer owns the schedule;
+# the service is pulled in by it.
+REGISTRY_UNITS := sparknet-registry-deliver.service sparknet-registry-deliver.timer
+REGISTRY_TIMER := sparknet-registry-deliver.timer
 UNIT_DIR ?= /etc/systemd/system
 # The overlay anchor and the firewall run as root and need a stable absolute path
 # to the vault, so they are launched through generated shims (same convention as
@@ -113,7 +123,7 @@ FIREWALL_SCRIPT := $(PEER_NODE_DIR)/scripts/sparknet-firewall.sh
 FIREWALL_SHIM := $(SHIM_DIR)/sparknet-master-firewall
 
 units: ## Install + enable this role's units (needs root; set UNIT_DIR to stage only)
-	@for u in $(UNITS); do \
+	@for u in $(UNITS) $(REGISTRY_UNITS); do \
 	  install -Dm644 "$(VAULT_ROOT)/systemd/$$u" "$(UNIT_DIR)/$$u" || exit 1; \
 	done
 	@echo "  ✓ staged $(UNITS) into $(UNIT_DIR)"
@@ -133,7 +143,8 @@ units: ## Install + enable this role's units (needs root; set UNIT_DIR to stage 
 	  } > "$(FIREWALL_SHIM)"; \
 	  chmod +x "$(FIREWALL_SHIM)"; \
 	  echo "  ✓ wrote $(FIREWALL_SHIM)"; \
-	  systemctl daemon-reload && systemctl enable --now $(UNITS); \
+	  systemctl daemon-reload && systemctl enable --now $(UNITS) && \
+	  systemctl enable --now $(REGISTRY_TIMER); \
 	else \
 	  echo "  (UNIT_DIR overridden — not touching systemd)"; \
 	fi
@@ -151,6 +162,9 @@ signer: ## Print the signer's isolation posture (no key, no root, no socket)
 
 signer-unit: ## Stage the signer unit ONLY (does not enable it; election does that)
 	@install -Dm644 "$(VAULT_ROOT)/systemd/$(SIGNER_UNIT)" "$(UNIT_DIR)/$(SIGNER_UNIT)"
+
+reflex-unit: ## Stage the reflex broker unit ONLY (does not enable it; 64F does)
+	@install -Dm644 "$(VAULT_ROOT)/systemd/$(REFLEX_UNIT)" "$(UNIT_DIR)/$(REFLEX_UNIT)"
 	@echo "  ✓ staged $(SIGNER_UNIT) into $(UNIT_DIR) — not enabled."
 	@echo "    It will refuse to start until SPARKNET_NODE_ID and"
 	@echo "    \$$SPARKNET_STATE_DIR/trust-root.json name this node as Master."
@@ -354,17 +368,31 @@ approval-sign-socket: ## Sign an approval THROUGH the isolated signer (needs APP
 	  $$(test -n "$(OUT)" && echo --out "$(OUT)")
 
 # --- Step 6: registry distribution ---
-.PHONY: registry-publish
+.PHONY: registry-publish registry-deliver
 
-registry-publish: ## Publish registry to OUT (needs REGISTRY, OUT)
+# Sign+emit the publication the peers install. `--out` holds `current.json`;
+# the sequence makes an older publication refuse at every peer, so a re-run
+# cannot roll a peer back.
+registry-publish: ## Publish registry to OUT (needs REGISTRY, optional OUT/SEQUENCE/OFFLINE)
 	@test -n "$(REGISTRY)" || (echo "REGISTRY=<registry.json> required" >&2; exit 1)
-	@test -n "$(OUT)" || (echo "OUT=<dest> required" >&2; exit 1)
-	@$(ROLE_ROOT)/scripts/sparknet-registry-publish.sh --registry "$(REGISTRY)" --out "$(OUT)"
+	@$(ROLE_ROOT)/scripts/sparknet-registry-publish.sh --registry "$(REGISTRY)" \
+	  $(if $(OUT),--out "$(OUT)") \
+	  $(if $(SEQUENCE),--sequence "$(SEQUENCE)") \
+	  $(if $(OFFLINE),--offline)
 
-# --- Step 7: listener target stub ---
+# Push the *already signed* publication to every peer's guard. No key is needed
+# here: delivery is not signing, and a peer that missed an earlier push is
+# converged by re-running this (or by the timer installed by `make units`).
+registry-deliver: ## Push a published registry to peers (needs PUBLICATION; optional PEER/TIMEOUT)
+	@test -n "$(PUBLICATION)" || (echo "PUBLICATION=<current.json> required" >&2; exit 1)
+	@$(ROLE_ROOT)/scripts/sparknet-registry-deliver.sh --publication "$(PUBLICATION)" \
+	  $(if $(PEER),--peer "$(PEER)") \
+	  $(if $(TIMEOUT),--timeout "$(TIMEOUT)")
+
+# --- Step 7: listener (superseded by the Step 6 push channel) ---
 .PHONY: registry-listen
 
-registry-listen: ## Registry push listener (stub)
+registry-listen: ## 8090 pull listener stub (superseded; see docs/registry-protocol.md)
 	@$(PY) $(VAULT_ROOT)/services/sparknet-registry-listener.py
 
 # --- Step 8: KillSwitch ---

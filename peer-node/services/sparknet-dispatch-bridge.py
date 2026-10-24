@@ -47,7 +47,9 @@ import json
 import os
 import sys
 import threading
+import time
 import urllib.parse
+import urllib.request
 
 try:  # Python 3.9+
     from collections.abc import Callable
@@ -62,7 +64,15 @@ from typing import Any
 STATES = ["PLAN", "PERMISSION_PENDING", "PERMITTED", "EXECUTING", "COMPLETE", "DENIED", "ERROR"]
 DEFAULT_PORT = 4096
 DEFAULT_BIND = "127.0.0.1"
-PLAIN_PREFIXES = ("/v1/models", "/v1/chat/completions", "/v1/openapi.json", "/session/", "/vault/", "/admin/")
+PLAIN_PREFIXES = (
+    "/v1/models",
+    "/v1/chat/completions",
+    "/v1/openapi.json",
+    "/v1/reflex/",
+    "/session/",
+    "/vault/",
+    "/admin/",
+)
 #: The local personality of the bridge. These routes inject the caller's user
 #: environment profile (OpenAI proxy), carry grant-keyed sessions, or read/write
 #: the node's own vault — so they must never be reachable from the overlay. When
@@ -70,7 +80,14 @@ PLAIN_PREFIXES = ("/v1/models", "/v1/chat/completions", "/v1/openapi.json", "/se
 #: ``/admin/*`` to the Master), naming them here makes the shared transport refuse
 #: an overlay source with 403 before the request is read. ``/admin/*`` is
 #: deliberately absent: it is the one surface meant to be overlay-reachable.
-LOCAL_ONLY_PREFIXES = ("/v1/models", "/v1/chat/completions", "/v1/openapi.json", "/session/", "/vault/")
+LOCAL_ONLY_PREFIXES = (
+    "/v1/models",
+    "/v1/chat/completions",
+    "/v1/openapi.json",
+    "/v1/reflex/",
+    "/session/",
+    "/vault/",
+)
 ADMIN_PREFIX = "/admin/"
 ADMIN_REPLAY_TTL_SECONDS = 300
 SESSION_SCHEMA = "sparknet-session/2"
@@ -355,6 +372,15 @@ def _rel_of(raw: str) -> PurePosixPath:
     return path
 
 
+def _reflex_local_timeout(default: float = 10.0) -> float:
+    """The local-LLM timeout; a bad or non-positive value falls back safely."""
+    try:
+        value = float(os.environ.get("SPARKNET_REFLEX_LOCAL_TIMEOUT", str(default)))
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
 class _HttpRequestError(Exception):
     """A refusal that maps straight to an HTTP status and the stable reason."""
 
@@ -391,6 +417,7 @@ class Bridge:
         self.http = _load_http()
         self.authz = self.http._load_authz()
         self.prov = _load_provenance()
+        self.reflex = _load_shared("sparknet-reflex", "sparknet_reflex_bridge", ("sparknet-reflex.py",))
         self._registry: dict[str, Any] | None = None
         self._identity: dict[str, Any] | None = None
         self._regime: Any | None = None
@@ -1167,6 +1194,102 @@ class Bridge:
             }
         return 200, {"ok": True, "action": action, "webui_status": webui_status, "result": result}
 
+    # -- reflex ---------------------------------------------------------------
+
+    def reflex_mode(self) -> str:
+        """Local is the default. `off`, `broker` and `auto` are opt-in."""
+        mode = os.environ.get("SPARKNET_REFLEX_MODE", "local").strip().lower()
+        return mode if mode in self.reflex.MODES else "off"
+
+    def reflex_decide(self, body: dict[str, Any], _grant: dict[str, Any]) -> dict[str, Any]:
+        """Validate a reflex request and answer it under the configured mode.
+
+        Local mode uses local reranker/LLM by default (no egress). Broker mode
+        forwards to the Master's broker. Reflex is a sensor: this method cannot
+        grant, sign, approve or widen anything.
+        """
+        mode = self.reflex_mode()
+        request = dict(body)
+        node_id = str(self.node_identity().get("node_id") or "")
+        if node_id:
+            request["node_id"] = node_id
+        self.reflex.validate_request(request)
+        model = request.get("model") or "local"
+
+        if mode == "off":
+            return self.reflex.abstain_decision(model, "null", "", request, reason="off")
+
+        if mode in ("local", "auto"):
+            backend_name = self.reflex.backend_from_env(request.get("question_class", "rag.relevance"))
+            # `local` mode must never open a socket off-node, so an operator who
+            # named the cloud backend there gets an abstain rather than egress;
+            # `auto` falls through to the broker path below.
+            if backend_name == "jev":
+                if mode != "auto":
+                    return self.reflex.abstain_decision(model, "null", "", request, reason="backend-misconfigured")
+            elif backend_name == "null":
+                return self.reflex.abstain_decision(model, "null", "", request, reason="off")
+            else:
+                started = time.monotonic()
+                try:
+                    if backend_name in ("local-rerank", "rules"):
+                        # One query+chunk arrives per call, so the batch
+                        # reranker's distance blend does not apply here; the
+                        # shared local sensor scores lexical coverage instead.
+                        # No coverage is *no signal* (abstain), never a reject:
+                        # a semantic-only match must not be read as a confident
+                        # "irrelevant".
+                        answer = self.reflex.local_relevance_answer(request)
+                        return self.reflex.decision_from_answer(
+                            answer,
+                            request,
+                            backend=backend_name,
+                            model=model,
+                            latency_ms=(time.monotonic() - started) * 1000.0,
+                        )
+                    decision = self.reflex.consult(
+                        self.reflex.local_llm_backend(model),
+                        request,
+                        timeout_s=_reflex_local_timeout(),
+                        backend=backend_name,
+                        model=model,
+                    )
+                    decision.setdefault("latency_ms", (time.monotonic() - started) * 1000.0)
+                    return decision
+                except self.reflex.ReflexNoSignal:
+                    return self.reflex.abstain_decision(model, backend_name, "", request, reason="low-signal")
+                except Exception:
+                    return self.reflex.abstain_decision(model, backend_name, "", request, reason="local-error")
+
+        broker = os.environ.get("SPARKNET_REFLEX_BROKER_URL", "http://10.100.0.1:4224").strip().rstrip("/")
+        if not broker:
+            return self.reflex.abstain_decision(model, "jev", "", request, reason="broker-not-configured")
+        try:
+            timeout = float(os.environ.get("SPARKNET_REFLEX_TIMEOUT", "2.0"))
+        except ValueError:
+            timeout = 2.0
+        if timeout <= 0:
+            timeout = 2.0
+
+        started = time.monotonic()
+        try:
+            payload = json.dumps(request, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            broker_request = urllib.request.Request(
+                broker + "/v1/reflex/decide",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(broker_request, timeout=timeout) as response:
+                result = json.loads(response.read().decode("utf-8"))
+        except Exception:  # noqa: BLE001 - a broker failure must abstain, never raise into the caller
+            return self.reflex.abstain_decision(model, "jev", "", request, reason="broker-error")
+
+        if not isinstance(result, dict) or result.get("verdict") not in self.reflex.VERDICTS:
+            return self.reflex.abstain_decision(model, "jev", "", request, reason="broker-malformed")
+        result.setdefault("latency_ms", (time.monotonic() - started) * 1000.0)
+        return result
+
     def handle(
         self, method: str, path: str, query: dict[str, list[str]], body: dict[str, Any], grant: dict[str, Any]
     ) -> tuple[int, dict[str, Any]]:
@@ -1192,6 +1315,8 @@ class Bridge:
             return 200, json.loads(spec_path.read_text(encoding="utf-8"))
         if method == "POST" and path == "/v1/chat/completions":
             return 200, self.chat_completions(body, grant)
+        if method == "POST" and path == "/v1/reflex/decide":
+            return 200, self.reflex_decide(body, grant)
         if path.startswith("/session/"):
             rest = urllib.parse.unquote(path[len("/session/") :].strip("/"))
             parts = [part for part in rest.split("/") if part]
