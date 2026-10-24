@@ -445,6 +445,7 @@ def sign_authorization(
     ttl_days: int = 365,
     now: datetime | None = None,
     revoked: bool = False,
+    department: str | None = None,
 ) -> dict[str, Any]:
     """Build a signed registry entry. MASTER-SIDE ONLY — needs the Master private key.
 
@@ -455,6 +456,13 @@ def sign_authorization(
     because ``revoked`` is *inside* the signed envelope: flipping it after
     signing produces an entry whose signature no longer verifies. Revoking is
     an act of the key, so it happens here, under the signature.
+
+    ``department`` is a parameter for exactly the same reason. It is inside the
+    envelope because it decides who may share with whom, so an entry's department
+    cannot be edited afterwards without invalidating the signature — attesting one
+    is an act of the Master's key, never a field a registry editor fills in. It is
+    always emitted, as null when the Master attests none, so there is one entry
+    shape rather than two for a verifier to distinguish.
     """
     now = now or datetime.now(timezone.utc)
     unknown = [c for c in capabilities if c not in KNOWN_CAPABILITIES]
@@ -470,6 +478,7 @@ def sign_authorization(
         "issued_at": stamp,
         "expires_at": (now + timedelta(days=ttl_days)).isoformat().replace("+00:00", "Z"),
         "revoked": bool(revoked),
+        "department": department,
     }
     entry["signature_b64"] = base64.b64encode(master_private_key.sign(authorization_message(entry))).decode("ascii")
     return entry

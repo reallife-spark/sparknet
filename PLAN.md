@@ -2830,20 +2830,44 @@ belongs where the rest of authority belongs: inside the envelope the Master sign
       vocabulary; (4) `make ci` green here and `make ci` → `ci: ok` in goSpark.
       Verified 2026-10-24.
 
-- [ ] **66B — enforcement.** The capability is grantable and nothing yet checks
-      it. The share regime (`peer-node/services/sparknet-share-regime.py`) must
-      compare the two nodes' attested departments and require
-      `cross-department-share` when they differ, refusing otherwise. Deliberately
-      inert until then, which is this repo's normal posture — `admin-supervise`
-      and `cluster-dispatch` are granted-able and authorise nothing until a real
-      registry carries them. The rule to encode: the boundary binds **only** when
-      both sides carry an attested department and the two differ, so a fresh
-      deployment where the Master has attested none shares exactly as it does
-      today instead of needing a grant nobody has issued.
-      **DoD:** same-department share needs no extra capability; cross-department
-      without it is refused with a stable reason; with it, it proceeds and still
-      obeys the four clocks and ratification; unattested on either side behaves as
-      before; `share-regime.json` declares the rule.
+- [x] **66B — enforcement, wired to the signed registry rather than merely
+      possible.** `Regime` gained two injected resolvers — `department_of` and
+      `holds_capability` — and `_department_check` implements the rule: the
+      boundary binds only when both sides carry an attested department and the two
+      differ, so a deployment whose Master attested none shares exactly as it did
+      before. It is enforced on **both** sides, each against its own view of the
+      registry: the offerer at `offer()`, the acceptor at `accept()`. Trusting the
+      sender would let one granted node pull an ungranted one across the boundary.
+      A narrower share type does not help — `kb-view` needs the capability too,
+      because the type says what a share conveys while the department says who may
+      share at all. An inbound offer the recipient will refuse is still *recorded*,
+      with `crosses: true` and `permitted_by: null`: an attempt refused silently
+      leaves no evidence it was made, and the evidence is the point.
+      **The bridge is wired, so this is not inert.** `_department_of` and
+      `_holds_capability` read `manifests/node-authorizations.json` and are passed
+      into the `Regime` the bridge constructs; both default to "nothing attested,
+      nothing granted" when unwired, which is the fail-safe direction.
+      **A gap this found in 66A, and the fix.** `sign_authorization` neither
+      accepted nor emitted `department`, so *no signer could attest one* and the
+      field was unreachable in practice. Its own docstring already states the
+      principle that caught it — `revoked` is a parameter rather than a field a
+      caller may set afterwards *because* it is inside the signed envelope — and
+      `department` is in the same envelope for the same reason. It is now a
+      parameter, always emitted (null when unattested) so there is one entry shape.
+      goSpark's `NewAuthorization` was checked for the same gap: it needs no
+      parameter, because `SignRegistry` is already the only writer of an entry's
+      signature and re-signs the whole envelope; that path is now documented in
+      goSpark `0a6da00` so it is discoverable rather than accidental.
+      **DoD:** (1) same-department share needs no extra capability;
+      (2) cross-department without it is refused `403 cross-department` naming the
+      capability; (3) with it, the share proceeds and still obeys the four clocks
+      and ratification; (4) unattested on either side behaves exactly as before —
+      proven by all 26 pre-existing share-regime tests passing **unchanged**;
+      (5) `share-regime.json` declares the rule; (6) the bridge's own construction
+      path is tested end to end against a real signed registry, and every entry the
+      test mints is verified to still sign. Verified 2026-10-24: 16 new tests
+      (11 engine, 5 bridge), peer suite 494 → 510 passed / 1 skipped, `make ci`
+      green, goSpark `make ci` → `ci: ok`.
 
 - [ ] **66C — the platform declaration in `00_System/`.** A file stating the
       computer system type the agent is operating on. The data already exists —
@@ -2879,7 +2903,8 @@ node deployment. Left open deliberately, because the pin file's own rule is that
 bump is a reviewed commit accompanied by a republish, and that is a release act
 rather than a code change.
 
-**Status:** 66A done. 66B–66D open. Cursor `done -> 66`.
+**Status:** 66A–66B done, `make ci` green in both repos. 66C–66D open.
+Cursor `done -> 66`.
 
 ## Next
 

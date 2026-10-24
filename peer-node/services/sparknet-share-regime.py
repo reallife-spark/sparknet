@@ -49,6 +49,11 @@ from typing import Any
 
 SHARE_SCHEMA = "sparknet-share/1"
 
+#: The capability that lets a node cross a department boundary. Declared in
+#: contracts/capabilities.json, granted only inside a Master-signed registry
+#: entry, and checked here against the node's own view of that registry.
+CROSS_DEPARTMENT_CAPABILITY = "cross-department-share"
+
 
 class ShareError(Exception):
     """A regime rule refusal. ``status`` mirrors the bridge's HTTP vocabulary
@@ -201,6 +206,8 @@ class Regime:
         contracts_dir: Path | None = None,
         durations: dict[str, int] | None = None,
         vault_index: Callable[[], dict[str, str]] | None = None,
+        department_of: Callable[[str], str | None] | None = None,
+        holds_capability: Callable[[str, str], bool] | None = None,
     ):
         if not node_id:
             raise ValueError("node_id is required")
@@ -243,6 +250,14 @@ class Regime:
         self._now = now or _utcnow
         self._node_count = node_count if node_count is not None else (lambda: 1)
         self._vault_index = vault_index or (lambda: {})
+        # Both default to "nothing attested, nothing granted", which makes the
+        # department boundary bind nowhere until a caller wires it to the signed
+        # registry. That is deliberate: a rule that refused shares by default
+        # would break every deployment whose Master has attested no departments,
+        # and the safe direction here is the one that changes nothing until the
+        # attestation exists.
+        self._department_of = department_of or (lambda _node_id: None)
+        self._holds_capability = holds_capability or (lambda _node_id, _capability: False)
         self.shares: dict[str, dict] = {}
         self._seq = 0
 
@@ -366,6 +381,52 @@ class Regime:
 
     # -- offer side -------------------------------------------------------------
 
+    def _department_check(self, counterpart: str | None, *, enforce: bool = True) -> dict[str, Any]:
+        """Decide whether this node may share with ``counterpart`` across departments.
+
+        The boundary binds only when the Master attested a department for *both*
+        nodes and the two differ. Where either side is unattested there is no
+        boundary to cross, so a deployment whose Master has attested nothing
+        shares exactly as it did before this rule existed, rather than needing a
+        grant nobody has issued yet.
+
+        The department read is the Master-attested one from the signed registry,
+        never anything a node says about itself. In-department sharing is the
+        easier path, so a self-declared department would be the cheap way into
+        whichever department a node wanted to read.
+
+        ``enforce=False`` records the boundary without refusing, for an inbound
+        offer this node has not decided to accept yet: an attempt that is refused
+        silently leaves no audit trail, and the trail is the point.
+        """
+        record: dict[str, Any] = {
+            "counterpart": counterpart,
+            "mine": None,
+            "theirs": None,
+            "crosses": False,
+            "permitted_by": None,
+        }
+        if not counterpart:
+            return record
+        mine = self._department_of(self.node_id)
+        theirs = self._department_of(counterpart)
+        record["mine"] = mine
+        record["theirs"] = theirs
+        if not mine or not theirs or mine == theirs:
+            return record
+        record["crosses"] = True
+        if self._holds_capability(self.node_id, CROSS_DEPARTMENT_CAPABILITY):
+            record["permitted_by"] = CROSS_DEPARTMENT_CAPABILITY
+            return record
+        if not enforce:
+            return record
+        raise ShareError(
+            403,
+            "cross-department",
+            f"{self.node_id} (department {mine}) may not share with {counterpart} "
+            f"(department {theirs}) without the {CROSS_DEPARTMENT_CAPABILITY} capability",
+        )
+
     def offer(
         self,
         kind: str,
@@ -382,6 +443,7 @@ class Regime:
             raise ShareError(400, "unknown-kind", f"{kind} is not a share type in capabilities.json")
         if self.mode_for() != "solo" and not toward:
             raise ShareError(400, "malformed", "a share must name its counterpart")
+        departments = self._department_check(toward)
         self._seq += 1
         share_id = f"share-{self._seq}"
         now = self._iso()
@@ -396,6 +458,7 @@ class Regime:
             "scope": scope if scope is not None else ["."],
             "mode": self.mode_for(),
             "mode_at_offer": self.mode_for(),
+            "departments": departments,
             "state": "invite",
             "created_at": now,
             "accept_deadline": self._deadline("invite_acceptance"),
@@ -411,6 +474,7 @@ class Regime:
                     "by": offered_by or self.node_id,
                     "kind": kind,
                     "temporary": bool(temporary),
+                    "departments": departments,
                     "at": now,
                 }
             ],
@@ -427,6 +491,10 @@ class Regime:
             raise ShareError(400, "unknown-kind", f"{kind} is not a share type in capabilities.json")
         if self.shares.get(message["share_id"]):
             raise ShareError(409, "already-known", f"share {message['share_id']} already reached this node")
+        # Recorded but not enforced: an inbound offer is not a share yet, and
+        # refusing to record one would erase the evidence that it was attempted.
+        # The refusal this node owes happens in accept(), where it decides.
+        departments = self._department_check(message["offered_by"], enforce=False)
         share: dict[str, Any] = {
             "schema": SHARE_SCHEMA,
             "share_id": message["share_id"],
@@ -438,6 +506,7 @@ class Regime:
             "scope": message.get("scope") or ["."],
             "mode": self.mode_for(),
             "mode_at_offer": self.mode_for(),
+            "departments": departments,
             "state": "invite",
             "created_at": message["created_at"],
             "accept_deadline": message["accept_deadline"],
@@ -480,6 +549,11 @@ class Regime:
                 "re-evaluated",
                 f"mesh mode changed to {mode} before acceptance; re-offer under the new mode",
             )
+        # The acceptor enforces its own boundary. Holding the capability is what
+        # lets *this* node accept across departments, and it is checked here
+        # rather than trusted from the offer, because the offer crossed a wire and
+        # the sender's view of the registry is not this node's authority.
+        share["departments"] = self._department_check(share["offered_by"])
         self._apply_open(share, chosen_kind, accepted_by=self.node_id, at=self._iso())
         return _Message.accept(share_id, chosen_kind, self.node_id, self._iso())
 

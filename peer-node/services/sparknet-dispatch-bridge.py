@@ -425,6 +425,41 @@ class Bridge:
         self._replay: Any | None = None
         self._webui_token: str | None = None
 
+    def _registry_entry(self, node_id: str) -> dict[str, Any] | None:
+        """This node's view of one signed registry entry, looked up by node_id."""
+        for entry in self.registry().get("authorizations") or []:
+            if not isinstance(entry, dict):
+                continue
+            identity = entry.get("identity") or {}
+            if str(identity.get("node_id") or "") == node_id:
+                return entry
+        return None
+
+    def _department_of(self, node_id: str) -> str | None:
+        """The Master-attested department of a node, or None when unattested.
+
+        Read from the signed registry entry and from nowhere else. A department
+        decides who may share with whom, so a self-declared one would be the cheap
+        way into whichever department a node wanted to read — and in-department
+        sharing is the easier path, which is exactly the direction to push.
+        """
+        entry = self._registry_entry(node_id)
+        if entry is None:
+            return None
+        department = entry.get("department")
+        return str(department) if department else None
+
+    def _holds_capability(self, node_id: str, capability: str) -> bool:
+        """Whether this node's registry view grants ``capability`` to ``node_id``.
+
+        An absent entry grants nothing, which is the fail-closed default the empty
+        shipped registry already relies on.
+        """
+        entry = self._registry_entry(node_id)
+        if entry is None:
+            return False
+        return capability in (entry.get("capabilities") or [])
+
     def _share_regime(self) -> Any:
         """The one share-regime engine, built once against this node's state.
 
@@ -433,13 +468,24 @@ class Bridge:
         never cached). With the empty registry this host actually carries, the
         mode is ``solo``: offers may be *drafted*, but acceptance is refused and
         nothing on this host can open a cross-node share by itself.
+
+        The department resolvers are wired from the same registry, so the
+        cross-department boundary the regime enforces reads Master-attested
+        values rather than anything a counterpart claims. With no attested
+        departments the boundary binds nowhere and sharing behaves as before.
         """
         if self._regime is None:
             mod = _load_regime()
             self._regime_mod = mod
             count = 1 + len(list(self.registry().get("authorizations") or []))
             node_id = str(self.node_identity().get("node_id") or "peer-node-bridge")
-            self._regime = mod.Regime(node_id, now=self._now, node_count=lambda: count)
+            self._regime = mod.Regime(
+                node_id,
+                now=self._now,
+                node_count=lambda: count,
+                department_of=self._department_of,
+                holds_capability=self._holds_capability,
+            )
         return self._regime
 
     def _share_verbs(self, session: dict[str, Any]) -> tuple[Any, list[dict]]:
