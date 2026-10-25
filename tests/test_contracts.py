@@ -267,18 +267,21 @@ def guard_port(ports: dict) -> tuple[int, dict]:
 
 
 def test_the_two_significant_ports_are_not_transposed(ports: dict):
-    """9090 is the peer's guard; 8090 is the master's instant-push.
+    """9090 is the peer's guard; 8090 is the Master's peer-intake listener.
 
-    Transposing them is invisible until an approval is POSTed to a listener that
-    either does not exist or does the wrong thing.
+    Transposing them is invisible until a request is POSTed to a listener that
+    either does not exist or does the wrong thing. 8090 was `master-instant-push`
+    until fabric Step 69C re-scoped it (the instant-push purpose was superseded by
+    Step 6's 9090 registry push); the anti-transposition invariant is unchanged —
+    one peer-bound 9090, one master-bound 8090, never swapped.
     """
     guard_number, guard = guard_port(ports)
     assert guard["bound_by"] == "peer" and guard_number == 9090
 
-    push = [(int(p), s) for p, s in ports["ports"].items() if s["service"] == "master-instant-push"]
-    assert len(push) == 1, f"expected exactly one instant-push port, found {push}"
-    push_number, push_spec = push[0]
-    assert push_spec["bound_by"] == "master" and push_number == 8090
+    intake = [(int(p), s) for p, s in ports["ports"].items() if s["service"] == "master-peer-intake"]
+    assert len(intake) == 1, f"expected exactly one master-peer-intake port, found {intake}"
+    intake_number, intake_spec = intake[0]
+    assert intake_spec["bound_by"] == "master" and intake_number == 8090
 
 
 def test_guard_port_is_overlay_only_and_implemented(ports: dict):
@@ -1501,13 +1504,26 @@ def test_the_compiled_rules_are_read_from_the_contract_at_runtime(provenance: Mo
     assert "updated" in tracking["signature"]["compiler_allowlist"]
 
 
-def test_the_phase_boundary_says_the_transport_does_not_exist(tracking: dict):
-    """Nothing here may imply delivery works; ports.json is what says otherwise."""
+def test_the_phase_boundary_names_what_is_and_is_not_built(tracking: dict, ports: dict):
+    """The inbox transport is *partly* built, and the boundary must say which part.
+
+    Before fabric Step 67D nothing arrived over a wire; now the RFI **answer** leg
+    does (POST /api/v1/rfi on the guard). The load-bearing part is the rule: a
+    transport claim is honest only once a listener exists AND ports.json names it,
+    so this checks both rather than trusting the prose — and keeps the still-unbuilt
+    legs (email, the request channel, the dispatch bridge as a server) named.
+    """
     boundary = tracking["phase_boundary"]
-    assert boundary["state"] == "specified, not built"
     built = " ".join(boundary["built_here"])
     not_built = " ".join(boundary["not_built"])
-    assert "email" in not_built and "transport" not in built
+    # The RFI answer leg is built, and ports.json is what makes the claim honest.
+    assert "/api/v1/rfi" in built, "the boundary no longer names the built RFI answer transport"
+    _, guard = guard_port(ports)
+    assert "/api/v1/rfi" in guard["note"], "ports.json must name the route before transport may be claimed"
+    # The legs that are still specified-only stay named as not built.
+    assert "email" in not_built
+    assert "request channel" in not_built
+    assert "dispatch bridge as a server" in not_built
     assert "sign" in built or "layout" in built
 
 
@@ -1916,3 +1932,319 @@ def test_rfi_verification_never_raises(authz: ModuleType) -> None:
         ok, reason, content = authz.verify_rfi_answer(junk, **kwargs)
         assert not ok and content == b""
         assert isinstance(reason, str) and reason
+
+
+# --- the RFI transport (fabric Step 67D) --------------------------------------
+
+
+def test_the_rfi_route_is_the_guard_route_the_contract_names(rfi_schema: dict, ports: dict) -> None:
+    """The listener the contract names is the one the guard serves, on 9090.
+
+    Mirrors the registry route pin: a contract that names a route no daemon serves
+    is a claim about a listener that does not exist, which is exactly what
+    tracking-schema.json's phase_boundary rule forbids.
+    """
+    transport = rfi_schema["transport"]
+    guard = (PEER / "services" / "sparknet-guard-d.py").read_text()
+    assert transport["path"] == "/api/v1/rfi"
+    assert transport["path"] in guard, "the guard does not serve the RFI route the contract names"
+    assert "handle_rfi" in guard, "the guard has no RFI handler"
+    assert transport["port"] == 9090
+    number, guard_spec = guard_port(ports)
+    assert number == 9090
+    assert "/api/v1/rfi" in guard_spec["note"], "ports.json's 9090 entry must name the RFI route"
+
+
+def test_the_guard_can_send_every_rfi_refusal_the_contract_names(rfi_schema: dict) -> None:
+    """A documented refusal nobody can send is documentation, not a behaviour.
+
+    `off_overlay` is the do_POST source gate; the rest are mapped to a status by
+    the guard's RFI_REFUSAL_STATUS. Every one must be reachable from the guard.
+    """
+    guard = (PEER / "services" / "sparknet-guard-d.py").read_text()
+    for code in rfi_schema["refusals"]:
+        assert code in guard, f"the contract documents {code!r}, which the guard cannot send"
+
+
+def test_the_rfi_implementation_state_matches_the_tree(rfi_schema: dict) -> None:
+    """The contract's own status block agrees with what ships — in both directions.
+
+    Built legs name files that exist; the deferred request channel stays marked
+    NOT BUILT with its reason, so it cannot be silently dropped from the roadmap.
+    """
+    state = rfi_schema["implementation_state"]
+    assert state["listener"].startswith("implemented")
+    assert state["master_side_composer"].startswith("implemented")
+    assert (PEER / "services" / "sparknet-guard-d.py").is_file()
+    composer = MASTER / "scripts" / "sparknet-rfi-answer.sh"
+    assert composer.is_file(), "the contract names a composer that does not exist"
+    # The composer is wired to something, or the master's nothing-inert rule fails.
+    assert "sparknet-rfi-answer.sh" in (MASTER / "Makefile").read_text()
+
+    # The request leg is tracked, not silently dropped. In 67D it was deferred with
+    # the reason (a peer signs with its node key, but nothing binds a fingerprint to
+    # a node signing key). Step 68 records the *decision* — overlay attribution — and
+    # still names the reason a node-key signature is not used, so a reader learns why
+    # rather than only that it is unbuilt.
+    request_channel = state["request_channel"]
+    assert request_channel.startswith("IN PROGRESS")
+    assert "fingerprint" in request_channel and "overlay" in request_channel
+    assert "RFI_REQUEST_DESIGN.md" in request_channel
+
+
+def test_the_signer_answers_the_rfi_op() -> None:
+    """The isolated key holder signs answers the same way it signs publications."""
+    signer = (MASTER / "services" / "sparknet-signer.py").read_text()
+    assert "sign-rfi-answer" in signer
+    assert "sign_rfi_answer" in signer, "the signer must build the answer via the one shared rule"
+
+
+def test_inbox_arrival_notification_is_contracted_and_wired(tracking: dict) -> None:
+    """67B: an arrived item must reach the human, and the contract must say how.
+
+    The mechanism is named (one shared module, *not* the fabric-root plugin, which
+    is deliberately unbundled) and the guard actually calls it — so the claim is
+    wired rather than aspirational. A contract that says "arrival is notified"
+    while no code notifies is the same failure 67A closed for inbox_acceptance.
+    """
+    dispatch = tracking["inbox_dispatch"]
+    assert "notification" in dispatch, "inbox_dispatch no longer states how arrival reaches the human"
+    note = dispatch["notification"]
+    assert "sparknet-notify.py" in note
+    assert "kde-notify.ts" in note, "the note must distinguish the node path from the unbundled fabric-root plugin"
+    assert (REPO_ROOT / "shared" / "sparknet-notify.py").is_file()
+    guard = (PEER / "services" / "sparknet-guard-d.py").read_text()
+    assert "notify_inbox_arrival" in guard, "the guard installs an answer but never tells anyone it arrived"
+    # The notification is built into the boundary as a built leg, not left implied.
+    assert "notification on arrival" in " ".join(tracking["phase_boundary"]["built_here"])
+
+
+# --- the RFI request envelope (fabric Step 68B, overlay-attributed) ------------
+
+
+def _request(authz: ModuleType, **overrides) -> dict:
+    from datetime import datetime, timezone
+
+    params = {
+        "request_id": "RFI-1",
+        "peer_fingerprint": "a" * 64,
+        "question": "what does the guard protect?",
+        "scope": ["concepts", "references"],
+        "now": datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc),
+    }
+    params.update(overrides)
+    return authz.build_rfi_request(**params)
+
+
+def test_rfi_request_envelope_matches_the_contract(authz: ModuleType, rfi_schema: dict) -> None:
+    """The request field list is pinned like every other envelope's."""
+    request = rfi_schema["request"]
+    assert tuple(request["fields"]) == authz.RFI_REQUEST_FIELDS
+    # Option B: attributed by the overlay, NOT signed. The contract must say so and
+    # the code must not grow a signature nobody can verify.
+    assert "signature_field" not in request
+    assert "signed_by" not in request
+    assert request["unsigned"].startswith("the request body carries no signature")
+    assert not hasattr(authz, "sign_rfi_request"), "a request signature would be unverifiable theatre"
+    assert hasattr(authz, "verify_rfi_request") and hasattr(authz, "build_rfi_request")
+
+
+def test_rfi_request_round_trips(authz: ModuleType) -> None:
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc)
+    req = _request(authz, now=now)
+    assert "signature_b64" not in req
+    assert authz.verify_rfi_request(req, expected_fingerprint="a" * 64, now=now) == (True, "")
+
+
+def test_rfi_request_scope_is_normalised(authz: ModuleType) -> None:
+    """Two orderings of one allow-list are one request, so scope is sorted+deduped."""
+    req = _request(authz, scope=["references", "concepts", "references"])
+    assert req["scope"] == ["concepts", "references"]
+
+
+def test_rfi_request_attribution_is_the_overlay_fingerprint(authz: ModuleType) -> None:
+    """A peer may not ask as another peer: the body's fingerprint must match the
+    overlay-derived one the Master supplies."""
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc)
+    req = _request(authz, now=now)
+    ok, reason = authz.verify_rfi_request(req, expected_fingerprint="b" * 64, now=now)
+    assert not ok and reason == authz.REASON_RFI_REQ_WRONG_PEER
+
+
+def test_rfi_request_expires_and_cannot_be_replayed(authz: ModuleType) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc)
+    req = _request(authz, now=now)
+    # Fresh, unseen nonce: ok.
+    assert authz.verify_rfi_request(req, expected_fingerprint="a" * 64, now=now)[0] is True
+    # Past its window (default ttl 300s).
+    late = authz.verify_rfi_request(req, expected_fingerprint="a" * 64, now=now + timedelta(seconds=301))
+    assert late == (False, authz.REASON_RFI_REQ_EXPIRED)
+    # A reused nonce is a replay.
+    again = authz.verify_rfi_request(req, expected_fingerprint="a" * 64, now=now, seen_nonces=[req["nonce"]])
+    assert again == (False, authz.REASON_RFI_REQ_REPLAYED)
+
+
+def test_rfi_request_issued_in_the_future_is_refused(authz: ModuleType) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc)
+    req = _request(authz, now=now + timedelta(seconds=3600))
+    ok, reason = authz.verify_rfi_request(req, expected_fingerprint="a" * 64, now=now)
+    assert not ok and reason == authz.REASON_RFI_REQ_NOT_YET_VALID
+
+
+def test_rfi_request_malformed_shapes_are_refused(authz: ModuleType) -> None:
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc)
+    good = _request(authz, now=now)
+    kwargs = {"expected_fingerprint": "a" * 64, "now": now}
+    # An extra field: a request carries exactly its declared shape.
+    assert authz.verify_rfi_request({**good, "escalate": True}, **kwargs)[1] == authz.REASON_RFI_REQ_MALFORMED
+    # A missing required field.
+    missing = {k: v for k, v in good.items() if k != "question"}
+    assert authz.verify_rfi_request(missing, **kwargs)[1] == authz.REASON_RFI_REQ_MALFORMED
+    # An empty required string.
+    assert authz.verify_rfi_request({**good, "request_id": ""}, **kwargs)[1] == authz.REASON_RFI_REQ_MALFORMED
+    # scope of the wrong type.
+    assert authz.verify_rfi_request({**good, "scope": "concepts"}, **kwargs)[1] == authz.REASON_RFI_REQ_MALFORMED
+    assert authz.verify_rfi_request({**good, "scope": [1, 2]}, **kwargs)[1] == authz.REASON_RFI_REQ_MALFORMED
+
+
+def test_rfi_request_verification_never_raises(authz: ModuleType) -> None:
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc)
+    for junk in (None, "not-a-dict", 42, [], {}, {"peer_fingerprint": None}, {"nonce": "x"}):
+        ok, reason = authz.verify_rfi_request(junk, expected_fingerprint="a" * 64, now=now)
+        assert not ok and isinstance(reason, str) and reason
+
+
+def test_rfi_request_builder_refuses_an_empty_question(authz: ModuleType) -> None:
+    import pytest as _pytest
+
+    for bad in ("", "   "):
+        with _pytest.raises(authz.AuthzError):
+            authz.build_rfi_request(request_id="R", peer_fingerprint="a" * 64, question=bad)
+
+
+# --- the telemetry evidence envelope (fabric Step 69B, Phase 4) ----------------
+
+
+@pytest.fixture(scope="module")
+def telemetry_schema() -> dict:
+    return load("telemetry-schema.json")
+
+
+def _report(authz: ModuleType, **overrides) -> dict:
+    from datetime import datetime, timezone
+
+    params = {
+        "kind": "status",
+        "peer_fingerprint": "a" * 64,
+        "payload": {"alive": True},
+        "now": datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc),
+    }
+    params.update(overrides)
+    return authz.build_telemetry_report(**params)
+
+
+def test_telemetry_envelope_matches_the_contract(authz: ModuleType, telemetry_schema: dict) -> None:
+    report = telemetry_schema["report"]
+    assert tuple(report["fields"]) == authz.TELEMETRY_REPORT_FIELDS
+    assert tuple(report["kinds"]) == authz.TELEMETRY_KINDS
+    # Overlay-attributed, not signed — the same Step 68A decision, generalised.
+    assert "signature_field" not in report and "signed_by" not in report
+    assert report["unsigned"].startswith("the report carries no signature")
+    assert not hasattr(authz, "sign_telemetry_report"), "an unverifiable signature would be theatre"
+    assert hasattr(authz, "build_telemetry_report") and hasattr(authz, "verify_telemetry_report")
+
+
+def test_telemetry_carries_no_authority(authz: ModuleType, telemetry_schema: dict) -> None:
+    """The kind vocabulary is observability only — no authority verb can ride it."""
+    assert telemetry_schema["report"]["no_authority"].startswith("a telemetry report cannot grant")
+    authority_verbs = {"grant", "revoke", "escalate", "approve", "widen", "sign"}
+    assert not (authority_verbs & set(authz.TELEMETRY_KINDS))
+
+
+def test_telemetry_report_round_trips(authz: ModuleType) -> None:
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc)
+    report = _report(authz, now=now)
+    assert "signature_b64" not in report
+    assert authz.verify_telemetry_report(report, expected_fingerprint="a" * 64, now=now) == (True, "")
+    # An empty payload is a legitimate heartbeat.
+    beat = _report(authz, kind="liveness", payload={}, now=now)
+    assert authz.verify_telemetry_report(beat, expected_fingerprint="a" * 64, now=now)[0] is True
+
+
+def test_telemetry_attribution_is_the_overlay_fingerprint(authz: ModuleType) -> None:
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc)
+    report = _report(authz, now=now)
+    ok, reason = authz.verify_telemetry_report(report, expected_fingerprint="b" * 64, now=now)
+    assert not ok and reason == authz.REASON_TELEMETRY_WRONG_PEER
+
+
+def test_telemetry_expires_and_cannot_be_replayed(authz: ModuleType) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc)
+    report = _report(authz, now=now)
+    assert authz.verify_telemetry_report(report, expected_fingerprint="a" * 64, now=now)[0] is True
+    late = authz.verify_telemetry_report(report, expected_fingerprint="a" * 64, now=now + timedelta(seconds=121))
+    assert late == (False, authz.REASON_TELEMETRY_EXPIRED)
+    again = authz.verify_telemetry_report(report, expected_fingerprint="a" * 64, now=now, seen_nonces=[report["nonce"]])
+    assert again == (False, authz.REASON_TELEMETRY_REPLAYED)
+
+
+def test_telemetry_malformed_shapes_are_refused(authz: ModuleType) -> None:
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc)
+    good = _report(authz, now=now)
+    kwargs = {"expected_fingerprint": "a" * 64, "now": now}
+    assert authz.verify_telemetry_report({**good, "escalate": True}, **kwargs)[1] == authz.REASON_TELEMETRY_MALFORMED
+    assert authz.verify_telemetry_report({**good, "kind": "grant"}, **kwargs)[1] == authz.REASON_TELEMETRY_MALFORMED
+    assert authz.verify_telemetry_report({**good, "payload": "not-an-object"}, **kwargs)[1] == (
+        authz.REASON_TELEMETRY_MALFORMED
+    )
+    missing = {k: v for k, v in good.items() if k != "kind"}
+    assert authz.verify_telemetry_report(missing, **kwargs)[1] == authz.REASON_TELEMETRY_MALFORMED
+
+
+def test_telemetry_verification_never_raises(authz: ModuleType) -> None:
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 10, 25, 12, 0, 0, tzinfo=timezone.utc)
+    for junk in (None, "x", 42, [], {}, {"kind": None}, {"payload": None}):
+        ok, reason = authz.verify_telemetry_report(junk, expected_fingerprint="a" * 64, now=now)
+        assert not ok and isinstance(reason, str) and reason
+
+
+def test_telemetry_builder_refuses_an_unknown_kind(authz: ModuleType) -> None:
+    import pytest as _pytest
+
+    with _pytest.raises(authz.AuthzError):
+        authz.build_telemetry_report(kind="grant-capability", peer_fingerprint="a" * 64)
+
+
+def test_every_telemetry_refusal_is_a_reason_the_verifier_or_gate_produces(
+    authz: ModuleType, telemetry_schema: dict
+) -> None:
+    """off_overlay is the listener's source gate (69C); the rest are verifier returns."""
+    produced = {
+        value
+        for value in vars(authz).values()
+        if isinstance(value, str) and value.startswith(("malformed", "wrong_", "expired", "not_yet_valid", "replayed_"))
+    }
+    for code in telemetry_schema["refusals"]:
+        assert code == "off_overlay" or code in produced, f"the contract names {code!r}, which nothing produces"

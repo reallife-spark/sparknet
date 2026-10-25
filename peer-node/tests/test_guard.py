@@ -1010,3 +1010,42 @@ def test_a_malformed_attestation_is_refused_not_read_as_none(authorized_vault, m
     assert exc.value.status == 403
     assert exc.value.code == "operator_malformed"
     assert applied == []
+
+
+# --- the RFI answer route (fabric Step 67D) -----------------------------------
+
+
+def _rfi_answer(master_key, vault: Path, *, content: bytes = b"# the answer\n", request_id="RFI-1", item_name="x.md"):
+    authz = guardmod._load_authz_module()
+    return authz.sign_rfi_answer(
+        content=content,
+        item_name=item_name,
+        peer_fingerprint=_own_fingerprint(vault),
+        request_id=request_id,
+        master_private_key=master_key,
+    )
+
+
+def test_the_rfi_route_verifies_an_answer_in_dry_run(harness, authorized_vault, master_key) -> None:
+    """POST /api/v1/rfi reaches handle_rfi and verifies under the pinned Master key.
+
+    The harness runs dry-run, so this is the verify-only path: the answer is
+    checked and nothing is written, which is the same contract the registry route
+    honours. The full install-over-a-wire path is master-node/tests/test_rfi_transport.py.
+    """
+    answer = _rfi_answer(master_key, authorized_vault)
+    status, body = harness.post(answer, path="/api/v1/rfi")
+    assert status == 200
+    assert body["status"] == "RFI_VERIFIED_DRY_RUN"
+    assert body["request_id"] == "RFI-1"
+    # Dry-run writes nothing into the inbox.
+    assert not (authorized_vault / "01_Inbox" / "x.md").exists()
+
+
+def test_the_rfi_route_refuses_a_tampered_answer(harness, authorized_vault, master_key) -> None:
+    """Content is bound by digest, so swapping it under a valid signature fails."""
+    answer = _rfi_answer(master_key, authorized_vault, content=b"# benign\n")
+    forged = {**answer, "content_b64": base64.b64encode(b"# injected\n").decode()}
+    status, body = harness.post(forged, path="/api/v1/rfi")
+    assert status == 400
+    assert body["code"] == "digest_mismatch"

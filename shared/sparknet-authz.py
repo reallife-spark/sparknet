@@ -37,6 +37,7 @@ import contextlib
 import hashlib
 import json
 import re
+import secrets
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -1502,6 +1503,280 @@ def verify_rfi_answer(
     if answer["request_id"] in set(installed_request_ids or ()):
         return False, REASON_RFI_DUPLICATE, b""
     return True, "", content
+
+
+# --- RFI requests (peer -> Master, overlay-attributed) --------------------------
+#
+# A request is NOT signed, unlike every other envelope here. See
+# RFI_REQUEST_DESIGN.md (fabric Step 68A): nothing in the fabric binds a peer
+# fingerprint to a node *signing* public key (the identity carries a Curve25519
+# WireGuard key, which cannot verify an Ed25519 signature), so the Master has no
+# attested key to check a request signature against. Attribution rides the
+# authenticated overlay instead — the Master derives the sender's fingerprint from
+# the WireGuard source address via its own registry and refuses a body whose
+# `peer_fingerprint` disagrees. A signature it could not verify would be theatre.
+
+#: The whole RFI request body. `scope` may be empty (a request that may draw on
+#: nothing still parses; the Master answers "nothing found"), so it is type-checked
+#: rather than required non-empty.
+RFI_REQUEST_FIELDS = (
+    "expires_at",
+    "issued_at",
+    "nonce",
+    "peer_fingerprint",
+    "question",
+    "request_id",
+    "scope",
+)
+
+#: Fields that must be present and non-empty strings.
+RFI_REQUEST_REQUIRED = (
+    "expires_at",
+    "issued_at",
+    "nonce",
+    "peer_fingerprint",
+    "question",
+    "request_id",
+)
+
+#: Refusal reasons for a request. Fixed strings, like the answer's: a caller maps
+#: them to an HTTP status and an operator greps a log for them, so neither may vary
+#: with the artifact that was refused.
+REASON_RFI_REQ_MALFORMED = "malformed"
+REASON_RFI_REQ_WRONG_PEER = "wrong_peer"
+REASON_RFI_REQ_EXPIRED = "expired"
+REASON_RFI_REQ_NOT_YET_VALID = "not_yet_valid"
+REASON_RFI_REQ_REPLAYED = "replayed_nonce"
+
+
+def build_rfi_request(
+    *,
+    request_id: str,
+    peer_fingerprint: str,
+    question: str,
+    scope: list[str] | None = None,
+    now: datetime | None = None,
+    ttl_seconds: int = 300,
+    nonce: str | None = None,
+) -> dict[str, Any]:
+    """Build an RFI request body (unsigned — see the section note above).
+
+    The peer sends this to the Master's overlay-only request listener. ``nonce``
+    plus ``expires_at`` are the replay guard that a signed envelope's freshness
+    fields would otherwise provide; ``scope`` is sorted+deduplicated so two
+    orderings of one allow-list cannot produce two different requests.
+    """
+    if not request_id or not peer_fingerprint:
+        raise AuthzError("request_id and peer_fingerprint are both required")
+    if not isinstance(question, str) or not question.strip():
+        raise AuthzError("question must be a non-empty string")
+    if scope is not None and (not isinstance(scope, list) or any(not isinstance(s, str) for s in scope)):
+        raise AuthzError("scope must be a list of vault-category strings")
+    moment = now or datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return {
+        "request_id": str(request_id),
+        "peer_fingerprint": str(peer_fingerprint),
+        "question": question,
+        "scope": sorted(set(scope or [])),
+        "issued_at": moment.isoformat().replace("+00:00", "Z"),
+        "expires_at": (moment + timedelta(seconds=ttl_seconds)).isoformat().replace("+00:00", "Z"),
+        "nonce": nonce or secrets.token_hex(16),
+    }
+
+
+def verify_rfi_request(
+    request: Any,
+    *,
+    expected_fingerprint: str,
+    now: datetime | None = None,
+    seen_nonces: Any = (),
+    max_skew_seconds: int = 300,
+) -> tuple[bool, str]:
+    """Validate one RFI request and match it to the overlay-derived fingerprint.
+
+    Returns ``(ok, reason)`` and never raises — a caller that had to catch to refuse
+    would eventually catch one too few. This is **not** a signature check; there is
+    no signature. ``expected_fingerprint`` is the fingerprint the Master derived
+    from the WireGuard-authenticated source address (its registry maps
+    ``overlay_ipv4 -> fingerprint``); a request whose ``peer_fingerprint`` field
+    disagrees is refused as ``wrong_peer``, so a peer cannot ask as another peer.
+
+    The order is the contract's: shape, then attribution, then freshness, then
+    replay. Attribution precedes expiry because *who* is asking is the more
+    specific fact, and a stale request from the right peer is a different refusal
+    than a fresh one from an impostor.
+    """
+    if not isinstance(request, dict):
+        return False, REASON_RFI_REQ_MALFORMED
+    if set(request) != set(RFI_REQUEST_FIELDS):
+        return False, REASON_RFI_REQ_MALFORMED
+    for field_name in RFI_REQUEST_REQUIRED:
+        value = request.get(field_name)
+        if not isinstance(value, str) or not value:
+            return False, REASON_RFI_REQ_MALFORMED
+    scope = request.get("scope")
+    if not isinstance(scope, list) or any(not isinstance(s, str) for s in scope):
+        return False, REASON_RFI_REQ_MALFORMED
+
+    if request["peer_fingerprint"] != expected_fingerprint:
+        return False, REASON_RFI_REQ_WRONG_PEER
+
+    moment = now or datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    try:
+        issued = datetime.fromisoformat(str(request["issued_at"]).replace("Z", "+00:00"))
+        expires = datetime.fromisoformat(str(request["expires_at"]).replace("Z", "+00:00"))
+    except ValueError:
+        return False, REASON_RFI_REQ_EXPIRED
+    if issued.tzinfo is None:
+        issued = issued.replace(tzinfo=timezone.utc)
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if expires <= moment:
+        return False, REASON_RFI_REQ_EXPIRED
+    if (issued - moment).total_seconds() > max_skew_seconds:
+        return False, REASON_RFI_REQ_NOT_YET_VALID
+
+    if request["nonce"] in set(seen_nonces or ()):
+        return False, REASON_RFI_REQ_REPLAYED
+    return True, ""
+
+
+# --- telemetry reports (peer -> Master observability, overlay-attributed) -------
+#
+# Phase 4 is Master observability WITHOUT touching the data path: peers push signed
+# evidence, the Master never intercepts. A report is attributed by the authenticated
+# overlay exactly like an RFI request (see MASTER_OBSERVABILITY_DESIGN.md and
+# RFI_REQUEST_DESIGN.md, Step 68A) — the Master derives the sender's fingerprint from
+# the WireGuard source via its registry, so there is no node-key signature and no
+# sign_telemetry_report. Telemetry carries NO authority: it informs, records, surfaces
+# and flags; it never grants, revokes, escalates, widens or approves.
+
+#: The whole telemetry report body.
+TELEMETRY_REPORT_FIELDS = (
+    "expires_at",
+    "issued_at",
+    "kind",
+    "nonce",
+    "payload",
+    "peer_fingerprint",
+)
+
+#: Fields that must be present and non-empty strings. `payload` is checked separately
+#: (it is an object, and an empty object is legitimate).
+TELEMETRY_REPORT_REQUIRED = (
+    "expires_at",
+    "issued_at",
+    "kind",
+    "nonce",
+    "peer_fingerprint",
+)
+
+#: A closed vocabulary. `kind` routes the report to what records it; the per-kind
+#: payload's meaning is the consumer sub-step's contract, not the envelope's, so a new
+#: kind's internals never reshape the envelope.
+TELEMETRY_KINDS = ("status", "metrics", "liveness", "checkpoint_anchor", "inbox_alert")
+
+#: Refusal reasons, named by contracts/telemetry-schema.json `refusals`. Fixed strings,
+#: like every other envelope's: a caller maps them to an HTTP status and an operator
+#: greps a log for them. `off_overlay` is the listener's source gate, not a return here.
+REASON_TELEMETRY_MALFORMED = "malformed"
+REASON_TELEMETRY_WRONG_PEER = "wrong_peer"
+REASON_TELEMETRY_EXPIRED = "expired"
+REASON_TELEMETRY_NOT_YET_VALID = "not_yet_valid"
+REASON_TELEMETRY_REPLAYED = "replayed_nonce"
+
+
+def build_telemetry_report(
+    *,
+    kind: str,
+    peer_fingerprint: str,
+    payload: dict[str, Any] | None = None,
+    now: datetime | None = None,
+    ttl_seconds: int = 120,
+    nonce: str | None = None,
+) -> dict[str, Any]:
+    """Build a telemetry report body (unsigned — see the section note above).
+
+    The peer pushes this to the Master's intake listener. ``payload`` is opaque to the
+    envelope (any JSON object; empty is legitimate — a heartbeat says "alive" with no
+    content). ``nonce`` plus ``expires_at`` are the replay/freshness guard.
+    """
+    if kind not in TELEMETRY_KINDS:
+        raise AuthzError(f"kind must be one of {TELEMETRY_KINDS}, got {kind!r}")
+    if not peer_fingerprint:
+        raise AuthzError("peer_fingerprint is required")
+    if payload is not None and not isinstance(payload, dict):
+        raise AuthzError("payload must be a JSON object")
+    moment = now or datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return {
+        "kind": str(kind),
+        "peer_fingerprint": str(peer_fingerprint),
+        "payload": dict(payload or {}),
+        "issued_at": moment.isoformat().replace("+00:00", "Z"),
+        "expires_at": (moment + timedelta(seconds=ttl_seconds)).isoformat().replace("+00:00", "Z"),
+        "nonce": nonce or secrets.token_hex(16),
+    }
+
+
+def verify_telemetry_report(
+    report: Any,
+    *,
+    expected_fingerprint: str,
+    now: datetime | None = None,
+    seen_nonces: Any = (),
+    max_skew_seconds: int = 300,
+) -> tuple[bool, str]:
+    """Validate one telemetry report and match it to the overlay-derived fingerprint.
+
+    Returns ``(ok, reason)`` and never raises. This is **not** a signature check; there
+    is no signature. ``expected_fingerprint`` is the fingerprint the Master derived from
+    the WireGuard-authenticated source address; a report whose ``peer_fingerprint``
+    disagrees is refused as ``wrong_peer``, so a peer cannot report as another peer.
+    The order is shape, then attribution, then freshness, then replay — the same order
+    the RFI request uses, so *who* is asking is answered before *whether it is stale*.
+    """
+    if not isinstance(report, dict):
+        return False, REASON_TELEMETRY_MALFORMED
+    if set(report) != set(TELEMETRY_REPORT_FIELDS):
+        return False, REASON_TELEMETRY_MALFORMED
+    for field_name in TELEMETRY_REPORT_REQUIRED:
+        value = report.get(field_name)
+        if not isinstance(value, str) or not value:
+            return False, REASON_TELEMETRY_MALFORMED
+    if report["kind"] not in TELEMETRY_KINDS:
+        return False, REASON_TELEMETRY_MALFORMED
+    if not isinstance(report.get("payload"), dict):
+        return False, REASON_TELEMETRY_MALFORMED
+
+    if report["peer_fingerprint"] != expected_fingerprint:
+        return False, REASON_TELEMETRY_WRONG_PEER
+
+    moment = now or datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    try:
+        issued = datetime.fromisoformat(str(report["issued_at"]).replace("Z", "+00:00"))
+        expires = datetime.fromisoformat(str(report["expires_at"]).replace("Z", "+00:00"))
+    except ValueError:
+        return False, REASON_TELEMETRY_EXPIRED
+    if issued.tzinfo is None:
+        issued = issued.replace(tzinfo=timezone.utc)
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if expires <= moment:
+        return False, REASON_TELEMETRY_EXPIRED
+    if (issued - moment).total_seconds() > max_skew_seconds:
+        return False, REASON_TELEMETRY_NOT_YET_VALID
+
+    if report["nonce"] in set(seen_nonces or ()):
+        return False, REASON_TELEMETRY_REPLAYED
+    return True, ""
 
 
 # --- CLI ---------------------------------------------------------------------

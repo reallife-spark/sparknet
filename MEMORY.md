@@ -5,11 +5,11 @@
 > own it. **All history lives in `log.md` and `sessions/YYYY-MM-DD.md`** — an
 > entry here is a durable fact you still need, never a record of what happened.
 
-Updated: 2026-10-23
+Updated: 2026-10-25
 
 ## Plan cursors
 
-- **root `PLAN.md` `current: 67`.** Step 64 (the reflex layer) opened
+- **root `PLAN.md` `current: 70`.** Step 64 (the reflex layer) opened
   **2026-10-23**: local-only default, Master broker (`4224`) for the unified
   massive-task workload, RAG relevance first on the fabric corpus,
   shadow → assist → enforce, Master-local before peer access. 64A is
@@ -100,15 +100,122 @@ Updated: 2026-10-23
   *enforcing* the `inbox_dispatch` policy rather than merely recording it. It
   closes a gap both roles' agent charters had been asserting since 2026-10-10:
   they told agents acceptance *is* recorded as an `inbox_acceptance` block while
-  no code could produce one. 67B notification, 67C the RFI channel, 67D the inbox
-  transport remain open. **67C done** — `contracts/rfi-schema.json` plus
-  `rfi_answer_message`/`sign_rfi_answer`/`verify_rfi_answer` in authz and
-  `shared/sparknet-rfi-install.py` as the one acceptance rule; installing composes
-  with 67A (writes the item, records the request id, appends an `inbox_acceptance`).
-  No monotonic sequence: a registry *supersedes* so a lower sequence is a replay,
-  while answers *accumulate*, so the idempotence key is the `request_id`.
-  **The `/api/v1/rfi` listener and the Master-side composer do not exist** — that
-  is 67D, and the contract's `implementation_state` says so explicitly.
+    no code could produce one. **67B, 67C and 67D are done — Step 67 is complete**
+   (cursor `done`). **67C done** — `contracts/rfi-schema.json` plus
+   `rfi_answer_message`/`sign_rfi_answer`/`verify_rfi_answer` in authz and
+   `shared/sparknet-rfi-install.py` as the one acceptance rule; installing composes
+   with 67A (writes the item, records the request id, appends an `inbox_acceptance`).
+   No monotonic sequence: a registry *supersedes* so a lower sequence is a replay,
+   while answers *accumulate*, so the idempotence key is the `request_id`.
+   **67D done (2026-10-25) — the RFI *answer* transport is live over a wire:**
+   `POST /api/v1/rfi` is a *third route on the guard's 9090* (not a new port),
+   `handle_rfi` in `peer-node/services/sparknet-guard-d.py`, source-gated +
+   installing through `shared/sparknet-rfi-install.py`; the Master composer is
+   `master-node/scripts/sparknet-rfi-answer.sh` (`make -C master-node rfi-answer`),
+   signing via the isolated signer's **new `sign-rfi-answer` op** (or `--offline`)
+   and pushing like `sparknet-registry-deliver.sh`. `ports.json` names the route on
+   9090 and `tracking-schema.json`'s `phase_boundary` now lists the answer leg as
+   built — the two facts its rule requires before transport may be claimed. **The
+   request direction is NOT built and is deferred to its own step**: a request is
+   signed with the peer's node key, but nothing binds a peer *fingerprint* to a node
+   *signing* public key (a registry entry carries the fingerprint + WireGuard key
+   only), so the Master cannot attribute one and `verify_rfi_request` does not
+   exist; the composer takes `request_id` + peer as inputs. The reason is recorded
+   in `rfi-schema.json` `implementation_state.request_channel` (operator decision,
+   Fork 1). The cross-node leg on a live pair stays `DoD: confirm: user`.
+   **67B done (2026-10-25) — node-local notification on arrival.**
+   `shared/sparknet-notify.py` is the one implementation (the Master admin console
+   now *delegates* its `notify_kde` to it rather than keeping a second copy): a
+   durable arrival spool (`<state-dir>/notifications/arrivals.jsonl`, 0600) plus a
+   best-effort KDE Connect ping. The guard's `handle_rfi` calls
+   `notify_inbox_arrival` *after* the install + `inbox_acceptance` append, so a
+   notification failure can never undo or block a delivery. The spool is the
+   *alert*; the ledger block is the *audit* — not redundant. Honest limit: a
+   headless peer with no `kdeconnect-cli` no-ops the ping (still spools), and
+   real-time push to a *remote* operator rides Phase 4 telemetry, not a local ping.
+   **Step 67's deferred legs became new roadmap work:** the RFI *request* channel is
+   now **Step 68** (below); reviewer-agent sanitisation (`agents/vault-curator` still
+   a placeholder) and remote operator push stay in PLAN `## Next`.
+   **Step 68 (the RFI request channel) opened 2026-10-25 — 68A + 68B done.**
+   68A chose **Option B: attribute a request by the authenticated overlay, not a
+   node-key signature.** The reason is blast radius, not merit — the contract's
+   original "signed with the peer's node key" is *unverifiable* (nothing binds a
+   fingerprint to a node signing pubkey; the identity carries only a Curve25519
+   WireGuard key), and the fix that would make it verifiable (**Option C**: attest
+   `node_pubkey_b64` in the signed envelope, as `department` was in 66A) is a
+   **two-repo** change (the envelope is Python here *and* Go in goSpark;
+   `tests/test_registry_crossverify.py` pins the agreement) that compounds the
+   re-sign already pending from 66A. Option B is single-repo, reversible, no
+   migration: WireGuard already authenticates each peer and the Master's registry
+   maps `overlay_ipv4 → fingerprint`, so **on the overlay the tunnel is the
+   identity**. Option C stays the recorded upgrade path if non-repudiation is ever
+   needed. Design in `RFI_REQUEST_DESIGN.md`; `rfi-schema.json`'s `request` block
+   rewritten (attribution/unsigned/verify/transport/upgrade_path) and
+   `implementation_state.request_channel` moved `NOT BUILT → IN PROGRESS`. 68B built
+   `build_rfi_request` + `verify_rfi_request` in authz — **no `sign_rfi_request`**
+   (a test fails if one appears): `verify_rfi_request` is a validator +
+   overlay-fingerprint match (`wrong_peer`) + expiry/`not_yet_valid`/`replayed_nonce`,
+   never raises. **68C (the Master listener — recommended: re-scope `8090`, which
+   resolves Master Step 7's open question) and 68D (composer `--request`) remain.**
+   **Step 69 (Phase 4, Master observability) opened 2026-10-25 — 69A + 69B + 69C done;
+   the operator sequenced Phase 4 *before* 68C–68D on purpose.** The theme is
+   *signed evidence pushed to the Master, never interception* (peers talk directly;
+   the Master is authority-plane only at `10.100.0.1/32`), under two invariants the
+   reflex layer also holds: **telemetry carries no authority** (inform/record/surface/
+   flag, never grant/revoke/escalate/widen/approve) and **no interception, no new
+   write path** (fabric vault maintenance rides `guard-apply` + `protected_paths`).
+   `MASTER_OBSERVABILITY_DESIGN.md` is the architecture; the key structural decision
+   is **one Master peer-intake listener** — re-scope the `spec-only`, superseded
+   **8090** (resolving Master Step 7) to carry peer→Master families as *routes*
+   (`POST /api/v1/telemetry` now; **68C's RFI request route joins the same 8090**),
+   exactly as the peer's guard 9090 carries three routes. That is why Phase 4 goes
+   first: 69C lays the listener once and 68C adds a route to it. Attribution reuses
+   **68A's Option B** (the overlay is the identity; no node-key signature). 69B built
+   `contracts/telemetry-schema.json` + `build_telemetry_report`/`verify_telemetry_report`
+   in authz — a `kind`-tagged (`status|metrics|liveness|checkpoint_anchor|inbox_alert`),
+   overlay-attributed, **unsigned** report (no `sign_telemetry_report`; a test fails if
+   one appears), `verify` a validator + fingerprint match + nonce/expiry that never
+   raises; `payload` is an opaque object so a new kind never reshapes the envelope.
+   The existing **pull** path (admin console `feed()` → `list_events` over
+   `admin-supervise`, bridge `/admin/*`) is complementary, not redundant: pull is
+   Master-initiated/admin-supervise/auth-events, push is peer-initiated/`telemetry`-gated.
+   **69C done (2026-10-25) — the Master peer-intake listener on a re-scoped 8090.**
+   `master-node/services/sparknet-telemetry-intake.py` binds `10.100.0.1` only and its
+   source gate is **registry-driven** (`PeerDirectory.attribute`: source address → the
+   Master's signed registry entry), refusing `off_overlay`/`revoked`/`capability_missing`
+   *before the body is read* — the last is what "wire the `telemetry` capability" means
+   concretely. It verifies via `verify_telemetry_report(expected_fingerprint=<derived>)`,
+   records to `/mnt/log/sparknet-telemetry.jsonl` (0600) with in-memory nonce replay
+   protection, and carries **no authority** (a source-scan test fails on any signing
+   primitive). The unit is staged (`make telemetry-intake-unit`), not enabled. **8090
+   re-scoped** in `ports.json` (`master-instant-push`/`spec-only` → `master-peer-intake`/
+   `implemented`), which **closed Master Step 7** (instant-push purpose retired as
+   superseded by Step 6's 9090 push; Master cursor `7 -> 20`). The 7-line
+   `sparknet-registry-listener.py` stub + its text-inspection `test_listener_8090.py`
+   are **deleted**, replaced by `test_telemetry_intake.py` (a real `ThreadingHTTPServer`,
+   15 tests); six master docs reconciled. **This is the surface 68C's RFI request route
+   joins — one listener, not two.**
+   **Step 70 (opened 2026-10-25) consolidates the entire remaining fabric roadmap
+   into one verbose plan** — Steps 68 and 69 are **closed** (their delivered legs
+   68A/68B and 69A/69B/69C are done+gated; their unfinished legs *moved*, not done).
+   Step 70's sub-steps, in dependency order: **70A** the peer telemetry pusher
+   (`telemetry`-gated, the keystone the riders need), **70B** the RFI request route
+   joining 69C's 8090 intake (+ rename `sparknet-telemetry-intake.py` →
+   `sparknet-peer-intake.py`), **70C** the composer's `--request` path (closes
+   peer→Master→peer), **70D** deploy `sparknet-liveness.py` (+ a contracted probe port,
+   recommend `4211`; reconcile `health-protocol.md` to Option B — claims unsigned,
+   overlay-attributed), **70E** anchor checkpoint Merkle roots
+   (`provenance.build_checkpoint_data` + push `checkpoint_anchor`), **70F** the
+   inbox-arrival remote alert (`inbox_alert` telemetry; closes Phase 3's third leg),
+   **70G** make `flagged` actionable (rides `kind=status` payload — no new kind; the
+   console surfaces it, never auto-remediates). Locked operator decisions: execute
+   sequentially gating each; 70D liveness → Option B; 70G flagged → `status` payload.
+   **Deliberately NOT in Step 70 and still honestly open** (not marked complete): the
+   reviewer-agent sanitisation leg (`agents/vault-curator` placeholder), Phase 5 (Open
+   WebUI), Phase 6 (data lake), master plan Steps 20/21, and the live `DoD: confirm:
+   user` items (Steps 54/56 hardware legs, the Step 66 registry re-sign, Phase 9's
+   destructive legs) — marking genuinely-undone work complete would be a false claim
+   the conformance tests reject.
   **The pin hazard is closed** (`3d3bac9`): `goagx/GOSPARK_PIN` now names goSpark
   `0a6da00`, goSpark is pushed, and goagx was republished (`9898733`) since
   `tests/test_goagx_repo.py` binds the pin to the published manifest. **Still

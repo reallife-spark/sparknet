@@ -90,6 +90,8 @@ EXPECTED_TOP_LEVEL = {
     "PER_USER_VAULTS_DESIGN.md",
     "ADMIN_FEDERATION_DESIGN.md",
     "REFLEX_DECISION_DESIGN.md",
+    "RFI_REQUEST_DESIGN.md",
+    "MASTER_OBSERVABILITY_DESIGN.md",
     # the DGX Spark node image surface: the image Dockerfile, the one dispatcher
     # every service runs, the compose orchestration, the precontext baker, and
     # the host bring-up script. They sit at the fabric root because the image

@@ -46,3 +46,23 @@ forward. The root `log.md` is a symlink to this file.
   `wrong_peer` and missing-capability negatives; the protected-file *write*
   needs euid 0 + `chattr` and is a target-node item, stated as such rather than
   claimed. Cross-role: `contracts/` + `shared/` + both roles in one commit.
+- [2026-10-25] Plan cursor 7 -> 20 — **Step 7 closed by re-scope** (fabric Step
+  69C). 8090's instant-push purpose was superseded in direction by Step 6 (the
+  signed registry is pushed Master→peer on 9090, so a Master-side ACL-push
+  listener was never needed) and is retired. Fabric Step 69C re-scoped 8090 into
+  the Master's peer→Master **intake** listener: `services/sparknet-telemetry-intake.py`
+  + `systemd/sparknet-telemetry-intake.service` (staged via `make
+  telemetry-intake-unit`, not enabled — a peer-facing socket on the authority-plane
+  node is an operator decision), overlay-only, binding `10.100.0.1` and refusing a
+  wildcard, attributing each `POST /api/v1/telemetry` by the WireGuard-authenticated
+  source via the signed registry (refusing unregistered / revoked / `telemetry`-ungranted
+  before the body is read), verifying with `authz.verify_telemetry_report`, recording
+  evidence to `/mnt/log/sparknet-telemetry.jsonl`, and carrying no authority. The
+  7-line `sparknet-registry-listener.py` stub and `test_listener_8090.py` — the
+  text-inspection test this step's own Status flagged as "cannot fail for the failure
+  the DoD names" — are **deleted**; `test_telemetry_intake.py` (15 tests) binds a real
+  `ThreadingHTTPServer`. `contracts/ports.json` now records 8090 as
+  `master-peer-intake` / `implemented`. Cross-role: fabric Step 69C, with the master
+  docs (`docs/master-control-plane.md`, `MISSION.md`, `docs/registry-protocol.md`,
+  `USER_MANUAL.md`, this plan, `MEMORY.md`) reconciled in the same pass. Step 68C's
+  RFI request route will join this same listener rather than found a second one.

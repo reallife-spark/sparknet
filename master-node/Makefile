@@ -103,6 +103,10 @@ SIGNER_UNIT := sparknet-master-signer.service
 # provisioned in Step 64F, so it is staged, not enabled. units-check still sees
 # it here, which is what keeps the unit from being forgotten.
 REFLEX_UNIT := sparknet-reflex-broker.service
+# The peer-intake listener (8090, re-scoped by fabric Step 69C) is staged, not
+# enabled, like the signer and reflex broker: a peer-facing socket on the
+# authority-plane node is an operator's decision to bring up.
+TELEMETRY_INTAKE_UNIT := sparknet-telemetry-intake.service
 # The delivery service must NOT be enabled with --now: its first run would push
 # to whatever peers exist at install time, and a single unreachable peer (a
 # normal condition) would make `make units` fail. The timer owns the schedule;
@@ -168,6 +172,12 @@ reflex-unit: ## Stage the reflex broker unit ONLY (does not enable it; 64F does)
 	@echo "  ✓ staged $(SIGNER_UNIT) into $(UNIT_DIR) — not enabled."
 	@echo "    It will refuse to start until SPARKNET_NODE_ID and"
 	@echo "    \$$SPARKNET_STATE_DIR/trust-root.json name this node as Master."
+
+telemetry-intake-unit: ## Stage the peer-intake (8090) unit ONLY (does not enable it)
+	@install -Dm644 "$(VAULT_ROOT)/systemd/$(TELEMETRY_INTAKE_UNIT)" "$(UNIT_DIR)/$(TELEMETRY_INTAKE_UNIT)"
+	@echo "  ✓ staged $(TELEMETRY_INTAKE_UNIT) into $(UNIT_DIR) — not enabled."
+	@echo "    It binds 10.100.0.1:8090 and refuses a non-overlay bind; enabling a"
+	@echo "    peer-facing socket on the authority-plane node is an operator decision."
 
 # The console is the operator's seat: it composes an admin request, asks the
 # isolated signer for a signature, and posts it to a peer's /admin/ route. It is
@@ -389,11 +399,31 @@ registry-deliver: ## Push a published registry to peers (needs PUBLICATION; opti
 	  $(if $(PEER),--peer "$(PEER)") \
 	  $(if $(TIMEOUT),--timeout "$(TIMEOUT)")
 
-# --- Step 7: listener (superseded by the Step 6 push channel) ---
-.PHONY: registry-listen
+# --- fabric Step 67D: RFI answer intake ---
+.PHONY: rfi-answer
 
-registry-listen: ## 8090 pull listener stub (superseded; see docs/registry-protocol.md)
-	@$(PY) $(VAULT_ROOT)/services/sparknet-registry-listener.py
+# Compose, sign and deliver one RFI answer into a peer's 01_Inbox (the Master half
+# of contracts/rfi-schema.json). Signing goes through the isolated signer by
+# default; OFFLINE=1 signs with the operational key in-process (tests, or a host
+# with no signer running). The peer installs it on POST /api/v1/rfi (guard, 9090).
+rfi-answer: ## Sign+deliver an RFI answer (needs REQUEST_ID, PEER, ITEM_NAME, and CONTENT or EMPTY)
+	@test -n "$(REQUEST_ID)" || (echo "REQUEST_ID=<id> required" >&2; exit 1)
+	@test -n "$(PEER)" || (echo "PEER=<fingerprint> required" >&2; exit 1)
+	@test -n "$(ITEM_NAME)" || (echo "ITEM_NAME=<name> required" >&2; exit 1)
+	@$(ROLE_ROOT)/scripts/sparknet-rfi-answer.sh --request-id "$(REQUEST_ID)" \
+	  --peer "$(PEER)" --item-name "$(ITEM_NAME)" \
+	  $(if $(CONTENT),--content "$(CONTENT)") \
+	  $(if $(EMPTY),--empty) \
+	  $(if $(URL),--url "$(URL)") \
+	  $(if $(REGISTRY),--registry "$(REGISTRY)") \
+	  $(if $(OFFLINE),--offline) \
+	  $(if $(OUT),--out "$(OUT)")
+
+# --- Step 7: 8090 — re-scoped by fabric Step 69C ---
+# The instant-push/pull listener stub is retired: Step 6 pushes the signed registry
+# Master→peer on 9090, so a Master-side ACL-push listener was never needed. 8090 is
+# now the peer→Master intake (telemetry evidence; Step 68C's RFI request route joins
+# it). See `telemetry-intake-unit` above and MASTER_OBSERVABILITY_DESIGN.md.
 
 # --- Step 8: KillSwitch ---
 .PHONY: killswitch

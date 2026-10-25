@@ -47,6 +47,8 @@ by its own commit, with both roles edited together where the contract changes.
 | `PER_USER_VAULTS_DESIGN.md` | per-user knowledge vaults |
 | `ADMIN_FEDERATION_DESIGN.md` | cross-node admin requests |
 | `MCP_A2A_DESIGN.md` | MCP/A2A tool surface |
+| `RFI_REQUEST_DESIGN.md` | the RFI request channel: peer→Master attribution by the authenticated overlay |
+| `MASTER_OBSERVABILITY_DESIGN.md` | Phase 4 Master observability: telemetry pushed as evidence, never interception; no authority on the telemetry path |
 
 ## The contract
 
@@ -61,13 +63,14 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/registry-schema.json` | the shape of the signed node-authorization registry — fields, types, the `signature_b64` name |
 | `contracts/registry-publication.json` | the Master→peer registry publication channel: envelope, digest, sequence, refusals, the 60 s re-delivery window |
 | `contracts/reflex-schema.json` | the typed decision contract for the reflex layer — a local sensor, never authority; abstain first-class |
-| `contracts/rfi-schema.json` | the request-for-information channel: signed request, signed answer, digest-bound content, `01_Inbox/` destination, acceptance order and refusals. Envelope and install rule built; the listener is not |
+| `contracts/rfi-schema.json` | the request-for-information channel: overlay-attributed request, signed digest-bound answer into `01_Inbox/`, acceptance order and refusals. Answer transport (listener + composer) built; the request channel is Step 68 |
 | `contracts/ports.json` | which role listens where |
 | `contracts/guard-protocol.md` | the approval conversation |
 | `contracts/guard-approval.json` | the guard-apply approval envelope — the eight fields, the canonical bytes, the transport |
 | `contracts/share-protocol.md` | the cross-node sharing regime |
 | `contracts/consensus-protocol.md` | master election and the cluster trust root |
 | `contracts/health-protocol.md` | peer liveness and eviction (probe rhythm, activity-trumps-eviction) |
+| `contracts/telemetry-schema.json` | peer→Master observability evidence (Phase 4): overlay-attributed, unsigned, `kind`-tagged reports the Master records and acts on nothing. Envelope built; the intake listener is Step 69C |
 | `contracts/provenance-protocol.md` | signed note chain and approvals |
 | `contracts/tracking-schema.json` | tracking envelope schema |
 | `contracts/proposal-schema.json` | the proposal/review/decision records and the draft→submitted→reviewed→decided lifecycle |

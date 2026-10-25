@@ -1,0 +1,43 @@
+# The Master's peer-intake listener (8090) — telemetry evidence, pushed not intercepted.
+#
+# Not enabled by `make units`. It is a peer-facing socket on the authority-plane
+# node, so enabling it is an operator decision, exactly as the signer and reflex
+# broker units are staged rather than enabled. `make telemetry-intake-unit` stages
+# the file.
+#
+# It binds the Master's overlay address only, and never a wildcard: a report is
+# attributed by the WireGuard-authenticated source address via the Master's signed
+# registry, so a source that is not a registered, non-revoked peer holding the
+# `telemetry` capability is refused 403 before its body is read.
+#
+# It carries no authority. It records evidence and acknowledges; nothing here signs,
+# grants, revokes, escalates, widens a permission or approves. See
+# MASTER_OBSERVABILITY_DESIGN.md and contracts/telemetry-schema.json.
+
+[Unit]
+Description=Sparknet Master peer-intake listener (telemetry evidence, never authority)
+After=network-online.target sparknet-master-wireguard-anchor.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-%h/.env
+Environment=SPARKNET_TELEMETRY_BIND=10.100.0.1
+Environment=SPARKNET_TELEMETRY_PORT=8090
+Environment=SPARKNET_TELEMETRY_REGISTRY=%h/manifests/node-authorizations.json
+Environment=SPARKNET_TELEMETRY_SPOOL=/mnt/log/sparknet-telemetry.jsonl
+ExecStart=/usr/bin/env python3 %h/services/sparknet-telemetry-intake.py --serve \
+    --bind ${SPARKNET_TELEMETRY_BIND} \
+    --port ${SPARKNET_TELEMETRY_PORT} \
+    --registry ${SPARKNET_TELEMETRY_REGISTRY} \
+    --spool ${SPARKNET_TELEMETRY_SPOOL}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+ReadWritePaths=/mnt/log
+
+[Install]
+WantedBy=multi-user.target

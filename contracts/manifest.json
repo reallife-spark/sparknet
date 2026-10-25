@@ -29,7 +29,7 @@
       "contract": "ports",
       "file": "ports.json",
       "schema_version": "2.0",
-      "sha256": "c325866cdab5df5da64304d99a777875935d36ceebad6ff71b6cec4cb462d0bc"
+      "sha256": "cda1e471b64814107b0f336ad3e9d03522d48d1314c51ef0e6900777168b923c"
     },
     {
       "contract": "proposal-schema",
@@ -59,13 +59,19 @@
       "contract": "rfi-schema",
       "file": "rfi-schema.json",
       "schema_version": "1.0",
-      "sha256": "6664ef473e2d233a1a53c45206f7e17c6b3457d7582202d688c3accca4814bde"
+      "sha256": "7a4e4cd890e2225cec454a77ee86e34f62aa096fa96caeff3d2c2d22438efd44"
+    },
+    {
+      "contract": "telemetry-schema",
+      "file": "telemetry-schema.json",
+      "schema_version": "1.0",
+      "sha256": "e7758c0fe563aeb0f844ee3c912921d16a30e93dbb8340d7977aaa88a209684f"
     },
     {
       "contract": "tracking-schema",
       "file": "tracking-schema.json",
       "schema_version": 1,
-      "sha256": "a973247c0dbee667655a9d2e444c7eb63644c29c2bd1f978b39d2741b5fa659e"
+      "sha256": "f1dd4b83b16e5a46b716d7c7a3c568df91022609bd0cbf70a82879eab29c7323"
     }
   ],
   "do_not_edit": true,
@@ -281,9 +287,9 @@
     },
     "8090": {
       "bound_by": "master",
-      "implementation_state": "spec-only",
-      "runtime": "not-listening",
-      "service": "master-instant-push"
+      "implementation_state": "implemented",
+      "runtime": "not-verifiable-here",
+      "service": "master-peer-intake"
     },
     "9090": {
       "bound_by": "peer",

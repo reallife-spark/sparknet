@@ -7,13 +7,14 @@
 
   "request": {
     "direction": "peer -> Master",
-    "fields": ["request_id", "peer_fingerprint", "question", "scope", "issued_at", "expires_at", "nonce"],
-    "signed_fields": ["request_id", "peer_fingerprint", "question", "scope", "issued_at", "expires_at", "nonce"],
-    "signature_field": "signature_b64",
-    "signed_by": "the requesting peer's own node key",
-    "why_the_peer_signs": "A request is a statement by a peer about what it wants, so the peer signs it. The Master answers only requests it can attribute, because the answer will carry privilege-relevant material into a node's inbox and an unattributable ask is an unattributable delivery.",
-    "scope": "an allow-list of vault categories the answer may draw on. The Master refuses to answer a request whose scope reaches material the peer is not granted; scope narrows, it never widens.",
-    "request_id_rule": "stable handle chosen by the requester, unique per peer. The answer echoes it, and it is what makes a re-delivered answer detectable as a duplicate rather than as new information."
+    "fields": ["expires_at", "issued_at", "nonce", "peer_fingerprint", "question", "request_id", "scope"],
+    "attribution": "the authenticated overlay, NOT a signature — decided in RFI_REQUEST_DESIGN.md (fabric Step 68A). The Master receives the request on an overlay-only listener, derives the sender's fingerprint from the WireGuard-authenticated source address via its own registry (overlay_ipv4 -> fingerprint), and refuses a request whose peer_fingerprint field disagrees. A node-key signature was the original 67C plan but is unverifiable: nothing binds a peer fingerprint to a node signing public key, so on the overlay the tunnel is the identity.",
+    "unsigned": "the request body carries no signature_b64. A signature the Master has no attested key to verify is theatre; attribution rides the tunnel the Master itself terminates and authenticated. nonce + expires_at give the replay protection a signed envelope's freshness fields would.",
+    "verify": "shared/sparknet-authz.py::verify_rfi_request — a validator + fingerprint match, not a signature check: it takes the overlay-derived expected_fingerprint and returns (ok, reason) after checking the exact field set, the fingerprint match, expiry and the nonce. There is deliberately no sign_rfi_request.",
+    "scope": "an allow-list of vault categories the answer may draw on. The Master refuses to answer a request whose scope reaches material the peer is not granted; scope narrows, it never widens. The request channel carries no authority — it cannot grant, revoke, escalate or widen a permission.",
+    "request_id_rule": "stable handle chosen by the requester, unique per peer. The answer echoes it, and it is what makes a re-delivered answer detectable as a duplicate rather than as new information.",
+    "transport": "peer -> Master on the Master's overlay-only request listener (the port is decided in Step 68C; recommended: 8090 re-scoped from the superseded instant-push, which resolves Master Step 7's open question). Source-gated to registered, non-revoked peer overlay addresses.",
+    "upgrade_path": "if node-key non-repudiation is ever required, Option C attests node_pubkey_b64 in the signed envelope (a two-repo change — Python here and Go in goSpark — riding the re-sign already pending from Step 66) and the request gains a signature verified against it. That is additive, not a reshape. See RFI_REQUEST_DESIGN.md."
   },
 
   "answer": {
@@ -83,14 +84,16 @@
     "note": "The guard's existing port, which already carries two routes (critical-file/patch and registry). A third route on it adds no transport edge and no new attack surface: the source gate, the size limit and the refusal vocabulary are the guard's, and the answer's own signature is checked by the shared install rule.",
     "body": "the answer artifact, JSON; no wrapper and no second signature — the answer is self-authenticating",
     "source_gate": "loopback and the Master's overlay address (10.100.0.1); every other source is refused 403 off_overlay before the body is read",
-    "implementation_state": "the envelope and the install rule are implemented; the listener route is NOT — see implementation_state below"
+    "implementation_state": "implemented — the guard serves POST /api/v1/rfi (peer-node/services/sparknet-guard-d.py::handle_rfi) and installs through shared/sparknet-rfi-install.py; the Master-side composer is master-node/scripts/sparknet-rfi-answer.sh"
   },
 
   "implementation_state": {
     "envelope": "implemented — shared/sparknet-authz.py signs, projects and verifies",
-    "install_rule": "implemented — shared/sparknet-rfi-install.py, exercised in-process",
-    "listener": "NOT BUILT. There is no /api/v1/rfi route on the guard yet, so nothing arrives over a wire. tracking-schema.json's phase_boundary rule applies unchanged: nothing in this repository may claim transport delivery works until a listener exists and contracts/ports.json says so.",
-    "master_side_composer": "NOT BUILT. The Master has no service that takes a signed request, gathers an answer and signs it; sign_rfi_answer is the primitive such a service would call.",
-    "honest_pair": "implemented reference code, nothing deployed here, and the cross-node leg explicitly a human's to confirm on a live pair"
+    "install_rule": "implemented — shared/sparknet-rfi-install.py, exercised in-process and over the wire",
+    "listener": "implemented (fabric Step 67D) — POST /api/v1/rfi is a third route on the guard's 9090 (peer-node/services/sparknet-guard-d.py::handle_rfi), behind the guard's own source gate, size limit and refusal vocabulary, installing through shared/sparknet-rfi-install.py. contracts/ports.json names the route on 9090, which is what tracking-schema.json's phase_boundary rule requires before transport delivery may be claimed. The route is not gated on the peer's capability, like the registry route: information the Master addressed to this node must reach it.",
+    "master_side_composer": "implemented (fabric Step 67D) — master-node/scripts/sparknet-rfi-answer.sh composes one answer, signs it with the operational key (through the isolated signer's sign-rfi-answer op, or --offline), checks it with the receiver's own rule, resolves the destination peer from the signed registry, and pushes it to the peer's /api/v1/rfi. It is the delivery shape of sparknet-registry-deliver.sh. `make -C master-node rfi-answer` runs it.",
+    "signer_op": "implemented (fabric Step 67D) — master-node/services/sparknet-signer.py answers sign-rfi-answer, deriving content_sha256 from the payload rather than trusting a caller-supplied digest, so the isolated key holder signs the answer the same way it signs a registry publication.",
+    "request_channel": "IN PROGRESS (fabric Step 68). 68A decided attribution: Option B — a request is attributed by the authenticated overlay (WireGuard source -> the Master's registry fingerprint), NOT a node-key signature, because nothing binds a peer fingerprint to a node signing public key and adding one to the signed envelope is a two-repo migration (Option C, kept as the upgrade path). See RFI_REQUEST_DESIGN.md. 68B builds verify_rfi_request (a validator + overlay-fingerprint match + nonce/expiry, no signature); 68C the Master-side overlay-only request listener (recommended: 8090 re-scoped, resolving Master Step 7); 68D rewires sparknet-rfi-answer.sh to consume a verified request. The answer transport (67D) is independent and already live.",
+    "honest_pair": "implemented reference code, exercised end to end over a loopback guard in master-node/tests/test_rfi_transport.py; nothing is deployed here, and the cross-node leg on a live pair is explicitly a human's to confirm"
   }
 }

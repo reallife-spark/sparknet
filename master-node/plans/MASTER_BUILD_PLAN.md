@@ -1,7 +1,7 @@
 ---
 title: sparknet master-node Build Plan
-updated: 2026-10-23
-current: 7
+updated: 2026-10-25
+current: 20
 ---
 
 # sparknet master-node — Build Plan
@@ -13,8 +13,10 @@ current: 7
 >
 > **As of Step 3 these directories exist** (`scripts/`, `services/`,
 > `systemd/` — built Steps 3–4 and 15–18; the isolated signer runs live on
-> agx64). Steps 1, 2, 5 and 6 are closed; the cursor sits at Step 7 (which
-> Step 6's push channel partly supersedes — see Step 7's status).
+> agx64). Steps 1, 2, 5, 6 and 7 are closed; the cursor sits at Step 20. Step 7
+> (8090) was **re-scoped and closed by fabric Step 69C** — the instant-push
+> purpose was superseded by Step 6's 9090 push, and 8090 is now the peer→Master
+> intake listener; see Step 7's status.
 
 ## Status Legend
 
@@ -333,18 +335,34 @@ containment and scheduling.
         schema now allows an empty `capabilities` list only on a revoked entry —
         the document that carries a revocation must be installable.
 
-## Step 7 — Instant-push listener (8090)
+## Step 7 — 8090: instant-push listener, re-scoped to peer intake
 
-- [ ] **Step 7** — Bind `10.100.0.1:8090` and POST ACL changes to peers.
+- [x] **Step 7** — Bind `10.100.0.1:8090`. Originally "POST ACL changes to peers";
+      **re-scoped and closed by fabric Step 69C** (2026-10-25).
       - **DoD**: (1) the listener binds `10.100.0.1` only, never a wildcard;
-        (2) it refuses off-overlay sources; (3) an ACL change reaches a peer
-        within the documented window; (4) tests cover the refusal paths.
-      - **Status**: reopened 2026-10-06 — `services/sparknet-registry-listener.py`
-        is 7 lines that print and exit; `contracts/ports.json` still records
-        8090 as `spec-only` / not listening; and `tests/test_listener_8090.py`
-        passes by **reading the source file's text**, not by binding a socket or
-        refusing anything. The test cannot fail for the failure the DoD names.
-      - **Blocked by**: Step 4 (needs to know which peers exist).
+        (2) it refuses off-overlay sources; (3) ~~an ACL change reaches a peer
+        within the documented window~~ — superseded, see Status; (4) tests cover
+        the refusal paths against a real socket, not by reading source text.
+      - **Status: closed by re-scope, 2026-10-25.** The instant-push *purpose* was
+        superseded in direction by Step 6, which pushes the signed registry
+        Master→peer on 9090 — a Master-side ACL-push listener was never needed, and
+        the 7-line `sparknet-registry-listener.py` stub (which printed and exited)
+        is **deleted**, along with `tests/test_listener_8090.py` (the text-inspection
+        test this step's own Status flagged as unable to fail). Fabric Step 69C
+        re-scoped 8090 into the Master's **peer→Master intake listener**
+        (`services/sparknet-telemetry-intake.py`, `systemd/sparknet-telemetry-intake.service`,
+        staged not enabled): it binds `10.100.0.1` only and refuses a non-overlay bind
+        (DoD 1), attributes every request by the WireGuard-authenticated source via
+        the signed registry and refuses an unregistered / revoked / `telemetry`-ungranted
+        source before reading the body (DoD 2, strengthened), and
+        `master-node/tests/test_telemetry_intake.py` binds a real `ThreadingHTTPServer`
+        and POSTs real bodies to cover each refusal (DoD 4 — the fake test is gone).
+        DoD 3 (ACL push) is retired with the purpose; `contracts/ports.json` records
+        8090 as `master-peer-intake` / `implemented`, and Step 68C's RFI request route
+        will join this same listener rather than found a second one. See
+        `../../MASTER_OBSERVABILITY_DESIGN.md`.
+      - **Was blocked by**: Step 4 (which peers exist) — now moot; attribution reads
+        the same registry Step 4's overlay does.
 
 ## Step 8 — Cluster KillSwitch
 

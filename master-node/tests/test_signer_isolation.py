@@ -864,6 +864,125 @@ def test_it_refuses_a_signature_the_caller_supplied_on_an_admin_request(signer):
     )
 
 
+# --- sign-rfi-answer (fabric Step 67D) -----------------------------------------
+
+_RFI_PEER = "a" * 64
+
+
+def _rfi_answer(content: bytes = b"# the answer\n", **overrides) -> dict:
+    """The `answer` object the signer's sign-rfi-answer op takes.
+
+    `content_b64` is the payload as it crosses the JSON socket; the signer decodes
+    it and computes `content_sha256` itself, so a caller never supplies the digest.
+    """
+    answer = {
+        "content_b64": base64.b64encode(content).decode(),
+        "item_name": "rfi-2026-10-25-guard.md",
+        "peer_fingerprint": _RFI_PEER,
+        "request_id": "RFI-1",
+    }
+    answer.update(overrides)
+    return answer
+
+
+def test_a_valid_rfi_answer_is_signed_and_verifies(signer, authz, operational_key):
+    response = signer.handle({"op": "sign-rfi-answer", "root_id": signer.root_id, "answer": _rfi_answer()})
+    assert response["ok"], response.get("error")
+    signed = response["answer"]
+    assert signed["signature_b64"]
+
+    _, public_b64 = operational_key
+    public = authz.public_key_from_b64(public_b64)
+    # The peer's own rule accepts what the signer produced — the test does not
+    # hand-roll verification.
+    ok, reason, content = authz.verify_rfi_answer(
+        signed, master_public_key=public, peer_fingerprint=_RFI_PEER, now=CLOCK
+    )
+    assert (ok, reason) == (True, ""), reason
+    assert content == b"# the answer\n"
+
+
+def test_an_empty_rfi_answer_is_signed(signer, authz, operational_key):
+    """'Nothing found' is an answer; the signer must not refuse it."""
+    response = signer.handle({"op": "sign-rfi-answer", "root_id": signer.root_id, "answer": _rfi_answer(content=b"")})
+    assert response["ok"], response.get("error")
+    _, public_b64 = operational_key
+    ok, reason, content = authz.verify_rfi_answer(
+        response["answer"],
+        master_public_key=authz.public_key_from_b64(public_b64),
+        peer_fingerprint=_RFI_PEER,
+        now=CLOCK,
+    )
+    assert (ok, reason, content) == (True, "", b"")
+
+
+def test_the_rfi_digest_is_computed_not_taken_from_the_caller(signer, authz):
+    """A caller-supplied content_sha256 is ignored: the digest binds the real bytes."""
+    bogus = hashlib.sha256(b"something else entirely").hexdigest()
+    response = signer.handle(
+        {
+            "op": "sign-rfi-answer",
+            "root_id": signer.root_id,
+            "answer": _rfi_answer(content=b"# the answer\n", content_sha256=bogus),
+        }
+    )
+    assert response["ok"], response.get("error")
+    assert response["answer"]["content_sha256"] == hashlib.sha256(b"# the answer\n").hexdigest()
+    assert response["answer"]["content_sha256"] != bogus
+
+
+def test_it_refuses_an_rfi_answer_without_an_answer_object(signer):
+    response = signer.handle({"op": "sign-rfi-answer", "root_id": signer.root_id})
+    assert not response["ok"] and "requires an 'answer' object" in response["error"]
+
+
+def test_it_refuses_an_rfi_answer_missing_content_b64(signer):
+    answer = _rfi_answer()
+    del answer["content_b64"]
+    response = signer.handle({"op": "sign-rfi-answer", "root_id": signer.root_id, "answer": answer})
+    assert not response["ok"] and "content_b64" in response["error"]
+
+
+def test_it_refuses_an_rfi_answer_with_a_traversing_item_name(signer):
+    """item_name is a write destination inside the projection, so this is a guard."""
+    response = signer.handle(
+        {
+            "op": "sign-rfi-answer",
+            "root_id": signer.root_id,
+            "answer": _rfi_answer(item_name="../00_System/user.md"),
+        }
+    )
+    assert not response["ok"] and "single safe path component" in response["error"]
+
+
+def test_it_refuses_an_rfi_answer_with_bad_content_base64(signer):
+    response = signer.handle(
+        {"op": "sign-rfi-answer", "root_id": signer.root_id, "answer": _rfi_answer(content_b64="!!!not-base64!!!")}
+    )
+    assert not response["ok"] and "not valid base64" in response["error"]
+
+
+def test_it_refuses_a_caller_supplied_signature_on_an_rfi_answer(signer):
+    response = signer.handle(
+        {
+            "op": "sign-rfi-answer",
+            "root_id": signer.root_id,
+            "answer": _rfi_answer(signature_b64=base64.b64encode(b"forged").decode()),
+        }
+    )
+    assert response["ok"], response.get("error")
+    assert response["answer"]["signature_b64"] != base64.b64encode(b"forged").decode()
+
+
+def test_an_rfi_answer_is_recorded_in_the_ledger(signer, tmp_path):
+    response = signer.handle({"op": "sign-rfi-answer", "root_id": signer.root_id, "answer": _rfi_answer()})
+    assert response["ok"], response.get("error")
+    assert response["ledger_block"]
+    ledger = json.loads((tmp_path / "ledger.json").read_text())
+    assert ledger["blocks"][-1]["data"]["operation"] == "sign-rfi-answer"
+    assert ledger["blocks"][-1]["data"]["subject"] == "RFI-1"
+
+
 def test_it_refuses_a_group_readable_key(signer_module, root, authz, consensus, tmp_path):
     private, _ = _keypair(f"operational-{MASTER}")
     key_path = tmp_path / "loose.ed25519"

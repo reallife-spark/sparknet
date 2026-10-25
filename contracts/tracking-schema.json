@@ -303,10 +303,10 @@
   },
 
   "phase_boundary": {
-    "built_here": ["the numbered layout and shims", "the tracking block and its signature", "the user record and key custody", "the approval/report ledger records", "the secret index", "local ingestion from stdin or file"],
-    "not_built": ["the email service", "node-to-node transport", "the dispatch bridge as a server"],
-    "state": "specified, not built",
-    "rule": "The inbox dispatch policy below is a policy, not a running pipeline. Nothing in this repository may claim transport delivery works until a listener exists and ports.json says so."
+    "built_here": ["the numbered layout and shims", "the tracking block and its signature", "the user record and key custody", "the approval/report ledger records", "the inbox_acceptance record", "the secret index", "local ingestion from stdin or file", "the RFI answer transport: a Master-signed answer pushed to POST /api/v1/rfi on the guard (9090) and installed into 01_Inbox", "node-local notification on arrival (shared/sparknet-notify.py: a durable spool plus a best-effort KDE Connect ping)"],
+    "not_built": ["the email service", "the RFI request channel — a peer's request is signed with its node key, but nothing binds a peer fingerprint to a node signing public key, so the Master cannot attribute one (see rfi-schema.json implementation_state.request_channel)", "the dispatch bridge as a server"],
+    "state": "partly built — the RFI answer leg of node-to-node transport is live; the request channel, the email service and the dispatch bridge as a server are not",
+    "rule": "The inbox dispatch policy below is a policy, not a running pipeline, except where a listener makes it one. Nothing in this repository may claim transport delivery works until a listener exists and ports.json says so — for the RFI answer channel both now hold: the guard serves /api/v1/rfi and ports.json names that route on 9090."
   },
 
   "inbox_dispatch": {
@@ -318,6 +318,7 @@
     },
     "reviewer_agents": "peer: agents/vault-curator; master: .opencode/agents/evidence-reviewer",
     "authorised_senders": "recorded in 00_System/user.md (the record is the operator's, and who may push work onto this node is an operator decision)",
-    "transport": "specified, not built — see phase_boundary"
+    "transport": "the RFI answer leg is built — a Master-signed answer arrives on POST /api/v1/rfi (guard, 9090) and is installed into 01_Inbox with an inbox_acceptance record (see phase_boundary and rfi-schema.json). The request leg, the email service and the dispatch bridge as a server are not built.",
+    "notification": "an item that lands in 01_Inbox over the transport is notified to the human, because acceptance is a human act and an unnoticed item is an unaccepted one. The node's own mechanism is shared/sparknet-notify.py: a durable arrival spool (<state-dir>/notifications/arrivals.jsonl, 0600) plus a best-effort KDE Connect ping. The fabric-root plugin (scripts/plugins/kde-notify.ts) is deliberately not bundled into nodes, so this is the node-local path, and the Master console's ping delegates to the same module rather than keeping a second copy. It never blocks or undoes the install, and it is the alert, not the audit trail — the signed inbox_acceptance block is the record. Real-time push to a remote operator from a headless peer is not this: a peer egresses only to the Master, so that rides Phase 4 telemetry, and a peer with no kdeconnect-cli honestly no-ops the ping while still leaving the spool row."
   }
 }

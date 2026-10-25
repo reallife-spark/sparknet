@@ -34,9 +34,13 @@ real reboot of each host on 2026-10-19.
 
 | Missing | Step | Consequence |
 |---|---|---|
-| instant push (`8090`) | 7 | ACL changes are applied by hand, not POSTed to peers; Step 6's push channel already supersedes the pull direction |
 | admin services (`4220`–`4223`) | `MASTER_ADMIN_PLAN.md` | git, file share, NAT and the vector DB are contracted `spec-only` |
 | the two destructive legs | — | rollback and a replace-Master re-formation are documented and deliberately unexecuted (`../../contracts/deployment-runbook.md`) |
+
+> `8090` is no longer missing: its instant-push purpose was superseded by Step 6's
+> 9090 registry push and retired, and fabric Step 69C re-scoped it into the
+> peer→Master **intake** listener (telemetry evidence), implemented and staged (not
+> enabled). See `plans/MASTER_BUILD_PLAN.md` Step 7.
 
 `guard-apply` left this list on 2026-10-22 (build plan Step 5): the Master
 mints a canonical approval, the isolated signer signs it, the Master delivers
@@ -62,7 +66,8 @@ peer-service resolution; `make keys-check` proves no key material is in the vaul
   Ed25519 signing key and its lifecycle, authoring and revoking the node
   registry, maintaining the overlay at `10.100.0.1` with one stanza per
   authorized peer, issuing signed guard approvals, the cluster KillSwitch, the
-  instant-push listener, the idle-detection scheduler for nocturnal memory
+  peer-intake listener (telemetry evidence, `8090`), the idle-detection scheduler
+  for nocturnal memory
   pooling, and the **infrastructure administration** the user delegated to the
   Master: the fabric's git, file sharing, NAT and vector embeddings database
   (all contracted `spec-only`, `4220`–`4223`; scoped in

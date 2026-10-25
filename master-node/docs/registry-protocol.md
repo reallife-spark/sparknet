@@ -173,9 +173,10 @@ shows the installed sequence and the capabilities the entry confers.
 ### What the channel is not
 
 - **Not a pull surface.** There is no `GET` route; a peer cannot ask for a
-  registry, and the Master does not listen on a registry port. Step 7's 8090
-  pull listener is superseded in direction; it stays spec-only until it is
-  reconciled.
+  registry, and the Master does not listen on a registry port. The old Step 7
+  8090 pull listener is retired; fabric Step 69C re-scoped 8090 into the
+  peer→Master intake listener (telemetry evidence), which is a different
+  direction and carries no registry traffic.
 - **Not an authorisation.** Installing a registry grants nothing by itself: the
   capabilities are the ones the Master signed into the entry, and `evaluate`
   still enforces expiry and revocation.

@@ -56,7 +56,7 @@ infrastructure service may not load, invoke or proxy to the signing key.
 | Overlay listener | master `wg0`, one stanza per authorized peer | built | 4 |
 | Approval issuer | signs and delivers `guard-apply` payloads | **half built** — the payload is signed and nonces are tracked; nothing has delivered one to a listening peer, and no test applies an issued payload on a peer stub | 5 |
 | Registry distribution | how a signed registry reaches a peer | **not built** — the channel is unspecified (`distribution: UNSPECIFIED`); peers read an operator-placed registry | 6 |
-| Instant push (`8090`) | ACL changes POSTed to peers | **not built** — the listener is a stub and `contracts/ports.json` still records `8090` as `spec-only` | 7 |
+| Peer intake (`8090`) | peer→Master telemetry evidence (and Step 68C's RFI requests) | **built (fabric Step 69C)** — `services/sparknet-telemetry-intake.py`, overlay-only, attributed by the registry, `telemetry`-gated, records evidence and acts on nothing. The old instant-push purpose was superseded by Step 6's 9090 registry push and is retired; the unit is staged, not enabled | 7 → fabric 69C |
 | Cluster KillSwitch | fabric-wide containment | built | 8 |
 | Pooling scheduler | idle detection, pooled-memory batches | built | 9 |
 | Git / file share / NAT / vector DB (`4220`–`4223`) | infrastructure administration | **not built** — all four are `spec-only` in `contracts/ports.json` | `MASTER_ADMIN_PLAN.md` |

@@ -15,11 +15,12 @@ the tests then prove both roles still agree.
 | `registry-schema.json` | the shape of the registry document and its entries: required fields, types, the `signature_b64` field name, and the decided distribution channel (a pointer to `registry-publication.json`) |
 | `registry-publication.json` | the channel that carries a registry: the five-field publication, the signed projection and digest, the monotonic sequence, the peer's acceptance order and refusal codes, and the documented re-delivery window |
 | `reflex-schema.json` | the typed decision contract for the reflex layer — a local sensor, never authority; abstain first-class, and a backend vocabulary with no egress member |
-| `rfi-schema.json` | the request-for-information channel: the peer's signed request, the Master's signed answer, the digest that binds its content, the `01_Inbox/` destination rule, the acceptance order and the refusal vocabulary. The listener is **not** built — the envelope and the install rule are |
+| `rfi-schema.json` | the request-for-information channel: the peer's overlay-attributed request, the Master's signed answer, the digest that binds its content, the `01_Inbox/` destination rule, the acceptance order and the refusal vocabulary. The answer transport (listener + composer) is built; the request channel is Step 68 |
 | `ports.json` | every listener and dial target, with `implementation_state` (code) kept separate from `runtime` (observed on a given host) |
 | `guard-protocol.md` | the Master↔peer approval conversation |
 | `guard-approval.json` | the approval envelope itself: the eight signed fields, the canonicalisation rule, where the capability comes from, and the transport (route, port, envelope fields) |
 | `health-protocol.md` | peer liveness and eviction: probe rhythm, activity-trumps-eviction, the full-dark rule, no-authority guarantee |
+| `telemetry-schema.json` | peer→Master observability evidence (Phase 4): overlay-attributed, unsigned, `kind`-tagged reports the Master records and acts on nothing — no authority on the telemetry path. The envelope is built; the intake listener is Step 69C |
 | `share-protocol.md` | the peer↔peer sharing regime: offers, share types, the four clocks, trust levels, isolation, evidence |
 | `consensus-protocol.md` | how three nodes agree on who holds the signing key: election, the cluster trust root, re-formation |
 | `deployment-runbook.md` | the operational procedure for bringing the real three-node system up on actual hosts (Step 13): overlay, election, signer unit, registry, rollback |

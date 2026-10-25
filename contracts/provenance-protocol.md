@@ -6,11 +6,14 @@ normative machine-readable form is `contracts/tracking-schema.json`
 what a reader may conclude from them.
 
 What is built and what is not: the layout, the tracking block, the user record,
-the ledger records, the secret index and the local signing tooling are built as
-of this step. **The transport that would deliver inbox items — the email service
-and node-to-node delivery — is specified, not built.** Every rule below that
-describes who may act on an arriving item is a policy awaiting a listener, and
-`contracts/ports.json` is what says so.
+the ledger records, the secret index and the local signing tooling are built.
+**One node-to-node delivery leg is built too: a Master-signed RFI answer pushed to
+`POST /api/v1/rfi` on the guard (9090) and installed into `01_Inbox/` with an
+`inbox_acceptance` record** (`contracts/rfi-schema.json`, fabric Step 67D). The
+email service, the RFI *request* leg, and the dispatch bridge as a server remain
+specified, not built. Every rule below that describes who may act on an arriving
+item is a policy; for the RFI answer channel a listener now enforces it, and
+`contracts/ports.json` names the route that says so.
 
 ## The chain of accountability
 
@@ -265,7 +268,21 @@ agent sanitizes it before anything downstream reads it.
   `00_System/user.md`, then treated as peer-origin.
 
 Reviewer agents: `agents/vault-curator` on a peer, `.opencode/agents/evidence-reviewer`
-on the Master. The transport that would deliver these items does not exist yet.
+on the Master. The RFI *answer* leg of the transport is built — a Master-signed
+answer arrives on `POST /api/v1/rfi` (guard, 9090) and is installed with an
+`inbox_acceptance` record; the email service and the RFI *request* leg are not.
+
+An item that arrives over the transport is also **notified** to the human, because
+acceptance is a human act and an unnoticed item is an unaccepted one. The node's
+own mechanism is `shared/sparknet-notify.py` — a durable arrival spool
+(`<state-dir>/notifications/arrivals.jsonl`, 0600) plus a best-effort KDE Connect
+ping — not the fabric-root plugin (`scripts/plugins/kde-notify.ts`), which is
+deliberately not bundled into nodes; the Master console's ping delegates to the
+same module rather than keeping a second copy. The notification is the *alert*; the
+`inbox_acceptance` block is the *audit trail*. It never blocks or undoes the
+install, and a headless peer with no `kdeconnect-cli` honestly no-ops the ping
+while still leaving the spool row. Real-time push to a remote operator from such a
+peer rides Phase 4 telemetry to the Master, not a local ping.
 
 ## Secrets
 

@@ -309,10 +309,15 @@ are delivered to as well, because the node being revoked has to learn about it.
 A peer that refuses or is offline is recorded, and the command exits non-zero —
 the installed `sparknet-registry-deliver.timer` retries every 60 s.
 
-`sparknet-registry-listener.py` remains as a **superseded** stub for the Step 7
-pull design. It is not part of the registry channel: there is no pull surface,
-and the Master listens on no registry port. `tests/test_listener_8090.py` still
-covers the stub's bind rule until Step 7 is reconciled.
+`sparknet-telemetry-intake.py` is the Master's **peer-intake listener** on `8090`
+(fabric Step 69C, re-scoped from the retired instant-push stub, which is deleted).
+It binds `10.100.0.1` only, attributes each `POST /api/v1/telemetry` by the
+WireGuard-authenticated source via the signed registry (refusing an unregistered,
+revoked or `telemetry`-ungranted peer before reading the body), verifies the report
+with `shared/sparknet-authz.py::verify_telemetry_report`, and records it as evidence
+— it carries no authority. `systemd/sparknet-telemetry-intake.service` is staged by
+`make telemetry-intake-unit`, not enabled. `tests/test_telemetry_intake.py` binds a
+real socket and covers each refusal. See `../../MASTER_OBSERVABILITY_DESIGN.md`.
 
 ### `sparknet-killswitch.py` — the KillSwitch
 
@@ -579,7 +584,7 @@ The suite:
 | `test_registry_dist.py` | Registry distribution end to end: publish → push → the peer's own guard installs, refuses a tampered artifact and refuses a replay. |
 | `test_admin_console.py` | The admin console. |
 | `test_killswitch.py` | The KillSwitch. |
-| `test_listener_8090.py` | The superseded 8090 pull-listener stub and its bind rule. |
+| `test_telemetry_intake.py` | The 8090 peer-intake listener over a real socket: registry attribution, the `telemetry` capability gate, revocation, replay, and the no-authority posture. |
 | `test_wg_anchor.py`, `test_wg_render.py` | The overlay anchor and the rendering. |
 | `test_step1_keypair.py` | The three-key generation. |
 | `test_master_scripts.py` | The role's scripts. |

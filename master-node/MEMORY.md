@@ -9,12 +9,18 @@ Updated: 2026-10-23
 
 ## Standing State
 
-- **Plan cursor**: `plans/MASTER_BUILD_PLAN.md` `current: 7`. Phase 0 (13–18) and
-  honest verification (19) are complete; **Steps 1, 2, 5 and 6 are complete**
-  (Steps 2 and 5 on 2026-10-22, Step 6 on 2026-10-23). Still unbuilt:
-  `10.100.0.1:8090` (7, whose pull direction Step 6's push channel supersedes),
-  signer liveness (20), the admin console's remaining leg (21). The KillSwitch
-  (8), the pooling scheduler (9) and the sharing regime (10–12) are built.
+- **Plan cursor**: `plans/MASTER_BUILD_PLAN.md` `current: 20`. Phase 0 (13–18) and
+  honest verification (19) are complete; **Steps 1, 2, 5, 6 and 7 are complete**
+  (Steps 2 and 5 on 2026-10-22, Step 6 on 2026-10-23). **Step 7 (8090) was
+  re-scoped and closed by fabric Step 69C (2026-10-25)**: the instant-push purpose
+  was superseded by Step 6's 9090 push and retired (the `sparknet-registry-listener.py`
+  stub and the text-inspection `test_listener_8090.py` are deleted), and 8090 is now
+  the peer→Master **intake** listener — `services/sparknet-telemetry-intake.py` +
+  `systemd/sparknet-telemetry-intake.service` (staged, not enabled), overlay-only,
+  registry-attributed, `telemetry`-gated, evidence-not-authority, tested by
+  `test_telemetry_intake.py` over a real socket. Still unbuilt: signer liveness (20),
+  the admin console's remaining leg (21). The KillSwitch (8), the pooling scheduler
+  (9) and the sharing regime (10–12) are built.
 - **`$SPARKNET_STATE_DIR` is outside the vault.** `$XDG_STATE_HOME/sparknet/master-node`
   or `~/.local/state/...`. Moving it was structural, not cosmetic: the admin surface
   bind-mounts the vault read-only into an LLM container, so the old default

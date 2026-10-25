@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "contract": "telemetry-schema",
+  "description": "Peer -> Master observability evidence: how a peer pushes status/metrics/liveness/checkpoint/inbox-alert reports to the Master, which records them and acts on nothing. The reference implementation is shared/sparknet-authz.py (build_telemetry_report / verify_telemetry_report); this file is the normative statement. Design and rationale: MASTER_OBSERVABILITY_DESIGN.md (fabric Step 69).",
+
+  "why": "Phase 4 is Master observability WITHOUT touching the data path. Peers talk directly by design and the Master is authority-plane only at 10.100.0.1/32, so monitoring is signed evidence pushed to the Master, never interception. Telemetry carries no authority: it informs, records, surfaces and flags; it never grants, revokes, escalates, widens a permission or approves a guard application.",
+
+  "report": {
+    "direction": "peer -> Master, onto the Master's peer-intake listener (8090 re-scoped, POST /api/v1/telemetry)",
+    "fields": ["expires_at", "issued_at", "kind", "nonce", "payload", "peer_fingerprint"],
+    "kinds": ["status", "metrics", "liveness", "checkpoint_anchor", "inbox_alert"],
+    "kinds_note": "A closed vocabulary. kind routes the report to what records it; the per-kind payload's meaning belongs to the consumer sub-step (69D status/metrics, 69E liveness, 69F checkpoint_anchor, 69H inbox_alert), not to the envelope, so a new kind's internals never reshape it.",
+    "attribution": "the authenticated overlay, NOT a signature — see MASTER_OBSERVABILITY_DESIGN.md and RFI_REQUEST_DESIGN.md (Step 68A). The Master derives the sender's fingerprint from the WireGuard-authenticated source address via its own registry (overlay_ipv4 -> fingerprint) and refuses a report whose peer_fingerprint field disagrees. Nothing binds a peer fingerprint to a node signing public key, so a node-key signature would be unverifiable theatre; on the overlay the tunnel is the identity.",
+    "unsigned": "the report carries no signature_b64, and there is deliberately no sign_telemetry_report. nonce + expires_at are the replay/freshness guard a signed envelope's freshness fields would otherwise be.",
+    "verify": "shared/sparknet-authz.py::verify_telemetry_report — a validator + fingerprint match, not a signature check: exact field set, kind in the vocabulary, payload an object, peer_fingerprint == the overlay-derived expected_fingerprint, expiry, future-issue skew, nonce replay. Returns (ok, reason); never raises.",
+    "payload": "an opaque JSON object. The envelope validates only that it IS an object; each kind's payload shape is the consumer's contract.",
+    "no_authority": "a telemetry report cannot grant, revoke, escalate, widen a permission or approve a guard application. The Master records it as evidence and may surface or flag; it never acts on it as authority. Any leg that would let observability touch an authority path is a contract change with its own step."
+  },
+
+  "refusals": {
+    "off_overlay": "the source is not a registered, non-revoked peer overlay address — refused by the listener's source gate before the body is read",
+    "malformed": "not an object, wrong field set, a required field empty or non-string, kind outside the vocabulary, or payload not an object",
+    "wrong_peer": "peer_fingerprint is not the overlay-derived fingerprint of the sender",
+    "expired": "the report arrived after expires_at",
+    "not_yet_valid": "issued_at is further in the future than the skew allowance",
+    "replayed_nonce": "this nonce has already been seen on this node"
+  },
+
+  "transport": {
+    "method": "POST",
+    "path": "/api/v1/telemetry",
+    "port": 8090,
+    "bound_by": "master",
+    "note": "The Master's peer-intake listener, re-scoped from the superseded instant-push (8090) — which resolves Master Step 7's open 'survives / re-scoped / retired' question. Overlay-only, source-gated to registered non-revoked peers. Step 68C's RFI request route joins this same listener as a sibling route, so the two steps build one surface rather than two.",
+    "capability": "telemetry (peer-held): a peer without it does not push. Distinct from admin-supervise (Master-held), which gates the PULL feed (list_events over the bridge /admin/*) — push and pull are complementary, and the capability split is the point.",
+    "implementation_state": "the envelope is implemented; the listener, the pusher and the port re-scope are NOT — see implementation_state below"
+  },
+
+  "implementation_state": {
+    "envelope": "implemented (fabric Step 69B) — shared/sparknet-authz.py builds and verifies a report",
+    "listener": "NOT BUILT. The Master has no peer-facing intake listener yet; 69C re-scopes 8090 and serves POST /api/v1/telemetry. Until then nothing arrives over a wire and contracts/ports.json still marks 8090 spec-only.",
+    "pusher": "NOT BUILT. No peer service pushes reports; 69D builds it, gated on the telemetry capability.",
+    "consumers": "NOT BUILT. liveness (69E), checkpoint anchors (69F), flagged surfacing (69G) and the inbox_alert (69H) each ride this envelope in their own sub-step.",
+    "honest_pair": "implemented reference envelope, nothing deployed here; the cross-node leg is a human's to confirm on a live pair"
+  }
+}

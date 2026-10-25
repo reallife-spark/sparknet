@@ -53,9 +53,7 @@ import argparse
 import importlib.util
 import json
 import os
-import shutil
 import socket
-import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -363,26 +361,31 @@ def dispatch(
 
 
 # --- pushing to KDE Connect ---------------------------------------------------
+#
+# The implementation lives once in shared/sparknet-notify.py, which the peer's
+# inbox-arrival path (fabric Step 67B) also calls. These are thin delegations so
+# `console.notify_kde` keeps resolving for callers and tests while there is a
+# single copy of "how a node pings a device" — a second copy here would drift from
+# the one the guard uses, which is the same failure the repo forbids for authz.
+
+_notify_module = None
+
+
+def load_notify(shared_dir: Path | None = None):
+    """The one node-local notification implementation, never a copy of it."""
+    global _notify_module
+    if _notify_module is None:
+        shared = shared_dir or _shared_dir()
+        _notify_module = _load("sparknet_console_notify", shared / "sparknet-notify.py")
+    return _notify_module
 
 
 def kde_devices_from_env(env: dict[str, str] | None = None) -> list[str]:
-    raw = (env if env is not None else os.environ).get("SPARKNET_KDE_DEVICES", "")
-    return [entry.strip() for entry in raw.split(",") if entry.strip()]
+    return load_notify().kde_devices_from_env(env)
 
 
 def discover_kde_devices(*, which: Any = None, run: Any = None) -> list[str]:
-    """The plugin's discovery, in Python: ask kdeconnect-cli for reachable ids."""
-    which = which or shutil.which
-    run = run or subprocess.run
-    if which("kdeconnect-cli") is None:
-        return []
-    try:
-        result = run(["kdeconnect-cli", "-a", "--id-only"], capture_output=True, text=True, timeout=10)
-    except (OSError, subprocess.SubprocessError):
-        return []
-    if result.returncode != 0:
-        return []
-    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    return load_notify().discover_kde_devices(which=which, run=run)
 
 
 def notify_kde(
@@ -393,25 +396,13 @@ def notify_kde(
     run: Any = None,
     timeout: float = 10.0,
 ) -> bool:
-    """Ping paired devices. A missing binary or a failed ping is a no-op, never
-    an error: a notification is a courtesy and must not block the console."""
-    which = which or shutil.which
-    run = run or subprocess.run
-    if which("kdeconnect-cli") is None:
-        return False
-    ids = list(devices) if devices is not None else discover_kde_devices(which=which, run=run)
-    if not ids:
-        return False
-    for device in ids:
-        try:
-            run(
-                ["kdeconnect-cli", "-d", device, "--ping-msg", f"sparknet: {body}"],
-                capture_output=True,
-                timeout=timeout,
-            )
-        except (OSError, subprocess.SubprocessError):
-            continue
-    return True
+    """Ping paired devices; a no-op when the binary or a device is absent.
+
+    Delegates to shared/sparknet-notify.py so the console and a peer's inbox
+    arrival ping through one implementation. A notification is a courtesy and must
+    not block the console.
+    """
+    return load_notify().notify_kde(body, devices=devices, which=which, run=run, timeout=timeout)
 
 
 # --- the console --------------------------------------------------------------

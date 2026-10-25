@@ -16,7 +16,7 @@ recorded in `../security/key-management.md`; the topology is asserted in
 
 ## What it will sign
 
-Exactly five payload types, all built from structured input:
+Exactly six payload types, all built from structured input:
 
 | Operation | Signs |
 |---|---|
@@ -25,6 +25,7 @@ Exactly five payload types, all built from structured input:
 | `sign-guard-approval` | a `guard-apply` approval for one named peer |
 | `sign-cluster-job` | a cluster job, via `authz.cluster_job_message` |
 | `sign-admin-request` | an `admin-supervise` admin request, via `authz.admin_request_message` |
+| `sign-rfi-answer` | an RFI answer for one named peer's inbox, via `authz.rfi_answer_message` |
 
 There is deliberately **no "sign these bytes" operation**. The build plan's
 wording for this step was "accepts only canonical bytes already co-signed by the
@@ -123,6 +124,7 @@ SIGN_OPERATIONS = (
     "sign-guard-approval",
     "sign-cluster-job",
     "sign-admin-request",
+    "sign-rfi-answer",
 )
 READ_OPERATIONS = ("capabilities", "public-key", "root-id", "ping")
 OPERATIONS = SIGN_OPERATIONS + READ_OPERATIONS
@@ -541,6 +543,8 @@ class Signer:
             return self._sign_cluster_job(op, request)
         if op == "sign-admin-request":
             return self._sign_admin_request(op, request)
+        if op == "sign-rfi-answer":
+            return self._sign_rfi_answer(op, request)
         return self._sign_guard_approval(op, request)
 
     def _sign_registry_entry(self, op: str, request: dict[str, Any]) -> dict[str, Any]:
@@ -715,6 +719,53 @@ class Signer:
         return {
             "ok": True,
             "admin_request": {**unsigned, "signature_b64": signature_b64},
+            "ledger_block": block["hash"],
+        }
+
+    def _sign_rfi_answer(self, op: str, request: dict[str, Any]) -> dict[str, Any]:
+        """Sign one RFI answer (contracts/rfi-schema.json) for a peer's 01_Inbox.
+
+        The payload arrives base64-encoded because JSON cannot carry raw bytes; it
+        is decoded strictly here and ``content_sha256`` is computed by
+        ``authz.sign_rfi_answer`` from those bytes, never taken from the caller —
+        the same rule as the registry publication, so a caller cannot hand the
+        signer a digest naming one payload and content that is another. The
+        destination ``item_name`` is inside the signed projection, so a name that
+        traverses out of ``01_Inbox/`` is refused here rather than at the write.
+        An empty payload is legitimate ("nothing found"); refusing it would push a
+        Master to invent content.
+        """
+        answer = request.get("answer")
+        if not isinstance(answer, dict):
+            return self._refuse("sign-rfi-answer requires an 'answer' object")
+
+        content_b64 = answer.get("content_b64")
+        if not isinstance(content_b64, str):
+            return self._refuse(
+                "sign-rfi-answer requires 'content_b64' (the answer payload, base64; '' is a legitimate empty answer)"
+            )
+        try:
+            content = self.authz.decode_b64_strict(content_b64, what="rfi answer content")
+        except self.authz.AuthzError as exc:
+            return self._refuse(f"rfi answer content is not valid base64: {exc}")
+
+        try:
+            signed = self.authz.sign_rfi_answer(
+                content=content,
+                item_name=answer.get("item_name"),
+                peer_fingerprint=answer.get("peer_fingerprint"),
+                request_id=answer.get("request_id"),
+                master_private_key=self.key,
+                now=(self.clock or (lambda: datetime.now(timezone.utc)))(),
+            )
+        except self.authz.AuthzError as exc:
+            return self._refuse(f"refusing to sign this rfi answer: {exc}")
+
+        signature_b64 = signed["signature_b64"]
+        block = self._record(op, str(signed["request_id"]), signature_b64)
+        return {
+            "ok": True,
+            "answer": signed,
             "ledger_block": block["hash"],
         }
 

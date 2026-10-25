@@ -50,7 +50,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 from http.server import ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 try:
     from cryptography.exceptions import InvalidSignature
@@ -116,6 +116,24 @@ class Refusal(Exception):
         self.status = status
         self.code = code
         self.detail = detail
+
+
+#: Maps an RFI answer refusal reason (contracts/rfi-schema.json `refusals`, produced
+#: by shared/sparknet-authz.py::verify_rfi_answer) to the HTTP status the guard
+#: sends. `off_overlay` is absent because the source gate in do_POST refuses it
+#: before the body is ever read. Attribution failures are 403, a bad artifact is
+#: 400, and a duplicate is 409 — the same split the registry route uses.
+RFI_REFUSAL_STATUS = {
+    "malformed": 400,
+    "extra_fields": 400,
+    "missing_fields": 400,
+    "unsafe_item_name": 400,
+    "digest_mismatch": 400,
+    "bad_signature": 403,
+    "wrong_peer": 403,
+    "expired": 403,
+    "duplicate_answer": 409,
+}
 
 
 # --- audit ledger ------------------------------------------------------------
@@ -459,6 +477,32 @@ def _load_registry_install_module():
     return _load_shared_module("sparknet-registry-install.py", "sparknet_registry_install")
 
 
+def _load_rfi_install_module():
+    """The shared RFI acceptance rule: what makes an answer installable.
+
+    Loaded by path so the guard's ``/api/v1/rfi`` route and any operator-carried
+    offline install accept and refuse exactly the same things — the same reason the
+    registry rule lives in ``shared/`` rather than once per surface.
+    """
+    return _load_shared_module("sparknet-rfi-install.py", "sparknet_rfi_install")
+
+
+def _load_provenance_module():
+    """The shared provenance tool: it builds and appends the ``inbox_acceptance``
+    block an installed RFI answer records. Loaded by path, one copy."""
+    return _load_shared_module("sparknet-provenance.py", "sparknet_provenance")
+
+
+def _load_notify_module():
+    """The shared node-local notifier: it tells the human an item arrived.
+
+    Loaded by path so the peer's inbox-arrival ping and the Master console's use
+    the one implementation (``shared/sparknet-notify.py``). Optional: a node
+    without it still installs — notification is a courtesy, never a gate.
+    """
+    return _load_shared_module("sparknet-notify.py", "sparknet_notify")
+
+
 def _load_http_module():
     """The shared sparknet-http.py: the one handler base every listener uses.
 
@@ -661,6 +705,128 @@ class Guard:
             },
         )
         return {**result, "audit_block": block["hash"]}
+
+    # -- RFI answer intake --------------------------------------------------
+
+    def installed_request_ids(self) -> list[str]:
+        """The request_ids this node has already installed an answer for, so a
+        re-delivery is a duplicate rather than a second copy of the same thing."""
+        install = _load_rfi_install_module()
+        if install is None:
+            return []
+        return install.installed_request_ids(self.vault_root)
+
+    def handle_rfi(self, artifact: Any) -> dict[str, Any]:
+        """Install one signed RFI answer into 01_Inbox, or refuse it.
+
+        This is the peer's half of the intake channel (contracts/rfi-schema.json):
+        the Master answers a request-for-information by pushing a digest-bound,
+        signed answer to POST /api/v1/rfi on this port. Like the registry route it
+        is *not* gated on the peer's own capability — information the Master
+        addressed to this node must reach it — and the acceptance rule lives once
+        in shared/sparknet-rfi-install.py, so this live route and an operator
+        carrying an artifact to a node with no daemon cannot disagree about what a
+        peer trusts.
+        """
+        with self._apply_lock:
+            return self._handle_rfi_locked(artifact)
+
+    def _handle_rfi_locked(self, artifact: Any) -> dict[str, Any]:
+        authz = _load_authz_module()
+        install = _load_rfi_install_module()
+        provenance = _load_provenance_module()
+        if self.master_pubkey is None:
+            raise Refusal(503, "no_master_key", "guard has no Master public key loaded")
+        if authz is None or install is None or provenance is None:
+            raise Refusal(503, "no_contract", "shared rfi code is not available")
+
+        mine = self.own_fingerprint()
+        if mine is None:
+            # An answer is bound to the peer it was prepared for; a node that
+            # cannot say who it is cannot check that binding, so it refuses rather
+            # than installing material it cannot attribute to itself.
+            raise Refusal(503, "no_identity", "guard cannot determine this node's fingerprint")
+
+        if self.dry_run:
+            # Verify only, never write — the contract the registry route honours
+            # too. No user record is needed because nothing is recorded.
+            ok, reason, _content = authz.verify_rfi_answer(
+                artifact,
+                master_public_key=self.master_pubkey,
+                peer_fingerprint=mine,
+                installed_request_ids=self.installed_request_ids(),
+            )
+            if not ok:
+                self._refuse_rfi(reason, artifact)
+            return {
+                "status": "RFI_VERIFIED_DRY_RUN",
+                "request_id": str(artifact.get("request_id")),
+                "content_sha256": str(artifact.get("content_sha256")),
+                "item": f"01_Inbox/{artifact.get('item_name')}",
+            }
+
+        # Installing appends a dual-signed inbox_acceptance block, which needs a
+        # filled user record and this node's keys. Check before writing anything:
+        # accept_answer writes the item first, so a vault that cannot record the
+        # acceptance would leave an item with no trail and a re-delivery refused
+        # as a duplicate. Failing here, before the write, keeps the inbox honest.
+        try:
+            record = provenance.parse_user_record(self.vault_root)
+            if not provenance.user_is_filled(record):
+                raise provenance.ProvenanceError("user record is unfilled")
+        except Exception:
+            raise Refusal(503, "no_user_record", "this vault has no filled user record; run `make user-init`") from None
+
+        result = install.accept_answer(
+            self.vault_root,
+            artifact,
+            authz=authz,
+            provenance=provenance,
+            master_public_key=self.master_pubkey,
+            peer_fingerprint=mine,
+            user_record=record,
+        )
+        if result["status"] == "refused":
+            self._refuse_rfi(result["reason"], artifact)
+
+        block = self.ledger.append(
+            "rfi_installed",
+            {
+                "request_id": result["request_id"],
+                "content_sha256": result["content_sha256"],
+                "item": result["item"],
+                "acceptance_id": result.get("acceptance_id"),
+            },
+        )
+
+        # Tell the human an item landed (fabric Step 67B): acceptance is a human
+        # act, so an unnoticed item is an unaccepted one. Best-effort and *after*
+        # the install and the ledger append, so a notification failure can never
+        # undo or block a delivery that already succeeded. The durable record is
+        # the inbox_acceptance block above; this is the alert that reaches a person.
+        notified = False
+        notify = _load_notify_module()
+        if notify is not None:
+            outcome = notify.notify_inbox_arrival(
+                self.vault_root,
+                item=result["item"],
+                source="master-node",
+                request_id=result["request_id"],
+            )
+            notified = bool(outcome.get("notified"))
+        return {**result, "audit_block": block["hash"], "notified": notified}
+
+    def _refuse_rfi(self, reason: str, artifact: Any) -> NoReturn:
+        """Record an RFI refusal in the guard ledger, then raise it as HTTP.
+
+        The reason is a fixed string from the contract's vocabulary, so it maps to
+        a stable status and an operator can grep the ledger for it. The detail
+        never echoes the artifact: a refused answer is untrusted input.
+        """
+        request_id = artifact.get("request_id") if isinstance(artifact, dict) else None
+        self.ledger.append("rfi_refused", {"code": reason, "request_id": request_id})
+        status = RFI_REFUSAL_STATUS.get(reason, 400)
+        raise Refusal(status, reason, f"the answer was refused: {reason}")
 
     # -- request handling ---------------------------------------------------
 
@@ -871,7 +1037,7 @@ def _make_handler(guard: Guard, server_name: str):  # noqa: C901 - HTTP surface 
             )
 
         def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
-            if self.path not in ("/api/v1/critical-file/patch", "/api/v1/registry"):
+            if self.path not in ("/api/v1/critical-file/patch", "/api/v1/registry", "/api/v1/rfi"):
                 self._send(404, {"error": "not found"})
                 return
             client = self.client_address[0]
@@ -907,7 +1073,12 @@ def _make_handler(guard: Guard, server_name: str):  # noqa: C901 - HTTP surface 
             except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                 self._send(400, {"error": str(exc), "code": "malformed_packet"})
                 return
-            handler = guard.handle_registry if self.path == "/api/v1/registry" else guard.handle_patch
+            handlers = {
+                "/api/v1/registry": guard.handle_registry,
+                "/api/v1/rfi": guard.handle_rfi,
+                "/api/v1/critical-file/patch": guard.handle_patch,
+            }
+            handler = handlers[self.path]
             try:
                 self._send(200, handler(packet))
             except Refusal as refusal:
