@@ -894,6 +894,118 @@ def test_grant_checks_reuse_the_guard_check_order(ports: dict):
     assert grant["fields"]["parent_grant_id"], "delegation must be representable, since subagents inherit grants"
 
 
+def test_grant_projection_matches_the_contract(authz: ModuleType):
+    """The signed grant projection is one field list stated in two places, so pin both.
+
+    The registry side already does this for `SIGNED_FIELDS`; the grant side did
+    not, which let `grant.fields` in the contract and `GRANT_FIELDS` in the
+    implementation drift with nothing red. That is not a documentation problem: a
+    grant whose signer projects one field set and whose verifier projects another
+    is a grant that verifies here and fails on a node, or the reverse.
+
+    Compared as sets, not tuples — `grant_message` serialises with `sort_keys`, so
+    the order fields are listed in cannot change the bytes, and pinning an order
+    would fail a harmless reorder while still missing a real one.
+    """
+    grant = load("identity-schema.json")["grant"]
+    declared = set(grant["fields"])
+    assert declared == set(authz.GRANT_FIELDS), (
+        f"grant projection drifted: contract-only {sorted(declared - set(authz.GRANT_FIELDS))}, "
+        f"code-only {sorted(set(authz.GRANT_FIELDS) - declared)}"
+    )
+    # Every required field must exist in the projection, or a grant could be
+    # canonicalised without a field the contract says it must carry.
+    assert set(authz.GRANT_REQUIRED) <= set(authz.GRANT_FIELDS)
+    # The optional ones are optional on purpose: null is a meaning, not a gap.
+    for optional in ("overlay_ipv4", "vault_scope", "parent_grant_id", "operator_os"):
+        assert optional in authz.GRANT_FIELDS
+        assert optional not in authz.GRANT_REQUIRED, (
+            f"{optional} is required, so a grant cannot express 'none attested' — "
+            f"and for operator_os that would force a mint to invent an OS identity"
+        )
+
+
+def test_operator_os_is_a_closed_normalised_shape(authz: ModuleType):
+    """The attested OS identity must not be coercible into a second canonical form.
+
+    It caps what an agent may do, so two spellings of one identity producing two
+    signatures — or a wrong type being quietly converted — would make the ceiling
+    depend on how a caller shaped its input.
+    """
+    attested = {"uid": 1000, "euid": 1000, "username": "operator", "groups": ["users", "docker"], "is_root": False}
+    normalised = authz.normalise_operator_os(attested)
+    assert normalised["groups"] == ["docker", "users"], "groups are sorted and deduplicated"
+    # Group order must not change the canonical bytes.
+    reordered = authz.normalise_operator_os({**attested, "groups": ["docker", "users", "users"]})
+    assert reordered == normalised
+    assert authz.normalise_operator_os(None) is None
+
+    for bad in (
+        {**attested, "uid": "1000"},  # wrong type, must not be coerced
+        {**attested, "is_root": 0},  # bool required, and 0 is not False here
+        {**attested, "uid": True},  # bool is an int subclass; uid 1 is a lie
+        {**attested, "uid": -1},
+        {**attested, "username": ""},
+        {**attested, "groups": "docker"},
+        {**attested, "groups": [1000]},
+        {k: v for k, v in attested.items() if k != "username"},  # missing
+        {**attested, "sudo": True},  # undeclared field
+        "not-an-object",
+    ):
+        with pytest.raises(authz.AuthzError):
+            authz.normalise_operator_os(bad)
+
+
+def test_a_grant_carries_its_operator_os_inside_the_signature(authz: ModuleType):
+    """Signed, so the ceiling travels with the grant and cannot be raised in transit."""
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    master_key = Ed25519PrivateKey.generate()
+    identity = {
+        "node_id": "peer-fixture-01",
+        "role": "peer",
+        "wireguard_public_key_b64": "ZmFrZS13Z2lwdW5pY21hcHViaWMta2V5LWZvci10ZXN0cw==",
+        "overlay_ipv4": "10.100.0.7",
+        "requested_capabilities": ["telemetry"],
+    }
+    attested = {"uid": 1000, "euid": 1000, "username": "operator", "groups": ["users"], "is_root": False}
+    grant = authz.mint_grant(
+        node_identity=identity,
+        grant_id="GRANT-OS-1",
+        user_identity="U-20161",
+        conversation_key="key-1",
+        capabilities=["telemetry"],
+        vault_scope=["05_Knowledge"],
+        ttl_minutes=60,
+        nonce="nonce-os-1",
+        master_private_key=master_key,
+        operator_os=attested,
+    )
+    assert grant["operator_os"] == authz.normalise_operator_os(attested)
+    assert "operator_os" in authz.grant_message(grant).decode()
+
+    # Widening the ceiling invalidates the signature: it is inside the envelope.
+    escalated = {**grant, "operator_os": {**grant["operator_os"], "is_root": True}}
+    assert authz.grant_message(escalated) != authz.grant_message(grant)
+    assert not authz.verify_signature(
+        master_key.public_key(), escalated["signature_b64"], authz.grant_message(escalated)
+    )
+
+    # And a grant minted with no attestation says so rather than implying one.
+    bare = authz.mint_grant(
+        node_identity=identity,
+        grant_id="GRANT-OS-2",
+        user_identity="U-20161",
+        conversation_key="key-1",
+        capabilities=["telemetry"],
+        vault_scope=[],
+        ttl_minutes=60,
+        nonce="nonce-os-2",
+        master_private_key=master_key,
+    )
+    assert bare["operator_os"] is None
+
+
 def test_share_endpoints_are_declared_and_separate(ports: dict):
     """Passing and sharing need independent grants, so they cannot share a port."""
     declared = {spec["service"]: int(n) for n, spec in ports["ports"].items()}

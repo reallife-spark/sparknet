@@ -17,7 +17,7 @@
       "contract": "identity-schema",
       "file": "identity-schema.json",
       "schema_version": "1.0",
-      "sha256": "0073b887b92a407cc6c0d6ebd75871cbfc81bf3eda45dabe95548cf5bb3932b3"
+      "sha256": "bf4c51af6b13d8ab736aa9867d43ecfffd4de083bbb6c0380196fa76f634ae2e"
     },
     {
       "contract": "overlay",

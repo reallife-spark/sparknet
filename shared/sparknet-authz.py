@@ -906,12 +906,66 @@ GRANT_FIELDS = (
     "expires_at",
     "nonce",
     "parent_grant_id",
+    "operator_os",
 )
 
+#: The OS identity of the human operating the session, attested when the grant is
+#: minted. Inside the signed projection because it *caps* what the agent may do:
+#: an unsigned one could be widened by whoever presents the grant, which is
+#: precisely the privilege the field exists to deny. It is deliberately not the
+#: uid of the daemon serving the request — a bridge running as root would then
+#: hand every session root, and the cap would be a property of how the node was
+#: started rather than of who is driving it.
+OPERATOR_OS_FIELDS = ("uid", "euid", "username", "groups", "is_root")
+
+
+def normalise_operator_os(value: Any) -> dict[str, Any] | None:
+    """Canonicalise an attested OS identity, or None when none was attested.
+
+    Strict rather than coercive: the canonical bytes a signature covers must not
+    depend on how a caller happened to shape the input, so a wrong type is refused
+    instead of silently converted. ``groups`` is sorted and de-duplicated for the
+    same reason a grant's capabilities are — two orderings of one set must not
+    produce two signatures.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise AuthzError("operator_os must be an object or null")
+    unknown = sorted(set(value) - set(OPERATOR_OS_FIELDS))
+    if unknown:
+        raise AuthzError(f"operator_os has undeclared field(s): {', '.join(unknown)}")
+    missing = [name for name in OPERATOR_OS_FIELDS if name not in value]
+    if missing:
+        raise AuthzError(f"operator_os missing field(s): {', '.join(missing)}")
+    for name in ("uid", "euid"):
+        # bool is an int subclass in Python, so True would otherwise pass as uid 1.
+        if isinstance(value[name], bool) or not isinstance(value[name], int):
+            raise AuthzError(f"operator_os.{name} must be an integer")
+        if value[name] < 0:
+            raise AuthzError(f"operator_os.{name} must not be negative")
+    if not isinstance(value["username"], str) or not value["username"]:
+        raise AuthzError("operator_os.username must be a non-empty string")
+    groups = value["groups"]
+    if not isinstance(groups, list) or not all(isinstance(g, str) for g in groups):
+        raise AuthzError("operator_os.groups must be a list of strings")
+    if not isinstance(value["is_root"], bool):
+        raise AuthzError("operator_os.is_root must be a boolean")
+    return {
+        "uid": value["uid"],
+        "euid": value["euid"],
+        "username": value["username"],
+        "groups": sorted(set(groups)),
+        "is_root": value["is_root"],
+    }
+
+
 #: Fields a grant must carry non-empty before it can be canonicalised. The
-#: remaining GRANT_FIELDS (`overlay_ipv4`, `vault_scope`, `parent_grant_id`)
-#: may legitimately be empty, so they are projected as null/empty rather than
-#: required — empty `vault_scope` is the meaningful "node-level config only".
+#: remaining GRANT_FIELDS (`overlay_ipv4`, `vault_scope`, `parent_grant_id`,
+#: `operator_os`) may legitimately be empty, so they are projected as null/empty
+#: rather than required — empty `vault_scope` is the meaningful "node-level config
+#: only", and a null `operator_os` is the meaningful "no OS identity attested",
+#: which caps the session at nothing rather than pretending to know it.
 GRANT_REQUIRED = (
     "grant_id",
     "node_id",
@@ -971,6 +1025,7 @@ def mint_grant(
     nonce: str,
     master_private_key: Ed25519PrivateKey,
     parent_grant_id: str | None = None,
+    operator_os: dict[str, Any] | None = None,
     registry: dict[str, Any] | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -1033,6 +1088,7 @@ def mint_grant(
         "expires_at": (now + timedelta(minutes=ttl_minutes)).isoformat().replace("+00:00", "Z"),
         "nonce": nonce,
         "parent_grant_id": parent_grant_id,
+        "operator_os": normalise_operator_os(operator_os),
     }
     grant["signature_b64"] = sign_bytes(master_private_key, grant_message(grant))
     return grant

@@ -80,10 +80,16 @@ Updated: 2026-10-23
   `manifests/user-env-manifest.json` so the two cannot disagree; declared in
   `tracking-schema.json` `platform_record`; the template ships uncaptured. The
   master role has no declaration yet (it carries no snapshot to agree with).
-  **66D OS→AI permission binding is the only open leg**, and it is genuinely
-  unbuilt: `deny_root_escalation_attempts` and `privilege_boundaries` are
-  *declared* but nothing enforces either — the only `geteuid` uses in the tree
-  are the killswitch requiring root and the capture script recording it.
+  **66D-i done** — the operator's OS identity (`operator_os`: uid, euid,
+  username, groups, is_root) is inside the signed grant projection, because the
+  ceiling must travel with the human rather than be whatever uid the daemon
+  happens to run as. Single-repo: goSpark implements no grant handling at all.
+  Also pinned `GRANT_FIELDS` against the contract, which nothing did.
+  **66D-ii open** — enforcement at the mutating path. Correction to an earlier
+  audit: the guard is not silent about privilege (`sparknet-guard-d.py:1002`
+  refuses to arm apply without euid 0), but that *requires* privilege rather than
+  *capping* by the operator's, and `deny_root_escalation_attempts` is still
+  declared with nothing enforcing it.
   **The pin hazard is closed** (`3d3bac9`): `goagx/GOSPARK_PIN` now names goSpark
   `0a6da00`, goSpark is pushed, and goagx was republished (`9898733`) since
   `tests/test_goagx_repo.py` binds the pin to the published manifest. **Still

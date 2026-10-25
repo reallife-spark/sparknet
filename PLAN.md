@@ -2898,16 +2898,67 @@ belongs where the rest of authority belongs: inside the envelope the Master sign
       there needs the capture script reachable from the Master role first, so it is
       deferred rather than faked with a hand-written file that nothing could check.
 
-- [ ] **66D — OS permissions bound to agent permissions.** Today
-      `user-env-manifest.json` *records* `privilege_boundaries.is_root` and
-      `security-policies.json` *declares* `deny_root_escalation_attempts`, but
-      nothing checks the operator's actual OS identity against what the agent is
-      about to do. The requirement is that local user permissions **dictate**
-      agent permissions, which means an enforced check at the mutating path, not a
-      recorded fact beside it.
-      **DoD:** a mutating request is refused when the operating user lacks the OS
-      permission it would exercise; the check is on the guard/bridge path and not
-      advisory; `DoD: confirm: user` for the live leg, since this host cannot
+- [x] **66D-i — the operator's OS identity is inside the signed grant.** Operator
+      decision: the ceiling is the identity of the **human operating the session**,
+      not of the daemon serving it. A bridge or WebUI container running as root
+      would otherwise hand every session root, making the ceiling a property of how
+      the node was started rather than of who is driving it — so the identity has
+      to travel with the grant the human presents.
+      `contracts/identity-schema.json` declares `grant.fields.operator_os`
+      (`uid`, `euid`, `username`, `groups`, `is_root`) with the reasoning recorded
+      beside it, and `shared/sparknet-authz.py` adds it to `GRANT_FIELDS` — the
+      projection the signature covers — plus `normalise_operator_os`, which refuses
+      a wrong type rather than coercing it and sorts/deduplicates groups so two
+      orderings of one set cannot produce two signatures. `mint_grant` takes it as
+      a parameter, for the same reason `revoked` and `department` are parameters:
+      it is inside the envelope, so it cannot be set afterwards without invalidating
+      the signature. It stays **optional** and is always emitted, as null when
+      unattested — a mint must never have to invent an OS identity, and null means
+      "nothing attested", which caps the session at nothing rather than implying
+      root.
+      **This is single-repo, unlike 66A.** goSpark implements no grant handling at
+      all (no `grant_id`, `vault_scope`, `user_identity` or `conversation_key` in
+      any Go file), so there is no second implementation of this projection to keep
+      honest. Verified rather than assumed before relying on it.
+      **A gap this closed beside the feature:** `SIGNED_FIELDS` is pinned against
+      `contracts/registry-schema.json` by `test_shared_constants_match_the_contract`,
+      but nothing pinned `GRANT_FIELDS` against `grant.fields`. The two happened to
+      agree, so a grant whose signer projected one field set and whose verifier
+      projected another would have verified here and failed on a node with nothing
+      red in between. `test_grant_projection_matches_the_contract` pins it now, as
+      a **set** rather than a tuple, because `grant_message` serialises with
+      `sort_keys` so field order cannot change the bytes.
+      **DoD:** (1) the contract and `GRANT_FIELDS` agree and a test fails if they
+      stop; (2) `operator_os` is optional, so a grant can express "none attested";
+      (3) normalisation is closed and strict — undeclared fields refused, wrong
+      types refused rather than coerced, `is_root: 0` and `uid: True` both refused;
+      (4) widening the ceiling invalidates the signature, proven by re-signing
+      check on an `is_root`-flipped copy; (5) `make ci` green. Verified
+      2026-10-24: 3 new contract tests, peer suite unchanged at 517 passed / 1
+      skipped.
+
+- [ ] **66D-ii — enforcement at the mutating path.** The ceiling is now signed and
+      travelling; nothing yet consults it. The check belongs on the bridge's
+      mutating verbs (and the guard's), and must refuse a mutation that needs a
+      privilege the attested operator does not hold — **whatever uid the serving
+      daemon runs as**. `deny_root_escalation_attempts` in
+      `manifests/security-policies.json` also still has no enforcement behind it.
+      Correcting the audit that opened this item: the guard is *not* silent about
+      privilege — `sparknet-guard-d.py:1002` refuses to arm `--apply-enabled`
+      without `euid 0`, and `:786` gates on it, matching `security-policies.json`'s
+      `apply_requires: [..., "euid_0", ...]`. But that is the **opposite**
+      direction: it *requires* privilege for the sensitive path rather than
+      *capping* by the operator's, and the two interact. A non-root operator's
+      agent can already never satisfy `euid_0`, so guard-apply is out of reach by
+      construction — which is either the cap working, or an accident a root-run
+      WebUI would silently void. Deciding which, and making it explicit, is the
+      content of this leg.
+      **DoD:** a mutating request is refused when the attested operator lacks the
+      OS privilege it would exercise; a null `operator_os` fails closed on
+      privileged mutations rather than being read as root; the check is on the
+      request path and not advisory; the interaction with the guard's existing
+      `euid_0` requirement is stated in `security-policies.json` rather than left
+      implicit; `DoD: confirm: user` for the live leg, since this host cannot
       exercise a privilege boundary it does not have.
 
 **Deployment hazard this step creates.** Adding a field to the signed envelope
@@ -2930,7 +2981,8 @@ distribution had to be republished in the same pass. `goagx/README.md`'s
 real AGX hardware, and rewriting a measurement to match a pin makes the evidence
 say something that never happened.
 
-**Status:** 66A–66C done, `make ci` green in both repos. 66D open.
+**Status:** 66A–66C and 66D-i done, `make ci` green. 66D-ii (enforcement at the
+mutating path) is the one open leg.
 Cursor `done -> 66`. Wiring 66B into the bridge also surfaced and fixed a
 security-relevant bug beside it: the mesh size was captured once and both the
 registry and the regime were cached with no invalidation, so `mode_for()` could

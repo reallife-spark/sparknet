@@ -219,7 +219,17 @@
       "parent_grant_id": {
         "type": "string|null",
         "purpose": "the grant a subagent inherited, when this grant was delegated",
-        "delegation_note": "A subagent inherits its parent's grant unchanged \u2014 authority is not re-derived per child. Authority therefore traces to the parent grant, while the ledger separately records the acting child session id so audit traces to the child. Both are needed: the first says what was permitted, the second says who used it."
+        "delegation_note": "A subagent inherits its parent's grant unchanged — authority is not re-derived per child. Authority therefore traces to the parent grant, while the ledger separately records the acting child session id so audit traces to the child. Both are needed: the first says what was permitted, the second says who used it."
+      },
+      "operator_os": {
+        "type": "object|null",
+        "fields": ["uid", "euid", "username", "groups", "is_root"],
+        "purpose": "The OS identity of the human operating the session, attested when the grant is minted. It CAPS what the agent may do on that computer: a mutation needing a privilege the attested operator does not hold is refused, whatever the serving daemon's own uid is.",
+        "why_not_the_daemon_uid": "A bridge or WebUI container running as root would otherwise hand every session root, making the ceiling a property of how the node was started rather than of who is driving it. The cap has to travel with the human, so it is signed into the grant they present.",
+        "attested_at_mint": "mint_grant is master-side or an offline operator act, so the minter is acting for that human and can attest the identity it is running as. Null means no OS identity was attested, which caps the session at nothing rather than pretending to know it — an absent attestation must never be read as root.",
+        "inside_the_signature": "Yes, via GRANT_FIELDS. An unsigned ceiling could be raised by whoever presents the grant, which is exactly the privilege the field exists to deny.",
+        "normalisation": "shared/sparknet-authz.py::normalise_operator_os refuses a wrong type rather than coercing it, and sorts+deduplicates groups, so two orderings of one set cannot produce two signatures. Undeclared fields are refused: the projection is a closed field list.",
+        "is_root_note": "A boolean, never inferred from uid == 0, because the two can disagree and the disagreement is exactly what an enforcement check must not guess about."
       }
     },
     "inheritable": [
