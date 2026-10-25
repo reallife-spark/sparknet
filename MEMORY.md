@@ -75,7 +75,15 @@ Updated: 2026-10-23
   attested department and they differ, checked on both sides against their own
   registry view, wired into the bridge so it is not inert; 66B also found that
   `sign_authorization` could not emit the field at all, so no signer could
-  attest one. 66C platform declaration and 66D OS→AI permission binding are open.
+  attest one. **66C done** — `00_System/platform.md` (schema
+  `sparknet-platform/1`), written by the same capture run as
+  `manifests/user-env-manifest.json` so the two cannot disagree; declared in
+  `tracking-schema.json` `platform_record`; the template ships uncaptured. The
+  master role has no declaration yet (it carries no snapshot to agree with).
+  **66D OS→AI permission binding is the only open leg**, and it is genuinely
+  unbuilt: `deny_root_escalation_attempts` and `privilege_boundaries` are
+  *declared* but nothing enforces either — the only `geteuid` uses in the tree
+  are the killswitch requiring root and the capture script recording it.
   **The pin hazard is closed** (`3d3bac9`): `goagx/GOSPARK_PIN` now names goSpark
   `0a6da00`, goSpark is pushed, and goagx was republished (`9898733`) since
   `tests/test_goagx_repo.py` binds the pin to the published manifest. **Still

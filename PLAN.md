@@ -2869,14 +2869,34 @@ belongs where the rest of authority belongs: inside the envelope the Master sign
       (11 engine, 5 bridge), peer suite 494 → 510 passed / 1 skipped, `make ci`
       green, goSpark `make ci` → `ci: ok`.
 
-- [ ] **66C — the platform declaration in `00_System/`.** A file stating the
-      computer system type the agent is operating on. The data already exists —
-      `manifests/user-env-manifest.json` carries `system.platform`, `machine`,
-      `release` and `privilege_boundaries` — but it lives in `manifests/`, is a
-      generated host snapshot, and nothing reads it as a declaration.
-      **DoD:** `00_System/` names the platform, the schema in
-      `contracts/tracking-schema.json` declares it, and a test pins that the
-      declaration and the captured snapshot cannot disagree.
+- [x] **66C — the platform declaration in `00_System/`.** The data already
+      existed: `manifests/user-env-manifest.json` carries `system.platform`,
+      `machine`, `release` and `privilege_boundaries`, written by
+      `scripts/sparknet-identity-capture.sh`. What was missing is a declaration an
+      agent reads — the snapshot lived in `manifests/` and nothing in the vault
+      pointed at it. `00_System/platform.md` (schema `sparknet-platform/1`) is that
+      declaration, and the capture script now writes **both files from one probe**,
+      which is the structural reason they cannot disagree: two files derived from
+      one capture, rather than one derived from the other at read time.
+      `contracts/tracking-schema.json` declares it under `platform_record` (path,
+      fields, generation rule, `agreement_rule`, and that it is descriptive and
+      never permissive), and names it in `layout.dirs["00_System"]`. The template
+      ships `status: uncaptured` with every value `null`, so a fresh vault does not
+      inherit this host's identity.
+      The committed record was derived from the **committed** snapshot rather than
+      by re-probing, after first asserting every host fact already agreed — so
+      `captured_at` matches the snapshot it summarises instead of silently
+      re-stamping a record whose host facts never changed.
+      **DoD:** (1) `00_System/` names the platform; (2) the schema declares it;
+      (3) a test pins that the declaration and the captured snapshot cannot
+      disagree — and a second runs the real capture script in a temp vault and
+      proves the two files it writes agree, so the invariant is tested against the
+      generator and not only against the committed pair. Verified 2026-10-24:
+      4 new tests, peer suite 513 → 517 passed / 1 skipped, `make ci` green.
+      **Remaining leg:** `master-node/00_System/` has no declaration, because the
+      Master role carries no `user-env-manifest.json` to agree with. Adding one
+      there needs the capture script reachable from the Master role first, so it is
+      deferred rather than faked with a hand-written file that nothing could check.
 
 - [ ] **66D — OS permissions bound to agent permissions.** Today
       `user-env-manifest.json` *records* `privilege_boundaries.is_root` and
@@ -2910,7 +2930,7 @@ distribution had to be republished in the same pass. `goagx/README.md`'s
 real AGX hardware, and rewriting a measurement to match a pin makes the evidence
 say something that never happened.
 
-**Status:** 66A–66B done, `make ci` green in both repos. 66C–66D open.
+**Status:** 66A–66C done, `make ci` green in both repos. 66D open.
 Cursor `done -> 66`. Wiring 66B into the bridge also surfaced and fixed a
 security-relevant bug beside it: the mesh size was captured once and both the
 registry and the regime were cached with no invalidation, so `mode_for()` could

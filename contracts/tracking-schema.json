@@ -9,7 +9,7 @@
     "status": "numbered layout replaces the wiki category layout in a role vault",
     "scope": "role subvaults (peer-node/, master-node/). The fabric root keeps its wiki category layout unchanged.",
     "dirs": {
-      "00_System": "governance: agent rules (alpha-agent.md), the user record, the note schema, index.md, log.md, the secret index",
+      "00_System": "governance: agent rules (alpha-agent.md), the user record, the platform record, the note schema, index.md, log.md, the secret index",
       "01_Inbox": "capture-first staging ground; read-only for agents until an item is accepted",
       "02_Daily": "dated entries and per-session agent memory",
       "03_Sources": "immutable external material and raw captures; read-only for agents",
@@ -188,6 +188,29 @@
       "bundle": "never bundled; .state/ is excluded by scripts/sparknet-bundle.sh",
       "authority": "the user key consents and attributes; it grants no capability. Capability comes from the capability contract and key possession per contracts/capabilities.json."
     }
+  },
+
+  "platform_record": {
+    "path": "00_System/platform.md",
+    "schema": "sparknet-platform/1",
+    "purpose": "Names the computer system this node's agents actually operate on, so an agent reasoning about what it may do reasons about the machine it is on rather than an assumed one. The vault is portable and the host is not; before this record the two were reconciled only inside a generated manifest that nothing in the vault pointed at.",
+    "generated_by": "scripts/sparknet-identity-capture.sh — the same run that writes manifests/user-env-manifest.json, so the two cannot be captured at different times or by different probes",
+    "never_hand_edited": "It is a capture, not an assertion. A hand-edited platform record would state what someone believes the host is, which is precisely what the capture exists to replace.",
+    "fields": {
+      "type": "platform-record",
+      "schema": "sparknet-platform/1",
+      "status": "uncaptured | captured",
+      "captured_at": "ISO8601; equals the snapshot's timestamp",
+      "hostname": "the host's own name",
+      "os": "platform.system()",
+      "machine": "platform.machine() — the architecture, which an agent must not assume away",
+      "release": "platform.release()",
+      "platform": "platform.platform() in full",
+      "running_as_root": "whether the capturing process held euid 0",
+      "snapshot_ref": "manifests/user-env-manifest.json — the full capture this record summarises"
+    },
+    "agreement_rule": "Every field above must equal the corresponding value in the referenced snapshot. A test asserts it, because two files describing one host drift silently and an agent reading the stale one reasons about a machine it is not on.",
+    "authority": "Descriptive, never permissive. Naming a platform grants nothing and widens nothing. The privilege consequences of the captured identity are a separate concern and are NOT enforced by this record — see PLAN Step 66D."
   },
 
   "ledger_block": {
