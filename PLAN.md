@@ -2985,7 +2985,62 @@ belongs where the rest of authority belongs: inside the envelope the Master sign
       request path and not advisory; the interaction with the guard's existing
       `euid_0` requirement is stated in `security-policies.json` rather than left
       implicit; `DoD: confirm: user` for the live leg, since this host cannot
-      exercise a privilege boundary it does not have.
+      exercise a privilege boundary it does not have. **Partly met:** the rule and
+      its declaration in `security-policies.json` landed 2026-10-24; the request-path
+      check did not, and cannot until 66D-iii puts the attestation on the envelope
+      the guard actually verifies.
+
+- [ ] **66D-iii — carry the attestation on the guard-apply envelope, and enforce
+      it where privilege is actually exercised.** Scoped 2026-10-24; not started,
+      because it is a cross-role atomic change and a partial one leaves both roles'
+      suites red.
+      **The constraint that shapes it:** `guard_approval_message` requires *every*
+      projected field to be a string —
+      `if not isinstance(value, str): raise AuthzError(...)`. So `operator_os`
+      cannot ride the approval as an object the way it rides the grant. Two ways
+      out, and the first is the right one:
+      1. carry it as a **canonical-JSON string** field, empty when unattested, with
+         one encode/decode helper pair in `shared/sparknet-authz.py` beside
+         `normalise_operator_os`. This preserves the invariant that makes the
+         envelope's bytes unambiguous, and an empty string is already how the
+         envelope expresses "legitimately absent" (`content_b64` is in
+         `GUARD_APPROVAL_FIELDS` but deliberately not in `GUARD_APPROVAL_REQUIRED`
+         because an empty file is a valid target).
+      2. relax the all-strings rule. Rejected: a nested object needs its own
+         canonicalisation, and the rule exists so no caller has to think about it.
+      Because the field must be *present* (the `absent` check) but may be empty, it
+      goes in `GUARD_APPROVAL_FIELDS` and **not** in `GUARD_APPROVAL_REQUIRED` —
+      the same split `content_b64` uses. It sorts between `nonce` and
+      `peer_fingerprint`, and `tests/test_contracts.py:650` pins the contract's
+      field list to the tuple *in order*, so both move together.
+      **Blast radius, measured not guessed** — nine files across both roles:
+      `shared/sparknet-authz.py` (fields + helpers), `contracts/guard-approval.json`
+      (the declared envelope), `master-node/scripts/sparknet-approval-issue.sh` and
+      `sparknet-approval-deliver.sh` (the issuer mints it, the deliverer carries
+      it), `master-node/services/sparknet-signer.py` (signs the projection),
+      `peer-node/services/sparknet-guard-d.py` (enforces), and
+      `master-node/tests/test_approval.py`, `test_signer_isolation.py`,
+      `peer-node/tests/test_guard.py` — the last three build approval envelopes and
+      `test_approval.py:254` asserts `set(approval) == set(GUARD_APPROVAL_FIELDS)`,
+      so every builder must emit the new field or fail. goSpark is **not** in scope:
+      it implements neither the guard nor grants (`spec/sparknet/PROVENANCE.md`
+      names the guard an explicit non-goal, and no Go file mentions
+      `guard_approval`), so this is single-repo.
+      **The enforcement itself** is one call at the guard's apply path, using the
+      rule 66D-ii already landed: decode the attestation, call
+      `operator_os_authorises(..., requires_root=True)`, refuse on
+      `operator_unattested` / `operator_insufficient` with a stable reason. The
+      guard's existing `euid_0` requirement stays — the attestation says whether the
+      human may ask, the uid says whether the process can do, and both must hold.
+      **DoD:** (1) an approval with no attestation is refused at the guard, not
+      merely unsigned; (2) an attested root operator is permitted and an attested
+      non-root is refused; (3) the attestation is inside the signature, proven by
+      flipping it on a signed approval and failing verification; (4) the string
+      encoding is canonical, so one attestation cannot produce two signatures;
+      (5) `contracts/guard-approval.json`, `GUARD_APPROVAL_FIELDS` and every builder
+      agree, with the existing pins doing the holding; (6) `make ci` green and
+      `make -C master-node` / `-C peer-node` suites green in one commit, since a
+      split landing leaves one role unable to verify what the other signs.
 
 **Deployment hazard this step creates.** Adding a field to the signed envelope
 changes the bytes the Master signs, so **every existing entry signature stops
@@ -3007,8 +3062,11 @@ distribution had to be republished in the same pass. `goagx/README.md`'s
 real AGX hardware, and rewriting a measurement to match a pin makes the evidence
 say something that never happened.
 
-**Status:** 66A–66C and 66D-i done, `make ci` green. 66D-ii (enforcement at the
-mutating path) is the one open leg.
+**Status:** 66A–66C and 66D-i done, `make ci` green. 66D-ii is **partly landed**
+— the ceiling is one tested rule and declared policy, but wired to nothing, because
+the envelope the guard verifies carries no operator identity. 66D-iii is scoped in
+full above (constraint, blast radius, DoD) and not started: it is a cross-role atomic
+change, and a partial one leaves both roles' suites red.
 Cursor `done -> 66`. Wiring 66B into the bridge also surfaced and fixed a
 security-relevant bug beside it: the mesh size was captured once and both the
 registry and the regime were cached with no invalidation, so `mode_for()` could
