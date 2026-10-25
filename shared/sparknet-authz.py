@@ -516,6 +516,7 @@ GUARD_APPROVAL_FIELDS = (
     "file_path",
     "issued_at",
     "nonce",
+    "operator_os",
     "peer_fingerprint",
     "request_id",
 )
@@ -992,6 +993,7 @@ REASON_GRANT_MALFORMED = "grant_malformed"
 #: statuses should not have to import them from two places.
 REASON_OPERATOR_UNATTESTED = "operator_unattested"
 REASON_OPERATOR_INSUFFICIENT = "operator_insufficient"
+REASON_OPERATOR_MALFORMED = "operator_malformed"
 
 
 def operator_os_authorises(grant: dict[str, Any], *, requires_root: bool) -> tuple[bool, str]:
@@ -1033,6 +1035,65 @@ def operator_os_authorises(grant: dict[str, Any], *, requires_root: bool) -> tup
     if attested.get("is_root") is True:
         return True, ""
     return False, REASON_OPERATOR_INSUFFICIENT
+
+
+def encode_operator_os(attested: dict[str, Any] | None) -> str:
+    """Canonical-JSON encoding of an OS attestation, for a string-only envelope.
+
+    ``guard_approval_message`` requires every projected field to be a string, so
+    the attestation rides a guard approval *encoded* rather than nested. That is a
+    feature rather than a workaround: a nested object would need its own
+    canonicalisation, and the all-strings rule exists so no caller has to think
+    about one.
+
+    Empty means unattested, and that is a **value** here rather than an omission —
+    the field must be present in the envelope, and present-but-empty is how this
+    envelope already says "legitimately none" for ``content_b64``.
+    """
+    normalised = normalise_operator_os(attested)
+    if normalised is None:
+        return ""
+    return json.dumps(normalised, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+
+def decode_operator_os(value: Any) -> dict[str, Any] | None:
+    """The inverse of :func:`encode_operator_os`. Strict, because it feeds a decision.
+
+    A malformed encoding is refused rather than read as "no attestation". Both
+    directions fail closed here — unattested already refuses a privileged mutation
+    — but a corrupt encoding that quietly became "none" would be indistinguishable
+    in an audit from an approval that never carried one, and the difference is
+    whether the Master attested a root operator and the record was lost.
+    """
+    if value is None or value == "":
+        return None
+    if not isinstance(value, str):
+        raise AuthzError("operator_os must be a canonical-JSON string or empty")
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise AuthzError(f"operator_os is not valid JSON: {exc}") from exc
+    return normalise_operator_os(parsed)
+
+
+def guard_approval_operator_allows(approval: Any, *, requires_root: bool) -> tuple[bool, str]:
+    """The operator-OS ceiling for one guard approval.
+
+    One call for the guard's apply path, so the enforcement point cannot invent a
+    second rule: this decodes the envelope's attestation and delegates the decision
+    to :func:`operator_os_authorises`, which is the same rule a grant-presenting
+    path uses. Two rules for one ceiling would eventually disagree, and the
+    disagreement would be visible only as a mutation that one path allowed.
+    """
+    if not requires_root:
+        return True, ""
+    if not isinstance(approval, dict):
+        return False, REASON_OPERATOR_MALFORMED
+    try:
+        attested = decode_operator_os(approval.get("operator_os"))
+    except AuthzError:
+        return False, REASON_OPERATOR_MALFORMED
+    return operator_os_authorises({"operator_os": attested}, requires_root=True)
 
 
 def grant_message(grant: dict[str, Any]) -> bytes:

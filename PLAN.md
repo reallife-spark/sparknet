@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
 updated: 2026-10-24
-current: 66
+current: done
 ---
 
 # sparknet — Active Plan
@@ -2937,7 +2937,7 @@ belongs where the rest of authority belongs: inside the envelope the Master sign
       2026-10-24: 3 new contract tests, peer suite unchanged at 517 passed / 1
       skipped.
 
-- [ ] **66D-ii — enforcement at the mutating path.** The ceiling is now signed and
+- [x] **66D-ii — enforcement at the mutating path.** The ceiling is now signed and
       travelling; nothing yet consults it. The check belongs on the bridge's
       mutating verbs (and the guard's), and must refuse a mutation that needs a
       privilege the attested operator does not hold — **whatever uid the serving
@@ -2990,7 +2990,7 @@ belongs where the rest of authority belongs: inside the envelope the Master sign
       check did not, and cannot until 66D-iii puts the attestation on the envelope
       the guard actually verifies.
 
-- [ ] **66D-iii — carry the attestation on the guard-apply envelope, and enforce
+- [x] **66D-iii — carry the attestation on the guard-apply envelope, and enforce
       it where privilege is actually exercised.** Scoped 2026-10-24; not started,
       because it is a cross-role atomic change and a partial one leaves both roles'
       suites red.
@@ -3032,8 +3032,10 @@ belongs where the rest of authority belongs: inside the envelope the Master sign
       `operator_unattested` / `operator_insufficient` with a stable reason. The
       guard's existing `euid_0` requirement stays — the attestation says whether the
       human may ask, the uid says whether the process can do, and both must hold.
-      **DoD:** (1) an approval with no attestation is refused at the guard, not
-      merely unsigned; (2) an attested root operator is permitted and an attested
+      **DoD — all six verified 2026-10-24.** (1) an approval with no attestation
+      is refused at the guard with `operator_unattested`, *before* any write and
+      before the euid question, so it fails as unauthorised rather than as
+      insufficiently privileged; (2) an attested root operator is permitted and an attested
       non-root is refused; (3) the attestation is inside the signature, proven by
       flipping it on a signed approval and failing verification; (4) the string
       encoding is canonical, so one attestation cannot produce two signatures;
@@ -3062,12 +3064,12 @@ distribution had to be republished in the same pass. `goagx/README.md`'s
 real AGX hardware, and rewriting a measurement to match a pin makes the evidence
 say something that never happened.
 
-**Status:** 66A–66C and 66D-i done, `make ci` green. 66D-ii is **partly landed**
-— the ceiling is one tested rule and declared policy, but wired to nothing, because
-the envelope the guard verifies carries no operator identity. 66D-iii is scoped in
-full above (constraint, blast radius, DoD) and not started: it is a cross-role atomic
-change, and a partial one leaves both roles' suites red.
-Cursor `done -> 66`. Wiring 66B into the bridge also surfaced and fixed a
+**Status:** **Step 66 complete** — 66A, 66B, 66C, 66D-i, 66D-ii and 66D-iii all
+done, `make ci` green in both repos, peer suite 521 passed / 1 skipped. The one leg
+that cannot be closed here is the live privilege boundary (`DoD: confirm: user`):
+this host has no real root/non-root split to exercise, so the ceiling is proven with
+an injected `geteuid` and encoded attestations, and is never reported as observed on
+a deployed node. Cursor `66 -> done`. Wiring 66B into the bridge also surfaced and fixed a
 security-relevant bug beside it: the mesh size was captured once and both the
 registry and the regime were cached with no invalidation, so `mode_for()` could
 never change after construction. `peer_pair` has **no Master arbitration** while

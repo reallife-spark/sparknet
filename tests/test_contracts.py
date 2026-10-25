@@ -1684,3 +1684,77 @@ def test_the_ceiling_reads_a_real_minted_grant(authz: ModuleType):
     assert authz.operator_os_authorises(root, requires_root=True)[0] is True
     allowed, reason = authz.operator_os_authorises(plain, requires_root=True)
     assert not allowed and reason == authz.REASON_OPERATOR_UNATTESTED
+
+
+def _approval_envelope(authz: ModuleType, operator_os: str) -> dict:
+    return {
+        "peer_fingerprint": "f" * 64,
+        "file_path": "/etc/wireguard/wg1.conf",
+        "content_b64": "",
+        "content_sha256": "0" * 64,
+        "issued_at": "2026-10-24T00:00:00Z",
+        "expires_at": "2026-10-24T00:01:00Z",
+        "nonce": "n-op-1",
+        "request_id": "r-op-1",
+        "operator_os": operator_os,
+    }
+
+
+def test_one_attestation_has_exactly_one_canonical_encoding(authz: ModuleType) -> None:
+    """The envelope field is a string, so the string has to be canonical.
+
+    A nested object would have been canonicalised by the envelope's own
+    sort_keys; encoded as a string it is opaque to that, so two orderings of one
+    attestation would otherwise produce two signatures over one fact.
+    """
+    one = {"uid": 1000, "euid": 1000, "username": "op", "groups": ["users", "docker"], "is_root": False}
+    other = {"is_root": False, "groups": ["docker", "users", "users"], "username": "op", "euid": 1000, "uid": 1000}
+    assert authz.encode_operator_os(one) == authz.encode_operator_os(other)
+    assert authz.decode_operator_os(authz.encode_operator_os(one)) == authz.normalise_operator_os(one)
+    # Empty is the encoding of "unattested", and it round-trips to None.
+    assert authz.encode_operator_os(None) == ""
+    assert authz.decode_operator_os("") is None
+
+
+def test_the_operator_attestation_is_inside_the_approval_signature(authz: ModuleType) -> None:
+    """Flipping the attestation must break the signature, or the ceiling is advisory.
+
+    This is the whole reason the field joined the envelope rather than riding
+    beside it: an unsigned ceiling could be raised by whoever delivers the
+    approval, which is the one party the envelope exists to constrain.
+    """
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    key = Ed25519PrivateKey.generate()
+    user = authz.encode_operator_os(
+        {"uid": 1000, "euid": 1000, "username": "operator", "groups": ["users"], "is_root": False}
+    )
+    root = authz.encode_operator_os({"uid": 0, "euid": 0, "username": "root", "groups": ["root"], "is_root": True})
+
+    approval = _approval_envelope(authz, user)
+    message = authz.guard_approval_message(approval)
+    signature = authz.sign_bytes(key, message)
+    assert authz.verify_signature(key.public_key(), signature, message)
+
+    escalated = _approval_envelope(authz, root)
+    assert authz.guard_approval_message(escalated) != message
+    assert not authz.verify_signature(key.public_key(), signature, authz.guard_approval_message(escalated)), (
+        "a non-root attestation was re-signed as root with the same signature"
+    )
+
+
+def test_the_ceiling_reads_the_envelope(authz: ModuleType) -> None:
+    """The guard's one call, against encoded envelope values rather than dicts."""
+    root = authz.encode_operator_os({"uid": 0, "euid": 0, "username": "root", "groups": ["root"], "is_root": True})
+    user = authz.encode_operator_os(
+        {"uid": 1000, "euid": 1000, "username": "operator", "groups": ["users"], "is_root": False}
+    )
+    allows = authz.guard_approval_operator_allows
+    assert allows({"operator_os": root}, requires_root=True) == (True, "")
+    assert allows({"operator_os": user}, requires_root=True)[1] == authz.REASON_OPERATOR_INSUFFICIENT
+    assert allows({"operator_os": ""}, requires_root=True)[1] == authz.REASON_OPERATOR_UNATTESTED
+    assert allows({}, requires_root=True)[1] == authz.REASON_OPERATOR_UNATTESTED
+    assert allows({"operator_os": "{not json"}, requires_root=True)[1] == authz.REASON_OPERATOR_MALFORMED
+    assert allows(None, requires_root=True)[1] == authz.REASON_OPERATOR_MALFORMED
+    # An unprivileged operation needs no attestation: the ceiling binds privilege.
+    assert allows({"operator_os": ""}, requires_root=False) == (True, "")

@@ -9,7 +9,7 @@ Updated: 2026-10-23
 
 ## Plan cursors
 
-- **root `PLAN.md` `current: 66`.** Step 64 (the reflex layer) opened
+- **root `PLAN.md` `current: done`.** Step 64 (the reflex layer) opened
   **2026-10-23**: local-only default, Master broker (`4224`) for the unified
   massive-task workload, RAG relevance first on the fabric corpus,
   shadow → assist → enforce, Master-local before peer access. 64A is
@@ -85,15 +85,17 @@ Updated: 2026-10-23
   ceiling must travel with the human rather than be whatever uid the daemon
   happens to run as. Single-repo: goSpark implements no grant handling at all.
   Also pinned `GRANT_FIELDS` against the contract, which nothing did.
-  **66D-ii partly landed** — operator decision: *the attestation authorises*.
-  `authz.operator_os_authorises(grant, requires_root=...)` is the one rule (never
-  reads the daemon's uid, fails closed on null, never infers root from uid 0) and
-  `security-policies.json` declares it as `operator_os_ceiling`. **Not wired:**
-  `operator_os` is on the *grant* envelope while privileged mutation goes through
-  *guard-apply*, whose eight `GUARD_APPROVAL_FIELDS` carry no operator identity —
-  so wiring needs a second signed-envelope change. Deliberately not wired to the
-  bridge's vault verbs: those writes are unprivileged, so the check would always
-  pass while looking like enforcement.
+  **66D complete** — operator decision: *the attestation authorises*. One rule,
+  `authz.operator_os_authorises` (never reads the daemon's uid, fails closed on
+  unattested, never infers root from `uid == 0`), declared in
+  `security-policies.json` as `operator_os_ceiling` and reached two ways: from a
+  grant's `operator_os`, and from the guard-apply envelope's, which carries it as
+  a **canonical-JSON string** because `guard_approval_message` requires every
+  projected field to be a string. The guard checks it at the apply path *before*
+  the write and before the euid question — the attestation says whether the human
+  may ask, the uid says whether the process can do, and both must hold. Only the
+  live privilege leg stays `DoD: confirm: user`: this host has no root/non-root
+  split to exercise.
   **The pin hazard is closed** (`3d3bac9`): `goagx/GOSPARK_PIN` now names goSpark
   `0a6da00`, goSpark is pushed, and goagx was republished (`9898733`) since
   `tests/test_goagx_repo.py` binds the pin to the published manifest. **Still

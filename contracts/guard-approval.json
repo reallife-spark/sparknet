@@ -9,6 +9,7 @@
       "file_path",
       "issued_at",
       "nonce",
+      "operator_os",
       "peer_fingerprint",
       "request_id"
     ],
@@ -22,8 +23,19 @@
       "request_id"
     ],
     "empty_allowed": [
-      "content_b64"
+      "content_b64",
+      "operator_os"
     ],
+    "empty_allowed_note": "`content_b64` may be empty because an empty file is a legitimate target. `operator_os` may be empty because an approval can carry no attestation of the human behind it — and empty then means *unattested*, which the guard must refuse a privileged mutation for rather than read as permission. Present-but-empty is a value, not an omission: the field is inside the projection either way, so an approval cannot be silently stripped of it without breaking the signature.",
+    "operator_os": {
+      "type": "string (canonical JSON) or empty",
+      "shape_when_present": "the encoded form of contracts/identity-schema.json grant.fields.operator_os — uid, euid, username, groups, is_root",
+      "why_a_string": "guard_approval_message requires every projected field to be a string, so the attestation rides encoded rather than nested. Relaxing that rule was considered and rejected: a nested object would need its own canonicalisation, and the all-strings rule exists so no caller has to supply one.",
+      "encoding": "shared/sparknet-authz.py::encode_operator_os — canonical JSON (sort_keys, tight separators, ASCII), which is why two orderings of one attestation cannot produce two signatures",
+      "decoding": "shared/sparknet-authz.py::decode_operator_os — strict; a malformed encoding is refused rather than read as unattested, so a lost root attestation stays distinguishable in an audit from one that was never made",
+      "enforced_by": "shared/sparknet-authz.py::guard_approval_operator_allows, at the peer guard's apply path",
+      "authority": "The attestation authorises. Operator decision 2026-10-24: a minter is trusted, so an attested is_root:true permits a privileged mutation even when the serving daemon runs as somebody else. It complements the guard's euid_0 requirement rather than replacing it — the attestation says whether the human may ask, the uid says whether the process can do, and both must hold."
+    },
     "extra_fields": "refused",
     "canonicalisation": "json.dumps(projected, sort_keys=True, separators=(',', ':')).encode('utf-8')",
     "implementation": "shared/sparknet-authz.py::guard_approval_message",

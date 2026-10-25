@@ -11,7 +11,7 @@
       "contract": "guard-approval",
       "file": "guard-approval.json",
       "schema_version": "1.0",
-      "sha256": "2b7f4f5e656ad17ce5c5494d4b7e3c7beaa76d3f1825d7b0c7dca026bbf534b1"
+      "sha256": "e95dad8bfda51ef83020ac9ee9c39e89bb345268517ac7ff73c68ee71ea45f7c"
     },
     {
       "contract": "identity-schema",

@@ -97,6 +97,17 @@ def approval_message(payload: dict[str, Any]) -> bytes:
     return authz.guard_approval_message(payload)
 
 
+#: Refusal detail for each way the operator-OS ceiling can fail. Fixed strings
+#: rather than interpolated ones: the reason code is what an operator greps a
+#: ledger for, and the detail must not vary with the payload it refused.
+_OPERATOR_REFUSALS = {
+    "operator_unattested": "the approval attests no operator OS identity, so a privileged apply is refused",
+    "operator_insufficient": "the attested operator lacks the privilege this apply needs",
+    "operator_malformed": "the approval's operator attestation is not decodable",
+    "grant_malformed": "the approval is not an object the ceiling can be read from",
+}
+
+
 class Refusal(Exception):
     """A denied request. Carries the HTTP status and a machine-readable code."""
 
@@ -777,12 +788,36 @@ class Guard:
                 "audit_block": block["hash"],
             }
 
-        # 8. Arming, then root.
+        # 8. Arming, then the operator's attested ceiling, then root.
         if not self.apply_enabled:
             self.ledger.append(
                 "patch_verified_not_applied", {"code": "unarmed", "file_path": target_path, "sha256": actual}
             )
             raise Refusal(403, "unarmed", "guard is not running with --apply-enabled")
+
+        # The human behind this approval, not the process serving it. The
+        # attestation rides inside the signature, so it cannot be widened in
+        # transit, and an absent one is *unattested* — which fails closed rather
+        # than being read as permission. This complements the euid check below and
+        # does not replace it: the attestation says whether the operator may ask,
+        # the uid says whether this process can do, and a privileged apply needs
+        # both. One rule, in shared/sparknet-authz.py, so the guard cannot drift
+        # from the ceiling a grant-presenting path applies.
+        ceiling_authz = _load_authz_module()
+        if ceiling_authz is None:
+            raise Refusal(
+                503,
+                "no_authz",
+                "shared/sparknet-authz.py not found; the guard cannot check the operator ceiling",
+            )
+        operator_allowed, operator_reason = ceiling_authz.guard_approval_operator_allows(payload, requires_root=True)
+        if not operator_allowed:
+            self.ledger.append(
+                "patch_verified_not_applied",
+                {"code": operator_reason, "file_path": target_path, "sha256": actual},
+            )
+            raise Refusal(403, operator_reason, _OPERATOR_REFUSALS[operator_reason])
+
         if os.geteuid() != 0:
             self.ledger.append("patch_verified_not_applied", {"code": "not_root", "file_path": target_path})
             raise Refusal(403, "not_root", "applying requires euid 0")

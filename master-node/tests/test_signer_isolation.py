@@ -588,6 +588,10 @@ def _guard_approval(**overrides) -> dict:
         "issued_at": CLOCK.isoformat(),
         "expires_at": (CLOCK + timedelta(minutes=10)).isoformat(),
         "nonce": "nonce-0123456789abcdef",
+        # Unattested on purpose: these tests exercise the *signer*, which projects
+        # and signs the envelope but does not enforce the operator ceiling — the
+        # peer guard does. Empty is a legitimate value here, not an omission.
+        "operator_os": "",
         "request_id": "req-0123456789abcdef",
     }
     approval.update(overrides)

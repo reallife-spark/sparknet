@@ -30,12 +30,14 @@ TTL_SECONDS="60"
 REQUEST_ID=""
 NONCE=""
 OUT=""
+OPERATOR_OS=""
 
 usage() {
   cat <<'USAGE'
 usage: sparknet-approval-issue.sh --target <path> --content <file> \
          (--peer-fingerprint <fp> | --identity <identity.json>) \
          [--ttl-seconds N] [--request-id ID] [--nonce HEX] [--out <approval.json>]
+         [--operator-os <canonical-json>]
 
 Issues one signed guard approval for a single protected file on a single peer.
 
@@ -49,6 +51,12 @@ Issues one signed guard approval for a single protected file on a single peer.
   --request-id       correlates plan -> permission -> execute
   --nonce            single-use value; the Master refuses to issue it twice
   --out              where to write the signed approval; stdout otherwise
+  --operator-os      canonical JSON of the OS identity of the human behind this
+                     approval ({"uid":0,"euid":0,"username":"root","groups":[],
+                     "is_root":true}); omit it to attest nobody. It is signed into
+                     the envelope, and the peer guard refuses a privileged apply
+                     whose attestation is absent or is_root:false — see
+                     contracts/guard-approval.json approval.operator_os.
 
 The result is {"approval": {...}, "signature_b64": "..."} — the envelope and
 the signature over its canonical bytes, ready for sparknet-approval-deliver.sh.
@@ -65,6 +73,7 @@ while [ $# -gt 0 ]; do
     --request-id) REQUEST_ID="$2"; shift 2 ;;
     --nonce) NONCE="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
+    --operator-os) OPERATOR_OS="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown arg: $1" >&2; usage; exit 1 ;;
   esac
@@ -100,6 +109,7 @@ OP_PRIV="$OP_PRIV" \
 NONCE_FILE="$NONCE_FILE" \
 FABRIC_ROOT="$FABRIC_ROOT" \
 OUT_PATH="$OUT" \
+OPERATOR_OS="$OPERATOR_OS" \
 "$PY" - <<'PYEOF'
 import base64
 import hashlib
@@ -127,6 +137,7 @@ nonce = os.environ.get("NONCE", "").strip()
 op_priv = Path(os.environ["OP_PRIV"])
 nonce_file = Path(os.environ["NONCE_FILE"])
 out_path = os.environ.get("OUT_PATH", "").strip()
+operator_os_raw = os.environ.get("OPERATOR_OS", "").strip()
 
 if identity_path:
     peer_fingerprint = authz.fingerprint(json.loads(Path(identity_path).read_text()))
@@ -146,6 +157,10 @@ approval = {
     "issued_at": now.isoformat().replace("+00:00", "Z"),
     "expires_at": (now + timedelta(seconds=ttl)).isoformat().replace("+00:00", "Z"),
     "nonce": nonce,
+    # Round-tripped through the shared codec rather than passed through: the
+    # guard decodes strictly, so a malformed attestation must be refused here at
+    # issue time, where an operator can fix it, and not at the peer.
+    "operator_os": authz.encode_operator_os(authz.decode_operator_os(operator_os_raw)),
     "request_id": request_id,
 }
 
