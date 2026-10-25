@@ -56,6 +56,12 @@
       "sha256": "c5da6abd1578314bce9cccdeb4cf30b5568d07216a749b8e5ba5ea6e27641b22"
     },
     {
+      "contract": "rfi-schema",
+      "file": "rfi-schema.json",
+      "schema_version": "1.0",
+      "sha256": "6664ef473e2d233a1a53c45206f7e17c6b3457d7582202d688c3accca4814bde"
+    },
+    {
       "contract": "tracking-schema",
       "file": "tracking-schema.json",
       "schema_version": 1,

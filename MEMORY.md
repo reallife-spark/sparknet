@@ -101,7 +101,14 @@ Updated: 2026-10-23
   closes a gap both roles' agent charters had been asserting since 2026-10-10:
   they told agents acceptance *is* recorded as an `inbox_acceptance` block while
   no code could produce one. 67B notification, 67C the RFI channel, 67D the inbox
-  transport remain open.
+  transport remain open. **67C done** — `contracts/rfi-schema.json` plus
+  `rfi_answer_message`/`sign_rfi_answer`/`verify_rfi_answer` in authz and
+  `shared/sparknet-rfi-install.py` as the one acceptance rule; installing composes
+  with 67A (writes the item, records the request id, appends an `inbox_acceptance`).
+  No monotonic sequence: a registry *supersedes* so a lower sequence is a replay,
+  while answers *accumulate*, so the idempotence key is the `request_id`.
+  **The `/api/v1/rfi` listener and the Master-side composer do not exist** — that
+  is 67D, and the contract's `implementation_state` says so explicitly.
   **The pin hazard is closed** (`3d3bac9`): `goagx/GOSPARK_PIN` now names goSpark
   `0a6da00`, goSpark is pushed, and goagx was republished (`9898733`) since
   `tests/test_goagx_repo.py` binds the pin to the published manifest. **Still

@@ -1304,6 +1304,206 @@ def verify_grant(
     )
 
 
+# --- RFI answers (request for information) ------------------------------------
+
+#: The whole RFI answer artifact. `content_b64` is in the field list but not in the
+#: signed projection: the content is bound by `content_sha256` instead, so an answer
+#: can be large without the projection having to carry it.
+RFI_ANSWER_FIELDS = (
+    "answered_at",
+    "content_b64",
+    "content_sha256",
+    "item_name",
+    "peer_fingerprint",
+    "request_id",
+)
+
+#: What the Master's signature covers.
+RFI_ANSWER_SIGNED_FIELDS = (
+    "answered_at",
+    "content_sha256",
+    "item_name",
+    "peer_fingerprint",
+    "request_id",
+)
+
+#: Fields that must be present and non-empty. `content_b64` is deliberately absent:
+#: an empty answer is a legitimate one ("nothing found"), and refusing it would push
+#: a Master toward inventing content to fill the field.
+RFI_ANSWER_REQUIRED = (
+    "answered_at",
+    "content_sha256",
+    "item_name",
+    "peer_fingerprint",
+    "request_id",
+)
+
+#: Refusal reasons, named by contracts/rfi-schema.json `refusals`. Fixed strings:
+#: a caller maps them to an HTTP status and an operator greps a ledger for them, so
+#: neither may vary with the artifact that was refused.
+REASON_RFI_MALFORMED = "malformed"
+REASON_RFI_EXTRA_FIELDS = "extra_fields"
+REASON_RFI_MISSING_FIELDS = "missing_fields"
+REASON_RFI_BAD_SIGNATURE = "bad_signature"
+REASON_RFI_DIGEST_MISMATCH = "digest_mismatch"
+REASON_RFI_WRONG_PEER = "wrong_peer"
+REASON_RFI_UNSAFE_ITEM_NAME = "unsafe_item_name"
+REASON_RFI_EXPIRED = "expired"
+REASON_RFI_DUPLICATE = "duplicate_answer"
+
+
+def check_rfi_item_name(name: Any) -> str:
+    """A single safe path component under ``01_Inbox/``, or a refusal.
+
+    The answer is *written* to this name, so the check is a path-traversal guard
+    and not a style preference. A separator, a parent reference or a leading dot
+    would let the destination be chosen by whoever composed the name — which is why
+    `item_name` is inside the signed projection rather than beside it.
+    """
+    if not isinstance(name, str) or not name:
+        raise AuthzError("item_name must be a non-empty string")
+    if "/" in name or "\\" in name or name in (".", "..") or ".." in name or name.startswith("."):
+        raise AuthzError(f"item_name must be a single safe path component, got {name!r}")
+    return name
+
+
+def rfi_answer_message(answer: dict[str, Any]) -> bytes:
+    """Canonical bytes an RFI answer's signature covers.
+
+    The same anti-drift rule as every other envelope here: one projection function,
+    imported by the signer and by every verifier, strict in both directions. A
+    missing field would authorise an answer with no named destination; an extra one
+    would be unsigned data riding inside an artifact that a peer treats as
+    authoritative.
+
+    `signature_b64` travels beside the projection in the same artifact, so it is
+    permitted on the dict without being part of what is signed.
+    """
+    if not isinstance(answer, dict):
+        raise AuthzError("rfi answer must be an object")
+    missing = [f for f in RFI_ANSWER_REQUIRED if not answer.get(f)]
+    if missing:
+        raise AuthzError(f"rfi answer missing required field(s): {', '.join(missing)}")
+    absent = [f for f in RFI_ANSWER_FIELDS if f not in answer]
+    if absent:
+        raise AuthzError(f"rfi answer missing field(s): {', '.join(absent)}")
+    extra = sorted(set(answer) - set(RFI_ANSWER_FIELDS) - {"signature_b64"})
+    if extra:
+        raise AuthzError(f"rfi answer carries field(s) outside the canonical envelope: {', '.join(extra)}")
+    check_rfi_item_name(answer["item_name"])
+    projected = {name: answer[name] for name in sorted(RFI_ANSWER_SIGNED_FIELDS)}
+    for name, value in projected.items():
+        if not isinstance(value, str):
+            raise AuthzError(f"rfi answer field {name!r} must be a string")
+    return json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def sign_rfi_answer(
+    *,
+    content: bytes,
+    item_name: str,
+    peer_fingerprint: str,
+    request_id: str,
+    master_private_key: Ed25519PrivateKey,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Build a signed RFI answer. MASTER-SIDE ONLY — needs the Master private key.
+
+    The peer never calls this, and a peer that could would be able to write
+    attributed material into its own inbox, which is the one thing the channel
+    exists to prevent.
+    """
+    if not isinstance(content, bytes):
+        raise AuthzError("content must be bytes")
+    if not peer_fingerprint or not request_id:
+        raise AuthzError("peer_fingerprint and request_id are both required")
+    check_rfi_item_name(item_name)
+    moment = now or datetime.now(timezone.utc)
+    answer: dict[str, Any] = {
+        "answered_at": moment.isoformat().replace("+00:00", "Z"),
+        "content_b64": base64.b64encode(content).decode("ascii"),
+        "content_sha256": hashlib.sha256(content).hexdigest(),
+        "item_name": item_name,
+        "peer_fingerprint": peer_fingerprint,
+        "request_id": request_id,
+    }
+    answer["signature_b64"] = base64.b64encode(master_private_key.sign(rfi_answer_message(answer))).decode("ascii")
+    return answer
+
+
+def verify_rfi_answer(
+    answer: Any,
+    *,
+    master_public_key: Ed25519PublicKey,
+    peer_fingerprint: str,
+    now: datetime | None = None,
+    ttl_seconds: int = 3600,
+    installed_request_ids: Any = (),
+) -> tuple[bool, str, bytes]:
+    """Verify one RFI answer. Returns ``(ok, reason, content)``.
+
+    Never raises for a refused answer: a caller that had to catch exceptions to
+    refuse would eventually catch one too few, and the refusal vocabulary is the
+    point of the check. ``content`` is empty unless ``ok``.
+
+    The order matters and is the one `contracts/rfi-schema.json` states. The
+    signature is checked before the digest because a digest mismatch on an unsigned
+    artifact is not a fact about the Master; the peer is checked before the item
+    name because an answer addressed to another node should be refused as such
+    rather than as badly named.
+    """
+    if not isinstance(answer, dict):
+        return False, REASON_RFI_MALFORMED, b""
+    extra = sorted(set(answer) - set(RFI_ANSWER_FIELDS) - {"signature_b64"})
+    if extra:
+        return False, REASON_RFI_EXTRA_FIELDS, b""
+    absent = [f for f in RFI_ANSWER_FIELDS if f not in answer]
+    if absent:
+        return False, REASON_RFI_MISSING_FIELDS, b""
+
+    signature_b64 = answer.get("signature_b64")
+    if not isinstance(signature_b64, str) or not signature_b64:
+        return False, REASON_RFI_BAD_SIGNATURE, b""
+    try:
+        message = rfi_answer_message(answer)
+    except AuthzError:
+        return False, REASON_RFI_MALFORMED, b""
+    try:
+        if not verify_signature(master_public_key, signature_b64, message):
+            return False, REASON_RFI_BAD_SIGNATURE, b""
+    except AuthzError:
+        return False, REASON_RFI_BAD_SIGNATURE, b""
+
+    try:
+        content = decode_b64_strict(str(answer.get("content_b64") or ""), what="rfi answer content")
+    except AuthzError:
+        return False, REASON_RFI_MALFORMED, b""
+    if hashlib.sha256(content).hexdigest() != answer["content_sha256"]:
+        return False, REASON_RFI_DIGEST_MISMATCH, b""
+
+    if answer["peer_fingerprint"] != peer_fingerprint:
+        return False, REASON_RFI_WRONG_PEER, b""
+    try:
+        check_rfi_item_name(answer["item_name"])
+    except AuthzError:
+        return False, REASON_RFI_UNSAFE_ITEM_NAME, b""
+
+    try:
+        answered = datetime.fromisoformat(str(answer["answered_at"]).replace("Z", "+00:00"))
+    except ValueError:
+        return False, REASON_RFI_EXPIRED, b""
+    moment = now or datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    age = (moment - answered).total_seconds()
+    if age > ttl_seconds or age < -ttl_seconds:
+        return False, REASON_RFI_EXPIRED, b""
+
+    if answer["request_id"] in set(installed_request_ids or ()):
+        return False, REASON_RFI_DUPLICATE, b""
+    return True, "", content
+
+
 # --- CLI ---------------------------------------------------------------------
 
 

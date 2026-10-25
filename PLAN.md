@@ -3138,12 +3138,57 @@ inventing one.
       fabric-root-local and deliberately not shipped in node bundles, so the node
       path needs its own mechanism.
 
-- [ ] **67C — the RFI channel.** A peer asks the Master for information and the
-      answer lands in `01_Inbox/`. The shape to mirror is the registry publication
-      (`contracts/registry-publication.json`), which is the proven Master→peer push:
-      a signed envelope, a digest-bound payload, a monotonic sequence so an older
-      answer cannot be replayed over a newer one, and one shared install rule serving
-      both the online and the offline path.
+- [x] **67C — the RFI channel's contract, envelope and install rule.** `contracts/
+      rfi-schema.json` states both directions: the peer's **request** (signed with
+      the peer's own node key, because a request is a statement by a peer about what
+      it wants and the Master answers only what it can attribute) and the Master's
+      **answer** (signed with the operational key, digest-bound content, a named
+      destination in `01_Inbox/`). `shared/sparknet-authz.py` gained
+      `rfi_answer_message` / `sign_rfi_answer` / `verify_rfi_answer` /
+      `check_rfi_item_name`, and `shared/sparknet-rfi-install.py` owns the one
+      acceptance order so a live listener and an operator carrying an artifact to a
+      node with no daemon cannot disagree about what the peer trusts.
+      Three decisions worth recording:
+      * **The content is bound by digest, not carried in the projection.** An answer
+        can be large; the projection stays small enough to canonicalise identically
+        everywhere, and the digest check is what makes the payload part of what the
+        Master authorised.
+      * **`item_name` is inside the signature.** Where an answer lands is part of the
+        authorisation, so an unsigned name would let a deliverer choose the
+        destination. It is validated as a single safe component at signing *and*
+        again at the write, because a write guarded by a check somewhere else is a
+        write guarded by nothing once that other code moves.
+      * **No monotonic sequence, unlike the registry publication.** A registry
+        *supersedes*, so a lower sequence is a replay; answers *accumulate*, so the
+        idempotence key is the `request_id` the answer echoes. A re-delivered answer
+        is `duplicate_answer` rather than a second copy of the same information, and
+        replaying an older answer for one request is impossible for the same reason.
+      Installing composes with 67A: it writes the item, records the `request_id`, and
+      appends an `inbox_acceptance` block with source `master-node`. The item is
+      written **before** the request id is recorded, so a crash between them
+      re-delivers rather than losing the answer — the reverse order would leave a
+      ledger claiming a delivery that never happened, which is worse than a
+      duplicate.
+      **DoD:** (1) the contract's field lists are pinned against the implementation,
+      as every other signed envelope is; (2) sign→verify round-trips and an **empty**
+      answer is legitimate, since "nothing found" is an answer and refusing it would
+      push a Master to invent content; (3) tampering is refused with a *specific*
+      reason — swapped content, a rewritten destination, an extra field, another
+      Master's signature; (4) an answer minted for another peer is refused and writes
+      nothing; (5) `item_name` cannot traverse, at signing and at verification;
+      (6) answers expire and cannot be replayed; (7) verification **never raises**,
+      because a caller that must catch in order to refuse will eventually catch one
+      too few; (8) the install rule writes into `01_Inbox/`, records the request id,
+      and appends a dual-signed `inbox_acceptance` block; (9) a corrupt install
+      record is read as empty rather than becoming a reason to accept a replay.
+      Verified 2026-10-24: 12 new tests (7 envelope, 5 install), `make ci` green.
+      **Still open, and stated in the contract's own `implementation_state` rather
+      than left to inference:** the `/api/v1/rfi` **listener does not exist**, so
+      nothing arrives over a wire — `tracking-schema.json`'s `phase_boundary` rule
+      applies unchanged, and `ports.json` says nothing about this route yet. Nor does
+      a **Master-side composer** that takes a signed request, gathers an answer and
+      signs it; `sign_rfi_answer` is the primitive such a service would call. Both
+      are 67D's legs.
 
 - [ ] **67D — the inbox transport itself.** `tracking-schema.json`'s
       `phase_boundary` still lists "node-to-node transport" as `not_built`, and its
@@ -3151,7 +3196,10 @@ inventing one.
       exists and `ports.json` says so. This is the leg that makes 67B and 67C real
       rather than in-process.
 
-**Status:** 67A done, `make ci` green. 67B–67D open. Cursor `done -> 67`.
+**Status:** 67A and 67C done, `make ci` green. 67B (notification) and 67D (the
+transport, plus the Master-side composer) are open — and 67C's contract says so
+in its own `implementation_state` block rather than leaving a reader to infer it.
+Cursor `done -> 67`.
 
 
 ## Next

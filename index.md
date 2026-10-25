@@ -61,6 +61,7 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/registry-schema.json` | the shape of the signed node-authorization registry — fields, types, the `signature_b64` name |
 | `contracts/registry-publication.json` | the Master→peer registry publication channel: envelope, digest, sequence, refusals, the 60 s re-delivery window |
 | `contracts/reflex-schema.json` | the typed decision contract for the reflex layer — a local sensor, never authority; abstain first-class |
+| `contracts/rfi-schema.json` | the request-for-information channel: signed request, signed answer, digest-bound content, `01_Inbox/` destination, acceptance order and refusals. Envelope and install rule built; the listener is not |
 | `contracts/ports.json` | which role listens where |
 | `contracts/guard-protocol.md` | the approval conversation |
 | `contracts/guard-approval.json` | the guard-apply approval envelope — the eight fields, the canonical bytes, the transport |

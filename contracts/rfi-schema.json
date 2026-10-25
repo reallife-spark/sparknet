@@ -1,0 +1,96 @@
+{
+  "schema_version": "1.0",
+  "contract": "rfi-schema",
+  "description": "The request-for-information channel: how a peer asks the Master for information, and how the Master's answer lands in that peer's 01_Inbox. The reference implementation is shared/sparknet-authz.py (the envelope) and shared/sparknet-rfi-install.py (the one acceptance rule); this file is the normative statement of both.",
+
+  "why": "Intake has to be attributable and replay-proof, or a node cannot tell an answer the Master signed from one somebody wrote into its inbox. The shape is deliberately the registry publication's — a signed projection, a digest-bound payload, and one install rule shared by every receive path — because that channel is built, tested and deployed, and a second invention would be a second thing to get wrong.",
+
+  "request": {
+    "direction": "peer -> Master",
+    "fields": ["request_id", "peer_fingerprint", "question", "scope", "issued_at", "expires_at", "nonce"],
+    "signed_fields": ["request_id", "peer_fingerprint", "question", "scope", "issued_at", "expires_at", "nonce"],
+    "signature_field": "signature_b64",
+    "signed_by": "the requesting peer's own node key",
+    "why_the_peer_signs": "A request is a statement by a peer about what it wants, so the peer signs it. The Master answers only requests it can attribute, because the answer will carry privilege-relevant material into a node's inbox and an unattributable ask is an unattributable delivery.",
+    "scope": "an allow-list of vault categories the answer may draw on. The Master refuses to answer a request whose scope reaches material the peer is not granted; scope narrows, it never widens.",
+    "request_id_rule": "stable handle chosen by the requester, unique per peer. The answer echoes it, and it is what makes a re-delivered answer detectable as a duplicate rather than as new information."
+  },
+
+  "answer": {
+    "direction": "Master -> peer, into the peer's 01_Inbox",
+    "fields": ["answered_at", "content_b64", "content_sha256", "item_name", "peer_fingerprint", "request_id"],
+    "signed_fields": ["answered_at", "content_sha256", "item_name", "peer_fingerprint", "request_id"],
+    "signature_field": "signature_b64",
+    "signature_travels": "beside the fields, in the same artifact; it is not part of the signed projection",
+    "extra_fields": "refused",
+    "canonicalisation": "json.dumps(projected, sort_keys=True, separators=(',', ':')).encode('utf-8')",
+    "implementation": "shared/sparknet-authz.py::rfi_answer_message",
+    "signer": "shared/sparknet-authz.py::sign_rfi_answer (Master-side only)",
+    "verifier": "shared/sparknet-authz.py::verify_rfi_answer",
+
+    "digest_rule": "content_sha256 must equal the sha256 of the bytes content_b64 decodes to. The content itself is not in the signed projection — it is bound by its digest — because an answer can be large and the projection should stay small enough to canonicalise identically everywhere. A digest that disagrees with the payload is refused before the payload is read.",
+    "signature_covers": "the projection (answered_at, content_sha256, item_name, peer_fingerprint, request_id); the content is bound by content_sha256",
+
+    "peer_fingerprint": {
+      "why": "Binds the answer to the peer it was prepared for. Without it, an answer minted for one node would be a valid answer any node could install into its own inbox, and the material inside it would have crossed a boundary nobody authorised. This is the same reason a guard approval names its peer."
+    },
+
+    "item_name": {
+      "rule": "a single path component under 01_Inbox/. It must contain no separator and no '..' — the answer is written into the inbox, so a name that could traverse would write outside it.",
+      "why_signed": "It is inside the projection because where an answer lands is part of what the Master authorised. An unsigned name would let a deliverer choose the destination."
+    },
+
+    "duplicate_rule": "A peer records every request_id it has installed. A second answer for one already installed is refused as duplicate_answer, which is what makes re-delivery idempotent and makes replaying an older answer for the same request impossible. There is no global sequence here, unlike the registry publication, because answers are independent items rather than successive states of one document: a registry supersedes, an answer accumulates.",
+
+    "expiry": "answered_at plus the peer's inbox policy window. An answer that arrives after it is refused as expired, because information the Master prepared for a question asked days ago may no longer be what the question meant."
+  },
+
+  "acceptance": {
+    "order": [
+      "the source is loopback or the Master's overlay address; anything else is refused before the body is read",
+      "the artifact parses and carries exactly the declared fields — an extra field is refused, because a field outside the projection is unsigned",
+      "the signature verifies under the registry's master public key",
+      "content_sha256 equals the digest of the decoded content_b64",
+      "peer_fingerprint is this peer's own",
+      "item_name is a single safe component under 01_Inbox/",
+      "the answer is not expired",
+      "request_id has not already been installed on this node",
+      "only then: write the item, record the request_id, and record an inbox_acceptance block"
+    ],
+    "one_rule": "shared/sparknet-rfi-install.py owns this order. Every receive path — a live listener and an operator carrying an artifact to a node whose listener is not running — installs through it, so the two cannot disagree about what a peer trusts. A second copy of the order is how the guard-approval rule drifted before Step 5.",
+    "records": "Installing an answer writes the item into 01_Inbox/ and appends an inbox_acceptance ledger block with source master-node, which is the event shared/sparknet-provenance.py::build_inbox_acceptance produces. Master-origin material may be executed on notice per tracking-schema.json inbox_dispatch, but it is still recorded: the trail of what arrived is what makes the arrival attributable.",
+    "write_order": "the item is written before the request_id is recorded, so a crash between them re-delivers rather than losing the answer. The reverse order would record an acceptance for an item that never landed, and a ledger claiming a delivery that did not happen is worse than a duplicate."
+  },
+
+  "refusals": {
+    "off_overlay": "the source is neither loopback nor the Master's overlay address",
+    "malformed": "the artifact is not JSON, or is not an object",
+    "extra_fields": "a field outside the declared envelope, which would be unsigned authority-shaped data",
+    "missing_fields": "a declared field is absent",
+    "bad_signature": "the signature does not verify under the registry's master public key",
+    "digest_mismatch": "content_sha256 is not the digest of the decoded content",
+    "wrong_peer": "peer_fingerprint is not this peer's",
+    "unsafe_item_name": "item_name traverses or names a subdirectory",
+    "expired": "the answer arrived after its window",
+    "duplicate_answer": "this request_id is already installed here"
+  },
+
+  "transport": {
+    "method": "POST",
+    "path": "/api/v1/rfi",
+    "port": 9090,
+    "bound_by": "peer",
+    "note": "The guard's existing port, which already carries two routes (critical-file/patch and registry). A third route on it adds no transport edge and no new attack surface: the source gate, the size limit and the refusal vocabulary are the guard's, and the answer's own signature is checked by the shared install rule.",
+    "body": "the answer artifact, JSON; no wrapper and no second signature — the answer is self-authenticating",
+    "source_gate": "loopback and the Master's overlay address (10.100.0.1); every other source is refused 403 off_overlay before the body is read",
+    "implementation_state": "the envelope and the install rule are implemented; the listener route is NOT — see implementation_state below"
+  },
+
+  "implementation_state": {
+    "envelope": "implemented — shared/sparknet-authz.py signs, projects and verifies",
+    "install_rule": "implemented — shared/sparknet-rfi-install.py, exercised in-process",
+    "listener": "NOT BUILT. There is no /api/v1/rfi route on the guard yet, so nothing arrives over a wire. tracking-schema.json's phase_boundary rule applies unchanged: nothing in this repository may claim transport delivery works until a listener exists and contracts/ports.json says so.",
+    "master_side_composer": "NOT BUILT. The Master has no service that takes a signed request, gathers an answer and signs it; sign_rfi_answer is the primitive such a service would call.",
+    "honest_pair": "implemented reference code, nothing deployed here, and the cross-node leg explicitly a human's to confirm on a live pair"
+  }
+}

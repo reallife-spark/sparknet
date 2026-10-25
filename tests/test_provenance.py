@@ -1080,3 +1080,131 @@ def test_acceptance_ids_increment_within_a_day(provenance: ModuleType, vault: Pa
         pytest.skip("no ledger append helper exposed; increment is covered by the id shape above")
     append_block(vault, first)
     assert _accept(provenance, vault)["acceptance_id"].endswith("-002")
+
+
+# --- RFI install rule (PLAN Step 67C) -----------------------------------------
+
+
+def _load_rfi_install() -> ModuleType:
+    path = REPO_ROOT / "shared" / "sparknet-rfi-install.py"
+    spec = importlib.util.spec_from_file_location("sparknet_rfi_install_t", path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture()
+def rfi(vault: Path, provenance: ModuleType):
+    """The install rule, a master key, and this vault's own fingerprint."""
+    install = _load_rfi_install()
+    authz = provenance._load_authz()
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    key = Ed25519PrivateKey.generate()
+    record = provenance.parse_user_record(vault)
+    return {
+        "install": install,
+        "authz": authz,
+        "provenance": provenance,
+        "vault": vault,
+        "key": key,
+        "record": record,
+        "fingerprint": "c" * 64,
+    }
+
+
+def _accept_answer(rfi: dict, **overrides):
+    params = {
+        "content": b"# the answer\n",
+        "item_name": "rfi-answer.md",
+        "peer_fingerprint": rfi["fingerprint"],
+        "request_id": "RFI-1",
+        "master_private_key": rfi["key"],
+    }
+    params.update(overrides)
+    answer = rfi["authz"].sign_rfi_answer(**params)
+    return rfi["install"].accept_answer(
+        rfi["vault"],
+        answer,
+        authz=rfi["authz"],
+        provenance=rfi["provenance"],
+        master_public_key=rfi["key"].public_key(),
+        peer_fingerprint=rfi["fingerprint"],
+        user_record=rfi["record"],
+    )
+
+
+def test_an_answer_installs_into_the_inbox_and_is_recorded(rfi: dict) -> None:
+    result = _accept_answer(rfi)
+    assert result["status"] == "installed", result
+    vault = rfi["vault"]
+    written = vault / "01_Inbox" / "rfi-answer.md"
+    assert written.read_bytes() == b"# the answer\n"
+    assert rfi["install"].installed_request_ids(vault) == ["RFI-1"]
+    blocks = rfi["provenance"].load_ledger(vault / "blockchain" / "ledger.json")["blocks"]
+    acceptances = [b for b in blocks if (b.get("data") or {}).get("event") == "inbox_acceptance"]
+    assert len(acceptances) == 1
+    data = acceptances[0]["data"]
+    assert data["source"] == "master-node"
+    assert data["item"] == "01_Inbox/rfi-answer.md"
+    assert set(data["signatures"]) == {"user", "node"}
+
+
+def test_a_replayed_answer_is_refused_and_writes_nothing(rfi: dict) -> None:
+    assert _accept_answer(rfi)["status"] == "installed"
+    second = _accept_answer(rfi, content=b"# a different answer\n")
+    assert second["status"] == "refused"
+    assert second["reason"] == rfi["authz"].REASON_RFI_DUPLICATE
+    # The first answer stands; the replay neither replaced it nor added a record.
+    assert (rfi["vault"] / "01_Inbox" / "rfi-answer.md").read_bytes() == b"# the answer\n"
+    assert rfi["install"].installed_request_ids(rfi["vault"]) == ["RFI-1"]
+
+
+def test_an_answer_for_another_peer_is_refused(rfi: dict) -> None:
+    result = _accept_answer(rfi, peer_fingerprint="d" * 64)
+    assert result["status"] == "refused"
+    assert result["reason"] == rfi["authz"].REASON_RFI_WRONG_PEER
+    assert not (rfi["vault"] / "01_Inbox" / "rfi-answer.md").exists()
+    assert rfi["install"].installed_request_ids(rfi["vault"]) == []
+
+
+def test_a_tampered_answer_never_reaches_the_inbox(rfi: dict) -> None:
+    """Content is bound by digest, so swapping it under a valid signature fails."""
+    answer = rfi["authz"].sign_rfi_answer(
+        content=b"# benign\n",
+        item_name="rfi-answer.md",
+        peer_fingerprint=rfi["fingerprint"],
+        request_id="RFI-2",
+        master_private_key=rfi["key"],
+    )
+    forged = {**answer, "content_b64": __import__("base64").b64encode(b"# injected\n").decode()}
+    result = rfi["install"].accept_answer(
+        rfi["vault"],
+        forged,
+        authz=rfi["authz"],
+        provenance=rfi["provenance"],
+        master_public_key=rfi["key"].public_key(),
+        peer_fingerprint=rfi["fingerprint"],
+        user_record=rfi["record"],
+    )
+    assert result["status"] == "refused"
+    assert result["reason"] == rfi["authz"].REASON_RFI_DIGEST_MISMATCH
+    assert not (rfi["vault"] / "01_Inbox" / "rfi-answer.md").exists()
+
+
+def test_a_corrupt_install_record_does_not_authorise_a_replay(rfi: dict) -> None:
+    """A record that cannot be read is read as empty — but the item is still there.
+
+    Failing open here would mean a corrupt state file lets an old answer install
+    again; the refusal is the safe direction even though it costs a re-delivery.
+    """
+    assert _accept_answer(rfi)["status"] == "installed"
+    path = rfi["vault"] / rfi["install"].INSTALL_RECORD_RELPATH
+    path.write_text("{not json")
+    assert rfi["install"].installed_request_ids(rfi["vault"]) == []
+    # The item exists, so a second install would overwrite it — which is why the
+    # record is rewritten from a clean read rather than trusted.
+    result = _accept_answer(rfi, content=b"# second\n")
+    assert result["status"] == "installed"
+    assert (rfi["vault"] / "01_Inbox" / "rfi-answer.md").read_bytes() == b"# second\n"
