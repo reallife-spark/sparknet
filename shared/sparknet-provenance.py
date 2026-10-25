@@ -1300,7 +1300,8 @@ def append_block(vault: Path, data: dict[str, Any]) -> dict[str, Any]:
     The block header — every field except `hash` and `signature` — is signed by
     this node's identity key, and the node's public key travels inline in the
     block so an offline verifier needs no local key material. `data.signatures`
-    (for approvals and `grant_use`) still bind the record separately; the header
+    (for approvals, `grant_use` and `inbox_acceptance`) still bind the record
+    separately; the header
     signature binds the block's position and payload, so a deleted, reordered or
     edited block is detectable.
     """
@@ -1731,6 +1732,121 @@ def build_grant_use_data(
         "agent": agent,
         "model": model,
         "note_refs": sorted(note_refs),
+        "owner_id": str(record.get("owner_id")),
+        "owner_node": _node_id(vault),
+        "node_pubkey_b64": _node_public_b64(vault),
+        "recorded_at": _iso(moment),
+    }
+    data["signatures"] = _dual_sign(vault, record, data)
+    return data
+
+
+#: Where an inbox item may have come from. Closed, because the dispatch policy in
+#: `contracts/tracking-schema.json::inbox_dispatch` keys off it: a source outside
+#: this set has no defined trust treatment, and inventing one at the call site is
+#: how an unreviewed item ends up executed.
+INBOX_SOURCES = ("master-node", "peer-node", "email")
+
+#: Sources whose material is untrusted until a reviewer agent has been over it.
+#: `master-node` is absent on purpose — the Master is the signing role, so its
+#: items may be executed on notice.
+INBOX_UNTRUSTED_SOURCES = ("peer-node", "email")
+
+
+def build_inbox_acceptance(
+    vault: Path,
+    *,
+    item: str,
+    source: str,
+    decision: str,
+    reviewer: str = "",
+    sanitized: bool = False,
+    sender: str = "",
+    note_refs: list[str] | None = None,
+    record: dict[str, Any],
+    clock=None,
+) -> dict[str, Any]:
+    """Assemble an `inbox_acceptance` block, and enforce the dispatch policy.
+
+    The contract already stated this event (`tracking-schema.json`
+    `inbox_dispatch`, `provenance-protocol.md`), and both roles' agent charters
+    told agents that acceptance *is* recorded as an `inbox_acceptance` block — but
+    nothing could produce one. A charter asserting a record that no code writes is
+    worse than silence: an agent reading it trusts an audit trail that does not
+    exist. This is the builder that makes the claim true.
+
+    Dual-signed over one payload, like an approval and a `grant_use`: the user
+    consents and the node countersigns, so neither half can be produced alone.
+
+    The policy is enforced here rather than left to callers, because the callers
+    are agents and the point of the policy is to constrain them:
+
+    * the item must live under `01_Inbox/` — that directory is read-only for agents
+      until accepted, so an acceptance recorded against a path outside it would be
+      laundering something that never went through intake;
+    * an `email` source must name a sender on `00_System/user.md`'s
+      `authorised_senders`, and an empty list refuses everything, which is the
+      fail-closed default the record ships with;
+    * accepting from an untrusted source requires a named reviewer, since the
+      contract's rule is that such an item is reviewed and sanitized before
+      anything downstream reads it.
+
+    A rejection is always recordable: the trail of what was refused is as much the
+    point as the trail of what was let in.
+    """
+    if source not in INBOX_SOURCES:
+        raise ProvenanceError(f"source must be one of {INBOX_SOURCES}, got {source!r}")
+    if decision not in ("accepted", "rejected"):
+        raise ProvenanceError(f"decision must be accepted|rejected, got {decision!r}")
+    if not isinstance(item, str) or not item:
+        raise ProvenanceError("item is required: the vault-relative path of the inbox item")
+    parts = Path(item).parts
+    if not parts or parts[0] != "01_Inbox":
+        raise ProvenanceError(f"item must be under 01_Inbox/, got {item!r}")
+    if ".." in parts:
+        raise ProvenanceError(f"item must not traverse out of the vault: {item!r}")
+
+    if source == "email":
+        allowed = list(parse_user_record(vault).get("authorised_senders") or [])
+        if not sender:
+            raise ProvenanceError("an email source must name its sender")
+        if sender not in allowed:
+            raise ProvenanceError(
+                f"sender {sender!r} is not on 00_System/user.md authorised_senders; "
+                "the inbox policy fails closed, so nothing may push work onto this node"
+            )
+
+    if decision == "accepted" and source in INBOX_UNTRUSTED_SOURCES and not reviewer:
+        raise ProvenanceError(
+            f"accepting from {source} requires a reviewer: untrusted material is reviewed "
+            "and sanitized before anything downstream reads it"
+        )
+
+    moment = (clock or _now)()
+    try:
+        blocks = load_ledger(vault / "blockchain" / "ledger.json").get("blocks", [])
+    except ProvenanceError:
+        blocks = []
+    prior = sum(
+        1
+        for block in blocks
+        if isinstance(block, dict) and (block.get("data") or {}).get("event") == "inbox_acceptance"
+    )
+    data: dict[str, Any] = {
+        "event": "inbox_acceptance",
+        "acceptance_id": f"INB-{moment.date().isoformat()}-{prior + 1:03d}",
+        "item": str(item),
+        "source": source,
+        "sender": str(sender),
+        "decision": decision,
+        "reviewer": str(reviewer),
+        "sanitized": bool(sanitized),
+        # The validity state the note carries afterwards. `sanitized` is the
+        # contract's own word for material that ingressed from an untrusted source
+        # and was reviewed before use; recording it here is what makes the state on
+        # the note checkable against the trail that justified it.
+        "validity": "sanitized" if sanitized else ("signed" if decision == "accepted" else "unsigned"),
+        "note_refs": sorted(note_refs or []),
         "owner_id": str(record.get("owner_id")),
         "owner_node": _node_id(vault),
         "node_pubkey_b64": _node_public_b64(vault),

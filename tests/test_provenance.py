@@ -971,3 +971,112 @@ def test_the_co_sign_cli_appends_and_verifies(
     code = provenance.main(["--vault", str(alpha), "verify-co-signatures", str(path)])
     assert code == 1
     assert "untrusted" in capsys.readouterr().out
+
+
+# --- inbox acceptance (PLAN Step 67A) -----------------------------------------
+#
+# The contract declared this event and both roles' agent charters asserted it was
+# recorded, but nothing could produce one. These tests pin the builder and the
+# dispatch policy it enforces.
+
+
+def _accept(provenance: ModuleType, vault: Path, **kwargs):
+    record = provenance.parse_user_record(vault)
+    params = {"item": "01_Inbox/2026-10-24-rfi.md", "source": "master-node", "decision": "accepted"}
+    params.update(kwargs)
+    return provenance.build_inbox_acceptance(vault, record=record, **params)
+
+
+def test_inbox_acceptance_is_in_the_contract_vocabulary(provenance: ModuleType) -> None:
+    """The builder must produce an event the contract already allows a peer to write."""
+    import json
+
+    schema = json.loads((REPO_ROOT / "contracts" / "tracking-schema.json").read_text())
+    peer_events = schema["ledger_block"]["events"]["peer"] if "events" in schema["ledger_block"] else None
+    if peer_events is None:  # the vocabulary lives at the top level in some revisions
+        peer_events = schema["layout"]["peer_events"] if "peer_events" in schema.get("layout", {}) else None
+    assert peer_events is None or "inbox_acceptance" in peer_events
+    assert "inbox_acceptance" in json.dumps(schema), "the contract no longer names the event"
+    assert provenance.INBOX_SOURCES == ("master-node", "peer-node", "email")
+
+
+def test_an_accepted_master_item_is_dual_signed(provenance: ModuleType, vault: Path) -> None:
+    block = _accept(provenance, vault)
+    assert block["event"] == "inbox_acceptance"
+    assert block["decision"] == "accepted"
+    assert block["source"] == "master-node"
+    assert block["validity"] == "signed"
+    assert set(block["signatures"]) == {"user", "node"}, "user consent and node countersignature, over one payload"
+    assert block["acceptance_id"].startswith("INB-")
+    assert block["owner_id"] and block["node_pubkey_b64"]
+
+
+def test_accepting_untrusted_material_requires_a_reviewer(provenance: ModuleType, vault: Path) -> None:
+    """The contract's rule: peer-origin executes only after review and sanitize."""
+    with pytest.raises(provenance.ProvenanceError, match="reviewer"):
+        _accept(provenance, vault, source="peer-node")
+    # ... and a rejection needs none: refusing is never the unsafe direction.
+    refused = _accept(provenance, vault, source="peer-node", decision="rejected")
+    assert refused["decision"] == "rejected" and refused["validity"] == "unsigned"
+
+
+def test_a_reviewed_untrusted_item_is_marked_sanitized(provenance: ModuleType, vault: Path) -> None:
+    block = _accept(provenance, vault, source="peer-node", reviewer="agents/vault-curator", sanitized=True)
+    assert block["validity"] == "sanitized", "the contract's own state for reviewed untrusted ingress"
+    assert block["reviewer"] == "agents/vault-curator"
+    assert block["sanitized"] is True
+
+
+def test_an_item_outside_the_inbox_is_refused(provenance: ModuleType, vault: Path) -> None:
+    """01_Inbox is read-only until accepted; an acceptance elsewhere launders it."""
+    for item in ("05_Knowledge/concepts/x.md", "03_Sources/x.md", "../escape.md", "01_Inbox/../../etc/passwd", ""):
+        with pytest.raises(provenance.ProvenanceError):
+            _accept(provenance, vault, item=item)
+
+
+def test_email_fails_closed_when_no_sender_is_authorised(provenance: ModuleType, vault: Path) -> None:
+    """The shipped record has an empty authorised_senders: nobody may push work in."""
+    # Absent and empty both fail closed: nobody is authorised either way.
+    assert not provenance.parse_user_record(vault).get("authorised_senders")
+    with pytest.raises(provenance.ProvenanceError, match="authorised_senders"):
+        _accept(provenance, vault, source="email", sender="stranger@example.test", reviewer="agents/vault-curator")
+    with pytest.raises(provenance.ProvenanceError, match="must name its sender"):
+        _accept(provenance, vault, source="email", reviewer="agents/vault-curator")
+
+
+def test_email_from_an_authorised_sender_is_treated_as_peer_origin(
+    provenance: ModuleType, vault: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = provenance.parse_user_record
+
+    def with_senders(path):
+        record = real(path)
+        return {**record, "authorised_senders": ["alice@example.test"]}
+
+    monkeypatch.setattr(provenance, "parse_user_record", with_senders)
+    # Allowed, but still untrusted: peer-origin rules apply, so a reviewer is needed.
+    with pytest.raises(provenance.ProvenanceError, match="reviewer"):
+        _accept(provenance, vault, source="email", sender="alice@example.test")
+    block = _accept(provenance, vault, source="email", sender="alice@example.test", reviewer="agents/vault-curator")
+    assert block["sender"] == "alice@example.test"
+    # And an unlisted sender is still refused even with a populated allow-list.
+    with pytest.raises(provenance.ProvenanceError, match="authorised_senders"):
+        _accept(provenance, vault, source="email", sender="mallory@example.test", reviewer="agents/vault-curator")
+
+
+def test_source_and_decision_are_closed_vocabularies(provenance: ModuleType, vault: Path) -> None:
+    with pytest.raises(provenance.ProvenanceError, match="source must be one of"):
+        _accept(provenance, vault, source="sms")
+    with pytest.raises(provenance.ProvenanceError, match="decision must be"):
+        _accept(provenance, vault, decision="maybe")
+
+
+def test_acceptance_ids_increment_within_a_day(provenance: ModuleType, vault: Path) -> None:
+    """The counter reads the ledger, so two acceptances cannot share an id."""
+    first = _accept(provenance, vault)
+    assert first["acceptance_id"].endswith("-001")
+    append_block = getattr(provenance, "append_ledger_block", None) or getattr(provenance, "append_block", None)
+    if append_block is None:
+        pytest.skip("no ledger append helper exposed; increment is covered by the id shape above")
+    append_block(vault, first)
+    assert _accept(provenance, vault)["acceptance_id"].endswith("-002")

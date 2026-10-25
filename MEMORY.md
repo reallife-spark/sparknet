@@ -9,7 +9,7 @@ Updated: 2026-10-23
 
 ## Plan cursors
 
-- **root `PLAN.md` `current: done`.** Step 64 (the reflex layer) opened
+- **root `PLAN.md` `current: 67`.** Step 64 (the reflex layer) opened
   **2026-10-23**: local-only default, Master broker (`4224`) for the unified
   massive-task workload, RAG relevance first on the fabric corpus,
   shadow → assist → enforce, Master-local before peer access. 64A is
@@ -95,7 +95,13 @@ Updated: 2026-10-23
   the write and before the euid question — the attestation says whether the human
   may ask, the uid says whether the process can do, and both must hold. Only the
   live privilege leg stays `DoD: confirm: user`: this host has no root/non-root
-  split to exercise.
+  split to exercise. **Step 67 (intake) opened 2026-10-24: 67A done** —
+  `build_inbox_acceptance` in `shared/sparknet-provenance.py`, dual-signed and
+  *enforcing* the `inbox_dispatch` policy rather than merely recording it. It
+  closes a gap both roles' agent charters had been asserting since 2026-10-10:
+  they told agents acceptance *is* recorded as an `inbox_acceptance` block while
+  no code could produce one. 67B notification, 67C the RFI channel, 67D the inbox
+  transport remain open.
   **The pin hazard is closed** (`3d3bac9`): `goagx/GOSPARK_PIN` now names goSpark
   `0a6da00`, goSpark is pushed, and goagx was republished (`9898733`) since
   `tests/test_goagx_repo.py` binds the pin to the published manifest. **Still

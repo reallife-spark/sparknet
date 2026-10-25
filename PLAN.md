@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
 updated: 2026-10-24
-current: done
+current: 67
 ---
 
 # sparknet — Active Plan
@@ -3080,6 +3080,79 @@ reachable, because the guard installs registry publications while the bridge run
 registry now re-reads on a `(mtime_ns, size)` stamp change and `_mesh_count` is
 passed as the live callable; the regression test is negative-controlled against
 the captured-constant version. See `log.md` 2026-10-24.
+
+## Step 67 — Intake: how information arrives, and what happens when it does
+
+Opened 2026-10-24 (Phase 3 of the six-phase arc). The requirement is that
+information reaches a node in three ways — the Master answering an RFI into
+`01_Inbox/`, a sibling sharing part of its knowledge base, and reports carrying
+verifiable validation chains — and that arrival is *notified*, *accepted by a
+human*, and only then ingested. `contracts/tracking-schema.json` already states the
+policy (`inbox_dispatch`) and its own `phase_boundary` lists the transport as
+`not_built`, so this step builds toward a contract that exists rather than
+inventing one.
+
+- [x] **67A — the `inbox_acceptance` ledger event the charters already promised.**
+      `tracking-schema.json` declares the event in the peer vocabulary,
+      `provenance-protocol.md` describes it twice, and **both roles' agent charters**
+      (`peer-node/00_System/alpha-agent.md:28`,
+      `master-node/00_System/alpha-admin.md:28`) tell an agent that acceptance *is*
+      recorded as an `inbox_acceptance` block. Nothing could produce one:
+      `shared/sparknet-provenance.py` built exactly three events — `approval`,
+      `checkpoint`, `grant_use`. A charter asserting a record no code can write is
+      worse than silence, because an agent reading it trusts an audit trail that
+      does not exist. `build_inbox_acceptance` now exists, dual-signed over one
+      payload like its two siblings (user consent plus node countersignature, so
+      neither half can be produced alone).
+      It **enforces the dispatch policy rather than merely recording it**, because
+      the callers are agents and constraining them is the point: the item must be
+      under `01_Inbox/` — that directory is read-only until accepted, so an
+      acceptance recorded against a path outside it would launder something that
+      never went through intake — and must not traverse out of the vault; an `email`
+      source must name a sender on `00_System/user.md`'s `authorised_senders`, where
+      an absent or empty list refuses everything, which is the fail-closed default
+      the record ships with; and accepting from an untrusted source (`peer-node`,
+      `email`) requires a named reviewer, per the contract's review-then-sanitize
+      rule. `master-node` is deliberately absent from the untrusted set — the Master
+      is the signing role, so its items may be executed on notice. A **rejection is
+      always recordable** and needs no reviewer: refusing is never the unsafe
+      direction, and the trail of what was turned away is as much the point as the
+      trail of what was let in. The block carries the `validity` state the note takes
+      afterwards (`sanitized` for reviewed untrusted ingress, the contract's own word
+      for it), which is what makes a note's state checkable against the trail that
+      justified it.
+      **DoD:** (1) the event the builder emits is one the contract's peer vocabulary
+      already allows; (2) a master-origin acceptance is dual-signed; (3) accepting
+      untrusted material without a reviewer is refused while rejecting it is not;
+      (4) a reviewed untrusted item is marked `sanitized`; (5) an item outside
+      `01_Inbox/`, or traversing out of it, is refused; (6) email fails closed on an
+      empty allow-list and is treated as peer-origin once a sender is authorised,
+      still requiring a reviewer; (7) `source` and `decision` are closed vocabularies;
+      (8) acceptance ids increment from the ledger. Verified 2026-10-24: 9 new tests,
+      `make ci` green.
+
+- [ ] **67B — notification on arrival.** An item landing in `01_Inbox/` must reach
+      the human, since acceptance is a human act and an unnoticed item is an
+      unaccepted one. `scripts/plugins/kde-notify.ts` already pings paired KDE
+      Connect devices for agent questions and permission prompts, but it is
+      fabric-root-local and deliberately not shipped in node bundles, so the node
+      path needs its own mechanism.
+
+- [ ] **67C — the RFI channel.** A peer asks the Master for information and the
+      answer lands in `01_Inbox/`. The shape to mirror is the registry publication
+      (`contracts/registry-publication.json`), which is the proven Master→peer push:
+      a signed envelope, a digest-bound payload, a monotonic sequence so an older
+      answer cannot be replayed over a newer one, and one shared install rule serving
+      both the online and the offline path.
+
+- [ ] **67D — the inbox transport itself.** `tracking-schema.json`'s
+      `phase_boundary` still lists "node-to-node transport" as `not_built`, and its
+      rule is explicit: nothing may claim transport delivery works until a listener
+      exists and `ports.json` says so. This is the leg that makes 67B and 67C real
+      rather than in-process.
+
+**Status:** 67A done, `make ci` green. 67B–67D open. Cursor `done -> 67`.
+
 
 ## Next
 
