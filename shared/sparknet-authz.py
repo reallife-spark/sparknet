@@ -987,6 +987,53 @@ REASON_GRANT_NONCE_REUSED = "grant_nonce_reused"
 REASON_GRANT_NODE_MISMATCH = "grant_node_mismatch"
 REASON_GRANT_MALFORMED = "grant_malformed"
 
+#: Refusal reasons for the operator-OS ceiling. Kept beside the grant reasons
+#: because the check reads a grant field, and a caller that maps reasons to HTTP
+#: statuses should not have to import them from two places.
+REASON_OPERATOR_UNATTESTED = "operator_unattested"
+REASON_OPERATOR_INSUFFICIENT = "operator_insufficient"
+
+
+def operator_os_authorises(grant: dict[str, Any], *, requires_root: bool) -> tuple[bool, str]:
+    """Whether the grant's attested operator identity permits a privileged mutation.
+
+    Returns ``(allowed, reason)``; ``reason`` is empty when allowed. Never raises,
+    so a caller cannot turn a missing attestation into an unhandled error and
+    thereby into a fail-open path.
+
+    **The attestation authorises.** A grant minter is trusted — minting is
+    master-side or an offline operator act, and `operator_os` is inside the
+    signature — so an attested ``is_root: true`` permits what root may do even when
+    the process serving the request runs as somebody else. That is the whole point
+    of putting the ceiling in the grant: it travels with the human rather than with
+    the daemon, so how the node happened to be started cannot widen a session.
+
+    Two things this deliberately does not do:
+
+    - It never reads the serving process's own uid. Doing so would let a bridge or
+      WebUI container started as root hand every session root.
+    - It never treats an absent attestation as permissive. ``operator_os: null``
+      means nobody vouched for this session's OS identity, so a privileged mutation
+      is refused rather than allowed on the strength of silence.
+
+    A non-privileged operation is always allowed: the ceiling binds what needs
+    privilege, and requiring an attestation for an ordinary vault write would make
+    the field a precondition of using the node at all.
+    """
+    if not requires_root:
+        return True, ""
+    if not isinstance(grant, dict):
+        return False, REASON_GRANT_MALFORMED
+    attested = grant.get("operator_os")
+    if not isinstance(attested, dict):
+        return False, REASON_OPERATOR_UNATTESTED
+    # is_root is a recorded boolean, never inferred from uid == 0: the two can
+    # disagree, and a disagreement is exactly what an enforcement check must not
+    # guess about.
+    if attested.get("is_root") is True:
+        return True, ""
+    return False, REASON_OPERATOR_INSUFFICIENT
+
 
 def grant_message(grant: dict[str, Any]) -> bytes:
     """Canonical bytes a grant's signature covers, projected to GRANT_FIELDS.

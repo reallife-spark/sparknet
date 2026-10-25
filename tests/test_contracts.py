@@ -1603,3 +1603,84 @@ def test_the_system_files_carry_no_key_shaped_literals(provenance: ModuleType):
             continue
         for label, pattern in provenance._PATTERNS:
             assert not pattern.search(text), f"{path.name}: {label}"
+
+
+def test_the_operator_ceiling_authorises_from_the_attestation(authz: ModuleType):
+    """The signed attestation is the authority, not the serving process's uid.
+
+    Operator decision, 2026-10-24: the attestation is allowed to authorise a
+    privileged mutation. A minter is trusted — minting is master-side or an
+    offline operator act and `operator_os` is inside the signature — so a session
+    driven by root may do what root may do even when the daemon answering it runs
+    as somebody else. What must never happen is the reverse reading, where the
+    daemon's uid sets the ceiling: then how the node was started would decide what
+    every session may do.
+    """
+    root = {"uid": 0, "euid": 0, "username": "root", "groups": ["root"], "is_root": True}
+    user = {"uid": 1000, "euid": 1000, "username": "operator", "groups": ["users"], "is_root": False}
+
+    assert authz.operator_os_authorises({"operator_os": root}, requires_root=True) == (True, "")
+    allowed, reason = authz.operator_os_authorises({"operator_os": user}, requires_root=True)
+    assert not allowed and reason == authz.REASON_OPERATOR_INSUFFICIENT
+
+
+def test_an_unattested_operator_fails_closed(authz: ModuleType):
+    """Null means nobody vouched for this session, not "assume the best case"."""
+    for grant in ({"operator_os": None}, {}, {"operator_os": "root"}, {"operator_os": []}):
+        allowed, reason = authz.operator_os_authorises(grant, requires_root=True)
+        assert not allowed, grant
+        assert reason == authz.REASON_OPERATOR_UNATTESTED, grant
+
+
+def test_root_is_read_not_inferred(authz: ModuleType):
+    """uid 0 with is_root false is refused: the two can disagree, and the check must not guess."""
+    lying = {"uid": 0, "euid": 0, "username": "root", "groups": ["root"], "is_root": False}
+    allowed, reason = authz.operator_os_authorises({"operator_os": lying}, requires_root=True)
+    assert not allowed and reason == authz.REASON_OPERATOR_INSUFFICIENT
+
+
+def test_an_unprivileged_operation_needs_no_attestation(authz: ModuleType):
+    """The ceiling binds privilege, not ordinary use of the node."""
+    for grant in ({"operator_os": None}, {}, {"operator_os": {"is_root": False}}):
+        assert authz.operator_os_authorises(grant, requires_root=False) == (True, "")
+
+
+def test_the_ceiling_never_raises(authz: ModuleType):
+    """A malformed grant must refuse, not blow up — an exception here is a fail-open path."""
+    for grant in (None, "not-a-grant", 42, [], object()):
+        allowed, reason = authz.operator_os_authorises(grant, requires_root=True)
+        assert not allowed
+        assert reason in (authz.REASON_GRANT_MALFORMED, authz.REASON_OPERATOR_UNATTESTED)
+
+
+def test_the_ceiling_reads_a_real_minted_grant(authz: ModuleType):
+    """End to end: what mint_grant signs is what the ceiling reads."""
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    master_key = Ed25519PrivateKey.generate()
+    identity = {
+        "node_id": "peer-fixture-01",
+        "role": "peer",
+        "wireguard_public_key_b64": "ZmFrZS13Z2lwdW5pY21hcHViaWMta2V5LWZvci10ZXN0cw==",
+        "overlay_ipv4": "10.100.0.7",
+        "requested_capabilities": ["telemetry"],
+    }
+    common = {
+        "node_identity": identity,
+        "user_identity": "U-20161",
+        "conversation_key": "key-1",
+        "capabilities": ["telemetry"],
+        "vault_scope": [],
+        "ttl_minutes": 60,
+        "master_private_key": master_key,
+    }
+    root = authz.mint_grant(
+        grant_id="G-ROOT",
+        nonce="n-root",
+        operator_os={"uid": 0, "euid": 0, "username": "root", "groups": ["root"], "is_root": True},
+        **common,
+    )
+    plain = authz.mint_grant(grant_id="G-PLAIN", nonce="n-plain", **common)
+    assert authz.operator_os_authorises(root, requires_root=True)[0] is True
+    allowed, reason = authz.operator_os_authorises(plain, requires_root=True)
+    assert not allowed and reason == authz.REASON_OPERATOR_UNATTESTED

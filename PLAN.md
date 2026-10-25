@@ -2953,6 +2953,32 @@ belongs where the rest of authority belongs: inside the envelope the Master sign
       construction — which is either the cap working, or an accident a root-run
       WebUI would silently void. Deciding which, and making it explicit, is the
       content of this leg.
+      **Partly landed 2026-10-24.** The decision itself is now one rule in one
+      place: `shared/sparknet-authz.py::operator_os_authorises(grant,
+      requires_root=...)` returns `(allowed, reason)` and never raises, so a caller
+      cannot turn a missing attestation into an unhandled error and thereby into a
+      fail-open path. It encodes the operator's decision — the attestation
+      authorises, an absent one fails closed, `is_root` is read and never inferred
+      from `uid == 0`, and an unprivileged operation needs no attestation at all.
+      `manifests/security-policies.json` declares it under `operator_os_ceiling`,
+      including how it relates to the guard's `euid_0` requirement: complementary,
+      not redundant — the attestation says whether the human may *ask*, the daemon's
+      uid says whether the process can *do*, and both must hold. Seven tests cover
+      it, including one that reads a real `mint_grant` output rather than a dict
+      literal.
+      **What is still missing, and why it is not a small omission.** The rule is not
+      wired to any mutating path, and the reason is structural: `operator_os` lives
+      on the **grant** envelope, while the privileged filesystem mutation happens
+      through the **guard-apply** envelope — and `GUARD_APPROVAL_FIELDS` is eight
+      fields (`content_b64`, `content_sha256`, `expires_at`, `file_path`,
+      `issued_at`, `nonce`, `peer_fingerprint`, `request_id`) with **no operator
+      identity among them**. So enforcing the ceiling where privilege is actually
+      exercised needs that envelope to carry the attestation, which is a second
+      signed-envelope change with its own golden vectors. Wiring the rule only to
+      the bridge's vault verbs would have been worse than not wiring it: those
+      writes are not privileged, so it would have produced a check that always
+      passes and looked like enforcement. Recorded here so the next pass does not
+      mistake the rule's existence for the control's.
       **DoD:** a mutating request is refused when the attested operator lacks the
       OS privilege it would exercise; a null `operator_os` fails closed on
       privileged mutations rather than being read as root; the check is on the

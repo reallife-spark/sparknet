@@ -85,11 +85,15 @@ Updated: 2026-10-23
   ceiling must travel with the human rather than be whatever uid the daemon
   happens to run as. Single-repo: goSpark implements no grant handling at all.
   Also pinned `GRANT_FIELDS` against the contract, which nothing did.
-  **66D-ii open** — enforcement at the mutating path. Correction to an earlier
-  audit: the guard is not silent about privilege (`sparknet-guard-d.py:1002`
-  refuses to arm apply without euid 0), but that *requires* privilege rather than
-  *capping* by the operator's, and `deny_root_escalation_attempts` is still
-  declared with nothing enforcing it.
+  **66D-ii partly landed** — operator decision: *the attestation authorises*.
+  `authz.operator_os_authorises(grant, requires_root=...)` is the one rule (never
+  reads the daemon's uid, fails closed on null, never infers root from uid 0) and
+  `security-policies.json` declares it as `operator_os_ceiling`. **Not wired:**
+  `operator_os` is on the *grant* envelope while privileged mutation goes through
+  *guard-apply*, whose eight `GUARD_APPROVAL_FIELDS` carry no operator identity —
+  so wiring needs a second signed-envelope change. Deliberately not wired to the
+  bridge's vault verbs: those writes are unprivileged, so the check would always
+  pass while looking like enforcement.
   **The pin hazard is closed** (`3d3bac9`): `goagx/GOSPARK_PIN` now names goSpark
   `0a6da00`, goSpark is pushed, and goagx was republished (`9898733`) since
   `tests/test_goagx_repo.py` binds the pin to the published manifest. **Still
