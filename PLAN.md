@@ -2890,18 +2890,25 @@ belongs where the rest of authority belongs: inside the envelope the Master sign
       advisory; `DoD: confirm: user` for the live leg, since this host cannot
       exercise a privilege boundary it does not have.
 
-**Deployment hazard this step creates, and does not resolve.** Adding a field to
-the signed envelope changes the bytes the Master signs, so **every existing entry
-signature stops verifying**. In this repo that costs nothing — the shipped
-registry is empty by design and fail-closed. On a live node it means re-signing
-and re-publishing at a higher sequence, never editing entries in place. Worse,
-`goagx/GOSPARK_PIN` still points at `f547751`, which predates the Go half of this
-change: a device bootstrapped from that pin would build a goSpark whose envelope
-disagrees with the fabric's, and its agent would reject a correctly signed
-registry. The pin must be bumped and `make goagx-publish` re-run **before** any
-node deployment. Left open deliberately, because the pin file's own rule is that a
-bump is a reviewed commit accompanied by a republish, and that is a release act
-rather than a code change.
+**Deployment hazard this step creates.** Adding a field to the signed envelope
+changes the bytes the Master signs, so **every existing entry signature stops
+verifying**. In this repo that costs nothing — the shipped registry is empty by
+design and fail-closed. On a live node it means re-signing and re-publishing at a
+higher sequence, never editing entries in place. That half stays open: it is an
+operator act on a live Master, not something this repository can do.
+
+The other half is **closed**. `goagx/GOSPARK_PIN` now names the goSpark commit
+carrying the matching Go envelope, so a device bootstrapped from the pin builds an
+agent that agrees with the fabric rather than one that would reject a *correctly*
+signed registry. Two things that made this more than a one-line edit: goSpark had
+to be pushed first, because a pin naming an unfetchable revision is a worse hazard
+than a stale one — `bootstrap-agx.sh` would fail on the device instead of quietly
+building the wrong thing — and `tests/test_goagx_repo.py` binds the pin to the
+published manifest (`manifest["gospark_sha"] == GOSPARK_SHA`), so the goagx
+distribution had to be republished in the same pass. `goagx/README.md`'s
+`f547751` was deliberately **not** changed: it is a record of what was measured on
+real AGX hardware, and rewriting a measurement to match a pin makes the evidence
+say something that never happened.
 
 **Status:** 66A–66B done, `make ci` green in both repos. 66C–66D open.
 Cursor `done -> 66`. Wiring 66B into the bridge also surfaced and fixed a
