@@ -76,9 +76,11 @@ Updated: 2026-10-23
   registry view, wired into the bridge so it is not inert; 66B also found that
   `sign_authorization` could not emit the field at all, so no signer could
   attest one. 66C platform declaration and 66D OS→AI permission binding are open.
-  **Hazard:** `goagx/GOSPARK_PIN` predates the Go half, so a device built from
-  that pin would reject a correctly signed registry — bump the pin and republish
-  goagx before any node deployment.
+  **The pin hazard is closed** (`3d3bac9`): `goagx/GOSPARK_PIN` now names goSpark
+  `0a6da00`, goSpark is pushed, and goagx was republished (`9898733`) since
+  `tests/test_goagx_repo.py` binds the pin to the published manifest. **Still
+  open, and not closable from this repo:** a live node must re-sign its registry
+  and re-publish at a higher sequence, because the signed envelope changed shape.
   Steps 1–54 closed/parked.
 - **`peer-node/PLAN.md` `current: done`** — the peer arc is terminal; its last
   work (Steps 2–12: container, grants, bridge, Open WebUI surface, conversation
