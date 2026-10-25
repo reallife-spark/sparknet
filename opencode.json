@@ -1,48 +1,98 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "instructions": [
-    "AGENTS.md"
-  ],
   "references": {
     "knowledge": {
-      "path": ".",
-      "description": "sparknet — active knowledge base for this vault (sparknet knowledge vault.)"
+      "path": "/mnt/knowledge/${PROJECT_NAME}",
+      "description": "Central knowledge base vault for ${PROJECT_NAME}. Use for project context and past decisions."
     }
   },
+  "model": "agx64/qwen3.6-35b-262k-q8",
+  "small_model": "agx32/gemma4-4b-131k",
+  "mcp": {},
   "permission": {
     "edit": {
       "*": "allow",
       "/boot/**": "deny",
-      "/etc/**": "deny",
-      "/proc/**": "deny",
-      "/sys/**": "deny",
-      "/dev/**": "deny",
-      "/root/**": "deny"
+      "/etc/fstab": "deny",
+      "/etc/passwd": "deny",
+      "/etc/shadow": "deny",
+      "/etc/gshadow": "deny",
+      "/etc/sudoers": "deny",
+      "/etc/sudoers.d/**": "deny",
+      "/etc/ssh/**": "deny",
+      "/etc/hosts": "deny",
+      "/etc/hostname": "deny",
+      "/etc/nftables.conf": "deny",
+      "/etc/nftables.d/**": "deny",
+      "/etc/NetworkManager/**": "deny",
+      "/etc/wpa_supplicant/**": "deny",
+      "/etc/network/**": "deny",
+      "/etc/systemd/network/**": "deny",
+      "/etc/systemd/system/**": "deny",
+      "/etc/modules": "deny",
+      "/etc/sysctl.conf": "deny",
+      "/etc/sysctl.d/**": "deny",
+      "/lib/modules/**": "deny",
+      "/etc/docker/**": "deny",
+      "/etc/containerd/**": "deny"
     },
     "bash": {
       "*": "allow",
-      "rm -rf /": "deny",
-      "rm -rf /*": "deny",
       "rm -rf /boot*": "deny",
-      "rm -rf /etc*": "deny",
-      "sudo rm -rf /": "deny",
-      "sudo rm -rf /*": "deny",
-      "mkfs*": "deny",
-      "dd if=* of=/dev/*": "deny",
-      "chmod -R 777 /": "deny"
+      "rm -rf /etc/fstab": "deny",
+      "rm -rf /etc/passwd": "deny",
+      "rm -rf /etc/shadow": "deny",
+      "rm -rf /etc/gshadow": "deny",
+      "rm -rf /etc/sudoers*": "deny",
+      "rm -rf /etc/nftables*": "deny",
+      "rm -rf /etc/systemd/system*": "deny",
+      "mv /boot/*": "deny",
+      "mv /etc/fstab*": "deny",
+      "chmod 0 /boot*": "deny",
+      "chmod 0 /etc/fstab": "deny",
+      "sudo rm -rf /boot*": "deny",
+      "sudo rm -rf /etc/fstab": "deny",
+      "sudo mv /boot/*": "deny",
+      "sudo chmod 0 /boot*": "deny",
+      "sudo chmod 0 /etc/fstab": "deny"
     },
     "external_directory": {
       "/boot/**": "deny",
-      "/etc/**": "deny",
-      "/proc/**": "deny",
-      "/sys/**": "deny",
-      "/dev/**": "deny",
-      "/root/**": "deny"
+      "/etc/fstab": "deny",
+      "/etc/passwd": "deny",
+      "/etc/shadow": "deny",
+      "/etc/gshadow": "deny",
+      "/etc/sudoers": "deny",
+      "/etc/sudoers.d/**": "deny",
+      "/etc/ssh/**": "deny",
+      "/etc/hosts": "deny",
+      "/etc/hostname": "deny",
+      "/etc/nftables.conf": "deny",
+      "/etc/nftables.d/**": "deny",
+      "/etc/NetworkManager/**": "deny",
+      "/etc/wpa_supplicant/**": "deny",
+      "/etc/network/**": "deny",
+      "/etc/systemd/network/**": "deny",
+      "/etc/systemd/system/**": "deny",
+      "/etc/modules": "deny",
+      "/etc/sysctl.conf": "deny",
+      "/etc/sysctl.d/**": "deny",
+      "/lib/modules/**": "deny",
+      "/etc/docker/**": "deny",
+      "/etc/containerd/**": "deny"
     }
   },
   "compaction": {
     "auto": true,
     "prune": false,
     "reserved": 10000
+  },
+  "agent": {
+    "explore": {
+      "model": "agx32/gemma4-4b-131k"
+    },
+    "general": {
+      "model": "agx64/qwen3.6-35b-262k-q8"
+    }
   }
 }
