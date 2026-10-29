@@ -173,11 +173,13 @@ class Monitor:
     # --- claims ---------------------------------------------------------------
 
     def claim(self, name: str, at: datetime | None = None) -> dict[str, object]:
-        """A signed-able liveness claim for ``name``'s view of the fabric.
+        """This monitor's liveness claim for ``name``.
 
         The claim carries the same monotonic, eviction-safe facts the monitor
-        holds; the transport's signing layer binds it to the serving node's
-        identity exactly as it binds every other request.
+        holds. It is not signed: the service pushes it as an unsigned,
+        overlay-attributed ``kind=liveness`` telemetry report, and the Master
+        attributes it by the authenticated source address
+        (``contracts/health-protocol.md``).
         """
         stamp = at or self.clock()
         peer = self.peers.get(name)
@@ -196,8 +198,14 @@ class Monitor:
 class ContinuousMonitor(Monitor):
     """A probe loop for a service: one thread, injected clock, graceful stop."""
 
-    def __init__(self, *args: object, **kwargs: object) -> None:
+    def __init__(
+        self,
+        *args: object,
+        on_round: Callable[[], None] | None = None,
+        **kwargs: object,
+    ) -> None:
         super().__init__(*args, **kwargs)
+        self.on_round = on_round
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -210,6 +218,8 @@ class ContinuousMonitor(Monitor):
     def _run(self) -> None:
         while not self._stop.is_set():
             self.probe_once()
+            if self.on_round is not None:
+                self.on_round()
             self._stop.wait(self.probe_interval)
 
     def stop(self) -> None:

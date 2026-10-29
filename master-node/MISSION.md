@@ -1,7 +1,7 @@
 ---
 title: sparknet master-node — MISSION
 status: partially-built
-updated: 2026-10-23
+updated: 2026-10-29
 ---
 
 # sparknet master-node — MISSION
@@ -34,6 +34,8 @@ real reboot of each host on 2026-10-19.
 
 | Missing | Step | Consequence |
 |---|---|---|
+| nocturnal live arming | `9` | the scheduler, idle detector and WG observer are built and tested; arming a lease on a real fleet remains operator-confirmed (`DoD: confirm: user`), and the observer service/timer are staged, not enabled |
+| share ratification, evidence repository, review agents | `10`–`12` | the code is complete 2026-10-29: registry-checked + signer-signed ratification, ledger-hashed evidence committed to git, and signed reversible trust transitions recorded in the ledger. The live 4203 listener, peer round trips and telemetry consumption remain `DoD: confirm: user` |
 | admin services (`4220`–`4223`) | `MASTER_ADMIN_PLAN.md` | git, file share, NAT and the vector DB are contracted `spec-only` |
 | the two destructive legs | — | rollback and a replace-Master re-formation are documented and deliberately unexecuted (`../../contracts/deployment-runbook.md`) |
 
@@ -54,8 +56,9 @@ On **this** development host none of the fabric runs: there is no cluster, no
 wireguard kernel module, nothing bound. The live claims above are dated claims
 about real hosts; what is verifiable here is the code, the tests, and the
 boundaries. Two claims in this file are load-bearing and tested: the signer is
-**implemented and unit-tested, never deployed**, and the admin surface carries no
-signing capability. `make validate` checks both.
+**deployed only by election** (it ran live on agx64 on 2026-10-07; it is not a
+service a role install may enable), and the admin surface carries no signing
+capability. `make validate` checks both.
 
 `make validate` checks the boundary claims in this file; `make parity` proves the
 peer-service resolution; `make keys-check` proves no key material is in the vault.
@@ -66,9 +69,9 @@ peer-service resolution; `make keys-check` proves no key material is in the vaul
   Ed25519 signing key and its lifecycle, authoring and revoking the node
   registry, maintaining the overlay at `10.100.0.1` with one stanza per
   authorized peer, issuing signed guard approvals, the cluster KillSwitch, the
-  peer-intake listener (telemetry evidence, `8090`), the idle-detection scheduler
-  for nocturnal memory
-  pooling, and the **infrastructure administration** the user delegated to the
+  peer-intake listener (telemetry evidence, `8090`), the idle-detection
+  nocturnal batch scheduler (a time-boxed lease over whole-node jobs, never a
+  literal memory pool), and the **infrastructure administration** the user delegated to the
   Master: the fabric's git, file sharing, NAT and vector embeddings database
   (all contracted `spec-only`, `4220`–`4223`; scoped in
   `plans/MASTER_ADMIN_PLAN.md`).

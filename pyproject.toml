@@ -57,7 +57,9 @@ target-version = "py310"
 # `.opencode/skills` is the vendored wiki suite (MIT, pinned upstream): it is
 # not ours to reformat, and `make wiki-verify` proves it has not drifted, so
 # ruff must keep its hands off it.
-exclude = [".venv", ".state", ".cache", "references", ".opencode"]
+# `gospark/` is a separate Git checkout (it carries its own .git); the fabric
+# lints and formats its own tree, not the reference checkout.
+exclude = [".venv", ".state", ".cache", "references", ".opencode", "gospark"]
 # `ruff format` is a Python-only gate. Without this it also rewrites fenced
 # code blocks inside Markdown, which produces documentation churn unrelated to
 # any code change.

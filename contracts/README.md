@@ -20,7 +20,7 @@ the tests then prove both roles still agree.
 | `guard-protocol.md` | the Master↔peer approval conversation |
 | `guard-approval.json` | the approval envelope itself: the eight signed fields, the canonicalisation rule, where the capability comes from, and the transport (route, port, envelope fields) |
 | `health-protocol.md` | peer liveness and eviction: probe rhythm, activity-trumps-eviction, the full-dark rule, no-authority guarantee |
-| `telemetry-schema.json` | peer→Master observability evidence (Phase 4): overlay-attributed, unsigned, `kind`-tagged reports the Master records and acts on nothing — no authority on the telemetry path. The envelope is built; the intake listener is Step 69C |
+| `telemetry-schema.json` | peer→Master observability evidence (Phase 4): overlay-attributed, unsigned, `kind`-tagged reports the Master records and acts on nothing — no authority on the telemetry path. Envelope, the 8090 peer intake (telemetry + RFI request routes) and the peer pusher are built; the per-kind consumers are Step 70 |
 | `share-protocol.md` | the peer↔peer sharing regime: offers, share types, the four clocks, trust levels, isolation, evidence |
 | `consensus-protocol.md` | how three nodes agree on who holds the signing key: election, the cluster trust root, re-formation |
 | `deployment-runbook.md` | the operational procedure for bringing the real three-node system up on actual hosts (Step 13): overlay, election, signer unit, registry, rollback |

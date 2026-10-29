@@ -9,11 +9,15 @@ overlay.
 
 What is **not** built is the deployment. `peer-node/manifests/share-regime.json`
 records the status as `wired, not deployed`, and its `not_built_yet` names the
-live 4201/4202/4203 listeners, the stanza application and nftables exception, the
-Master's ratification service and the Master-hosted evidence repo; those are
-target-node legs marked `DoD: confirm: user`. `contracts/ports.json` says the same
+live 4201/4202/4203 listeners, the stanza application and host-firewall
+exception, the Master's ratification service and the Master-hosted evidence
+repo; those are target-node legs marked `DoD: confirm: user`. The deployed fleet
+uses iptables, not nftables: the in-process renderer still emits a spec-only
+`nftables_exception` and must be translated to `SPARKNET-FW-*`/iptables before
+any live share transport is enabled. `contracts/ports.json` says the same
 thing in its own vocabulary — 4201 and 4202 are `implemented` in code and
-`not-listening` at runtime, and 4203 is still `spec-only`.
+`not-listening` at runtime; 4203 is implemented in code (registry-checked and
+signer-signed) but has no listener, so its live leg is `DoD: confirm: user`.
 
 The normative machine-readable policy is `contracts/capabilities.json`
 (`share_types`, `trust_levels`), `contracts/identity-schema.json` (`grant`),
@@ -50,7 +54,7 @@ sender drafts an offer naming a share type and a window
 INVITE     recipient has 1 h to accept; after that the offer is dead
         │
         ▼
-ACCEPT     both nodes are unauthenticated + flagged; share opens
+ACCEPT     both nodes are flagged pending review; share opens
         │
         ▼
 RATIFY     Master has 2 h. Silence is a refusal.
@@ -124,9 +128,9 @@ present itself as the Master.
 
 Ratification authorises the share. It does **not** clear the flag.
 
-Both nodes enter an accepted share as `unauthenticated` and `flagged`. On
-ratification they become `authorized` with the flag **retained for audit**. The
-reasons, in `capabilities.json`:
+Both nodes enter an accepted share as `flagged`. On ratification they become
+`authenticated` with the `flagged` marker **retained in `retained_flags` for
+audit**. The reasons, in `capabilities.json`:
 
 - Approval is not evidence that nothing happened. Unapproved data crossed between
   nodes, and that is a fact about the world that survives the decision about it.
@@ -139,6 +143,31 @@ reasons, in `capabilities.json`:
 A trust level records a belief, never a permission. Only the Master moves them,
 only as signed events in the registry with a reason, and a model's summary of the
 evidence may inform that decision without ever being it.
+
+A peer's `kind=status` telemetry payload carries that belief and the retained
+evidence: its current level, `retained_flags`, and the flagged share records
+(`share_id`, kind, state, trust, counterpart). The Master's admin console reads
+its received-telemetry spool and surfaces flagged nodes to a human. That is the
+whole action: telemetry can surface a flag, never clear it, and no path here
+writes a registry or moves a trust level.
+
+### Signed ratification and trust
+
+A Master ratification is a canonical, signed artifact, not a bare field in the
+share message. `shared/sparknet-authz.py` defines the envelope
+(`share_ratification_message`) and the signer answers
+`sign-share-ratification`; the fields are `schema_version`, `share_id`,
+`node_id`, `node_fingerprint`, `grant_id`, `decision`, `reason`, `accepted_at`,
+`deadline`, `ratified_at` and `flag_retained`. A late decision is signed as
+`decision: refused, reason: deadline-exceeded`; the flag is retained on both
+approval and refusal.
+
+Trust is a belief, not a permission. The review path emits a signed
+`trust_level_changed` event with `authenticated`, `unauthenticated` or
+`flagged`, a reason, `reversible: true` and `flag_preserved: true`. The registry
+is the permission document and carries no trust field; a trust level can never
+authorise an action. Review findings and evidence files are separate: the
+reviewer reads the evidence repository and does not rewrite it.
 
 ## Two nodes, three nodes
 

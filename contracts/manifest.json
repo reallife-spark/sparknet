@@ -5,7 +5,7 @@
       "contract": "capabilities",
       "file": "capabilities.json",
       "schema_version": "1.0",
-      "sha256": "16e4642022fb6f590f5eadeb6685b17e05c4f92399b2b0e2a6fa6684723fbc73"
+      "sha256": "65b92d0185edc4f8661c196f7fc2d0ed705675e5a3d01bd330ff64226b8bdcd7"
     },
     {
       "contract": "guard-approval",
@@ -23,13 +23,13 @@
       "contract": "overlay",
       "file": "overlay.json",
       "schema_version": "1.0",
-      "sha256": "0839155320ba5f7cfec8c2fbc1b54fb13cd394aeb9659aac5b68ce0371437487"
+      "sha256": "3b73cb625f33aabb19345a94491702def0731a2b85496115e3406cad5ec83437"
     },
     {
       "contract": "ports",
       "file": "ports.json",
       "schema_version": "2.0",
-      "sha256": "cda1e471b64814107b0f336ad3e9d03522d48d1314c51ef0e6900777168b923c"
+      "sha256": "7e0e9e6d8d65aa6a4a6d8dffe7fff19f9996d361dee945794e439f3cb0f41fff"
     },
     {
       "contract": "proposal-schema",
@@ -41,7 +41,7 @@
       "contract": "reflex",
       "file": "reflex-schema.json",
       "schema_version": "1.0",
-      "sha256": "204ebcb1cff0fac1266a7e13c8f0b08c89889e9f971b77f73674ef09fe2277ae"
+      "sha256": "4e2b86e0fc42e8067ddd026afa5889e226fe9cb0b11c2681cd3529908440a7e2"
     },
     {
       "contract": "registry-publication",
@@ -59,19 +59,19 @@
       "contract": "rfi-schema",
       "file": "rfi-schema.json",
       "schema_version": "1.0",
-      "sha256": "7a4e4cd890e2225cec454a77ee86e34f62aa096fa96caeff3d2c2d22438efd44"
+      "sha256": "84f03ab8b457feebc4b3c99137a12f69823fdb2dddfe942d6db6a2c6fd030e50"
     },
     {
       "contract": "telemetry-schema",
       "file": "telemetry-schema.json",
       "schema_version": "1.0",
-      "sha256": "e7758c0fe563aeb0f844ee3c912921d16a30e93dbb8340d7977aaa88a209684f"
+      "sha256": "04b9a289b8469b23075e4ece9f167302fd5db8a3ca34c6ac2fc6a26de647b5af"
     },
     {
       "contract": "tracking-schema",
       "file": "tracking-schema.json",
       "schema_version": 1,
-      "sha256": "f1dd4b83b16e5a46b716d7c7a3c568df91022609bd0cbf70a82879eab29c7323"
+      "sha256": "400a834928bfb40450661121e1fe3a134c92903f775d9399aab0684aa9068d07"
     }
   ],
   "do_not_edit": true,
@@ -233,7 +233,7 @@
     },
     "4203": {
       "bound_by": "master",
-      "implementation_state": "spec-only",
+      "implementation_state": "implemented",
       "runtime": "not-listening",
       "service": "share-ratification"
     },
@@ -242,6 +242,12 @@
       "implementation_state": "implemented",
       "runtime": "not-listening",
       "service": "cluster-election"
+    },
+    "4211": {
+      "bound_by": "peer",
+      "implementation_state": "implemented",
+      "runtime": "not-verifiable-here",
+      "service": "liveness-probe"
     },
     "4220": {
       "bound_by": "master",

@@ -104,7 +104,7 @@ It cuts both ways, so be honest about it:
 - Detail goes to `sessions/YYYY-MM-DD.md`; `MEMORY.md` stays tiny. Mark a plan
   step done only after its DoD is verified.
 - Do not claim live verification of anything network-, kernel- or
-  privilege-dependent — WireGuard, nftables, `chattr +i` and systemd behaviour
+  privilege-dependent — WireGuard, iptables, `chattr +i` and systemd behaviour
   are unverified on a development host. An unverified claim is worse than an
   acknowledged gap.
 - Offensive-security work is out of scope for a default session: route it to the

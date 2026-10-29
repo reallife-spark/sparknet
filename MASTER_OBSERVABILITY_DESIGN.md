@@ -27,12 +27,12 @@ Each piece exists in vocabulary or in reference code and none is wired:
 
 | Piece | State today |
 |---|---|
-| `telemetry` capability | In the closed vocabulary — "Push metrics and node status to the Master" (`capabilities.json`, holder `peer`, `sensitive: false`) — but **nothing pushes** and no Master socket receives. |
-| `shared/sparknet-liveness.py` | Reference monitor + `tests/test_liveness.py`; **no service, no unit, no endpoint** (`health-protocol.md` "Implementation state" says exactly this). |
-| checkpoints | `provenance.build_checkpoint_data` builds a Merkle-root checkpoint over the ledger head, but **nothing calls it** — no periodic anchor. |
-| `flagged` trust level | Recorded, retained after ratification, only the Master moves it — but **nothing acts on it**; a flag nobody surfaces is a flag nobody can act on. |
-| inbox-arrival alert (67B) | Spooled locally + best-effort local KDE ping. A **headless peer's** alert reaches no remote human. |
-| Master peer intake | **No implemented peer-facing listener.** The Master *dials* peers on 9090; 8090 (instant-push) and 4203 (share-ratification) are `spec-only`. |
+| `telemetry` capability | In the closed vocabulary — "Push metrics and node status to the Master" (`capabilities.json`, holder `peer`, `sensitive: false`). Built as 70A (peer pusher) + 70B (8090 intake); the cross-node pair is still `DoD: confirm: user`. |
+| `shared/sparknet-liveness.py` | Built as 70D: the reference monitor runs in `sparknet-liveness-monitor.py`, probes the contracted non-serving port 4211 and pushes `kind=liveness`. Live cross-node behaviour is `DoD: confirm: user`. |
+| checkpoints | Built as 70E: `sparknet-checkpoint-anchor.py` periodically appends an idempotent signed checkpoint over the ledger head and pushes the full block as `kind=checkpoint_anchor`. Live cross-node anchoring is `DoD: confirm: user`. |
+| `flagged` trust level | Built as 70G: the peer's `status` payload carries its trust level and retained share evidence, and the admin console surfaces flagged nodes from the Master's telemetry spool. A flag is held for a human; telemetry never clears it and only a signed registry event moves it. |
+| inbox-arrival alert (67B) | Built as 70F: an installed RFI answer still spools locally and pings KDE, and now also emits `kind=inbox_alert` to the Master. A headless peer's arrival therefore reaches a remote operator; live cross-node delivery is `DoD: confirm: user`. |
+| Master peer intake | Built as 70B: `sparknet-peer-intake.py` serves the overlay-only 8090 surface (`/api/v1/telemetry` + `/api/v1/rfi-request`), so 8090 is no longer spec-only. 4203 remains spec-only; the Master still *dials* peers on 9090 for the pull path. |
 
 There is already a **pull** path, and it is not this: the Master admin console's
 `feed()` sends `list_events` admin requests (over `admin-supervise`, Step 29) to each
@@ -80,9 +80,11 @@ per-kind payload's meaning belongs to the consumer sub-step, not the envelope.
 
 **The Master records telemetry as evidence, and acts on nothing.** A received report
 is appended to a telemetry spool the admin console's feed can surface alongside auth
-events. `flagged` nodes' evidence is what 69G makes actionable — surfaced and held for
-a human, never auto-remediated, because only the Master moves a trust level and only
-as a signed registry event. The inbox-arrival alert (69H) is the `inbox_alert` kind:
+events. `flagged` nodes' evidence is what 70G makes actionable — the peer reads its
+own persisted share records through `sparknet-share-regime.py::trust_summary`, puts
+the level and retained `flagged` markers in its `status` payload, and the console
+surfaces them for a human. Nothing auto-remediates: only the Master moves a trust
+level, and only as a signed registry event. The inbox-arrival alert (69H) is the `inbox_alert` kind:
 67B's local spool row also rides telemetry to the Master, whose admin surface a remote
 operator actually watches — closing Phase 3's third deferred leg.
 
@@ -100,19 +102,21 @@ operator actually watches — closing Phase 3's third deferred leg.
 - **69D** — the peer telemetry pusher: a service/unit that periodically builds a
   `status`/`metrics` report and pushes it, gated on the peer's `telemetry` capability
   (a peer without it does not push).
-- **69E** — deploy `sparknet-liveness.py`: a service running `ContinuousMonitor`
+- **69E** (built as 70D) — deploy `sparknet-liveness.py`: a service running `ContinuousMonitor`
   against registry-derived peers, a non-serving probe port (contracted in
   `ports.json`), and the peer's liveness `claim()` riding telemetry as kind
   `liveness`. Live cross-node behaviour stays `DoD: confirm: user` (no overlay here).
-- **69F** — anchor checkpoint Merkle roots: a periodic service calling
-  `provenance.build_checkpoint_data` + appending the checkpoint block, and pushing the
-  anchor as kind `checkpoint_anchor` so the Master holds a tamper-evident head.
-- **69G** — make `flagged` actionable: the admin console surfaces flagged nodes and
-  their retained evidence from the telemetry feed; a flag is held for a human, never
-  auto-remediated (only the Master moves a trust level, by signed registry event).
-- **69H** — inbox-arrival alert to a remote operator: 67B's arrival also emits an
-  `inbox_alert` telemetry report, so a headless peer's arrival reaches the Master's
-  admin surface. Closes Phase 3's third deferred leg.
+- **69F** (built as 70E) — anchor checkpoint Merkle roots: a periodic service
+  calling `provenance.build_checkpoint_data` + appending the checkpoint block, and
+  pushing the full signed block as kind `checkpoint_anchor` so the Master holds a
+  tamper-evident head. Live cross-node anchoring stays `DoD: confirm: user`.
+- **69G** (built as 70G) — make `flagged` actionable: the peer's `status` payload
+  carries its trust summary, and the admin console surfaces flagged nodes and their
+  retained evidence from the Master's telemetry spool; a flag is held for a human,
+  never auto-remediated (only the Master moves a trust level, by signed registry event).
+- **69H** (built as 70F) — inbox-arrival alert to a remote operator: 67B's arrival
+  also emits an `inbox_alert` telemetry report, so a headless peer's arrival reaches
+  the Master's admin surface. Closes Phase 3's third deferred leg.
 
 ## What Phase 4 deliberately does not do
 

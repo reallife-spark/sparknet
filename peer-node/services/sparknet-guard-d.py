@@ -83,6 +83,10 @@ DEFAULT_VAULT_ROOT = SERVICE_DIR.parent
 #: documented topology rather than to "accept everything".
 DEFAULT_MASTER_ANCHOR_IP = "10.100.0.1"
 
+#: A remote arrival alert is evidence, not part of acceptance. Bound the wait so
+#: an unreachable Master cannot hold the RFI response open for the pusher default.
+INBOX_ALERT_TIMEOUT = 3
+
 
 def approval_message(payload: dict[str, Any]) -> bytes:
     """Deterministic bytes the Master signs for one approval.
@@ -503,6 +507,30 @@ def _load_notify_module():
     return _load_shared_module("sparknet-notify.py", "sparknet_notify")
 
 
+def _load_telemetry_pusher():
+    """The peer's 70A pusher, loaded by path from this role's services dir.
+
+    ``inbox_alert`` rides the same envelope and endpoint as status/metrics, so the
+    guard reuses the one pusher instead of building a second report by hand. It is
+    optional: a guard without it still installs and still leaves the local spool.
+    """
+    import importlib.util
+
+    path = SERVICE_DIR / "sparknet-telemetry-push.py"
+    if not path.is_file():
+        return None
+    modname = "sparknet_telemetry_pusher"
+    if modname in sys.modules:
+        return sys.modules[modname]
+    spec = importlib.util.spec_from_file_location(modname, path)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def _load_http_module():
     """The shared sparknet-http.py: the one handler base every listener uses.
 
@@ -814,7 +842,56 @@ class Guard:
                 request_id=result["request_id"],
             )
             notified = bool(outcome.get("notified"))
-        return {**result, "audit_block": block["hash"], "notified": notified}
+
+        # 70F: the same arrival is evidence the Master can see. The local ping
+        # above reaches whoever is at this node; a headless peer has nobody, so
+        # the alert rides telemetry to the Master's admin surface. It is unsigned
+        # and overlay-attributed like every report, and it cannot affect the
+        # install: a failed push returns False and the item stays installed.
+        alerted = self._emit_inbox_alert(result, block)
+        return {**result, "audit_block": block["hash"], "notified": notified, "alerted": alerted}
+
+    def _emit_inbox_alert(self, result: dict[str, Any], block: dict[str, Any]) -> bool:
+        """Push an installed arrival as ``kind=inbox_alert``; never a gate.
+
+        Gated on the peer's own ``telemetry`` capability, exactly as 70A. The
+        payload carries the inbox item, its source, request id, content digest and
+        the ``rfi_installed`` audit block hash — enough to correlate the alert
+        with the ledger, no content and no authority. Overlay attribution, the
+        freshness nonce and the Master's capability gate are the envelope's, not
+        this method's; nothing here signs, grants or edits the registry.
+        """
+        pusher = _load_telemetry_pusher()
+        if pusher is None:
+            return False
+        try:
+            capabilities, identity, refusal = pusher.granted_capabilities(self.vault_root)
+            if identity is None or refusal or "telemetry" not in capabilities:
+                return False
+            authz = _load_authz_module()
+            if authz is None:
+                return False
+            endpoint = pusher.resolve_endpoint(self.vault_root)
+            if not endpoint.startswith(("http://", "https://")):
+                return False
+            report = authz.build_telemetry_report(
+                kind="inbox_alert",
+                peer_fingerprint=authz.fingerprint(identity),
+                payload={
+                    "item": result.get("item"),
+                    "source": "master-node",
+                    "request_id": result.get("request_id"),
+                    "content_sha256": result.get("content_sha256"),
+                    "audit_block": block.get("hash"),
+                },
+            )
+            ok, detail = pusher.post_report(endpoint, report, INBOX_ALERT_TIMEOUT)
+            if not ok:
+                print(f"[guard] inbox_alert push failed: {detail}", file=sys.stderr)
+            return ok
+        except Exception as exc:  # a courtesy must not break an install
+            print(f"[guard] inbox_alert skipped: {exc}", file=sys.stderr)
+            return False
 
     def _refuse_rfi(self, reason: str, artifact: Any) -> NoReturn:
         """Record an RFI refusal in the guard ledger, then raise it as HTTP.

@@ -50,6 +50,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+import uuid
 
 try:  # Python 3.9+
     from collections.abc import Callable
@@ -69,6 +70,7 @@ PLAIN_PREFIXES = (
     "/v1/chat/completions",
     "/v1/openapi.json",
     "/v1/reflex/",
+    "/v1/cluster/",
     "/session/",
     "/vault/",
     "/admin/",
@@ -425,6 +427,15 @@ class Bridge:
         self._regime_mod: Any | None = None
         self._replay: Any | None = None
         self._webui_token: str | None = None
+        self._cluster_jobs_dir = _state_dir(self.vault_root) / "cluster-jobs"
+        self._cluster_jobs_dir.mkdir(parents=True, exist_ok=True)
+        self._cluster_jobs_lock = threading.RLock()
+        self._cluster_execute_enabled = os.environ.get("SPARKNET_CLUSTER_EXECUTE_ENABLED", "0").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
 
     def _registry_entry(self, node_id: str) -> dict[str, Any] | None:
         """This node's view of one signed registry entry, looked up by node_id."""
@@ -501,6 +512,99 @@ class Bridge:
             if record.get("share_id") not in regime.shares:
                 regime.restore(record)
         return regime, records
+
+    # --- cluster job ingress (Seam E) + construction/placement stubs (items 4-5) ---
+
+    @staticmethod
+    def _cluster_construct(job: dict[str, Any], roster: list[str] | None = None) -> dict[str, Any]:
+        """Deterministic construction (Seam B) — stub; no dispatch."""
+        subtasks = job.get("subtasks") if isinstance(job.get("subtasks"), list) else []
+        roster = list(roster or [])
+        roster_sorted = sorted(roster) if roster else []
+        constructed = {
+            "subtasks": subtasks,
+            "roster": roster_sorted,
+            "placement": {"topology": "none", "assignments": []},
+            "truncated": False,
+        }
+        return constructed
+
+    def cluster_job_submit(self, body: dict[str, Any], _grant: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(body, dict):
+            raise _HttpRequestError(400, "malformed", "cluster job must be a JSON object")
+        job = body.get("job")
+        if not isinstance(job, dict):
+            raise _HttpRequestError(400, "malformed", "cluster job requires a 'job' object")
+        job_id = job.get("job_id") or body.get("job_id") or f"cj-{uuid.uuid4().hex}"
+        if not isinstance(job_id, str) or not job_id:
+            raise _HttpRequestError(400, "malformed", "cluster job_id required")
+        subtasks = job.get("subtasks")
+        if not isinstance(subtasks, list) or not subtasks:
+            raise _HttpRequestError(400, "bad-job", "cluster job subtasks must be a non-empty list")
+        mode = job.get("mode")
+        if mode not in ("map_reduce", "scatter_gather", "pipeline"):
+            raise _HttpRequestError(400, "bad-job", f"unsupported cluster job mode {mode!r}")
+        now = self._now().isoformat().replace("+00:00", "Z")
+        constructed = self._cluster_construct(job)
+        record = {
+            "job_id": job_id,
+            "job": job,
+            "status": "accepted",
+            "execute_enabled": bool(getattr(self, "_cluster_execute_enabled", False)),
+            "accepted_at": now,
+            "updated_at": now,
+            "result": None,
+            "constructed": constructed,
+            "placement": constructed.get("placement") or {"topology": "none", "assignments": []},
+            "reduced": None,
+        }
+        with self._cluster_jobs_lock:
+            path = self._cluster_jobs_dir / f"{job_id}.json"
+            if path.exists():
+                raise _HttpRequestError(409, "duplicate", f"cluster job {job_id} already exists")
+            tmp = path.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+            os.replace(tmp, path)
+        return {
+            "ok": True,
+            "job_id": job_id,
+            "status": "accepted",
+            "execute_enabled": bool(getattr(self, "_cluster_execute_enabled", False)),
+        }
+
+    def cluster_job_status(self, job_id: str) -> dict[str, Any]:
+        if not isinstance(job_id, str) or not job_id:
+            raise _HttpRequestError(400, "malformed", "job_id required")
+        with self._cluster_jobs_lock:
+            path = self._cluster_jobs_dir / f"{job_id}.json"
+            if not path.exists():
+                raise _HttpRequestError(404, "not-found", f"cluster job {job_id} not found")
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+            except Exception as exc:
+                raise _HttpRequestError(500, "unreadable", str(exc))
+        return {
+            "ok": True,
+            "job_id": job_id,
+            "status": record.get("status"),
+            "execute_enabled": bool(record.get("execute_enabled")),
+            "updated_at": record.get("updated_at"),
+        }
+
+    def cluster_job_result(self, job_id: str) -> dict[str, Any]:
+        if not isinstance(job_id, str) or not job_id:
+            raise _HttpRequestError(400, "malformed", "job_id required")
+        with self._cluster_jobs_lock:
+            path = self._cluster_jobs_dir / f"{job_id}.json"
+            if not path.exists():
+                raise _HttpRequestError(404, "not-found", f"cluster job {job_id} not found")
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+            except Exception as exc:
+                raise _HttpRequestError(500, "unreadable", str(exc))
+        if record.get("status") not in ("completed", "failed", "cancelled"):
+            raise _HttpRequestError(409, "not-ready", f"cluster job {job_id} not ready (status={record.get('status')})")
+        return {"ok": True, "job_id": job_id, "status": record.get("status"), "result": record.get("result")}
 
     def _now(self) -> datetime:
         return (self.clock or _utcnow)()
@@ -1397,6 +1501,14 @@ class Bridge:
             return 200, self.chat_completions(body, grant)
         if method == "POST" and path == "/v1/reflex/decide":
             return 200, self.reflex_decide(body, grant)
+        if method == "POST" and path == "/v1/cluster/submit":
+            return 200, self.cluster_job_submit(body, grant)
+        if method == "GET" and path.startswith("/v1/cluster/status/"):
+            job_id = path[len("/v1/cluster/status/") :].strip("/")
+            return 200, self.cluster_job_status(job_id)
+        if method == "GET" and path.startswith("/v1/cluster/result/"):
+            job_id = path[len("/v1/cluster/result/") :].strip("/")
+            return 200, self.cluster_job_result(job_id)
         if path.startswith("/session/"):
             rest = urllib.parse.unquote(path[len("/session/") :].strip("/"))
             parts = [part for part in rest.split("/") if part]

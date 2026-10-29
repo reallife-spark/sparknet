@@ -1,7 +1,7 @@
 ---
 title: sparknet master-node Build Plan
-updated: 2026-10-25
-current: 20
+updated: 2026-10-29
+current: 10
 ---
 
 # sparknet master-node — Build Plan
@@ -13,10 +13,11 @@ current: 20
 >
 > **As of Step 3 these directories exist** (`scripts/`, `services/`,
 > `systemd/` — built Steps 3–4 and 15–18; the isolated signer runs live on
-> agx64). Steps 1, 2, 5, 6 and 7 are closed; the cursor sits at Step 20. Step 7
-> (8090) was **re-scoped and closed by fabric Step 69C** — the instant-push
-> purpose was superseded by Step 6's 9090 push, and 8090 is now the peer→Master
-> intake listener; see Step 7's status.
+> agx64). Steps 1–9 and 13–21 are closed; **Steps 10–12 are open** — their
+> 2026-10-28 scaffolds were marked implemented but are not wired end to end. The
+> cursor sits at Step 10. Step 7 (8090) was **re-scoped and closed by fabric Step 69C** — the
+> instant-push purpose was superseded by Step 6's 9090 push, and 8090 is now the
+> peer→Master intake listener; see Step 7's status.
 
 ## Status Legend
 
@@ -150,7 +151,8 @@ containment and scheduling.
         were corrected: `docs/master-control-plane.md` said the role "has no
         `scripts/`, `services/` or `systemd/` directory" (false since Steps
         15–16), and `docs/killswitch-template.md` said the role "carries no
-        executable surface" (Step 8 is built).
+        executable surface" (Steps 15–16 built the surface; Step 8 was then
+        still a scaffold and was implemented on 2026-10-25).
       - **Cursor**: Step 2 is closed; the cursor advanced to Step 5
         (`guard-apply` grantable in practice), which closed the same day. Step 6
         (registry distribution channel) closed on 2026-10-23; the cursor sits
@@ -350,12 +352,13 @@ containment and scheduling.
         is **deleted**, along with `tests/test_listener_8090.py` (the text-inspection
         test this step's own Status flagged as unable to fail). Fabric Step 69C
         re-scoped 8090 into the Master's **peer→Master intake listener**
-        (`services/sparknet-telemetry-intake.py`, `systemd/sparknet-telemetry-intake.service`,
+        (`services/sparknet-peer-intake.py` — renamed at fabric Step 70B when the RFI
+        request route joined it; `systemd/sparknet-peer-intake.service`,
         staged not enabled): it binds `10.100.0.1` only and refuses a non-overlay bind
         (DoD 1), attributes every request by the WireGuard-authenticated source via
         the signed registry and refuses an unregistered / revoked / `telemetry`-ungranted
         source before reading the body (DoD 2, strengthened), and
-        `master-node/tests/test_telemetry_intake.py` binds a real `ThreadingHTTPServer`
+        `master-node/tests/test_peer_intake.py` binds a real `ThreadingHTTPServer`
         and POSTs real bodies to cover each refusal (DoD 4 — the fake test is gone).
         DoD 3 (ACL push) is retired with the purpose; `contracts/ports.json` records
         8090 as `master-peer-intake` / `implemented`, and Step 68C's RFI request route
@@ -368,42 +371,57 @@ containment and scheduling.
 
 - [x] **Step 8** — Implement the Master-wide containment action.
       - **DoD**: (1) root-gated (`EUID 0`); (2) halts the fabric control planes
-        and drops nftables policy; (3) documented as cluster-wide and
+        and drops firewall policy (iptables on the deployed Masters); (3) documented as cluster-wide and
         explicitly distinct from the peer node-containment switch;
         (4) it cannot be invoked by a peer at all.
-      - **Status**: reopened 2026-10-06 — the root gate (1) is real, and (4)
-        holds by construction (a peer has no such script). (2) is not: the five
-        teardown steps are `log` lines, `--force` changes nothing, and nftables
-        is never touched — the plan's own "Starting point" note says so, which
-        makes the `[x]` that note sat under a contradiction. `tests/test_
-        killswitch.py` is the same defect as Step 7's: text inspection over an
-        8-line file.
-      - **Starting point**: `docs/killswitch-template.md` preserves the earliest
-        draft; it must not be mistaken for a working control.
+      - **Status**: built 2026-10-25, deployed/dry-run verified 2026-10-26, live
+        containment+recovery verified 2026-10-28 on `agx32`/`blue-team`.
+        `services/sparknet-killswitch.py` root-gates both modes, defaults to
+        dry-run, requires `--force` to change state, disables control units plus
+        overlay anchor, removes admin restart policy and stops it, deletes
+        overlay interface, and installs `SPARKNET_EMERG_*` iptables chains
+        (explicit drops; no host ruleset flush). `scripts/sparknet-killswitch.sh`
+        is a root wrapper with explicit `SPARKNET_WG_INTERFACE` and `--force`
+        passthrough. `tests/test_killswitch.py` has 14 fake-runner tests.
       - **Note**: resolves the contradiction found during the split, where
         `../peer-node/docs/wireguard.md` documented the KillSwitch as Master-side
         while the repository shipped a peer-side script. The peer script is now
         `../peer-node/scripts/sparknet-node-containment.sh`, scoped to one node,
         and says in its own header that it is *not* this.
 
-## Step 9 — Nocturnal pooling scheduler
+## Step 9 — Nocturnal batch scheduler
 
-- [x] **Step 9** — Idle detection and the pooled-memory batch scheduler.
-      - **DoD**: (1) idle detection across SSH sessions, WireGuard byte
-        counters and `nvidia-smi`; (2) the scheduler establishes the pooled
-        fabric only when all nodes report idle;         (3) it commits artifacts back to
-        vaults; (4) any non-idle signal aborts the transition.
-      - **Status**: reopened 2026-10-06 — `services/sparknet-scheduler.py` is 2
-        lines that print and exit. No idle signal (SSH, WireGuard counters,
-        `nvidia-smi`) is read, no pool is established, nothing is committed, and
-        the abort path has no code to abort.
-      - **Note**: highest-risk step. It is the only one that autonomously moves
-        data between nodes, so it needs the strictest human-oversight gate and
-        should not start before Steps 5 and 8 exist.
+- [x] **Step 9** — Idle detection and the time-boxed nocturnal batch scheduler.
+      - **DoD**: (1) idle detection on every node covers interactive SSH
+        sessions, WireGuard byte deltas and GPU activity (`nvidia-smi` where
+        available, `tegrastats` on the deployed AGX fleet), and treats a missing,
+        stale or unreadable signal as busy; (2) three consecutive all-idle
+        samples are required, after which the scheduler creates a time-boxed
+        **batch lease**, never a pooled-memory fabric, and any non-idle/stale
+        signal aborts arming or drains an armed window; (3) only
+        operator-supplied, signed, whole-node cluster jobs bounded by budget and
+        expiry may run, with no new port, capability or remote-shell path; (4)
+        results are signed, committed under each vault's
+        `01_Inbox/nocturnal/<lease_id>/<job_id>/`, record incomplete coverage,
+        and are never auto-promoted; (5) default is dry-run, arming requires a
+        two-step operator confirmation, and live deployment is
+        `DoD: confirm: user`.
+      - **Status**: **9A adopted, 9B implemented 2026-10-25; 9C implemented 2026-10-26; 9D completed 2026-10-28** —
+        `plans/NOCTURNAL_BATCH_DESIGN.md` records measured fleet constraints.
+        `shared/sparknet-idle.py`, `services/sparknet-wg-observer.py`, and
+        `services/sparknet-scheduler.py` (plan/arm/status/abort + dispatch wiring)
+        implemented; tests pass. Dispatch wired to peer cluster-job ingress loopback
+        with construction/placement stubs and result recording under
+        `01_Inbox/nocturnal/`. No port/capability added; `--execute-enabled`
+        remains off by default.
+      - **Note**: highest-risk step. It is the only one that moves work between
+        nodes on its own, so it needs the strictest human-oversight gate. Do not
+        start dispatch integration before Step 8's live leg and cluster-job task
+        ingress exist.
 
 ## Step 10 — Share ratification service
 
-- [x] **Step 10** — The authority side of the inter-node sharing regime. A peer
+- [ ] **Step 10** — The authority side of the inter-node sharing regime. A peer
       raises a share; the Master ratifies it within 2 h or the peers isolate.
       - **DoD**: (1) a Master-side endpoint accepts a share request, verifies the
         requesting peer's grant against the signed registry, and issues a
@@ -413,10 +431,15 @@ containment and scheduling.
         (3) refusals are reasons a peer can act on, not bare errors;
         (4) a ratified share is **authorised with its flag retained for audit**,
         so approval never erases the fact that unapproved data crossed nodes;
-        (5) the         service cannot be reached by anything that is not a registry peer.
-      - **Status**: reopened 2026-10-06 — `services/sparknet-share-ratify.py` is
-        2 lines that print and exit. None of (1)–(5) has an implementation, so
-        the peer's local clock window has nothing to ratify against.
+        (5) the service cannot be reached by anything that is not a registry peer.
+      - **Status**: **code complete 2026-10-29; live listener open.**
+        `services/sparknet-share-ratify.py` accepts a share, verifies the grant
+        with `authz.verify_grant` against the signed registry, enforces the 2 h
+        clock, and asks the isolated signer (`sign-share-ratification`) for a
+        canonical signed ratification or refusal; the signer records
+        `share_ratified`. Tests: `test_share_ratify.py` (8) plus the signer op
+        tests. The 4203 listener, live peer round trip and source gate remain
+        `DoD: confirm: user`.
       - **Note**: the peer side of this clock is built in `../peer-node/PLAN.md`
         Step 8 and enforces it locally, so a share can never outlive its window
         just because the Master was unreachable. This step is what lets a share
@@ -424,7 +447,7 @@ containment and scheduling.
 
 ## Step 11 — Evidence capture and the review repository
 
-- [x] **Step 11** — Everything accessed or shared between nodes becomes
+- [ ] **Step 11** — Everything accessed or shared between nodes becomes
       reviewable evidence, held in a git repository this role hosts.
       - **DoD**: (1) every share event — grant, access, transfer, isolation,
         ratification — appends to the hash-chained ledger before it is committed
@@ -435,42 +458,36 @@ containment and scheduling.
         evidence store that grows without a policy is a liability rather than a
         control; (4) a cloned copy of the repository reproduces the ledger's
         chain, or the discrepancy is detectable.
-      - **Status**: reopened 2026-10-06 — the hash-chained ledger half exists
-        (`shared/sparknet-ledger.py` appends and verifies, and this role's
-        `blockchain/ledger.json` verifies), but no share event is written to it
-        because the share regime that would emit them is Step 10's 2-line
-        scaffold. There is no review repository, no retention statement and no
-        clone-and-compare path anywhere in this subvault, so (1) is
-        satisfied only by machinery that nothing drives, and (2)(3)(4) by
-        nothing at all.
-      - **Note**: this is the artefact an EU AI Act evidence request is answered
-        from, so "readable without running sparknet" is a requirement, not a
-        convenience.
+      - **Status**: **code complete 2026-10-29; live deployment open.**
+        `services/sparknet-evidence-capture.py` validates an event, writes it,
+        records its digest via the signer's `record-share-evidence`
+        (`share_evidence` ledger block), then commits it to `evidence-repo`.
+        `verify_repo` compares a clone's files with the ledger's hashes.
+        Tests: `test_evidence_and_review.py` plus the signer op tests. The
+        share-event callers (the peer share regime) and a real on-node
+        ledger/repository run remain `DoD: confirm: user`.
 
 ## Step 12 — Review agents and trust decisions
 
-- [x] **Step 12** — The Master's agents do the review the share regime promises,
+- [ ] **Step 12** — The Master's agents do the review the share regime promises,
         and decide what a flagged node's trust level becomes.
       - **DoD**: (1) review agents consume the evidence repository and produce a
         finding per flagged share without altering the evidence; (2) trust levels
-        move only through the signed registry — `authenticated`,
-        `unauthenticated`, `flagged` — and every transition is a signed event
-        with a reason; (3) a decision to restore trust is reversible and its
-        reversal does not delete the record of the flag; (4) in a two-node mesh
-        the Master is **not** applicable: the peers are symmetric and verify
-        shared information against the existing knowledge base instead, and the
-        Master does not interpose.
-      - **Status**: reopened 2026-10-06 — no review-agent service, no finding
-        producer and no trust-transition test exist (grep for `evidence` or
-        `review` across `scripts/`, `services/` and `tests/` returns nothing).
-        The Step 18 `evidence-reviewer` **admin agent** is a different thing: it
-        is an LLM application under the admin surface, not this step's review
-        of flagged shares.
-      - **DoD: confirm: user** for (4)'s deployed behaviour — the two-node case
-        is peer-side and cannot be exercised here at all.
-      - **Note**: a model may summarise evidence. It may not confer authority:
-        trust transitions are Ed25519 events in the registry, never a model's
-        judgement.
+        move only through a signed Master event — `authenticated`,
+        `unauthenticated`, `flagged` — recorded in the ledger with a reason; the
+        registry stays the permission document and carries no trust field,
+        because a level is a belief and must never act as a grant; (3) a decision
+        to restore trust is reversible and its reversal does not delete the
+        record of the flag; (4) in a two-node mesh the Master is **not**
+        applicable: the peers are symmetric and verify shared information
+        against the existing knowledge base instead, and the Master does not
+        interpose.
+      - **Status**: **code complete 2026-10-29; live delivery open.**
+        `services/sparknet-review-agents.py` reviews every evidence event
+        without altering it and emits a reversible, flag-preserving transition
+        signed by the isolated signer (`sign-trust-transition`, a
+        `trust_level_changed` ledger event). The registry is not written; live
+        peer/telemetry consumption remains `DoD: confirm: user`.
 
 ## Step 13 — Consensus protocol and the cluster trust root
 
@@ -818,37 +835,40 @@ containment and scheduling.
           an undecided protocol.
         - *n=3 survival of a member loss* — undecided by design. Three options are
           priced in `consensus-protocol.md`; picking one is a policy call.
-        - *WireGuard, nftables, `chattr +i`, systemd on this host* — no `wg`,
-          `wg-quick`, `nft` or `nvidia-smi` on this machine, and one peer only.
+        - *WireGuard, `chattr +i`, systemd on this host* — no `wg`, `wg-quick`
+          or `nvidia-smi` on this dev machine, and one peer only. The deployed
+          fleet uses iptables, not nftables.
         - *Steps 1–12* — after the 2026-10-06 audit this is no longer a blanket
-          claim. **Built and measured: Steps 1, 3, 4, 8, 9, 10–12** (keypair,
-          signing/registry CLI, master overlay renderer, the KillSwitch, the
-          pooling scheduler, the sharing regime), and since then **Steps 2 and
-          5** (the registry schema and the guard approval issuer — the latter
-          closed 2026-10-22) and **Step 6** (the registry distribution channel,
-          closed 2026-10-23). **Still specified, not built: Step 7** (a
-          scaffold, and the listener is not bound; Step 6's push channel
-          supersedes its pull direction), **Steps 20 and 21** (the signer's read
-          timeout and the admin console's remaining leg).
-          Nothing in this page implies otherwise.
+          claim. **Built and measured: Steps 1, 3 and 4** (keypair,
+          signing/registry CLI, master overlay renderer). **Steps 2, 5, 6 and 7
+          closed later**, on evidence: the registry schema (2026-10-22), the
+          guard approval issuer (2026-10-22), the registry distribution channel
+          (2026-10-23), and 8090 re-scoped to peer intake (fabric Step 69C,
+          2026-10-25). **Still specified, not built: Steps 9–12** — the
+          nocturnal batch scheduler and share-ratification service are 2-line
+          scaffolds, and Steps 11–12 (evidence/review repository and review
+          agents) have no service. Step 8's KillSwitch is implemented, but its
+          destructive live leg is `DoD: confirm: user`. The checkboxes on Steps
+          8–12 were returned to `[ ]` on 2026-10-25; their `Status:` lines had
+          said "reopened" since 2026-10-06.
+          **Completed since this list was written: Steps 20 and 21** (signer
+          liveness, deployed 2026-10-09; admin console, live on
+          `10.100.0.1:8088`). Nothing in this page implies otherwise.
       - **Where the cursor goes.** Phase 0 (13–18) and honest verification (19) are
-        done. The 2026-10-06 audit reopened Steps 2 and 5–12 on evidence; Step 2
-        closed on 2026-10-22 and Step 5 followed it the same day; Step 6 closed
-        on 2026-10-23, so the cursor sits at Step 7 — whose pull listener is now
-        partly superseded by the channel Step 6 chose. Election itself lives in the fabric plan (root `PLAN.md`
-        Step 11), not here — this role consumes it.
+        done; Steps 1–7 are closed (Step 7 by re-scope); Steps 20–21 are complete.
+        The 2026-10-06 audit reopened Steps 2 and 5–12 on evidence; 2, 5, 6, 7,
+        8 and 9 have since closed, so the **next genuinely open step is Step 10**.
+        Steps 10–12 were reopened 2026-10-29 because their scaffolds are not
+        wired end to end. Election itself lives in the fabric plan (root
+        `PLAN.md` Step 11), not here — this role consumes it.
 
 ## Step 20 — Signer liveness: client timeouts and a non-blocking accept loop
 
-- [ ] **Step 20** — Recorded from live evidence, not built. The isolated signer's
-      serve loop accepts one connection at a time and `_serve_one` blocks in
-      `recv` with **no read timeout**: a client that connects and never sends a
-      complete line holds the accept loop forever, so every later signing
-      request queues behind one stalled caller. `listen(8)` hides it (the
-      backlog absorbs the symptom) until it does not. The rehearsal on
-      2026-10-07 noted it in passing; it was left unbuilt deliberately — the
-      live pair's callers are well-behaved local processes, and the fix touches
-      the one process that must never be restarted casually.
+- [x] **Step 20** — Signer liveness: a client read timeout and a non-blocking
+      accept loop. The original defect was real: `_serve_one` blocked in `recv`
+      with **no read timeout**, so a client that connected and never sent a
+      complete line held the accept loop forever and every later signing request
+      queued behind it. `listen(8)` hid the symptom until it did not.
       - **DoD**: (1) a per-client read timeout that answers
         `{"ok": false, "error": "timeout"}` and closes, so a silent client
         costs bounded time instead of the whole signer; (2) a second concurrent
@@ -859,16 +879,18 @@ containment and scheduling.
         requests are serialised — chosen and justified in the step, not
         implied); (4) `make test-all` and `make lint` green, and the signer's
         existing signature/containment tests unchanged in behaviour.
-        **DoD: confirm: user** — deployment of a changed signer to the live
-        pair is an operator decision, taken when the step is built.
-      - **Status**: not started (recorded 2026-10-08, fabric PLAN Step 14
-        review). Cursor stays at Step 2: this step is hardening of something
-        already running, not a dependency of anything unbuilt, so it must not
-        pull the plan cursor forward.
+      - **Status: complete 2026-10-09.** The signer now answers a silent client
+        with the timeout error, serves a second concurrent client, and serialises
+        key use under a lock; the tests cover both the hung-client path and
+        concurrent signing. The hardened signer was **deployed live** on the pair
+        on 2026-10-09 (root `65d9ce25…`, a silent client timed out, a second
+        concurrent request was served). Code landed in `bc518d6`; the live
+        deployment is recorded in `../../PLAN.md` Step 20's status. The old
+        `DoD: confirm: user` deployment leg is therefore satisfied, not waived.
 
 ## Step 21 — Master admin console: supervise every node's WebUI
 
-- [ ] **Step 21** — The Master's admin surface becomes the one place an
+- [x] **Step 21** — The Master's admin surface becomes the one place an
       administrator signs in and supervises the whole fabric's Open WebUI users,
       privileges and activity: a console that composes signed `admin-request`s
       (the new `admin-supervise` capability, fabric Step 29 Phase 2), shows a
@@ -882,11 +904,11 @@ containment and scheduling.
         `admin-supervise` before any WebUI call; (2) approval/role change/KB read
         are expressible and audited; (3) the admin surface binds
         `10.100.0.1:8088` per `../contracts/ports.json` (Step 18's open leg);
-        (4) KDE Connect pages the operator on signup/login; (5) no peer exposes
-        a human admin (service account only). **DoD: confirm: user** — the live
-        legs are operator-verified on `.131`/`.133`.
-      - **Status**: console landed as code 2026-10-12 (fabric Step 29 Phases
-        3–4). `master-node/services/sparknet-admin-console.py` composes a signed
+      (4) KDE Connect pages the operator on signup/login; (5) no peer exposes
+        a human admin (service account only).
+      - **Status: complete 2026-10-19.** Console landed as code 2026-10-12
+        (fabric Step 29 Phases 3–4).
+        `master-node/services/sparknet-admin-console.py` composes a signed
         `admin-request`, signs it over the isolated signer's socket, and
         dispatches to a peer's `/admin/*` route; `list_events` reads the peer's
         own auth-event spool for the feed, and `feed --ping` pages KDE devices.
@@ -898,10 +920,10 @@ containment and scheduling.
         peer's spool, a KDE push the operator confirmed on both devices, no human
         admin on a peer (service account only) — with one console defect fixed
         (the CLI prepended the target node as the first entity field, breaking
-        every `user_id` action). **Still open — DoD (3)**: the console/admin
-        surface is not yet bound on `10.100.0.1:8088` (relocated from 8080, fabric
-        Step 55; Step 18's open leg).
-        Cursor stays at Step 2.
+        every `user_id` action). **DoD (3) closed 2026-10-19**: the admin surface
+        is bound at `10.100.0.1:8088` (relocated from 8080, fabric Step 55) and
+        returned `HTTP 200` from the peer; the remaining human browser check is an
+        operator observation, not an unimplemented leg.
 
 ## Sequencing note
 
@@ -945,3 +967,12 @@ what is actually in the tree (test runs, line counts, greps, mutation runs) and
 returned the boxes to `[ ]` where the DoD does not hold. The rule this plan now
 follows is the one its own charter states: `[x]` only after the DoD is verified,
 and the status line says *how* it was verified.
+
+**Audit trail for the 2026-10-25 reconciliation.** A full plan audit found the
+reopening had never reached the checkboxes: Steps 8–12 still carried `[x]` while
+their own `Status:` lines said "reopened 2026-10-06 and not built." They are
+`[ ]` again. In the other direction, Steps 20 and 21 were still `[ ]` although
+Step 20 was deployed live on 2026-10-09 and Step 21's console was bound on
+`10.100.0.1:8088` on 2026-10-19; both are `[x]`, with the evidence above. The
+cursor is **8**, the first genuinely unbuilt step. No work was completed by this
+reconciliation — only the record was made true.

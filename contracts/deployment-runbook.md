@@ -1,5 +1,13 @@
 # Deployment runbook — the real handoff (Step 13: agx64 + agx32)
 
+> [!warning] **Historical Step 13 procedure; roles changed at Step 57.**
+> This page names `agx64` as Master and `agx32` as peer, which was true for the
+> Step 13 deployment. The current Step 57 pair is the reverse: **`agx64` peer
+> (`sparknet-node-0001`, `10.100.0.2`) / `agx32` Master
+> (`sparknet-node-0002`, `10.100.0.1`)**. Do not copy a role-bound command
+> without re-mapping it. Use `MEMORY.md`'s live-fabric section for current
+> addresses and state dirs.
+>
 > Status: **Phase 0–1 complete; handoff being executed.** The two nodes were
 > moved onto the `192.168.178.0/24` LAN on 2026-10-12; the old
 > `192.168.10.0/24` / `192.168.20.0/24` legs are retired. `agx64` (Master,

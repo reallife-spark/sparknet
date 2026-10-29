@@ -97,21 +97,21 @@ cross a boundary where the receiver must check authority it cannot otherwise tru
 a peer→Master request arrives on a tunnel the Master itself terminates and
 authenticated, so the source *is* the attestation.
 
-**Where the listener lives (68C).** The Master has no implemented peer-facing
-listener, so 68C must place one. The natural home is **8090**, which
-`contracts/ports.json` marks `spec-only` and *superseded in direction* — Master Step
+**Where the listener lives (68C, delivered as fabric 70B).** At design time the
+Master had no implemented peer-facing listener. The natural home was **8090**, which
+`contracts/ports.json` marked `spec-only` and *superseded in direction* — Master Step
 7 was left open precisely to decide whether 8090 "survives for ACL pushes, is
 re-scoped, or is retired." Re-scoping it as the Master's peer→Master **request**
 listener (RFI requests now; ACL pushes and share-ratification could ride it later)
-resolves that open question productively rather than adding a fresh transport edge.
-68C records the decision in `ports.json` and reconciles Master Step 7. This design
-does **not** unilaterally re-scope 8090; it recommends it and leaves the port wiring
-to 68C.
+resolved that open question productively rather than adding a fresh transport edge.
+Fabric Step 69C first re-scoped 8090 as the telemetry intake and closed Master Step 7;
+Step 70B joined `POST /api/v1/rfi-request` to that same listener and renamed the
+service `sparknet-peer-intake.py`, so the two families share one surface.
 
-**Composer rewiring (68D).** `sparknet-rfi-answer.sh` currently takes
-`--request-id`/`--peer` as operator inputs (67D, because no verified request
-existed). 68D adds a `--request <artifact>` path: the composer verifies the request
-(the overlay-derived fingerprint comes from the listener that received it), reads
+**Composer rewiring (68D, delivered as fabric 70C).** `sparknet-rfi-answer.sh` takes
+`--request-id`/`--peer` as operator inputs (67D, because no verified request existed).
+70C adds a `--request <artifact>` path: the composer verifies the request (the
+overlay-derived fingerprint comes from the listener that received it), reads
 `question`/`scope`/`request_id`/`peer_fingerprint` from it, and answers — closing the
 loop. The `--request-id`/`--peer` inputs stay for the offline/operator path, exactly
 as the answer channel keeps an operator-carried install beside the live listener.
@@ -138,8 +138,8 @@ as the answer channel keeps an operator-carried install beside the live listener
 - **68B** — `build_rfi_request` / `verify_rfi_request` in `shared/sparknet-authz.py`
   (validator + overlay-fingerprint match + nonce/expiry), pinned to the contract like
   every other envelope. No signature, so no `sign_rfi_request`.
-- **68C** — the Master-side request listener on the port 68C decides (recommended:
-  re-scoped 8090), source-gated to registered non-revoked peers, deriving the
-  fingerprint from the overlay source; `ports.json` + Master Step 7 reconciled.
-- **68D** — `sparknet-rfi-answer.sh --request <artifact>`: verify, then gather/sign/
-  deliver, closing the peer→Master→peer loop.
+- **68C → 70B (done)** — the Master-side request route on re-scoped 8090, source-gated
+  to registered non-revoked peers, deriving the fingerprint from the overlay source;
+  `ports.json`, the contract and Master Step 7 reconciled.
+- **68D → 70C (in progress)** — `sparknet-rfi-answer.sh --request <artifact>`: verify,
+  then gather/sign/deliver, closing the peer→Master→peer loop.

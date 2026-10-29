@@ -12,7 +12,8 @@ updated: 2026-10-22
 > The consensus arc (Steps 13–14) is implemented in
 > [`../../shared/sparknet-consensus.py`](../../shared/sparknet-consensus.py) and
 > was proven live on 2026-10-07: agx64 and agx32 co-formed a 2/2 trust root
-> naming agx64 Master over the deployed transport, and the signer that followed
+> naming agx64 Master over the deployed transport (the Step 57 pair later
+> reversed this: agx32 Master / agx64 peer), and the signer that followed
 > signed a live registry entry a still-peer verified. The **replace-Master
 > re-formation** leg is documented in
 > [`../../contracts/deployment-runbook.md`](../../contracts/deployment-runbook.md)

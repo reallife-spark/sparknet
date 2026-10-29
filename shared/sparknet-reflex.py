@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from typing import Any
 
 SCHEMA_VERSION = "1.0"
-QUESTION_CLASSES = ("rag.relevance", "intent.route", "input.injection", "tool.risk", "output.grounded")
+QUESTION_CLASSES = ("rag.relevance", "intent.route", "input.injection", "tool.risk", "output.grounded", "plan.select")
 QUESTION_TYPES = ("noul", "choice", "score")
 VERDICTS = ("accept", "reject", "abstain")
 MODES = ("off", "local", "broker", "auto")
@@ -109,6 +109,8 @@ def validate_request(req: dict[str, Any]) -> dict[str, Any]:
     questions = req["questions"]
     if not isinstance(questions, dict) or not questions:
         raise ReflexPolicyError("questions must be a non-empty object")
+    if len(questions) != 1:
+        raise ReflexPolicyError("exactly one question per request")
 
     for qname, qspec in questions.items():
         if not isinstance(qspec, dict):
@@ -263,6 +265,7 @@ def default_modes() -> dict[str, dict[str, str]]:
         "input.injection": {"mode": "off", "rollout": "shadow"},
         "tool.risk": {"mode": "off", "rollout": "shadow"},
         "output.grounded": {"mode": "off", "rollout": "shadow"},
+        "plan.select": {"mode": "local", "rollout": "shadow"},
     }
 
 
@@ -334,6 +337,7 @@ def decision_from_answer(
     if not isinstance(answer, dict):
         return abstain_decision(model, backend, "", request, reason="malformed-answer")
     atype = answer.get("type")
+    answer_payload: dict[str, Any] | None = None
     try:
         if atype == "noul":
             p = float(answer["noul"])
@@ -343,26 +347,41 @@ def decision_from_answer(
             confidence = abs(p - 0.5) * 2.0
         elif atype == "choice":
             probs = answer.get("probabilities") or {}
+            if not isinstance(probs, dict):
+                return abstain_decision(model, backend, "", request, reason="malformed-answer")
             ordered = sorted((float(v) for v in probs.values()), reverse=True)
             top_p = ordered[0] if ordered else 0.0
             second_p = ordered[1] if len(ordered) > 1 else 0.0
             confidence = float(answer.get("confidence", 0.0))
+            if not 0.0 <= confidence <= 1.0:
+                return abstain_decision(model, backend, "", request, reason="malformed-answer")
             if choice_abstain(confidence, top_p, second_p):
                 return abstain_decision(model, backend, "", request, reason="low-signal")
             choice = answer.get("choice")
+            if not isinstance(choice, str):
+                return abstain_decision(model, backend, "", request, reason="malformed-answer")
             verdict = "accept" if positive_choice is None or choice in positive_choice else "reject"
+            answer_payload = {
+                "type": "choice",
+                "choice": choice,
+                "probabilities": {str(key): float(value) for key, value in probs.items()},
+                "confidence": confidence,
+            }
         elif atype == "score":
             score = float(answer["score"])
             confidence = float(answer.get("confidence", 0.0))
+            if not 0.0 <= confidence <= 1.0:
+                return abstain_decision(model, backend, "", request, reason="malformed-answer")
             if score_abstain(confidence):
                 return abstain_decision(model, backend, "", request, reason="low-signal")
             verdict = "accept" if score >= score_threshold else "reject"
+            answer_payload = {"type": "score", "score": score, "confidence": confidence}
         else:
             return abstain_decision(model, backend, "", request, reason="unknown-answer-type")
     except (KeyError, TypeError, ValueError):
         return abstain_decision(model, backend, "", request, reason="malformed-answer")
 
-    return {
+    decision = {
         "verdict": verdict,
         "confidence": confidence,
         "backend": backend,
@@ -373,6 +392,9 @@ def decision_from_answer(
         "state_digest": _digest(request.get("state")),
         "model_drift": False,
     }
+    if answer_payload is not None:
+        decision["answer"] = answer_payload
+    return decision
 
 
 def consult(
@@ -400,19 +422,30 @@ def consult(
             return abstain_decision(model, backend, "", request, reason="budget-exhausted")
 
     started = time.monotonic()
+
+    def finish_abstain(reason: str) -> dict[str, Any]:
+        decision = abstain_decision(model, backend, "", request, reason=reason)
+        decision["latency_ms"] = (time.monotonic() - started) * 1000.0
+        return decision
+
+    def finish(decision: dict[str, Any], latency_ms: float) -> dict[str, Any]:
+        if decision.get("verdict") == "abstain" and not decision.get("latency_ms"):
+            decision["latency_ms"] = latency_ms
+        return decision
+
     executor = ThreadPoolExecutor(max_workers=1)
     future = executor.submit(call, request)
     try:
         answer = future.result(timeout=timeout_s)
     except FuturesTimeoutError:
         future.cancel()
-        return abstain_decision(model, backend, "", request, reason="timeout")
+        return finish_abstain("timeout")
     except ReflexBudgetExhausted:
-        return abstain_decision(model, backend, "", request, reason="budget-exhausted")
+        return finish_abstain("budget-exhausted")
     except ReflexNoSignal:
-        return abstain_decision(model, backend, "", request, reason="low-signal")
+        return finish_abstain("low-signal")
     except Exception:
-        return abstain_decision(model, backend, "", request, reason="backend-error")
+        return finish_abstain("backend-error")
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
 
@@ -423,26 +456,32 @@ def consult(
         usage = answer.get("usage")
         answers = answer["answers"]
         if len(answers) != 1:
-            return abstain_decision(model, backend, "", request, reason="answer-count")
+            return finish_abstain("answer-count")
         answer = next(iter(answers.values()))
-        return decision_from_answer(
+        return finish(
+            decision_from_answer(
+                answer,
+                request,
+                backend=backend,
+                model=model,
+                latency_ms=latency_ms,
+                usage=usage,
+                positive_choice=positive_choice,
+                score_threshold=score_threshold,
+            ),
+            latency_ms,
+        )
+    return finish(
+        decision_from_answer(
             answer,
             request,
             backend=backend,
             model=model,
             latency_ms=latency_ms,
-            usage=usage,
             positive_choice=positive_choice,
             score_threshold=score_threshold,
-        )
-    return decision_from_answer(
-        answer,
-        request,
-        backend=backend,
-        model=model,
-        latency_ms=latency_ms,
-        positive_choice=positive_choice,
-        score_threshold=score_threshold,
+        ),
+        latency_ms,
     )
 
 
@@ -640,6 +679,9 @@ def local_llm_backend(model: str | None = None, timeout_s: float = 5.0) -> Any:
             "temperature": 0,
             "max_tokens": 256,
         }
+        structured = os.environ.get("SPARKNET_REFLEX_STRUCTURED", "1").strip().lower()
+        if structured not in ("0", "false", "no", "off"):
+            payload["response_format"] = {"type": "json_object"}
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
             url,

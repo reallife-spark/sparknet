@@ -309,30 +309,58 @@ are delivered to as well, because the node being revoked has to learn about it.
 A peer that refuses or is offline is recorded, and the command exits non-zero —
 the installed `sparknet-registry-deliver.timer` retries every 60 s.
 
-`sparknet-telemetry-intake.py` is the Master's **peer-intake listener** on `8090`
-(fabric Step 69C, re-scoped from the retired instant-push stub, which is deleted).
-It binds `10.100.0.1` only, attributes each `POST /api/v1/telemetry` by the
-WireGuard-authenticated source via the signed registry (refusing an unregistered,
-revoked or `telemetry`-ungranted peer before reading the body), verifies the report
-with `shared/sparknet-authz.py::verify_telemetry_report`, and records it as evidence
-— it carries no authority. `systemd/sparknet-telemetry-intake.service` is staged by
-`make telemetry-intake-unit`, not enabled. `tests/test_telemetry_intake.py` binds a
-real socket and covers each refusal. See `../../MASTER_OBSERVABILITY_DESIGN.md`.
+`sparknet-peer-intake.py` is the Master's **peer-intake listener** on `8090`
+(fabric Step 69C, re-scoped from the retired instant-push stub, which is deleted;
+renamed at Step 70B when it gained a second route). It binds `10.100.0.1` only and
+carries two routes. `POST /api/v1/telemetry` attributes the WireGuard-authenticated
+source via the signed registry (refusing an unregistered, revoked or
+`telemetry`-ungranted peer before reading the body), verifies the report with
+`shared/sparknet-authz.py::verify_telemetry_report`, and records it as evidence.
+`POST /api/v1/rfi-request` shares the registry gate but needs **no capability**
+(asking is not reporting), verifies with `verify_rfi_request` (overlay fingerprint,
+freshness, nonce — no signature), and queues one content-addressed artifact under
+`/mnt/log/sparknet-rfi-requests` for the composer; it never answers. Both routes
+carry no authority. `systemd/sparknet-peer-intake.service` is staged by
+`make peer-intake-unit`, not enabled. `tests/test_peer_intake.py` binds a real socket
+and covers each refusal. See `../../MASTER_OBSERVABILITY_DESIGN.md` and
+`../../RFI_REQUEST_DESIGN.md`.
 
 ### `sparknet-killswitch.py` — the KillSwitch
 
-The cluster-wide revoke-and-teardown, and it is **root-gated**. It is not the
-same thing as the peer's own containment script, which only tears down *that*
-node. The distinction is enforced by the two roles' separate scripts.
+The cluster-wide containment control. It is **root-gated in both modes** and
+**dry-run by default**. `make killswitch` prints the plan; `make killswitch
+FORCE=1` disables the five control units and the overlay anchor, stops the admin
+container (after removing its restart policy), deletes the overlay interface, and
+installs the `SPARKNET_EMERG_IN/OUT/FWD` iptables chains. It does not flush the
+host ruleset or SSH to peers. It is not the peer's own containment script, which only
+tears down *that* node; the peer has no copy or target for this one.
+
+The implementation and its 14 fake-runner tests are complete. The destructive
+run on a real Master is **not yet verified** (`DoD: confirm: user`). Recovery is
+manual: remove the three iptables jumps/chains, re-enable the units you want, then bring the overlay
+anchor back up. See `docs/killswitch-template.md`.
 
 ```sh
-make killswitch
+make killswitch              # dry-run
+make killswitch FORCE=1      # destructive; root
 ```
 
-### `sparknet-scheduler.py` — the nocturnal pooling scheduler
+### `sparknet-scheduler.py` — the nocturnal batch scheduler
 
-A scaffold: it pools a cluster's capacity into a nightly batch. It is
-specified and sketched, not finished.
+The 9C state machine is built and tested, but it dispatches nothing. The fleet
+has no RDMA and no shared GPU address space, so a window is a time-boxed **batch
+lease** over independent, idle nodes, not pooled memory. `plan`, `arm`, `status`
+and `abort` are implemented; `arm` requires the exact plan id, `--confirm` and an
+operator reason, and assignments stay `[]` until 9D.
+
+The authoritative WireGuard counters come from the root observer
+(`sparknet-wg-observer.py`), which writes a bounded snapshot to
+`/mnt/log/sparknet-wg.json`. Its service and 60-second timer are staged by
+`make wg-observer-unit`, **not enabled**. The unprivileged peer telemetry service
+still supplies session and GPU evidence; a missing probe is `null` plus an
+error, never zero. Local idle samples accumulate across `plan` runs, so a real
+window needs three probes at least five minutes apart. See
+`plans/NOCTURNAL_BATCH_DESIGN.md`.
 
 ### `sparknet-share-ratify.py` — the share ratification service
 
@@ -364,7 +392,7 @@ changing nothing when they do**.
 | `sparknet-approval-sign-socket.sh` | Sign an approval **through the signer socket**, recording a ledger block. |
 | `sparknet-approval-deliver.sh` | Deliver an approval to a peer. |
 | `sparknet-election-approve.sh` | Install the formed trust root. |
-| `sparknet-killswitch.sh` | The Master KillSwitch, root-gated. |
+| `sparknet-killswitch.sh` | The Master KillSwitch wrapper; help-before-root, dry-run default, `FORCE=1` executes. |
 
 The distinction between `sparknet-registry-sign.sh` and
 `sparknet-registry-sign-socket.sh` is the one that matters operationally: the
@@ -584,7 +612,7 @@ The suite:
 | `test_registry_dist.py` | Registry distribution end to end: publish → push → the peer's own guard installs, refuses a tampered artifact and refuses a replay. |
 | `test_admin_console.py` | The admin console. |
 | `test_killswitch.py` | The KillSwitch. |
-| `test_telemetry_intake.py` | The 8090 peer-intake listener over a real socket: registry attribution, the `telemetry` capability gate, revocation, replay, and the no-authority posture. |
+| `test_peer_intake.py` | The 8090 peer-intake listener over a real socket: registry attribution, the `telemetry` capability gate, revocation, replay, the RFI request route (no capability, queueing, replay), and the no-authority posture. |
 | `test_wg_anchor.py`, `test_wg_render.py` | The overlay anchor and the rendering. |
 | `test_step1_keypair.py` | The three-key generation. |
 | `test_master_scripts.py` | The role's scripts. |
@@ -739,7 +767,7 @@ decision.
 | `make wiki-preflight` fails | The nearest `.env` is missing, so the skills would resolve a *different* vault. | `make env-init`. Never work around it. |
 | `make spec-check` fails | The spec/impl boundary rotted: a surface moved without the plan or the docs moving with it. | `plans/MASTER_BUILD_PLAN.md`; `docs/unverifiable-claims.md`. |
 | A peer refuses the registry | The peer's pinned Master key does not match the signer, or the entry's validity window has closed. | `make registry-verify`; the entry's `issued_at`/`expires_at`. |
-| The KillSwitch does nothing | It is root-gated and the call was not made as root. | `make killswitch` as root; `docs/killswitch-template.md`. |
+| The KillSwitch only prints a plan | Dry-run is the default. | `make killswitch FORCE=1` as root; `docs/killswitch-template.md`. |
 
 ---
 
@@ -754,10 +782,12 @@ Broadly, in this role:
   (exercised against the peer's own guard daemon, loaded by path, so "the two
   sides agree" is a fact the suite enforces), the admin console, the overlay
   anchor, the admin surface's capability boundary, the role-scoped agents, the
-  KillSwitch's root gate.
-- **Contracted and scaffolding** — the registry push listener, the nocturnal
-  pooling scheduler, share ratification, the cluster KillSwitch's full
-  federation behaviour, several master-side ports (`4203`, `4220`–`4223`).
+  KillSwitch's implementation against a fake runner.
+- **Contracted and scaffolding** — share ratification, the evidence/review
+  repository and review agents, and several
+  master-side ports (`4203`,
+  `4220`–`4223`). Registry distribution itself is built: a signed publication is
+  pushed to each peer's guard on 9090.
 - **Deliberately parked** — the destructive legs of the deployment runbook
   (rollback; replace-Master re-formation) are documented and deliberately left
   unexecuted by operator decision. `plans/PAIR_REFORMATION_DESIGN.md` designs
@@ -787,6 +817,6 @@ trying.
 | **Admin surface** | The Master's administrative plane; bound to the overlay address, holds no key. |
 | **Registry** | The Master-signed statement of which node may hold which capability. Entries are signed per entry. |
 | **Revocation** | A signed entry marking an identity revoked. Only the Master can sign one, and only the Master can remove one. |
-| **KillSwitch** | The cluster-wide, root-gated revoke and teardown. Master-side. |
+| **KillSwitch** | The cluster-wide, root-gated containment and teardown. Master-side; no revoke. |
 | **Containment** | One node's own root-gated teardown. Peer-side. A different thing. |
 | **Spec-only** | Designed and contracted, no code, by deliberate role boundary. |

@@ -61,7 +61,7 @@
     "tracked_files": ["configs/wireguard/wg0-node.conf.template", "configs/wireguard/master-peer.template"],
     "private_keys_in_vault": false,
     "teardown": "Master revocation, or the root-gated KillSwitch. Never a plain systemctl stop.",
-    "wlan_egress": "restricted to 10.100.0.1 only, so revocation leaves a revoked node without egress by design",
-    "unverified_on_dev_host": ["live handshake", "PersistentKeepalive behaviour", "chattr +i enforcement", "nftables enforcement"]
+    "wlan_egress": "the deployed peer uses iptables SPARKNET-FW chains for its published surfaces; it does not pin all WLAN egress to 10.100.0.1. Revocation removes the overlay and signed path, leaving the node inert for guarded actions, not offline.",
+    "unverified_on_dev_host": ["live handshake", "PersistentKeepalive behaviour", "chattr +i enforcement", "host firewall enforcement (iptables on the deployed fleet; the wlan-guard template emits nftables and is not applied)"]
   }
 }

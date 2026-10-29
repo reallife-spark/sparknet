@@ -1,7 +1,7 @@
 # Sparknet
 
-A two-role WireGuard fabric for DGX Spark nodes, with one signed-authorization
-scheme and a knowledge vault per node.
+A two-role WireGuard fabric for DGX Spark and Jetson AGX Xavier nodes, with one
+signed-authorization scheme and a knowledge vault per node.
 
 The Master holds the signing key and decides what each node may do. Every other
 node is a peer: it verifies the Master's decisions and cannot authorise anything
@@ -99,7 +99,7 @@ Details in `peer-node/docs/`, starting with `wireguard.md` and
 `node-authorization.md`.
 
 > **Verified live on agx64+agx32 (2026-10-07):** unanimous 2/2 election formed; `sparknet-master-signer.service` active and restart-stable; signed registry entry distributed to a peer and verified by the root alone; revoke→peer-inert→re-authorize cycle executed live one-peer-at-a-time; reboot survival on agx64 (signer unit comes back, ledger intact, peer auth still verifies); overlay handshakes + ICMP ping ~2 ms 0% loss over real NICs via the gateway UDP relay.
-> **Designed but undemonstrated on a dev host:** kernel WireGuard path (`CONFIG_WIREGUARD=n` here, so userspace `wireguard-go` + `/root/scripts/sparknet-wg-restore.sh`); `nftables` containment rules; `chattr +i` enforcement of protected paths; `guard-apply` with euid 0 and `--apply-enabled` (required, off by default). Phase 9's destructive legs (rollback / replace-Master re-formation) remain documented-but-unexecuted at operator choice.
+> **Designed but undemonstrated on a dev host:** kernel WireGuard path (`CONFIG_WIREGUARD=n` here; the deployed nodes use userspace `wireguard-go` via their enabled anchor units); `iptables` containment rules; `chattr +i` enforcement of protected paths; `guard-apply` with euid 0 and `--apply-enabled` (required, off by default). Phase 9's destructive legs (rollback / replace-Master re-formation) remain documented-but-unexecuted at operator choice.
 
 ## Configuration in `/etc`
 

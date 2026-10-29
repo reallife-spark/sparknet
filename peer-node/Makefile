@@ -23,7 +23,7 @@ PY := $(if $(wildcard $(VENV_PY)),$(VENV_PY),$(if $(wildcard $(FABRIC_VENV_PY)),
 .PHONY: help env-init validate test lint devtools provision dist bundle install-units \
         install-config keys wg-render authz-verify anchor guard-status guard-contract \
         peer-manifest containment wiki-preflight wiki-status wiki-lint wiki-capture clean \
-        provenance-verify user-init provenance-append ingest precommit shims-check keys-check \
+        provenance-verify user-init provenance-append ingest accept-inbox review-inbox precommit shims-check keys-check \
         ai-stack-config admin-agent-help container-build container-load container-config container-preflight container-up \
         container-health container-down model-generate model-verify model-build model-serve
 
@@ -119,8 +119,8 @@ anchor: ## Bring up the WireGuard Master Anchor (root; render + wg-quick up + ch
 
 containment: ## THIS NODE's root-gated teardown. Not the cluster KillSwitch (Master-side).
 	@echo "This tears down only this node's anchor. The cluster KillSwitch is a Master"
-	@echo "action and is specified in master-node/docs/master-killswitch.md — it does not"
-	@echo "exist yet. Continuing with node-local containment in 3s (Ctrl-C to abort)."
+	@echo "action (master-node/services/sparknet-killswitch.py) and this role has no"
+	@echo "copy or target for it. Continuing with node-local containment in 3s (Ctrl-C to abort)."
 	@sleep 3
 	@./scripts/sparknet-node-containment.sh $(if $(DRY_RUN),--dry-run,)
 
@@ -176,6 +176,20 @@ ingest: ## Land STDIN or SRC= as an unsigned note in 01_Inbox/ (SOURCE=master-no
 	@$(PROV_PY) $(PROV) $(PROV_VAULT) ingest $(if $(SRC),"$(SRC)","-") \
 		--source "$(if $(SOURCE),$(SOURCE),peer-node)" \
 		$(if $(SENDER),--sender "$(SENDER)",)
+
+accept-inbox: ## Record an inbox acceptance (ITEM=01_Inbox/... SOURCE=... [REVIEWER=... SANITIZED=1])
+	@test -n "$(ITEM)"   || { echo "ITEM=01_Inbox/<item>.md required" >&2; exit 1; }
+	@test -n "$(SOURCE)" || { echo "SOURCE=peer-node|email|master-node required" >&2; exit 1; }
+	@$(PROV_PY) $(PROV) $(PROV_VAULT) accept-inbox "$(ITEM)" --source "$(SOURCE)" \
+		--decision "$(if $(DECISION),$(DECISION),accepted)" \
+		$(if $(REVIEWER),--reviewer "$(REVIEWER)",) \
+		$(if $(SANITIZED),--sanitized,) $(if $(SENDER),--sender "$(SENDER)",) \
+		$(if $(NOTE),--note $(NOTE),)
+
+review-inbox: ## Sanitize an accepted untrusted item (ITEM=... [APPLY=1] [ALLOW_INSTRUCTIONS=1])
+	@test -n "$(ITEM)" || { echo "ITEM=01_Inbox/<item>.md required" >&2; exit 1; }
+	@$(PY) "$(VAULT_ROOT)/agents/vault-curator/agent.py" review --vault "$(VAULT_ROOT)" "$(ITEM)" \
+		$(if $(APPLY),--apply,) $(if $(ALLOW_INSTRUCTIONS),--allow-instructions,)
 
 shims-check: ## Prove every legacy name is a symlink to its numbered home
 	@$(PROV_PY) $(PROV) $(PROV_VAULT) shims

@@ -18,11 +18,12 @@ The fabric already has the *authority* half of agent traffic:
   OpenAI-compatible proxy that routes *local client* calls toward domain agent
   ports and injects the node's user-environment profile. It is deliberately
   local-only: it carries the node's session authority.
-- **Provisioned but silent agents** — `peer-node/agents/{engineering,cyber,
-  vault-curator}/agent.py` are two-line placeholders. `opencode-serve` (8090)
-  is the single opencode server. Open WebUI is the Master's declared admin
-  surface (overlay 8088, provisioned; relocated from 8080 and deployed on the
-  live Master, fabric Step 55).
+- **Provisioned but silent agents** — `peer-node/agents/{engineering,cyber}/agent.py`
+  are two-line placeholders; `vault-curator/agent.py` is now a deterministic
+  inbox reviewer CLI (no listener), not a server. `opencode-serve` (8090) is the
+  single opencode server. Open WebUI is the Master's declared admin surface
+  (overlay 8088, provisioned; relocated from 8080 and deployed on the live
+  Master, fabric Step 55).
 
 What is *not* contracted is the part in between: how one agent reaches another
 (or reaches a tool on a neighbouring node), and what an LLM-driven surface

@@ -158,6 +158,9 @@ UNTRACKED_TOP_LEVEL = {
     # It is machine-local state (the volatile files are gitignored, the rest is
     # never tracked), not part of the fabric's design.
     ".obsidian",
+    # A local goSpark checkout is a separate Git repository (it carries its own
+    # .git); its layout and provenance snapshots are not the fabric's to police.
+    "gospark",
 }
 
 # Files that record what one machine looked like, rather than describing the
@@ -191,6 +194,9 @@ VAULT_CATEGORY_DIRS = [
 # The legacy names are the fabric root's; the numbered ones are the role
 # subvaults' equivalents under the PARA layout (`peer-node/`), so a capture
 # that legitimately records a host path stays exempt after the move.
+# A local goSpark checkout is a separate repository, not part of this tree.
+EXTERNAL_REPO_DIRS = {"gospark"}
+
 PROVENANCE_DIRS = {
     "references",
     "plans",
@@ -205,7 +211,17 @@ PROVENANCE_DIRS = {
 }
 
 SCAN_SUFFIXES = {".md", ".py", ".sh", ".json", ".template", ".conf", ".env.example"}
-SKIP_DIR_PARTS = {"__pycache__", ".git", ".venv", "dist", "node_modules", ".pytest_cache", ".ruff_cache", ".opencode"}
+SKIP_DIR_PARTS = {
+    "__pycache__",
+    ".git",
+    ".venv",
+    "dist",
+    "node_modules",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".opencode",
+    *EXTERNAL_REPO_DIRS,
+}
 
 # Generated committed artifacts whose body is a verbatim copy of a vendored,
 # already-excluded source (.opencode/skills/llm-wiki/SKILL.md, produced by

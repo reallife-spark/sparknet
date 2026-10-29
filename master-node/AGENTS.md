@@ -18,7 +18,10 @@ authority over the overlay.
 > `sparknet-master-signer.service` on agx64 — it answered its own root-id,
 > signed a live registry entry a still-peer verified, survived a real reboot,
 > refused non-Master keys/unnamed nodes/tampered roots, and demonstrated a
-> live revoke→peer-inert→re-authorize cycle.
+> live revoke→peer-inert→re-authorize cycle. That 2026-10-07 root is archived;
+> the **current** Step 57 pair is reversed — `agx32` Master
+> (`sparknet-node-0002`, `10.100.0.1`) and `agx64` peer (`0001`,
+> `10.100.0.2`), root `fa6f4fa5…`.
 >
 > The admin surface is **deployed on the live Master (agx32)**: the container
 > `sparknet-admin-webui` runs the committed topology and binds `10.100.0.1:8088`
@@ -86,7 +89,7 @@ carries this role and not the contract.
 | Revoke a node | signs `revoked: true`, removes the peer from its own `wg0` |
 | Register a new peer | adds a `[Peer]` stanza to the Master's `wg0` |
 | Authorize a `guard-apply` | signs an approval payload for one specific peer |
-| Halt the fabric | the cluster KillSwitch (specified, still unbuilt) |
+| Halt the fabric | the cluster KillSwitch (built Step 8; dry-run by default, live destructive run unverified) |
 
 None of these are granted through the capability system. The capability
 vocabulary in `../contracts/capabilities.json` governs what a **peer** may do.
@@ -242,7 +245,7 @@ Run `/wiki-status` first, then `/wiki-ingest`, `/wiki-query`, `/wiki-lint`,
 | --- | --- |
 | `deployment/vault-template/` | Starter `00_System/` set for a fresh vault (`cp` + `make user-init`). |
 | `configs/wireguard/master-peer.template` | Master-side WireGuard peer stanza for `wg0`. |
-| `docs/killswitch-template.md` | KillSwitch procedure template (operational checklist). |
+| `docs/killswitch-template.md` | Cluster KillSwitch implementation, recovery, and preserved draft. |
 
 ## Boundaries
 
@@ -255,13 +258,14 @@ Run `/wiki-status` first, then `/wiki-ingest`, `/wiki-query`, `/wiki-lint`,
 - **Offensive security is out of scope** for a general/default agent session.
   Route offensive work to the `red` role and defensive work to `blue`.
 - Cite sources. A distilled page without provenance is a guess — mark it as one.
-- **Do not claim production verification.** The code on this role is real and
-  tested, and the election→signer→registry arc has run in a live **local**
-  three-node rehearsal (Step 12). It has not run **in production**: no deployed
-  election, no deployed signed registry entry, no key crossing a process boundary
-  on real nodes. The peer's live network
-  behaviour is likewise unverified on the development host. Say "implemented and
-  unit-tested", never "deployed" or "verified in production".
+- **Do not overclaim what the live run proves.** The code on this role is real
+  and tested, and the election→signer→registry arc was **deployed and proven
+  live on real hosts on 2026-10-07** (agx64/agx32): a signed registry entry, a
+  key crossing a process boundary, a reboot, and a revoke/restore cycle. That is
+  a dated claim about those hosts, not a general production-fleet guarantee. On
+  the development host nothing binds the overlay or admin surface. Say
+  "implemented and tested", "deployed live on agx64/agx32 on 2026-10-07", or
+  "unverified here" — never generalise the live run into an untested claim.
 - **Distinguish what runs from what is specified.** This role now runs a real
   surface, so the temptation reverses: describing the signer, election or overlay
   anchoring as working when they are specified-only. Check the boundary before

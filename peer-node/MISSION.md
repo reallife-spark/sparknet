@@ -4,14 +4,14 @@ The **working node** role of the Sparknet fabric.
 
 ## Scope
 
-- **In scope**: everything needed for a DGX Spark node to run its own local AI
+- **In scope**: everything needed for a DGX Spark or Jetson AGX Xavier node to run its own local AI
   and knowledge vault, hold a Master-anchored WireGuard overlay, verify
   Master-signed authorization, and apply Master-approved changes to its own
   protected files under Plan → Permission → Execute.
 - **Out of scope**: the Master role (see `../master-node/`) — signing
   authorizations, revoking peers, cluster-wide containment, the registry
-  service, and nocturnal memory pooling. Cross-role contracts live in
-  `../contracts/`, not here.
+  service, and the Master-side nocturnal batch-lease scheduler. Cross-role
+  contracts live in `../contracts/`, not here.
 - **Out of scope**: adjacent domains. A page serving another vault goes there.
 
 ## Success

@@ -155,11 +155,11 @@
     "purpose": "What a node is believed to be, independent of what it is permitted to do. A node can be permitted and distrusted \u2014 that combination is the normal state of both sides of an unratified share, and collapsing the two would remove the signal that something needs review.",
     "levels": {
       "authenticated": {
-        "means": "Identity is in the signed registry, the fingerprint matches, and no share against it is unresolved.",
+        "means": "Identity is in the signed registry, the fingerprint matches, and no share against it is unresolved. A ratified share may still carry the `flagged` marker in `retained_flags` as evidence; the retained marker alone does not lower this level.",
         "shares_allowed": true
       },
       "flagged": {
-        "means": "A share was opened without ratification and has not been resolved either way. Everything the node touches is recorded as evidence.",
+        "means": "An accepted share has not been ratified, or a share carries a retained `flagged` marker. Everything the node touches is recorded as evidence. A flag is held for a human; telemetry may surface it, never clear it.",
         "shares_allowed": true,
         "flagged_note": "Flagged does not mean malicious. It means nobody has decided yet, and the cost of leaving that unrecorded is that nobody later can."
       },
@@ -170,7 +170,7 @@
     },
     "retained_after_ratification": true,
     "retained_rationale": "Ratification authorises the share; it does not erase that unapproved data crossed between nodes. The flag is kept so the record shows what actually happened, which is also what an EU AI Act evidence request asks for. A flag that disappeared on approval would make the interesting events unobservable.",
-    "who_moves_them": "Only the Master, and only as a signed event in the registry naming the reason. A model may summarise the evidence that justifies a change. It may not itself confer or lift a trust level.",
-    "never_a_grant": "A trust level never grants authority. It records a belief. Authority comes from key possession and the signed envelope, per master_capabilities above."
+    "who_moves_them": "Only the Master, and only as a signed event in the registry naming the reason. A peer's `kind=status` telemetry may surface a flag and its retained evidence, but it cannot move the level. A model may summarise the evidence that justifies a change; it may not itself confer or lift a trust level.",
+    "never_a_grant": "A trust level never grants authority. It records a belief. Authority comes from key possession and the signed envelope, per master_capabilities above. Telemetry surfacing is evidence for a human, never remediation."
   }
 }

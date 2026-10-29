@@ -26,7 +26,18 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-SKIP_DIRS = {"__pycache__", ".git", ".venv", "dist", "node_modules", ".pytest_cache", ".ruff_cache", ".opencode"}
+SKIP_DIRS = {
+    "__pycache__",
+    ".git",
+    ".venv",
+    "dist",
+    "node_modules",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".opencode",
+    # A local goSpark checkout is a separate repository, not fabric deployment config.
+    "gospark",
+}
 
 # The one module allowed to call b64decode directly: the strict helper lives here,
 # and load_private_key legitimately tries base64 *and* hex.

@@ -36,7 +36,8 @@ SCOPE ?= fabric
         render render-check sbom sbom-check nv-search drift-check \
         goagx-publish goagx-drift-check \
         devtools chroma-dev chroma-init chroma-inspect \
-        chroma-index chroma-stamp chroma-query reflex-eval reflex-live-check reflex-live-query env-init wiki-sync wiki-verify \
+        chroma-index chroma-stamp chroma-query reflex-eval reflex-live-check reflex-live-query \
+        reflex-plan-eval verify-plans env-init wiki-sync wiki-verify \
         wiki-preflight bundle bundle-verify status-plan clean dist \
         keys-check shims-check hooks
 
@@ -285,6 +286,7 @@ chroma-query: ## Search the CHROMA_SCOPE index: make chroma-query CHROMA_SCOPE=f
 REFLEX_SCOPE ?= fabric
 REFLEX_MODE ?= shadow
 REFLEX_TOP_K ?= 5
+PLANS ?= -
 
 reflex-eval: ## Offline RAG reflex pilot (fabric only): precision@5, recall, abstain, p95, cost
 	@$(PY) scripts/sparknet-reflex-eval.py --scope "$(REFLEX_SCOPE)" --mode "$(REFLEX_MODE)" \
@@ -295,6 +297,12 @@ reflex-live-check: ## Live pilot preflight: broker health (governance+key only f
 
 reflex-live-query: ## One broker-backed fabric query (operator-gated): QUERY="..."
 	@REFLEX_LIVE=1 $(PY) scripts/sparknet-reflex-eval.py --query "$(QUERY)" --top-k "$(REFLEX_TOP_K)"
+
+reflex-plan-eval: ## Live plan-selection calibration (local LLM advisory; top-1, coverage, ECE)
+	@$(PY) scripts/sparknet-reflex-plan-eval.py --live $(if $(REFLEX_JSON),--json "$(REFLEX_JSON)",)
+
+verify-plans: ## Rank candidate plans from JSON (advisory only; no authority)
+	@$(PY) scripts/sparknet-verify-plans.py --input "$(PLANS)"
 
 env-init: ## Write every vault's .env + wiki dirs from its .env.example
 	@./scripts/sparknet-env-init.sh "$(VAULT_ROOT)"

@@ -70,7 +70,7 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/share-protocol.md` | the cross-node sharing regime |
 | `contracts/consensus-protocol.md` | master election and the cluster trust root |
 | `contracts/health-protocol.md` | peer liveness and eviction (probe rhythm, activity-trumps-eviction) |
-| `contracts/telemetry-schema.json` | peer→Master observability evidence (Phase 4): overlay-attributed, unsigned, `kind`-tagged reports the Master records and acts on nothing. Envelope built; the intake listener is Step 69C |
+| `contracts/telemetry-schema.json` | peer→Master observability evidence (Phase 4): overlay-attributed, unsigned, `kind`-tagged reports the Master records and acts on nothing. Envelope, the 8090 peer intake (telemetry + RFI request routes), the peer pusher and the per-kind consumers were built and gated in Step 70 (2026-10-25) |
 | `contracts/provenance-protocol.md` | signed note chain and approvals |
 | `contracts/tracking-schema.json` | tracking envelope schema |
 | `contracts/proposal-schema.json` | the proposal/review/decision records and the draft→submitted→reviewed→decided lifecycle |

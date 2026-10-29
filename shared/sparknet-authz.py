@@ -1305,6 +1305,152 @@ def verify_grant(
     )
 
 
+# --- share ratification (Master arbitrates a share) ---------------------------
+
+#: The signed share-ratification artifact. It is deliberately narrow: it records
+#: the Master's answer to one accepted share, not a permission and not a trust
+#: level. The flag is retained on both approval and refusal because the fact that
+#: unapproved data crossed nodes does not disappear when the share is approved.
+SHARE_RATIFICATION_FIELDS = (
+    "schema_version",
+    "share_id",
+    "node_id",
+    "node_fingerprint",
+    "grant_id",
+    "decision",
+    "reason",
+    "accepted_at",
+    "deadline",
+    "ratified_at",
+    "flag_retained",
+)
+SHARE_RATIFICATION_SCHEMA = "1.0"
+SHARE_RATIFICATION_DECISIONS = ("ratified", "refused")
+
+
+def share_ratification_message(ratification: dict[str, Any]) -> bytes:
+    """Canonical bytes the Master's signature over a share ratification covers.
+
+    Closed like the guard approval: an extra field is refused rather than left
+    outside the signature. The field list is the contract; a second copy in the
+    signer or the peer would be the divergence class this module exists to stop.
+    """
+    if not isinstance(ratification, dict):
+        raise AuthzError("share ratification must be an object")
+    extra = set(ratification) - set(SHARE_RATIFICATION_FIELDS) - {"signature_b64"}
+    if extra:
+        raise AuthzError(f"share ratification carries unsigned field(s): {', '.join(sorted(extra))}")
+    missing = [f for f in SHARE_RATIFICATION_FIELDS if f not in ratification]
+    if missing:
+        raise AuthzError(f"share ratification missing required field(s): {', '.join(missing)}")
+    if ratification["schema_version"] != SHARE_RATIFICATION_SCHEMA:
+        raise AuthzError(f"share ratification schema_version must be {SHARE_RATIFICATION_SCHEMA}")
+    for name in ("share_id", "node_id", "grant_id", "accepted_at", "deadline", "ratified_at"):
+        value = ratification.get(name)
+        if not isinstance(value, str) or not value.strip():
+            raise AuthzError(f"share ratification {name} must be a non-empty string")
+    fingerprint_hex = ratification.get("node_fingerprint")
+    if not isinstance(fingerprint_hex, str) or not re.fullmatch(r"[0-9a-f]{64}", fingerprint_hex):
+        raise AuthzError("share ratification node_fingerprint must be 64 lowercase hex characters")
+    if ratification.get("decision") not in SHARE_RATIFICATION_DECISIONS:
+        raise AuthzError(f"share ratification decision must be one of {SHARE_RATIFICATION_DECISIONS}")
+    if not isinstance(ratification.get("reason"), str):
+        raise AuthzError("share ratification reason must be a string")
+    if ratification.get("flag_retained") is not True:
+        raise AuthzError("share ratification must retain the flag")
+    projected = {field: ratification[field] for field in SHARE_RATIFICATION_FIELDS}
+    return json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def sign_share_ratification(ratification: dict[str, Any], master_private_key: Ed25519PrivateKey) -> dict[str, Any]:
+    """Sign one share ratification. MASTER-SIDE ONLY."""
+    unsigned = {key: value for key, value in ratification.items() if key != "signature_b64"}
+    message = share_ratification_message(unsigned)
+    return {**unsigned, "signature_b64": sign_bytes(master_private_key, message)}
+
+
+def verify_share_ratification(ratification: dict[str, Any], master_public_key: Ed25519PublicKey) -> bool:
+    """Verify the Master's ratification signature; refuse on any shape error."""
+    if not isinstance(ratification, dict):
+        return False
+    signature = ratification.get("signature_b64")
+    if not isinstance(signature, str) or not signature:
+        return False
+    try:
+        message = share_ratification_message(ratification)
+    except AuthzError:
+        return False
+    return verify_signature(master_public_key, signature, message)
+
+
+# --- trust transitions (a belief, never a permission) -------------------------
+
+#: Trust levels are beliefs, not grants. This signed artifact records a Master
+#: decision about one node; it does not move a capability or a registry entry.
+TRUST_LEVELS = ("authenticated", "unauthenticated", "flagged")
+TRUST_TRANSITION_FIELDS = (
+    "schema_version",
+    "node_id",
+    "level",
+    "previous_level",
+    "reason",
+    "decided_at",
+    "reversible",
+    "flag_preserved",
+)
+TRUST_TRANSITION_SCHEMA = "1.0"
+
+
+def trust_transition_message(transition: dict[str, Any]) -> bytes:
+    """Canonical bytes a Master trust-transition signature covers."""
+    if not isinstance(transition, dict):
+        raise AuthzError("trust transition must be an object")
+    extra = set(transition) - set(TRUST_TRANSITION_FIELDS) - {"signature_b64"}
+    if extra:
+        raise AuthzError(f"trust transition carries unsigned field(s): {', '.join(sorted(extra))}")
+    missing = [f for f in TRUST_TRANSITION_FIELDS if f not in transition]
+    if missing:
+        raise AuthzError(f"trust transition missing required field(s): {', '.join(missing)}")
+    if transition["schema_version"] != TRUST_TRANSITION_SCHEMA:
+        raise AuthzError(f"trust transition schema_version must be {TRUST_TRANSITION_SCHEMA}")
+    if transition.get("level") not in TRUST_LEVELS:
+        raise AuthzError(f"trust transition level must be one of {TRUST_LEVELS}")
+    previous = transition.get("previous_level")
+    if previous is not None and previous not in TRUST_LEVELS:
+        raise AuthzError(f"trust transition previous_level must be one of {TRUST_LEVELS} or null")
+    for name in ("node_id", "reason", "decided_at"):
+        value = transition.get(name)
+        if not isinstance(value, str) or not value.strip():
+            raise AuthzError(f"trust transition {name} must be a non-empty string")
+    if transition.get("reversible") is not True:
+        raise AuthzError("trust transition must be reversible")
+    if transition.get("flag_preserved") is not True:
+        raise AuthzError("trust transition must preserve the flag")
+    projected = {field: transition[field] for field in TRUST_TRANSITION_FIELDS}
+    return json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def sign_trust_transition(transition: dict[str, Any], master_private_key: Ed25519PrivateKey) -> dict[str, Any]:
+    """Sign one trust transition. MASTER-SIDE ONLY."""
+    unsigned = {key: value for key, value in transition.items() if key != "signature_b64"}
+    message = trust_transition_message(unsigned)
+    return {**unsigned, "signature_b64": sign_bytes(master_private_key, message)}
+
+
+def verify_trust_transition(transition: dict[str, Any], master_public_key: Ed25519PublicKey) -> bool:
+    """Verify a Master trust-transition signature; refuse on any shape error."""
+    if not isinstance(transition, dict):
+        return False
+    signature = transition.get("signature_b64")
+    if not isinstance(signature, str) or not signature:
+        return False
+    try:
+        message = trust_transition_message(transition)
+    except AuthzError:
+        return False
+    return verify_signature(master_public_key, signature, message)
+
+
 # --- RFI answers (request for information) ------------------------------------
 
 #: The whole RFI answer artifact. `content_b64` is in the field list but not in the

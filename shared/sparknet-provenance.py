@@ -2520,6 +2520,24 @@ def main(argv: list[str] | None = None) -> int:
     p_ingest.add_argument("--agent", default="ingest")
     p_ingest.add_argument("--model", default="local")
 
+    p_accept = sub.add_parser(
+        "accept-inbox",
+        help="record an inbox acceptance in the ledger (the item itself is not moved)",
+    )
+    p_accept.add_argument("item", help="vault-relative path under 01_Inbox/")
+    p_accept.add_argument("--source", required=True, choices=INBOX_SOURCES)
+    p_accept.add_argument("--decision", default="accepted", choices=("accepted", "rejected"))
+    p_accept.add_argument("--reviewer", default="", help="named reviewer; required for untrusted ingress")
+    p_accept.add_argument(
+        "--sanitized",
+        action="store_true",
+        help="record that the reviewer sanitizes this untrusted item (sets validity=sanitized)",
+    )
+    p_accept.add_argument("--sender", default="", help="authorised sender for an email source")
+    p_accept.add_argument("--note", action="append", default=[], dest="notes", help="related note path (repeatable)")
+    p_accept.add_argument("--agent", default="inbox")
+    p_accept.add_argument("--model", default="local")
+
     sub.add_parser("shims", help="prove every legacy name is a symlink to its numbered home")
 
     sub.add_parser("scan", help="fail on registered secrets or key-shaped literals in tracked files")
@@ -2607,6 +2625,25 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(f"ingested: {target}")
             print("state: unsigned (pending) — acceptance and signature come later")
+            return 0
+        if args.command == "accept-inbox":
+            record = parse_user_record(vault)
+            data = build_inbox_acceptance(
+                vault,
+                item=args.item,
+                source=args.source,
+                decision=args.decision,
+                reviewer=args.reviewer,
+                sanitized=args.sanitized,
+                sender=args.sender,
+                note_refs=args.notes,
+                record=record,
+            )
+            block = append_block(vault, data)
+            print(
+                f"recorded {data['acceptance_id']} as block {block['block_id']} "
+                f"({data['decision']}, validity={data['validity']})"
+            )
             return 0
         if args.command == "append-approval":
             record = parse_user_record(vault)

@@ -14,19 +14,24 @@
 # approvals and registry publications, and because the answer's own signature is
 # what the peer checks, not the transport.
 #
+# A request arrives two ways. With --request <artifact>, the composer consumes the
+# file the 8090 peer intake queued: it re-verifies shape/freshness, takes the
+# request_id and destination peer *from the request*, and enforces its `scope`
+# against the categories the answer declares via --sources. Without --request, the
+# operator path still takes --request-id/--peer directly — needed when a request
+# arrived out of band or no listener is running. Attribution is the intake's (the
+# overlay), not a signature: see RFI_REQUEST_DESIGN.md.
+#
 # WHAT THIS SCRIPT DOES NOT DO, and why:
 #
-#   * It does not verify a signed *request*. A request is signed with the peer's
-#     own node key, but nothing in the fabric binds a peer fingerprint to a node
-#     signing public key (registry entries carry the fingerprint and the WireGuard
-#     key only), so the Master cannot attribute a request signature today. The
-#     request channel is deferred to its own step; see rfi-schema.json
-#     implementation_state.request_channel. This composer therefore takes the
-#     request_id and the destination peer as inputs — an operator or an agent
-#     supplies what the peer asked for — rather than parsing a request envelope.
 #   * It does not *gather* the answer. Gathering is upstream (the fabric's semantic
 #     store, port 4223, is spec-only). The content is read from --content or
-#     --empty; signing and delivery are the transport this script owns.
+#     --empty; --sources is the upstream's declaration of which vault categories
+#     it drew on, and in --request mode the composer refuses any source outside
+#     the request's scope. Scope narrows; the answer cannot widen it.
+#   * It cannot re-attest the request's sender. The overlay did that when the
+#     intake received it; the queued artifact is 0600 in a 0700 directory. The
+#     composer re-checks the request's shape and freshness, not its provenance.
 #
 # The signature is produced by shared/sparknet-authz.py::sign_rfi_answer — the same
 # rule the peer verifies with — either through the isolated signer (--socket,
@@ -39,10 +44,12 @@ ROLE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$ROLE_ROOT/scripts/sparknet-master-env.sh" >/dev/null
 
 REQUEST_ID=""
+REQUEST_FILE=""
 PEER=""
 URL=""
 ITEM_NAME=""
 CONTENT=""
+SOURCE_CATEGORIES=""
 EMPTY="0"
 REGISTRY=""
 SOCKET=""
@@ -53,25 +60,34 @@ OUT=""
 
 usage() {
   cat <<'USAGE'
-usage: sparknet-rfi-answer.sh --request-id <id> --peer <fingerprint> \
-          --item-name <name> (--content <file|-> | --empty) \
+usage: sparknet-rfi-answer.sh --request <artifact> --item-name <name> \
+          (--content <file|-> [--sources <category,...>] | --empty) \
           [--url <url>] [--registry <registry.json>] \
           [--socket <signer.sock>] [--offline] [--answered-at ISO8601] \
           [--timeout SECONDS] [--out <record.json>]
 
+       sparknet-rfi-answer.sh --request-id <id> --peer <fingerprint> \
+          --item-name <name> (--content <file|-> | --empty) \[same options]
+
 Composes one signed RFI answer and pushes it to the peer's POST /api/v1/rfi.
 
-  --request-id  the request this answers; the answer echoes it, and it is what
-                makes a re-delivered answer a duplicate rather than new information
-  --peer        the destination peer's fingerprint; the answer is bound to it, so
-                an answer minted for one node cannot install into another's inbox
+  --request     a verified request artifact queued by the 8090 intake; the peer
+                and request_id come from it, and its scope constrains --sources
+  --request-id  the request this answers (operator path); the answer echoes it, and
+                it is what makes a re-delivered answer a duplicate, not new data
+  --peer        the destination peer's fingerprint (operator path); the answer is
+                bound to it, so one minted for a node cannot install elsewhere
   --item-name   the destination filename under the peer's 01_Inbox/ (a single
                 safe component; it is inside the signature, so the peer cannot be
                 made to write elsewhere)
   --content     the answer payload: a file path, or '-' for stdin
+  --sources     comma-separated vault categories the content was drawn from. With
+                --request, a non-empty answer must declare them and every one must
+                be inside the request's scope; an empty answer declares none.
   --empty       compose an empty answer ("nothing found" is a legitimate answer)
-  --url         the exact endpoint (requires --peer); overrides the registry
-                lookup. This is how a test reaches a loopback guard.
+  --url         the exact endpoint; overrides the registry lookup. The operator
+                path requires --peer (or --request, which supplies it). This is how
+                a test reaches a loopback guard.
   --registry    where to resolve --peer to an overlay address
                 (default: $VAULT_PATH/manifests/node-authorizations.json). A
                 bare registry or a publication wrapping one both work.
@@ -91,11 +107,13 @@ USAGE
 
 while [ $# -gt 0 ]; do
   case "$1" in
+    --request) REQUEST_FILE="$2"; shift 2 ;;
     --request-id) REQUEST_ID="$2"; shift 2 ;;
     --peer) PEER="$2"; shift 2 ;;
     --url) URL="$2"; shift 2 ;;
     --item-name) ITEM_NAME="$2"; shift 2 ;;
     --content) CONTENT="$2"; shift 2 ;;
+    --sources) SOURCE_CATEGORIES="$2"; shift 2 ;;
     --empty) EMPTY="1"; shift ;;
     --registry) REGISTRY="$2"; shift 2 ;;
     --socket) SOCKET="$2"; shift 2 ;;
@@ -108,13 +126,15 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ -n "$REQUEST_ID" ] || { echo "--request-id required" >&2; usage; exit 1; }
-[ -n "$PEER" ] || { echo "--peer required (the destination fingerprint)" >&2; usage; exit 1; }
-[ -n "$ITEM_NAME" ] || { echo "--item-name required" >&2; usage; exit 1; }
-if [ -n "$URL" ] && [ -z "$PEER" ]; then
-  echo "--url names one endpoint, so it requires --peer" >&2
-  exit 1
+if [ -n "$REQUEST_FILE" ]; then
+  [ -f "$REQUEST_FILE" ] || { echo "request artifact not found: $REQUEST_FILE" >&2; exit 1; }
+  [ -z "$PEER" ] || { echo "--request takes the peer from the artifact; drop --peer" >&2; exit 1; }
+  [ -z "$REQUEST_ID" ] || { echo "--request takes the id from the artifact; drop --request-id" >&2; exit 1; }
+else
+  [ -n "$REQUEST_ID" ] || { echo "--request-id required" >&2; usage; exit 1; }
+  [ -n "$PEER" ] || { echo "--peer required (the destination fingerprint)" >&2; usage; exit 1; }
 fi
+[ -n "$ITEM_NAME" ] || { echo "--item-name required" >&2; usage; exit 1; }
 if [ "$OFFLINE" = "1" ] && [ -n "$SOCKET" ]; then
   echo "--offline and --socket are mutually exclusive" >&2
   exit 1
@@ -122,10 +142,10 @@ fi
 
 # Exactly one content source. Reading stdin happens here, before the Python
 # heredoc, because the heredoc is the interpreter's own stdin.
-SOURCES=0
-[ -n "$CONTENT" ] && SOURCES=$((SOURCES + 1))
-[ "$EMPTY" = "1" ] && SOURCES=$((SOURCES + 1))
-if [ "$SOURCES" -ne 1 ]; then
+CONTENT_SOURCES=0
+[ -n "$CONTENT" ] && CONTENT_SOURCES=$((CONTENT_SOURCES + 1))
+[ "$EMPTY" = "1" ] && CONTENT_SOURCES=$((CONTENT_SOURCES + 1))
+if [ "$CONTENT_SOURCES" -ne 1 ]; then
   echo "exactly one of --content <file|-> or --empty is required" >&2
   exit 1
 fi
@@ -158,7 +178,9 @@ if [ "$OFFLINE" != "1" ] && [ -z "$SOCKET" ]; then
 fi
 
 REQUEST_ID="$REQUEST_ID" \
+REQUEST_FILE="$REQUEST_FILE" \
 PEER="$PEER" \
+SOURCES="$SOURCE_CATEGORIES" \
 URL="$URL" \
 ITEM_NAME="$ITEM_NAME" \
 CONTENT_FILE="$CONTENT_FILE" \
@@ -190,7 +212,9 @@ from sparknet_loader import load_shared  # noqa: E402 - import after the loader 
 authz = load_shared("sparknet-authz.py", "sparknet_authz", dirs=[FABRIC_ROOT / "shared"])
 
 request_id = os.environ["REQUEST_ID"]
+request_file = os.environ.get("REQUEST_FILE", "").strip()
 peer = os.environ["PEER"]
+sources_arg = os.environ.get("SOURCES", "")
 url_override = os.environ.get("URL", "").strip()
 item_name = os.environ["ITEM_NAME"]
 content_file = os.environ.get("CONTENT_FILE", "").strip()
@@ -217,6 +241,45 @@ elif content_file:
         sys.exit(f"cannot read the answer content {content_file}: {exc}")
 else:
     sys.exit("no answer content: pass --content <file|-> or --empty")
+
+# --- the request artifact (70C) ----------------------------------------------
+
+request_doc = None
+scope = []
+question = ""
+if request_file:
+    try:
+        request_doc = json.loads(Path(request_file).read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        sys.exit(f"cannot read the request artifact {request_file}: {exc}")
+    if not isinstance(request_doc, dict):
+        sys.exit("the request artifact is not a JSON object")
+    # Attribution was the intake's job (the overlay source). Re-checking with the
+    # artifact's own fingerprint validates shape, freshness and the nonce format;
+    # it cannot re-attest the sender, and does not pretend to.
+    ok, reason = authz.verify_rfi_request(
+        request_doc,
+        expected_fingerprint=str(request_doc.get("peer_fingerprint", "")),
+        now=datetime.now(timezone.utc),
+    )
+    if not ok:
+        sys.exit(f"refusing an invalid request artifact [{reason}]")
+    peer = request_doc["peer_fingerprint"]
+    request_id = request_doc["request_id"]
+    question = request_doc["question"]
+    scope = list(request_doc["scope"])
+
+sources = sorted({s.strip() for s in sources_arg.split(",") if s.strip()})
+if request_doc is not None:
+    if content and not sources:
+        sys.exit("a non-empty answer to --request must declare --sources (the categories it drew on)")
+    if content_empty and sources:
+        sys.exit("an empty answer drew on nothing; drop --sources")
+    outside = [s for s in sources if s not in scope]
+    if outside:
+        sys.exit(f"scope narrows: {outside} is outside the request's scope {scope}; refusing to widen it")
+elif content_empty and sources:
+    sys.exit("an empty answer drew on nothing; drop --sources")
 
 # --- resolve the destination -------------------------------------------------
 
@@ -350,6 +413,7 @@ record = {
     "request_id": request_id,
     "peer_fingerprint": peer,
     "item_name": item_name,
+    "sources": sources,
     "content_sha256": artifact["content_sha256"],
     "url": url,
     "delivered_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -358,6 +422,9 @@ record = {
     "response": None,
     "error": None,
 }
+if request_doc is not None:
+    record["question"] = question
+    record["scope"] = scope
 if ledger_block:
     record["ledger_block"] = ledger_block
 

@@ -523,3 +523,116 @@ def test_no_signal_becomes_a_low_signal_abstain_through_consult(reflex: ModuleTy
     assert decision["verdict"] == "abstain"
     assert decision["_reason"] == "low-signal"
     assert decision["backend"] == "local-rerank"
+
+
+def test_exactly_one_question_per_request_is_enforced(reflex: ModuleType) -> None:
+    req = _request(reflex)
+    req["questions"]["second"] = {"type": "noul", "instructions": "also relevant?"}
+    with pytest.raises(reflex.ReflexPolicyError, match="exactly one question"):
+        reflex.validate_request(req)
+
+
+def test_plan_select_is_in_the_closed_vocabulary(reflex: ModuleType, schema: dict) -> None:
+    assert "plan.select" in reflex.QUESTION_CLASSES
+    assert "plan.select" in schema["request"]["fields"]["question_class"]["enum"]
+    assert schema["request"]["fields"]["questions"]["maxProperties"] == 1
+
+
+def test_a_choice_decision_carries_the_typed_answer(reflex: ModuleType) -> None:
+    req = reflex.make_request(
+        "plan.select",
+        {"query": "pick", "rubric": "local", "plans": [{"id": "a"}, {"id": "b"}]},
+        {"choose": {"type": "choice", "instructions": "pick one", "criteria": ["a", "b"]}},
+        "local",
+        "plan-select-v1",
+        "node-a",
+        "req-1",
+    )
+    answer = {"type": "choice", "choice": "a", "probabilities": {"a": 0.8, "b": 0.2}, "confidence": 0.9}
+    decision = reflex.decision_from_answer(answer, req)
+
+    assert decision["verdict"] == "accept"
+    assert decision["answer"] == {
+        "type": "choice",
+        "choice": "a",
+        "probabilities": {"a": 0.8, "b": 0.2},
+        "confidence": 0.9,
+    }
+
+
+def test_a_score_decision_carries_the_typed_answer(reflex: ModuleType) -> None:
+    req = _request(reflex)
+    answer = {"type": "score", "score": 0.9, "confidence": 0.9}
+    decision = reflex.decision_from_answer(answer, req)
+    assert decision["verdict"] == "accept"
+    assert decision["answer"] == {"type": "score", "score": 0.9, "confidence": 0.9}
+
+
+def test_an_abstain_carries_no_typed_answer(reflex: ModuleType) -> None:
+    req = _request(reflex)
+    thin = {"type": "choice", "choice": "a", "probabilities": {"a": 0.5, "b": 0.5}, "confidence": 0.9}
+    decision = reflex.decision_from_answer(thin, req)
+    assert decision["verdict"] == "abstain"
+    assert "answer" not in decision
+
+
+def test_a_non_dict_probability_set_is_malformed_not_a_crash(reflex: ModuleType) -> None:
+    req = _request(reflex)
+    answer = {"type": "choice", "choice": "a", "probabilities": ["a", "b"], "confidence": 0.9}
+    decision = reflex.decision_from_answer(answer, req)
+    assert decision["verdict"] == "abstain"
+    assert decision["_reason"] == "malformed-answer"
+
+
+def test_the_local_llm_asks_for_json_by_default(reflex: ModuleType, monkeypatch) -> None:
+    seen: dict = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+        def read(self):
+            return json.dumps({"choices": [{"message": {"content": '{"type":"noul","noul":0.9}'}}]}).encode()
+
+    def fake_urlopen(request, timeout=None):
+        seen["body"] = json.loads(request.data.decode())
+        return FakeResponse()
+
+    monkeypatch.setenv("SPARKNET_REFLEX_LOCAL_MODEL", "qwen2.5-3b-32k")
+    monkeypatch.delenv("SPARKNET_REFLEX_STRUCTURED", raising=False)
+    monkeypatch.setattr(reflex.urllib.request, "urlopen", fake_urlopen)
+    reflex.local_llm_backend()(_request(reflex))
+    assert seen["body"]["response_format"] == {"type": "json_object"}
+
+    seen.clear()
+    monkeypatch.setenv("SPARKNET_REFLEX_STRUCTURED", "0")
+    reflex.local_llm_backend()(_request(reflex))
+    assert "response_format" not in seen["body"]
+
+
+def test_a_low_signal_abstain_records_the_measured_latency(reflex: ModuleType) -> None:
+    import time as _t
+
+    def answer(_req):
+        _t.sleep(0.01)
+        return {"type": "noul", "noul": 0.5}
+
+    decision = reflex.consult(answer, _request(reflex), timeout_s=1.0)
+    assert decision["verdict"] == "abstain"
+    assert decision["latency_ms"] >= 5.0, "an abstain after a real call must not report 0 ms"
+
+
+def test_a_non_string_choice_or_out_of_range_confidence_is_malformed(reflex: ModuleType) -> None:
+    req = _request(reflex)
+    bad_answers = [
+        {"type": "choice", "choice": 1, "probabilities": {"1": 0.9, "b": 0.1}, "confidence": 0.9},
+        {"type": "choice", "choice": "a", "probabilities": {"a": 0.9, "b": 0.1}, "confidence": 1.5},
+        {"type": "score", "score": 0.9, "confidence": -0.1},
+    ]
+    for bad in bad_answers:
+        decision = reflex.decision_from_answer(bad, req)
+        assert decision["verdict"] == "abstain", bad
+        assert decision["_reason"] == "malformed-answer", bad

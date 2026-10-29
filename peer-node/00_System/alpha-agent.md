@@ -37,7 +37,9 @@ the email and peer-to-peer legs do not**):
 - source is the master-node → may be executed on notice: the Master is the
   signing role;
 - source is another peer → executes only on **acceptance**, reviewed and
-  sanitized by a reviewer agent first (`agents/vault-curator`);
+  sanitized by a reviewer agent first (`agents/vault-curator`); the recorded
+  acceptance must be accepted, `sanitized: true`, and name that reviewer before
+  the reviewer will run;
 - source is email → the sender must be on `authorised_senders` in
   `00_System/user.md`, then it is treated as peer-origin.
 
@@ -116,5 +118,5 @@ There is no `approvals.md` and nothing may be coded to one.
   when it was captured; current surfaces must not hard-code host paths.
 - Logs and telemetry → `/mnt/log/`, not the vault. Runtime caches →
   `$OPENCODE_DATA_DIR`.
-- Never claim live verification of WireGuard, nftables, `chattr +i`,
+- Never claim live verification of WireGuard, iptables, `chattr +i`,
   KillSwitch or systemd behaviour: this host has none of them.

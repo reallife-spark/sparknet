@@ -1613,3 +1613,133 @@ def test_cli_refuses_to_start_without_a_key(tmp_path):
     assert result.returncode == 1
     assert "not found" in result.stderr or "not valid" in result.stderr
     assert "refusing" in result.stderr or "not found" in result.stderr
+
+
+# --- share ratification ------------------------------------------------------
+
+
+def _share_ratification(*, decision: str = "ratified", deadline: str | None = None) -> dict:
+    return {
+        "schema_version": "1.0",
+        "share_id": "share-1",
+        "node_id": "peer-1",
+        "node_fingerprint": "a" * 64,
+        "grant_id": "grant-1",
+        "decision": decision,
+        "reason": "operator-approved" if decision == "ratified" else "not-approved",
+        "accepted_at": CLOCK.isoformat(),
+        "deadline": deadline or (CLOCK + timedelta(hours=2)).isoformat(),
+        "ratified_at": CLOCK.isoformat(),
+        "flag_retained": True,
+    }
+
+
+def test_it_signs_a_share_ratification_and_records_the_master_event(signer) -> None:
+    response = signer.handle(
+        {
+            "op": "sign-share-ratification",
+            "root_id": signer.root_id,
+            "ratification": _share_ratification(),
+        }
+    )
+    assert response["ok"], response.get("error")
+    signed = response["ratification"]
+    assert signer.authz.verify_share_ratification(signed, signer.authz.public_key_from_b64(signer.public_key_b64))
+
+    ledger = json.loads(signer.ledger_path.read_text())
+    assert any(
+        block.get("data", {}).get("event") == "share_ratified" and block.get("data", {}).get("share_id") == "share-1"
+        for block in ledger["blocks"]
+    )
+
+
+def test_it_refuses_to_ratify_after_the_deadline(signer) -> None:
+    response = signer.handle(
+        {
+            "op": "sign-share-ratification",
+            "root_id": signer.root_id,
+            "ratification": _share_ratification(deadline=(CLOCK - timedelta(minutes=1)).isoformat()),
+        }
+    )
+    assert response["ok"] is False
+    assert "deadline" in response["error"]
+
+
+def test_it_refuses_an_unsigned_field_in_a_share_ratification(signer) -> None:
+    ratification = _share_ratification()
+    ratification["extra"] = "unsigned"
+    response = signer.handle({"op": "sign-share-ratification", "root_id": signer.root_id, "ratification": ratification})
+    assert response["ok"] is False
+    assert "unsigned field" in response["error"]
+
+
+def test_it_records_share_evidence_in_the_signed_ledger(signer) -> None:
+    evidence = {
+        "event_type": "share-access",
+        "grant_id": "grant-1",
+        "node_pair": "a-b",
+        "share_type": "kb-view",
+        "content_sha256": "b" * 64,
+        "captured_at": CLOCK.isoformat(),
+    }
+    response = signer.handle({"op": "record-share-evidence", "root_id": signer.root_id, "evidence": evidence})
+    assert response["ok"], response.get("error")
+    assert response["content_sha256"] == "b" * 64
+    ledger = json.loads(signer.ledger_path.read_text())
+    assert any(
+        block.get("data", {}).get("event") == "share_evidence"
+        and block.get("data", {}).get("content_sha256") == "b" * 64
+        for block in ledger["blocks"]
+    )
+
+
+def test_it_refuses_a_bad_share_evidence_digest(signer) -> None:
+    evidence = {
+        "event_type": "share-access",
+        "grant_id": "grant-1",
+        "node_pair": "a-b",
+        "share_type": "kb-view",
+        "content_sha256": "not-a-digest",
+        "captured_at": CLOCK.isoformat(),
+    }
+    response = signer.handle({"op": "record-share-evidence", "root_id": signer.root_id, "evidence": evidence})
+    assert response["ok"] is False
+    assert "content_sha256" in response["error"]
+
+
+def test_it_signs_a_reversible_trust_transition(signer) -> None:
+    transition = {
+        "schema_version": "1.0",
+        "node_id": "peer-1",
+        "level": "flagged",
+        "previous_level": "authenticated",
+        "reason": "review-needed",
+        "decided_at": CLOCK.isoformat(),
+        "reversible": True,
+        "flag_preserved": True,
+    }
+    response = signer.handle({"op": "sign-trust-transition", "root_id": signer.root_id, "transition": transition})
+    assert response["ok"], response.get("error")
+    signed = response["transition"]
+    assert signer.authz.verify_trust_transition(signed, signer.authz.public_key_from_b64(signer.public_key_b64))
+    ledger = json.loads(signer.ledger_path.read_text())
+    assert any(
+        block.get("data", {}).get("event") == "trust_level_changed" and block.get("data", {}).get("node_id") == "peer-1"
+        for block in ledger["blocks"]
+    )
+
+
+def test_it_refuses_a_non_reversible_trust_transition(signer) -> None:
+    transition = {
+        "schema_version": "1.0",
+        "node_id": "peer-1",
+        "level": "flagged",
+        "previous_level": "flagged",
+        "reason": "review-needed",
+        "decided_at": CLOCK.isoformat(),
+        "reversible": False,
+        "flag_preserved": True,
+    }
+    response = signer.handle({"op": "sign-trust-transition", "root_id": signer.root_id, "transition": transition})
+    assert response["ok"] is False
+    assert "reversible" in response["error"]

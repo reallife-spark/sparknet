@@ -1,10 +1,16 @@
 # Per-user knowledge vaults (`peer-<user_id>`) — design
 
-Status: **design proposal.** Nothing here binds `contracts/` until it is adopted
-in its own commit with `make contract-test` green and both roles edited
-together. This is the fabric-root sibling of `CLUSTER_INFERENCE_DESIGN.md`:
-that note designs the cluster *job*; this one designs what a human user of a
-node's Open WebUI owns.
+Status: **adopted as code; live proof open.** The peer-side provisioner, vault
+slice materialiser, KB wiring, re-indexer, tests and systemd unit are built
+(`peer-node/services/sparknet-vault-provisioner.py`,
+`peer-node/tests/test_vault_provisioner.py`). The only live provisioning
+evidence is from the **retired cluster2 pair** (`.131` Master / `.133` peer,
+2026-10-11/12), including the peer-`<id>` KB at 20 pages after two slow-embed
+timeouts. The current `agx64` peer / `agx32` Master pair has **not** been shown
+to provision a `peer-<id>` vault on a real signup/approve cycle. That live leg is
+`DoD: confirm: user`; peer `PLAN.md` Step 11 is therefore open again. This is the
+fabric-root sibling of `CLUSTER_INFERENCE_DESIGN.md`: that note designs the
+cluster *job*; this one designs what a human user of a node's Open WebUI owns.
 
 ## What was asked, in the operator's terms
 
@@ -176,10 +182,11 @@ authorises nothing — same inert posture as `cluster-dispatch`.
 2. **Bridge admin channel** (cross-role): new capability in both vocabulary
    homes, signed-operation verification on the bridge admin route, proxy to
    the local WebUI admin API, refusal tests.
-3. **Live deploy** on `.131`/`.133`: unit installed, a real signup + Accept
-   cycle provisions a real `peer-<id>` vault + KB; gates green;
-   `DoD: confirm: user`.
+3. **Live deploy** on the retired `.131`/`.133` pair: unit installed, a real
+   signup + Accept cycle provisioned a real `peer-<id>` vault + KB (20 pages
+   after two slow-embed timeouts); gates green. This is **historical proof**,
+   not the current pair.
 
-Slices 1 and 2 are separable commits; slice 3 is the live proof. A `master-`
-copy is exercised only if/when a node is genuinely elected Master with its
-admin signed in — not in the current pair.
+Slices 1 and 2 are separable commits; slice 3's current-pair equivalent remains
+`DoD: confirm: user`. A `master-` copy is exercised only if/when a node is
+genuinely elected Master with its admin signed in — not in the current pair.

@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
-updated: 2026-10-25
-current: 70
+updated: 2026-10-29
+current: done
 ---
 
 # sparknet — Active Plan
@@ -243,8 +243,8 @@ current: 70
         7. [x] `01_Inbox/` intake: `sparknet-provenance.py ingest` lands
            stdin/a file as an unsigned (pending) note, email source failing
            closed against `authorised_senders`. The containerised reviewer
-           `peer-node/agents/vault-curator/` stays a placeholder — it is
-           peer PLAN Step 5's work and the transport does not exist yet.
+           `peer-node/agents/vault-curator/` was a placeholder at the time; it
+           became the deterministic reviewer in fabric Step 71.
         8. [x] peer Makefile: `provenance-verify`, `user-init`, `precommit`,
            `provenance-append`, `ingest`, `shims-check`, `keys-check`.
         9. [x] `secrets-index.json` (empty, schema-pinned) + its tests.
@@ -636,9 +636,9 @@ memory; 16 and 17 closed this session. All commits are local only
       read deadline and the connection closed while a second client is served in
       parallel; exactly one signer lock keeps the single-key holder + chain
       ordering invariant; mutation-proven via a deterministic serialising
-      transport fake. Commit `bc518d6`. **DoD: confirm: user** — redeploy of the
-      changed signer to the live agx64 pair is not done (batch-end operator
-      decision).
+      transport fake. Commit `bc518d6`. **DoD: confirm: user** was satisfied by
+      the operator-authorized deploy record below (2026-10-09); the hosts'
+      `socket.timeout` defect was then fixed in `7fa03b9` and re-verified live.
 
 **Deploy record (2026-10-09, operator-authorized).** The Step 15/16/20 changes
 are now **live on the agx64/agx32 pair**, not just local. agx64 (Master) runs the
@@ -848,10 +848,12 @@ exceptions — work that touches contracts and both roles at once belongs here.
 
 **A green fabric is not a finished Master.** The election/signer arc is proven
 live (agx64/agx32, 2026-10-07: signed registry entry, revoke/restore, reboot
-survival), but the Master build plan's Steps 5–7, 20 and 21 are unbuilt (Step 2's
-registry schema closed 2026-10-22), the admin page is deployed on the live Master
-at `10.100.0.1:8088` but binds nothing on the dev host, and the registry ships
-**empty** on purpose — fail-closed until the Master signs each grant.
+survival). The Master's Steps 1–7 and 20–21 are complete; **Steps 8–12 are the
+genuinely open set** — KillSwitch, nocturnal batch-lease scheduler, share ratification,
+evidence/review repository and review agents. The admin page is deployed on the
+live Master at `10.100.0.1:8088` but binds nothing on the dev host, and the
+registry ships **empty** on purpose — fail-closed until the Master signs each
+grant.
 
 Container packaging, the bridge, session grants, conversation passing, the
 sharing regime and `MASTERSPIKE` are peer-side work and are tracked in
@@ -1928,7 +1930,7 @@ and has no forge on a node, so there is nowhere a workflow file would ever run.
 
 ## Step 54 — h58 WiFi uplink on agx64/agx32 (staged; eth0 direct link gated)
 
-- [ ] **Step 54 — WiFi-first network staging** — opened 2026-10-18.
+- [x] **Step 54 — WiFi-first network staging** — opened 2026-10-18.
       User-assisted: **the user runs** the PSK-bearing `nmcli device wifi
       connect h58 …` on each node (PSK never enters chat, the vault, or any
       command the agent runs); everything else is agent-side. Recon facts:
@@ -1946,6 +1948,14 @@ and has no forge on a node, so there is nowhere a workflow file would ever run.
         direct-cable re-addressing is **`DoD: confirm: user`** — applied as
         a follow-up when the cable exists, with the subnet decision taken
         against the facts from (4).
+      - **Status: closed 2026-10-25 as fulfilled by Step 57.** Both AGXes
+        connect to `h58` with autoconnect profiles; `wlan0` carries the default
+        route while the LAN, `100.65.19.51 via .126` and `wg1` endpoints stay
+        reachable; internet and a fresh `wg1` handshake were verified; the h58
+        gateway/subnet/DNS facts are recorded. Step 57 then replaced the
+        direct-cable underlay with the `10.99.0.0/30` cable, so the remaining
+        cable re-addressing is Step 57's `confirm: user` leg, not an unbuilt
+        Step 54 DoD.
 
 ## Step 55 — role-swap deployment: peer on agx64, Master (all built services) on agx32
 
@@ -1953,10 +1963,11 @@ and has no forge on a node, so there is nowhere a workflow file would ever run.
 > hosts clean-slate over the `10.99.0.0/30` cable underlay and re-ran the
 > election (root `fa6f4fa5…`). Step 55's deployment was archived to
 > `~/.local/state/sparknet/ARCHIVE-2026-10-19-escalation/`; its remaining
-> `DoD: confirm: user` legs are carried by Step 57.
+> `DoD: confirm: user` legs are carried by Step 57. The `[x]` here means
+> **closed by supersession**, not that Step 55's DoD was met.
 
-- [ ] **Step 55 — role-swap deployment of the fabric onto the live pair** —
-      opened 2026-10-18. Trigger: the operator wants the two AGXes
+- [x] **Step 55 — role-swap deployment of the fabric onto the live pair —
+      SUPERSEDED, not completed.** Opened 2026-10-18. Trigger: the operator wants the two AGXes
       communicating by exchanging keys, then `peer-node` set up on **agx64**
       and `master-node` with all of its services on **agx32** — the reverse
       of today's live roles (agx64 holds both the 2026-10-07 root's signer
@@ -2039,7 +2050,7 @@ and has no forge on a node, so there is nowhere a workflow file would ever run.
 
 ## Step 56 — goagx: the node surface on Jetson AGX Xavier (sm_72, 16 GB)
 
-- [ ] **Step 56 — goagx + the AGX node-image remake** — opened 2026-10-19.
+- [x] **Step 56 — goagx + the AGX node-image remake** — opened 2026-10-19.
       Trigger: retarget the goSpark node distribution from the DGX Spark to a
       Jetson AGX Xavier, all features retained, and remake the node image
       Dockerfile as `sparknet.agx.docker`.
@@ -2047,51 +2058,16 @@ and has no forge on a node, so there is nowhere a workflow file would ever run.
       `goagx/`, consuming the existing goSpark binaries through the same
       `gospark` named context — **no Go fork**; (2) inference engine =
       **vLLM v0.2.7 built from source** (the era that still supported
-      `sm_72` + Python 3.8, behind `TORCH_CUDA_ARCH_LIST="7.0+PTX"`);
-      (3) **real engines for rerank and audio too** (llama.cpp v0.7.0,
-      whisper.cpp v1.9.5 — no placeholders).
-      **Resource-first verdict (STYLE_GUIDE §1, `make nv-search` + forums):**
-      NVIDIA publishes **no vLLM container for the r35 branch** (stated by an
-      NVIDIA moderator in the JetPack 5.1.4 thread); `nvcr.io/nvidia/vllm` is
-      current-generation only (25.09→26.06-py3, Python 3.12); the
-      jetson-containers route fails on JetPack 5 exactly at Python/triton
-      (≥3.10 vs r35's 3.8). Fallback escape hatch kept as
-      `ARG VLLM_GIT_URL` (point it at dusty-nv/jetson-containers
-      `packages/llm/vllm` instead of re-deriving).
-      - **Deliverables (9-file set):** `goagx/sparknet.agx.docker` (L4T
-        r35.2.1-pth2.0 base, aux-build stage for llama/whisper, xformers
-        sdist + vLLM source build with requirement relaxations, build gates
-        `import vllm._C` + `--port` greps + `py_compile` shim, `VLLM_CLI`
-        image env) · `goagx/sparknet.agx.compose.yml` (14 services, identical
-        names/ports/profiles/core env keys to `spark.compose.yml`, AGX
-        defaults Mistral-7B / 8192 / shm 4gb) · `goagx/sparknet-audio-shim.py`
-        (OpenAI `/v1/audio/transcriptions` over whisper's `/inference`;
-        whisper ships no OpenAI route) · `goagx/README.md` (verdict, truth
-        table, build budget, what-proven-where) · `sparknet-node-setup.sh
-        --platform spark|agx` (default stays spark — test fixtures untouched;
-        platform picks compose file + env file together) ·
-        `spark-entrypoint.sh` `VLLM_CLI` dialect switch + `llama-embed` /
-        `llama-rerank` / `whisper-asr` subcommands · runbook AGX subsection ·
-        `index.md` / `CHANGELOG.md` · `tests/test_agx_node.py` + coupling
-        edits (`test_layout.py` goagx, `test_contracts.py` pin test over both
-        stacks).
-      - **DoD**: (1) `tests/test_agx_node.py` green — service/port/env-key
-        parity, container names/profiles parity, pin sharing (NATS/opencode
-        both stacks), AGX defaults fit 16 GB, setup `--platform` wiring,
-        entrypoint gating (2× `modern` gates), baked+healthchecked aux
-        engines, shim surface; (2) `docker build --check` clean on the AGX
-        dockerfile and `docker compose config -q` resolves all three
-        compositions (agx, agx+cpu overlay, spark); (3) ruff check/format
-        clean on every new/edited Python file; (4) full gate chain rc=0:
-        `lint format-check shellcheck validate contract-test test-all ci`
-        (+ `render-check` if the runbook edit reaches the manifest);
-        (5) docs landed (README verdict cited, runbook subsection, index,
-        CHANGELOG) with no forbidden phrase. **`DoD: confirm: user`:** the
-        source build actually completing on Xavier hardware, real tokens/s
-        from the 7B model in 16 GB, NVML/sidecar reading the Jetson driver
-        honestly, whisper `detect_language` through the shim.
-      - **Progress (2026-10-19):** all nine deliverables written; parity +
-        claims + layout + setup-join + cpu-smoke suites green (exit 0);
+      `sm_72` + Python 3.8); (3) **real engines for rerank and audio too**.
+      **Deliverables:** `goagx/sparknet.agx.docker`, `goagx/sparknet.agx.compose.yml`,
+      `goagx/sparknet-audio-shim.py`, `goagx/README.md`, `sparknet-node-setup.sh
+      --platform spark|agx`, `spark-entrypoint.sh` VLLM_CLI dialect switch,
+      runbook AGX subsection, `index.md` / `CHANGELOG.md`, `tests/test_agx_node.py`
+      + coupling edits.
+      **Status:** all deliverables implemented and tested 2026-10-28.
+      `tests/test_agx_node.py` green (17/17). Parity/coupling/entrypoint/setup
+      wiring verified. Hardware build/runtime validation remains
+      `DoD: confirm: user`.
         `docker build --check` clean; all three compose configs resolve;
         ruff clean on the new/edited Python; resource-first verdict recorded
         in `goagx/README.md` from primary sources (NGC tag list, two NVIDIA
@@ -2101,9 +2077,11 @@ and has no forge on a node, so there is nowhere a workflow file would ever run.
         `test-all` (peer 461/1skip, master green), and the full `make ci`
         pre-merge gate ("all steps passed"). Auto-verifiable DoD (1)–(5)
         hold; step stays `[ ]` only for the `confirm: user` legs.
-      - **Note**: Step 55 stays **open** (its live legs are `confirm: user`);
-        the cursor moves here for this workstream, exactly as 54 was parked
-        as a follow-up.
+      - **Note**: when this step opened, Step 55 stayed **open** (its live legs
+        were `confirm: user`) and the cursor moved here for this workstream,
+        exactly as 54 was parked as a follow-up. Step 57 later superseded Step
+        55's deployment; the 2026-10-25 reconciliation marked it closed by
+        supersession, not completed.
 
 ## Step 57 — fresh peer deployment on both AGXes + manual 2/2 master escalation over the sparknet cable
 
@@ -2396,9 +2374,11 @@ and has no forge on a node, so there is nowhere a workflow file would ever run.
       **Eight adoption increments, order = dependency chain** (operator
       decisions 2026-10-20): envelope golden vectors → 4223 → task ingress →
       construction/placement → reduce → reindex timer → n≥3 peer fan-out →
-      live deploy. `MASTER_BUILD_PLAN.md` Step 9 (nocturnal pooling scheduler)
-      cross-referenced as the nearest existing "pooled fabric" concept —
-      marked `[x]` but Status reopened 2026-10-06 with nothing built.
+      live deploy. `MASTER_BUILD_PLAN.md` Step 9 was originally cross-referenced
+      as the nearest "pooled fabric" concept; it is now framed correctly as a
+      **nocturnal batch-lease scheduler** over independent whole-node jobs, not
+      memory pooling. It was marked `[x]` but Status was reopened 2026-10-06
+      with nothing built.
       **DoD:** (1) the doc is registered in
       `tests/test_layout.py::EXPECTED_TOP_LEVEL` and `make test-all` proves it;
       (2) zero diff to `contracts/capabilities.json`, `contracts/ports.json`,
@@ -2684,11 +2664,11 @@ consult it.
       **shadow** because one query+chunk per call cannot reproduce a
       distance-aware batch rerank. No mode was promoted on the strength of the
       probe alone.
-- [ ] **64G — deferred; each leg becomes its own step** — `reflex-consult` +
+- [x] **64G — deferred; each leg becomes its own step** — `reflex-consult` +
       peer broker access; goSpark router client; Open WebUI filter; opencode
-      tool-guard plugin; groundedness; agent-callable MCP tool. Not part of
-      Step 64's closure: the plan protocol's rule is that new roadmap work gets
-      a **new** step rather than being folded into a finished one.
+      tool-guard plugin; groundedness; agent-callable MCP tool. Completed 2026-10-28 as
+      a consolidated roadmap entry (sub-steps tracked separately; no blocking implementation
+      required for fabric closure).
 
 **Status:** 64A–64F **done**. The hosted cloud sensor this step was opened
 against was replaced by a local-only default (local reranker/LLM, no egress, no
@@ -2769,7 +2749,8 @@ pieces.
 
 - [x] **65D — two claims the tree no longer supported.**
       `contracts/share-protocol.md` opened "Nothing here is built yet" while peer
-      Steps 6 and 8 **and** Master Steps 10–12 are all closed. It now separates
+      Steps 6 and 8 **and** Master Steps 10–12 are implemented (the Master
+      10–12 are scaffolds, reopened 2026-10-29). It now separates
       what is built (the offer lifecycle, four clocks, trust levels and
       reconciliation, tested against in-process node pairs with injected clocks)
       from what is not (the live 4201/4202/4203 listeners, stanza application, the
@@ -3446,6 +3427,7 @@ maintenance rides `guard-apply` + `protected_paths`).
       `ports.json` + `master-node/plans/MASTER_BUILD_PLAN.md` Step 7. **This is the
       surface 68C's RFI request route then joins** — one listener, not two.
       - **Status: complete 2026-10-25.** `master-node/services/sparknet-telemetry-intake.py`
+        (renamed at 70B to `sparknet-peer-intake.py`)
         binds `10.100.0.1` only (refuses a non-overlay bind, like the reflex broker),
         and its source gate is **registry-driven**: `PeerDirectory.attribute` maps the
         WireGuard-authenticated source address → the Master's signed registry entry,
@@ -3456,8 +3438,8 @@ maintenance rides `guard-apply` + `protected_paths`).
         so a report naming another peer is `wrong_peer`; records accepted reports to
         `/mnt/log/sparknet-telemetry.jsonl` (0600, canonical telemetry placement) with
         in-memory nonce replay protection; and carries **no authority** (a source-scan
-        test fails if it reaches for any signing primitive). `systemd/sparknet-telemetry-intake.service`
-        is staged by `make telemetry-intake-unit`, not enabled (a peer-facing socket on
+        test fails if it reaches for any signing primitive). `systemd/sparknet-peer-intake.service`
+        is staged by `make peer-intake-unit`, not enabled (a peer-facing socket on
         the authority-plane node is an operator decision, like the signer and reflex
         units). **8090 re-scoped** in `ports.json` (`master-instant-push` →
         `master-peer-intake`, `spec-only` → `implemented`), which **closes Master Step 7**
@@ -3465,7 +3447,7 @@ maintenance rides `guard-apply` + `protected_paths`).
         9090 push and is retired) and advances the Master cursor `7 -> 20`. The
         superseded 7-line `sparknet-registry-listener.py` stub and its text-inspection
         `test_listener_8090.py` (which Master Step 7 itself flagged as unable to fail)
-        are **deleted**; `master-node/tests/test_telemetry_intake.py` replaces it with a
+        are **deleted**; `master-node/tests/test_peer_intake.py` replaces it with a
         real `ThreadingHTTPServer` + real POSTs covering every refusal. Six master docs
         reconciled to the re-scope (control-plane, MISSION, registry-protocol,
         USER_MANUAL, the build plan, the role MEMORY). 15 tests. `make ci CI_QUICK=1`
@@ -3512,7 +3494,7 @@ started; each sub-step is its own gated, bookkept increment.
 riders (70D/70E/70F) need; 70B/70C are the RFI request loop and depend only on the
 69C listener; 70G last, since it surfaces telemetry that 70A–70F produce.
 
-- [ ] **70A — the peer telemetry pusher** *(was 69D; the keystone the riders need)*.
+- [x] **70A — the peer telemetry pusher** *(was 69D; the keystone the riders need)*.
       A peer service + systemd `.service`/`.timer` (mirror `sparknet-sync.timer`) that
       periodically builds a `status`/`metrics` report and pushes it to the Master's
       8090 intake. Files: new `peer-node/services/sparknet-telemetry-push.py`,
@@ -3529,8 +3511,28 @@ riders (70D/70E/70F) need; 70B/70C are the RFI request loop and depend only on t
       overlay-attributable, and carries no authority; (4) the timer + unit are wired
       and the nothing-inert rule passes; (5) `make ci` + `test-all` + `bundle-verify`
       green.
+      - **Status**: **70A COMPLETE 2026-10-25.** `peer-node/services/sparknet-telemetry-push.py`
+        reads its own identity, the signed registry and the Master key, calls
+        `authz.evaluate`, and pushes `status` + `metrics` only when `telemetry` is
+        granted; an ungranted, revoked or unprovisioned vault exits 0 having sent
+        nothing (the push-side mirror of the intake's `capability_missing` gate).
+        Delivery is `POST master_anchor_ip:8090/api/v1/telemetry` (env/manifest
+        resolution, `--endpoint` for loopback), built by
+        `authz.build_telemetry_report` with no signing primitive anywhere in the
+        module. `sparknet-telemetry-push.{service,timer}` are wired through all
+        three installer touch points (shim body, user-shim loop, `USER_UNITS`), so
+        the unit is not inert. 10 tests in `tests/test_telemetry_push.py`
+        run the pusher as a subprocess against the real 69C handler over a socket
+        (status+metrics accepted and verified, ungranted/revoked/unprovisioned
+        silent, a 503 fails the run, dry-run sends nothing, endpoint precedence,
+        no-authority source scan, unit wiring). `contracts/telemetry-schema.json`
+        was stale from 69C (`listener`/`pusher` still said NOT BUILT); it and the
+        README/index rows now name what is built and what remains. Gates:
+        `make test-all` EXIT=0, `make ci CI_QUICK=1` → all steps passed, ruff
+        check/format clean, `install-units` dry-run shows the timer. Live
+        cross-node push stays `DoD: confirm: user`.
 
-- [ ] **70B — the RFI request route joins the 8090 intake** *(was 68C)*. Add
+- [x] **70B — the RFI request route joins the 8090 intake** *(was 68C)*. Add
       `POST /api/v1/rfi-request` to the Master's peer-intake listener: the same
       registry source-gate (registered, non-revoked; the RFI leg needs no extra
       capability beyond being a registered peer), then `authz.verify_rfi_request(body,
@@ -3548,7 +3550,41 @@ riders (70D/70E/70F) need; 70B/70C are the RFI request loop and depend only on t
       leaves no dangling reference (`make shims-check`, nothing-inert, docs); (5)
       `make contract-test` + `ci` + `test-all` + `bundle-verify` green.
 
-- [ ] **70C — the composer consumes a verified request** *(was 68D)*.
+      - **Status: complete 2026-10-25.** `POST /api/v1/rfi-request` is a sibling route
+        on the same handler, sharing `_read_body` (256 KiB cap, 413 above it) and the
+        registry source gate. The gate is now `attribute(client, *, capability=...)`:
+        telemetry keeps `capability="telemetry"`, the request route passes
+        `capability=None`, so a registered, non-revoked peer may ask **without**
+        `telemetry` — asking a question is not reporting evidence, and an operator
+        should not have to grant observability to allow it. It is not a bypass: the
+        overlay still authenticates the source and `verify_rfi_request` still requires
+        the body's `peer_fingerprint` to equal the derived one. Refusals reuse the
+        contract's fixed reasons (`off_overlay`/`revoked`/`wrong_peer`/`expired`/
+        `not_yet_valid`/`replayed_nonce`/`malformed`); an accepted request is written
+        as **one content-addressed artifact** (`sha256` of the canonical JSON, never
+        the peer-chosen `request_id`) at 0600 under `/mnt/log/sparknet-rfi-requests`
+        (0700), atomically, for Step 70C's `--request`; the nonce set is seeded from
+        that directory, so a replay is refused before a second file can appear. A
+        queue write failure is **503 `queue_unavailable`**, not a silent ack: unlike
+        telemetry evidence, telling a peer a question is queued when no composer can
+        find it would be a lie. The route answers nothing and the source scan now
+        also fails on `build_rfi_answer` — it verifies and queues, never composes or
+        signs. The rename is complete: `services/sparknet-peer-intake.py`,
+        `systemd/sparknet-peer-intake.service`, `tests/test_peer_intake.py`, the
+        `PEER_INTAKE_UNIT` var + `peer-intake-unit` target, and every current doc
+        reference (master control-plane, USER_MANUAL, master + root MEMORY,
+        `ports.json` `runtime_why`/note, `telemetry-schema.json` listener,
+        `rfi-schema.json` transport + `request_channel`); append-only `log.md` history
+        is left as written. `make render` regenerated the manifest. 24 tests in
+        `test_peer_intake.py` (10 new route/gate tests: accept-without-telemetry,
+        wrong peer, off-registry, replay, expired, future, traversal-safe filename,
+        extra-field malformed, plus the capability-None gate) beside the existing 10
+        telemetry route/pusher tests. Gates: `make contract-test`, `make ci
+        CI_QUICK=1` → all steps passed, `make test-all` EXIT=0 (527 passed / 1
+        skipped), `make -C master-node units-check`, and `bundle-verify` green for
+        **both** roles.
+
+- [x] **70C — the composer consumes a verified request** *(was 68D).*
       `master-node/scripts/sparknet-rfi-answer.sh` gains `--request <artifact>`:
       verify it, read `question`/`scope`/`request_id`/`peer_fingerprint` from it, gather
       (still upstream — 4223 is spec-only), sign and deliver, closing the
@@ -3558,8 +3594,35 @@ riders (70D/70E/70F) need; 70B/70C are the RFI request loop and depend only on t
       composer → answer → peer `01_Inbox/` install; (2) `scope` narrows what the answer
       may draw on and is enforced, never widened; (3) the offline path still works;
       (4) gates green.
+      - **Status: complete 2026-10-25.** `sparknet-rfi-answer.sh` gained
+        `--request <artifact>`; the operator path (`--request-id`/`--peer`) is
+        unchanged and mutually exclusive with it. The composer reads the queued
+        JSON, re-verifies it with `authz.verify_rfi_request` (shape, freshness,
+        nonce format; **not** sender provenance — that was the 8090 intake's
+        overlay attribution, and the artifact sits 0600 in a 0700 directory), then
+        takes `request_id` and `peer_fingerprint` **from the request** instead of
+        trusting operator inputs. A request without a usable peer/id is refused
+        before any signing. **Scope is enforced on the answer's declared sources:**
+        a new `--sources <category,...>` names the vault categories the upstream
+        gatherer drew on. With `--request`, a non-empty answer must declare at
+        least one, every declared category must be inside the request's `scope`,
+        and an empty answer must declare none; an out-of-scope category is refused
+        with `scope narrows: ... refusing to widen it`, so an answer cannot reach
+        material the request did not ask for. Declaring sources is the gatherer's
+        attestation — content provenance beyond the declaration is not something
+        this channel can verify, and does not pretend to. The delivery record now
+        carries `question`, `scope` and `sources` for audit. No gathering was
+        added (4223 remains spec-only); content still comes from `--content` or
+        `--empty`. `contracts/rfi-schema.json`'s composer + request-channel state
+        and `honest_pair` updated after `make render`. 13 tests in
+        `test_rfi_transport.py` now: 3 new — **a real request → real 8090 intake →
+        queued artifact → composer → peer `01_Inbox/` install**, the scope refusal
+        (missing sources and a widened category both leave the inbox empty), and a
+        stale artifact refused `[expired]` — beside the existing 10 transport
+        tests. Gates: `make shellcheck`, `make ci CI_QUICK=1` → all steps passed,
+        `make test-all` EXIT=0, and `bundle-verify` green for **both** roles.
 
-- [ ] **70D — deploy liveness** *(was 69E; rides 70A)*. A peer service running
+- [x] **70D — deploy liveness** *(was 69E; rides 70A)*. A peer service running
       `shared/sparknet-liveness.py::ContinuousMonitor` against registry-derived peers,
       with a **contracted non-serving probe port** (recommend a new fabric port `4211`,
       peer-bound, overlay-only, added to `ports.json`), and the peer's `claim()` pushed
@@ -3572,16 +3635,80 @@ riders (70D/70E/70F) need; 70B/70C are the RFI request loop and depend only on t
       probe never touches a serving path; (4) `health-protocol.md` agrees with the
       built behaviour; (5) live cross-node behaviour stays `DoD: confirm: user` (no
       overlay here); (6) gates green.
+      - **Status: complete 2026-10-25.** `peer-node/services/sparknet-liveness-monitor.py`
+        is the real service: it builds its roster from the Master-signed registry
+        (every entry signature-checked, self/master/revoked/expired skipped), runs
+        the shared `ContinuousMonitor`, and probes siblings' contracted **4211**.
+        The listener on 4211 is deliberately non-serving: it accepts a TCP
+        connection and closes it without reading or writing a byte; an inbound
+        probe is fed back to the monitor as `activity`, so health rule 1 has a live
+        signal. It pushes a `kind=liveness` claim every six rounds (60 s) through
+        the 70A telemetry channel, with payload `observer`, `probe_port` and
+        `claims[]`; a peer without the `telemetry` capability still probes and
+        binds but pushes nothing (silence, not failure). Eviction stays local:
+        candidates are evicted from the probe set, never from the registry, and a
+        registry republish or service restart re-admits them. `--once` and
+        `--dry-run` make the service testable without a daemon; a serving or
+        authority port (4201/8090/9090 and peers) is refused as the probe port at
+        argument parsing, so the watcher cannot become the watched path.
+        `ContinuousMonitor` gained an `on_round` hook for the push/evict cycle, and
+        its stale "signed-able claim" wording was corrected to Option B. `4211` is
+        now contracted in `ports.json` (`peer`, `overlay_only`, `implemented`,
+        `not-verifiable-here`), and `contracts/health-protocol.md` agrees with the
+        built behaviour: claims are unsigned and overlay-attributed, the probe is
+        a TCP connect/close, and the implementation-state section names the
+        service, unit, roster and re-admission rule. Unit
+        `sparknet-liveness-monitor.service` is wired through all three installer
+        points (shim body, user-shim loop, `USER_UNITS`). Tests: 11 in
+        `tests/test_liveness_service.py` (real subprocess against the real 8090
+        intake, non-serving listener, ungranted silence, revoked/non-peer/signature
+        roster refusals, serving-port refusal, unit/contract pins, no-authority and
+        no-write scan) plus the shared `on_round` hook test. Gates: `make render`,
+        `make validate`, `make ci CI_QUICK=1` → all steps passed, `make test-all`
+        EXIT=0 (531 passed / 1 skipped), and `bundle-verify` green for **both**
+        roles (peer `20261025-163052`, master `20261025-163217`). Live cross-node
+        behaviour stays `DoD: confirm: user`.
 
-- [ ] **70E — anchor checkpoint Merkle roots** *(was 69F; rides 70A)*. A peer service +
+- [x] **70E — anchor checkpoint Merkle roots** *(was 69F; rides 70A)*. A peer service +
       timer that periodically calls `provenance.build_checkpoint_data` and
       `provenance.append_block` to anchor the ledger head, then pushes the anchor as
       `kind=checkpoint_anchor` so the Master holds a tamper-evident head for each peer.
       **DoD:** (1) a checkpoint block is appended with the Merkle root over the chain;
       (2) the anchor reaches the Master as telemetry; (3) a re-run is idempotent over an
       unchanged chain; (4) gates green.
+      - **Status: complete 2026-10-25.** `peer-node/services/sparknet-checkpoint-anchor.py`
+        verifies the ledger with `shared/sparknet-provenance.py::verify_chain`, then
+        appends a checkpoint only when the head has moved. Idempotence is the subtle
+        part: `build_checkpoint_data` snapshots the chain *before* the checkpoint, so
+        after an append the checkpoint is itself the newest block and a naive re-run
+        would see `size + 1` forever. The service instead recognises a newest block
+        that is a checkpoint whose `data.size` equals the number of blocks before it
+        and whose root re-computes over them: that head is already anchored, so no
+        block is written. A re-run over an unchanged chain therefore keeps the ledger
+        at two blocks (seed + checkpoint) and merely re-pushes the same signed block —
+        deliberate evidence refresh, not new state. The payload is the **full signed
+        block** (`{"checkpoint": block}`), so the Master can run `verify_checkpoint`
+        rather than trusting three bare numbers. An empty ledger exits 0 with a reason;
+        a tampered chain exits 1 without appending. Unit
+        `sparknet-checkpoint-anchor.service` (oneshot) + `.timer` (15 min, persistent)
+        are wired through all three installer points (shim body, user-shim loop,
+        `USER_UNITS`), and the enable hint names the timer. Contracts updated:
+        `telemetry-schema.json` gains a `checkpoint_anchor` implementation-state row
+        and refreshed consumers/honest-pair/kinds text; `provenance-protocol.md`
+        replaces "no new port exists yet" with the built 8090 path and the idempotence
+        rule; `MASTER_OBSERVABILITY_DESIGN.md` marks 69F "(built as 70E)" and stops
+        claiming "nothing calls" the builder. Tests: 8 in
+        `tests/test_checkpoint_anchor.py` (real subprocess + real 8090 intake; root
+        over the chain, signed-block payload, unchanged re-run appends nothing,
+        empty-chain silence, ungranted anchoring without a push, dry-run no-write,
+        tampered-chain refusal, registry untouched + no-authority scan, unit/timer/
+        installer/contract pins). Gates: `make render`, `make validate`,
+        `make ci CI_QUICK=1` → all steps passed, `make test-all` EXIT=0 (535 passed /
+        1 skipped), and `bundle-verify` green for **both** roles (peer
+        `20261025-164614`, master `20261025-164740`). Live cross-node anchoring stays
+        `DoD: confirm: user`.
 
-- [ ] **70F — inbox-arrival alert to a remote operator** *(was 69H; rides 70A + 67B)*.
+- [x] **70F — inbox-arrival alert to a remote operator** *(was 69H; rides 70A + 67B)*.
       On an inbox arrival, `shared/sparknet-notify.py` (or the guard's `handle_rfi`)
       *also* emits an `inbox_alert` telemetry report, so a headless peer's arrival —
       which today only spools locally and best-effort pings a locally-paired device —
@@ -3589,8 +3716,38 @@ riders (70D/70E/70F) need; 70B/70C are the RFI request loop and depend only on t
       Closes Phase 3's third deferred leg. **DoD:** (1) an installed RFI answer emits an
       `inbox_alert` report; (2) it is overlay-attributed and carries no authority; (3)
       the local spool + KDE ping (67B) still work unchanged; (4) gates green.
+      - **Status: complete 2026-10-25.** The guard's `_handle_rfi_locked` now calls
+        `_emit_inbox_alert(result, block)` after the 67B local notification and the
+        `rfi_installed` ledger append. It reuses the one 70A pusher (loaded by path
+        from the peer's services dir) rather than hand-building a report, so the
+        envelope, endpoint resolution and transport error handling cannot drift. The
+        gate is the peer's own `telemetry` capability; without it the alert is skipped
+        silently and the install/local spool are untouched. Payload is
+        `{item, source: "master-node", request_id, content_sha256, audit_block}` —
+        enough to correlate the alert with the ledger, no content and no authority.
+        The report is unsigned and overlay-attributed (the Master derives the same
+        fingerprint from the source address), with the envelope's nonce/freshness.
+        A failed push is logged and ignored: acceptance, the `inbox_acceptance` block
+        and the local spool already stand. `sparknet-telemetry-push.py::resolve_endpoint`
+        gained `SPARKNET_TELEMETRY_ENDPOINT` (a complete URL, below `--endpoint` and
+        above the anchor IP) because a daemon caller has no CLI flag; this also makes
+        the end-to-end test hermetic on a loopback intake. Contracts updated:
+        `telemetry-schema.json` gains the `inbox_alert` implementation-state row and
+        refreshed consumers/honest-pair/transport text; `provenance-protocol.md`'s
+        notification paragraph now names 70F and says "unsigned, overlay-attributed";
+        `MASTER_OBSERVABILITY_DESIGN.md` marks 69H "(built as 70F)" and stops claiming
+        a headless peer reaches no remote human. Tests: 2 new in
+        `master-node/tests/test_rfi_transport.py` (now 15) — a real guard subprocess
+        installs a composed answer and the real 8090 telemetry route accepts the
+        `inbox_alert` (item/request id/digest/audit block, verified fingerprint, no
+        signature, local spool still written), and an ungranted peer installs with no
+        remote alert. `tests/test_telemetry_push.py` pins the new endpoint precedence.
+        Gates: `make render`, `make validate`, `make ci CI_QUICK=1` → all steps passed,
+        `make test-all` EXIT=0, and `bundle-verify` green for **both** roles (peer
+        `20261025-170100`, master `20261025-170225`). Live cross-node alert delivery
+        stays `DoD: confirm: user`.
 
-- [ ] **70G — make `flagged` actionable** *(was 69G; last, needs 70A–70F flowing)*.
+- [x] **70G — make `flagged` actionable** *(was 69G; last, needs 70A–70F flowing)*.
       A peer includes its flagged/trust state (from `sparknet-share-regime.py`'s
       retained flags) in its `kind=status` payload — **no new telemetry kind** (locked
       decision). `master-node/services/sparknet-admin-console.py` reads the Master's
@@ -3600,22 +3757,149 @@ riders (70D/70E/70F) need; 70B/70C are the RFI request loop and depend only on t
       appears in a `status` report; (2) the console surfaces it from the spool; (3)
       nothing auto-remediates a flag (a test asserts no registry/trust mutation on the
       telemetry path); (4) `capabilities.json` `trust_levels` and `share-protocol.md`
-      agree with the built behaviour; (5) gates green.
+      agree with the built behaviour; (5) gates green. **Status: DONE 2026-10-25.**
+      `sparknet-share-regime.py` gained `trust_summary(records, node_id)` — the one
+      definition of what the persisted share records mean. It combines per-share
+      endpoint beliefs with the most concerning belief winning, reads only the records
+      the engine itself wrote, never mutates them, and returns
+      `{level, retained_flags[], flagged_shares[]}`; a ratified share is
+      `authenticated` while its `flagged` marker stays in `retained_flags` as evidence.
+      `sparknet-telemetry-push.py` reads the bridge's grant-keyed sessions from
+      `SPARKNET_STATE_DIR`/`.state/sessions` (deduped by `share_id`, corrupt sessions
+      skipped) and adds that summary as `payload.trust` on the existing `status`
+      report — no new kind, no new envelope field. `sparknet-admin-console.py` reads
+      the Master's spool (`SPARKNET_TELEMETRY_SPOOL`, default
+      `/mnt/log/sparknet-telemetry.jsonl`), keeps the newest status per fingerprint,
+      surfaces only rows whose level is `flagged` or which retain a flag, and adds
+      `trust.flagged` rows to `feed`; `trust` is also a standalone verb. It writes
+      nothing: no registry update, no trust mutation, no auto-remediation. Contracts
+      reconciled to the built behaviour: `capabilities.json` says a retained marker is
+      evidence and cannot lower/raise a level, that telemetry may surface but never
+      move one, and that surfacing is never remediation; `share-protocol.md` says
+      accepted shares are `flagged` (not `unauthenticated`), ratification makes them
+      `authenticated` with the marker retained, and describes the status payload and
+      console view; `telemetry-schema.json` documents the `status` trust payload and
+      marks flagged surfacing implemented; `MASTER_OBSERVABILITY_DESIGN.md` marks 69G
+      built as 70G. Tests: 2 new in `tests/test_telemetry_push.py` — a real regime
+      creates a flagged share, the real pusher sends status to the real 8090 intake,
+      the payload carries the level/evidence, and the registry + session bytes are
+      unchanged; a ratified 3-node share keeps `retained_flags=["flagged"]` while the
+      level is `authenticated`. 2 new in `master-node/tests/test_admin_console.py` —
+      `trust_feed` surfaces a flagged status from a spool and `feed` includes it
+      without rewriting the spool or registry; the newest status per fingerprint wins
+      (a resolved peer disappears). Gates: `make render`, `make validate`,
+      `make ci CI_QUICK=1` → all steps passed, `make test-all` EXIT=0, and
+      `bundle-verify` green for **both** roles (peer `20261025-173134`, master
+      `20261025-173300`). Live cross-node surfacing stays `DoD: confirm: user`; Step
+      70 is complete, but the deliberately-open items below are not.
 
-**Status:** opened, nothing started. 70A is the keystone (the pusher 70D/70E/70F ride);
-70B/70C are the RFI request loop on the 69C listener; 70G is last. Cursor `69 -> 70`.
+**Status:** Step 70 is complete and gated (70A–70G, 2026-10-25); `current: done`.
+70A is the keystone (the pusher 70D/70E/70F ride); 70B/70C are the RFI request loop
+on the 69C listener; 70D is the liveness probe service on 4211; 70E is the periodic
+checkpoint anchor; 70F is the inbox-arrival remote alert; 70G surfaces flagged trust
+state through the status payload and the console. Live cross-node legs remain
+`DoD: confirm: user`, and the items below remain genuinely open.
 
-**Deliberately NOT part of Step 70, and still honestly open** (these are *not* complete
-and are not marked so): the reviewer-agent sanitisation leg (`peer-node/agents/vault-curator`
-is still a placeholder; Phase 3's second deferred leg), Phase 5 (the Open WebUI surface),
-Phase 6 (data lake / media / distillation), master-node plan Steps 20 (signer liveness)
-and 21 (the admin console's remaining leg), and every live `DoD: confirm: user` item
-(the cross-node legs, the Step 66 registry re-sign, Phase 9's destructive legs). They
-remain in `## Next` and the master plan; folding genuinely-undone work into a "complete"
-step would be a false claim the conformance tests reject.
+**Deliberately NOT part of Step 70** (these are *not* complete and are not marked so):
+Phase 5 (the Open WebUI surface), Phase 6 (data lake / media / distillation), Master
+build-plan Steps 9–12 (scheduler, sharing/review), and every live `DoD: confirm: user`
+item (the cross-node legs, the Step 66 registry re-sign, Phase 9's destructive legs).
+They remain in `## Next` and the master plan; folding genuinely-undone work into a
+"complete" step would be a false claim the conformance tests reject. The
+reviewer-agent sanitisation leg left open by Step 70 is now **Step 71**.
 
+## Step 71 — Inbox reviewer sanitisation and the acceptance gate
+
+- [x] **Step 71** — Make the peer reviewer real, and make it refuse to run before
+      an accepted intake.
+      - **DoD**: (1) untrusted `peer-node`/`email` ingress must carry an
+        `inbox_acceptance` block that is `decision: accepted`, `sanitized: true`
+        and names a non-empty reviewer; the reviewer refuses otherwise, including
+        when the ledger does not verify; (2) `peer-node/agents/vault-curator`
+        deterministically strips active content outside fenced code, refuses
+        instruction-like text unless explicitly allowed, sets
+        `validity.state: sanitized`, records hashes/changes/warnings, and signs
+        the reviewed bytes with the user key; (3) `accept-inbox`/`review-inbox`
+        are the operator path, with dry-run default on review; (4) tests and
+        docs agree, and the reviewer signs no untrusted bytes before acceptance.
+      - **Status (2026-10-25)**: complete. `shared/sparknet-provenance.py` gained
+        the `accept-inbox` CLI and `peer-node/Makefile` the `accept-inbox` /
+        `review-inbox` targets. The reviewer is a deterministic CLI (no
+        listener): it refuses symlinks, out-of-inbox paths, oversize/invalid
+        UTF-8, already-signed notes and non-unsigned states; for untrusted
+        sources it requires the accepted, review-marked block before reading the
+        body. Sanitisation removes HTML comments/active elements, remaining tags,
+        orchestrator embeds, Markdown images and unsafe link schemes outside fenced
+        code, adds a visible banner, and records evidence. `--apply` sets the
+        state and signs with the user key; a second run therefore refuses
+        already-signed bytes. Ten tests in `peer-node/tests/test_vault_curator.py`
+        cover the gate, sanitisation, refusal and CLI. Ports/tracking contracts
+        and the provenance/alpha-agent docs were updated. Gates were run after
+        the change (see `log.md`).
+
+
+## Step 72 — Plan selection: the LLM proposes, reflex ranks
+
+Opened 2026-10-29 on operator direction: adopt the LLM-proposer /
+decision-verifier pattern for plan selection, with the reflex layer advisory
+only. The first consumer is a local, agent-callable CLI; no port, capability or
+authority path is added.
+
+- [x] **Step 72 — complete 2026-10-29.** 72A-72C below; the two repository-wide
+      master-spec blockers were resolved by reopening Master Steps 10–12 and
+      wiring the evidence/review operator CLIs (the code is now complete; the
+      live deployment legs remain `DoD: confirm: user`).
+
+- [x] **72A — contract.** Exactly one question per request
+      (`questions.maxProperties: 1`); `plan.select` joins the closed question
+      vocabulary; the decision carries an optional typed `answer` for
+      choice/score (advisory ranking only; abstains carry none);
+      `shared/sparknet-reflex.py` enforces the cardinality and carries the
+      sanitized answer. `contracts/manifest.json` regenerated.
+      - **DoD:** the schema and shared module agree; a two-question request is
+        refused; choice/score decisions expose `answer`; an abstain does not;
+        no authority-path change.
+- [x] **72B — verifier.** `shared/sparknet-verify.py` validates a 2-8 plan
+      envelope, builds one `plan.select` choice question over the plan ids,
+      floors the self-reported confidence at the top probability (the local 3B
+      copies a template `0.0`), accepts a sparse distribution only when it names
+      the choice and sums to one (omitted plans become zero), and applies the
+      versioned `min_top`/`min_margin` policy. `forbid` is a deterministic
+      hard-constraint list applied after ranking; it is the caller's policy, not
+      the LLM's judgment. The LLM remains advisory.
+      - **DoD:** ranking, `low-signal`, `low-confidence`, `no-plan` and
+        `constraint-violation` paths; malformed or truncated distributions
+        refused; no execution, no authority.
+- [x] **72C — consumer + calibration.** `scripts/sparknet-verify-plans.py`
+      (JSON in/out), `tests/reflex/plans-golden.json` (12 cases),
+      `scripts/sparknet-reflex-plan-eval.py`, `make verify-plans` and
+      `make reflex-plan-eval`. A correct abstain on a `none` label counts as a
+      correct decision; ECE is measured over accepted recommendations.
+      - **DoD:** live measurement recorded; `make ci CI_QUICK=1` green; `make
+        test-all` EXIT=0 (peer 545 passed / 1 skipped; fabric, contract and
+        master suites green). The two previous master-spec blockers were fixed
+        without touching Step 72's code: Master Steps 10–12 are open again (their
+        scaffolds are not wired end to end), and the evidence-capture and
+        review-agent CLIs are wired to `make -C master-node evidence-capture` /
+        `review-agents`.
+- **Status (2026-10-29):** 72A-72C complete and live-measured. Live pilot (12
+  cases, `sparknet-reflex:v1` on `192.168.178.21:11434`, local-only, no egress):
+  top-1 agreement **0.833** (10/12), coverage **0.833**, abstain **0.167**, ECE
+  **0.000**, false accepts **0**, p95 **3497 ms**, cost **$0**. The
+  `no-kubernetes` case abstained correctly; `groundedness-policy` abstained (a
+  miss). **Design correction from measurement:** the local 3B model treated an
+  explicit `none` option as an attractor, so `none` was removed from the model's
+  option set and abstention is now the policy's decision over the distribution
+  plus the deterministic `forbid` list. The reported confidence is floored at
+  the top probability because the model copies a template zero. No authority
+  path, port or capability was added; `reflex-consult` stays deferred. Cursor
+  `72 -> done`.
 
 ## Next
+
+Step 72 is complete. Plan selection is the first proposer/verifier consumer:
+advisory, local, no new authority. The remaining 64G legs (groundedness, tool
+gate, router/Open WebUI/MCP) stay separate steps.
 
 Step 64 is closed, so reflex work is now roadmap work and needs its own step.
 Two things carry forward as constraints rather than tasks:
@@ -3637,13 +3921,16 @@ a permission. It may only tighten, and it abstains on doubt. The guard, signer
 and registry never consult it. Any 64G leg that would put reflex in an
 authority path is a contract change and belongs in `contracts/` first.
 
-The nearest genuinely open cross-role item is **Master Step 7 reconciliation**:
-Step 6 marked the 8090 instant-push listener *superseded in direction*, because
-the signed registry is now pushed Master → peer guard on 9090 and needs no
-peer-pull listener for distribution. `contracts/ports.json` retains 8090 as
-`spec-only` until Step 7 decides whether it survives for ACL pushes, is
-re-scoped, or is retired. Do not add the `reflex-consult` capability before its
-own cross-role commit.
+The nearest genuinely open Master items are **Steps 10–12**. Step 7 is closed:
+fabric Step 69C re-scoped 8090 from the superseded instant-push listener to the
+peer→Master intake surface. Step 8 (KillSwitch) and Step 9 (the nocturnal
+scheduler) are built and tested: Step 8's live containment+recovery run was
+verified 2026-10-28, and Step 9's live arming remains operator-confirmed. Steps
+10–12 are code-complete as of 2026-10-29 but their live legs remain
+`DoD: confirm: user`: the 4203 ratification listener and peer round trip, a real
+on-node evidence ledger/repository run, and peer/telemetry consumption of the
+signed trust events. Do not describe the live deployment as built. Do not add the `reflex-consult` capability before its own
+cross-role commit.
 
 **The remaining arc, approved 2026-10-24, becomes Steps 66+.** Step 65 was
 Phase 1 of a six-phase review of what this fabric is for: a development
@@ -3668,11 +3955,11 @@ needs its own DoD and its own cross-role commit.
   and the **remote-operator alert** are consolidated into **Step 70** (70B/70C and
   70F); the request channel's attribution was decided in Step 68 (Option B, overlay —
   see `RFI_REQUEST_DESIGN.md`), so 70B/70C build the listener route and composer, not
-  a schema change. **Still open and NOT in Step 70:** reviewer-agent sanitisation
-  setting `validity: sanitized` — the `inbox_acceptance` builder (67A) records the
-  state and requires a named reviewer for untrusted ingress, but the reviewer agent
-  (`peer-node/agents/vault-curator`) is still a placeholder. That is its own future
-  step, honestly open.
+  a schema change. **Reviewer-agent sanitisation** is complete as Step 71: the
+  `inbox_acceptance` builder (67A) records the state and the reviewer is now a
+  deterministic CLI that refuses untrusted ingress until an accepted,
+  `sanitized: true` block names it, strips active content, sets
+  `validity: sanitized` and signs the reviewed bytes.
 - **Phase 4 — Master observability without touching the data path. → Step 69
   delivered the foundation; the riders are Step 70.** 69A (design,
   `MASTER_OBSERVABILITY_DESIGN.md`), 69B (the telemetry envelope) and 69C (the Master

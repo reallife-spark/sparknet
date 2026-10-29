@@ -201,8 +201,8 @@ def test_eviction_is_local_and_reversible(liveness):
     assert mon.peers["alpha"].missed_probes == 0
 
 
-def test_claim_is_signed_able_shape(liveness):
-    """The claim carries monotonic health facts, ready for the transport's signing."""
+def test_claim_carries_the_monotonic_facts(liveness):
+    """The claim carries monotonic health facts for the overlay-attributed report."""
     mon, clock, _ = _monitor(liveness, lit={"alpha"})
     clock["mon"] = mon
     _advance(clock, 10, stride=1)

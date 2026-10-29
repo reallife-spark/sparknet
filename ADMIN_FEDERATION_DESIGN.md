@@ -1,12 +1,13 @@
 ---
 title: Sparknet admin federation — cross-node administration design
-updated: 2026-10-12
-status: design (adopted as code: vocabulary + signed transport + console; live deploy open)
+updated: 2026-10-26
+status: design (adopted as code; live proof on retired cluster2; current pair open)
 ---
 
 # Sparknet admin federation
 
-**Adopted as code through the console; only the live deploy is open.**
+**Adopted as code through the console; live deploy proven on the retired
+cluster2 pair, not on the current pair.**
 This page records the operator decisions and the build plan for one capability:
 a Master-side administrator who can see and supervise the Open WebUI users,
 privileges and activity of **every node in the fabric**, while nobody can log
@@ -16,9 +17,10 @@ in as an administrator on a peer node. The capability name it needs
 produces signed admin requests and the peer's bridge `/admin/*` route executes
 them, inert until the peer's own registry grants the capability. Phases 1–4
 (the node agent, the signed transport, and the Master console with its event
-feed and KDE push) are landed as code and tested; only Phase 5 (the live deploy
-that turns the overlay-reachable surface on) is open, and it is the one leg that
-is `DoD: confirm: user` on real hosts.
+feed and KDE push) are landed as code and tested. Phase 5 ran live on the
+**retired** `.131` Master / `.133` peer pair on 2026-10-12. The current
+`agx64` peer / `agx32` Master pair has not redeployed it; that leg remains
+`DoD: confirm: user`.
 
 Related, already-proposed surface: the per-user vaults design in
 [`PER_USER_VAULTS_DESIGN.md`](PER_USER_VAULTS_DESIGN.md) already names the
@@ -27,11 +29,12 @@ administration half of that work.
 
 ## The problem
 
-The two cluster2 nodes (`.131` Master, `.133` peer) each run their **own**
-Open WebUI on `0.0.0.0:8181`, each against its **own** `open-webui-data` volume.
+The two retired cluster2 nodes (`.131` Master, `.133` peer) each ran their
+**own** Open WebUI on `0.0.0.0:8181`, each against its **own**
+`open-webui-data` volume. The current pair is `agx64` peer / `agx32` Master.
 There is no federation between them, so:
 
-- a signup or sign-in on `.133` is invisible on `.131`, and vice versa;
+- a signup or sign-in on `.133` was invisible on `.131`, and vice versa;
 - a signup request produces no notice to anyone — the surface is not
   self-service today (`ENABLE_SIGNUP: "false"`), so the account a user *wants*
   can only be created by an operator already logged into that node;
@@ -215,10 +218,10 @@ the approval decision is the Master's.
 |---|---|---|---|
 | 0 | This design page; fabric `PLAN.md` step; peer and master plan pointers. | `make contract-test`, fabric suite green with only doc + plan edits. | **landed 2026-10-12** |
 | 1 | Compose: signup + `pending` + audit trail; `sparknet-admin-agent.py`; unit + installer; tests. | peer suite green; `--help` contract; relocatable. | **landed 2026-10-12** |
-| 2 | `admin-supervise` in `contracts/` + `shared/`; bridge `/admin/*` route; signer `sign-admin-request`. | `make contract-test`, master parity green. | **landed as code + signed plumbing 2026-10-12**; live legs (Phase 5) still carry the reachability change |
-| 3 | Master admin console; deploy the declared admin surface; service-account enforcement. | console serves; no human admin on peer (DoD: confirm: user). | **landed as code 2026-10-12** (`sparknet-admin-console.py`, `make console`); binding on `10.100.0.1:8088` (relocated from 8080, fabric Step 55) is the Phase 5 live leg |
-| 4 | KDE Connect + live feed notifications. | plugin path proven against a paired device. | **landed as code 2026-10-12** (`feed --ping`); a real paired-device ping is a Phase 5 live leg |
-| 5 | Live deploy on `.131`/`.133` (turns the overlay-reachable surface on; bridge today binds loopback by design). | `DoD: confirm: user`. | **runbook written 2026-10-12** (`contracts/admin-federation-runbook.md`); live legs open. Recon surfaced **F1**, now **fixed in code** (route-class source policy + repeatable `--bind`) — see below |
+| 2 | `admin-supervise` in `contracts/` + `shared/`; bridge `/admin/*` route; signer `sign-admin-request`. | `make contract-test`, master parity green. | **landed as code + signed plumbing 2026-10-12**; signed route proven on the retired cluster2 pair |
+| 3 | Master admin console; deploy the declared admin surface; service-account enforcement. | console serves; no human admin on peer (DoD: confirm: user). | **landed as code 2026-10-12** (`sparknet-admin-console.py`, `make console`); the admin webui runs on the current Master (`agx32`, `10.100.0.1:8088`), but the cross-node console deploy is the open current-pair leg |
+| 4 | KDE Connect + live feed notifications. | plugin path proven against a paired device. | **landed as code 2026-10-12** (`feed --ping`); a real paired-device ping on the current pair is still `DoD: confirm: user` |
+| 5 | Live deploy on the retired `.131`/`.133` pair (turns the overlay-reachable surface on; bridge binds loopback by default). | `DoD: confirm: user`. | **executed on the retired cluster2 pair 2026-10-12**; the runbook is now historical (`contracts/admin-federation-runbook.md`). The current `agx64`/`agx32` pair has not redeployed it. Recon surfaced **F1**, fixed in code (route-class source policy + repeatable `--bind`). |
 | 6 | Full gates: `make test-all`, `contract-test`, `lint`, `validate`, `keys-check`, `shims-check`, `bundle-verify`, `precommit`. | green. | re-run whenever a phase lands |
 
 ## Boundaries — what this is not
@@ -235,10 +238,11 @@ the approval decision is the Master's.
 ## Honest boundary
 
 Everything above is design until the phases land. Phases 0–4 are landed as
-code and signed plumbing; only the live legs (Phase 5) — a real signup landing
-`pending`, the Master console approving it over the overlay, a KDE push
-firing, and no human admin login succeeding on a peer — are `DoD: confirm: user`
-on the target nodes. The bridge deliberately binds loopback until Phase 5, and
+code and signed plumbing. Phase 5 ran on the **retired** cluster2 pair, where a
+real signup landed `pending` and the Master console read it over the signed
+`/admin/*` route. The same live legs on the current `agx64` peer / `agx32`
+Master pair are `DoD: confirm: user`. The bridge deliberately binds loopback by
+default, and
 Phase 5 is **not** only a binding change: recon on 2026-10-12 (**F1**) found the
 bridge's plain handler (`_plain()`) refused *every* non-loopback source —
 including the Master reaching `/admin/*` — while a naive open to the overlay

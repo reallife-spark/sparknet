@@ -52,7 +52,7 @@
   },
   "persistent_keepalive": 25,
   "mtu": 1400,
-  "mtu_rationale": "Keeps the tunnel clear of the 1500-byte path MTU when the same NIC also carries RoCEv2/TCP.",
+  "mtu_rationale": "Keeps the tunnel clear of the 1500-byte path MTU when the same NIC also carries ordinary TCP. The deployed AGX fleet has no RoCEv2.",
   "listen_port_default": 51820,
   "config_mode": "0600",
   "pinned_immutable": true,
@@ -62,6 +62,6 @@
     "live handshake",
     "PersistentKeepalive behaviour",
     "chattr +i enforcement",
-    "nftables enforcement"
+    "host firewall enforcement (iptables on the deployed fleet)"
   ]
 }

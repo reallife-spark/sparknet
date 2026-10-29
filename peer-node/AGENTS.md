@@ -46,8 +46,9 @@ ceremony does.
 A peer holding the local root account can still rewrite its own machine. That
 is not a property this design can prevent — it is why the useful protections
 are the ones that do not depend on the peer's cooperation: `chattr +i` on
-protected files, the nftables egress restriction, and the requirement for a
-Master signature that simply does not exist locally.
+protected files, the host-firewall egress restriction (iptables on the deployed
+fleet), and the requirement for a Master signature that simply does not exist
+locally.
 
 ## The manual
 
@@ -200,7 +201,7 @@ Run `/wiki-status` first, then `/wiki-ingest`, `/wiki-query`, `/wiki-lint`,
 - **Offensive security is out of scope** for a general/default agent session.
   Route offensive work to the `red` role and defensive work to `blue`.
 - Cite sources. A distilled page without provenance is a guess — mark it as one.
-- **Do not claim live verification** of WireGuard, nftables, `chattr +i`,
+- **Do not claim live verification** of WireGuard, iptables, `chattr +i`,
   KillSwitch or systemd behaviour. This host has none of them; those are
   privileged-target-node checks and are listed as unverified in
   `docs/wireguard.md`.

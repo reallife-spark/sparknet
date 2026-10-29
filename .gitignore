@@ -53,3 +53,11 @@ dist/
 privkey*
 id_ed25519*
 *.seed
+
+# A local goSpark checkout is a separate Git repository (its own .git); it is a
+# development reference, not a directory of this fabric.
+/gospark/
+
+# The Master's evidence repository is its own Git repository (Step 11); the
+# fabric source must not embed it as a gitlink or copy its .git.
+/master-node/evidence-repo/

@@ -770,8 +770,8 @@ def test_share_protocol_states_its_own_build_boundary(ports: dict):
         assert ports["ports"][port]["runtime"] == "not-listening", (
             f"{port} is listening now, so 'wired, not deployed' understates the build state"
         )
-    assert ports["ports"]["4203"]["implementation_state"] == "spec-only", (
-        "4203 gained an implementation; the ratification side is no longer spec-only"
+    assert ports["ports"]["4203"]["implementation_state"] in ("implemented", "provisioned"), (
+        "4203 should be implemented/provisioned for the ratification side"
     )
 
 
@@ -1034,7 +1034,8 @@ def test_the_share_plane_grants_no_authority(ports: dict):
     proposal route (sparknet-proposal-exchange.py) now exist, so share-intake and
     session-transfer are `implemented` + `not-listening` — the code routes when
     invoked, and no daemon binds. The Master's side of the share plane
-    (share-ratification) and any not-yet-built surface stay spec-only.
+    (share-ratification) — implemented for Step 10 — must be declared and not
+    grant authority; opencode-serve stays as specified.
     """
     for number, spec in ports["ports"].items():
         if spec["service"] not in ("share-intake", "session-transfer", "share-ratification", "opencode-serve"):
@@ -1052,6 +1053,9 @@ def test_the_share_plane_grants_no_authority(ports: dict):
             assert spec.get("runtime_why"), (
                 f"port {number} ({spec['service']}) is implemented with no running listener; it must record why"
             )
+        elif spec["service"] == "share-ratification":
+            assert spec["implementation_state"] in ("implemented", "provisioned")
+            assert spec["runtime"] == "not-listening"
         else:
             assert spec["implementation_state"] == "spec-only", (
                 f"port {number} ({spec['service']}) must stay spec-only until built"
@@ -1969,8 +1973,8 @@ def test_the_guard_can_send_every_rfi_refusal_the_contract_names(rfi_schema: dic
 def test_the_rfi_implementation_state_matches_the_tree(rfi_schema: dict) -> None:
     """The contract's own status block agrees with what ships — in both directions.
 
-    Built legs name files that exist; the deferred request channel stays marked
-    NOT BUILT with its reason, so it cannot be silently dropped from the roadmap.
+    Built legs name files that exist and the route that serves them; a leg that is
+    still deferred must stay honestly marked, so it cannot be silently dropped.
     """
     state = rfi_schema["implementation_state"]
     assert state["listener"].startswith("implemented")
@@ -1981,15 +1985,17 @@ def test_the_rfi_implementation_state_matches_the_tree(rfi_schema: dict) -> None
     # The composer is wired to something, or the master's nothing-inert rule fails.
     assert "sparknet-rfi-answer.sh" in (MASTER / "Makefile").read_text()
 
-    # The request leg is tracked, not silently dropped. In 67D it was deferred with
-    # the reason (a peer signs with its node key, but nothing binds a fingerprint to
-    # a node signing key). Step 68 records the *decision* — overlay attribution — and
-    # still names the reason a node-key signature is not used, so a reader learns why
-    # rather than only that it is unbuilt.
+    # 70B built the request leg. Its text must name the route and the service that
+    # serves it, and keep the 68A reason there is no signature, so the contract
+    # records *why* rather than only *that*.
     request_channel = state["request_channel"]
-    assert request_channel.startswith("IN PROGRESS")
+    assert request_channel.startswith("implemented")
+    assert "/api/v1/rfi-request" in request_channel
+    assert "sparknet-peer-intake.py" in request_channel
+    assert "verify_rfi_request" in request_channel
     assert "fingerprint" in request_channel and "overlay" in request_channel
     assert "RFI_REQUEST_DESIGN.md" in request_channel
+    assert (MASTER / "services" / "sparknet-peer-intake.py").is_file()
 
 
 def test_the_signer_answers_the_rfi_op() -> None:

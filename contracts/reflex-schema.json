@@ -31,7 +31,8 @@
           "intent.route",
           "input.injection",
           "tool.risk",
-          "output.grounded"
+          "output.grounded",
+          "plan.select"
         ],
         "purpose": "The consumer class; each class has its own default mode (off/local/broker) and thresholds."
       },
@@ -49,7 +50,8 @@
         "additionalProperties": {
           "$ref": "#/definitions/question"
         },
-        "purpose": "Atomic questions keyed by name. Each evaluated independently in parallel."
+        "purpose": "Exactly one atomic question per request. Multiple questions are refused; a batch caller issues one request per question and correlates by request_id.",
+        "maxProperties": 1
       },
       "model": {
         "type": "string",
@@ -303,6 +305,38 @@
       },
       "model_drift": {
         "type": "boolean"
+      },
+      "answer": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "purpose": "The sanitized typed answer for choice/score decisions, carried so a consumer can rank proposals. Advisory only: it never grants, approves or widens; abstains carry no answer.",
+        "fields": {
+          "type": {
+            "enum": [
+              "choice",
+              "score"
+            ]
+          },
+          "choice": {
+            "type": "string",
+            "purpose": "Choice answers only: the selected option."
+          },
+          "probabilities": {
+            "type": "object",
+            "purpose": "Choice answers only: option -> probability, as returned."
+          },
+          "score": {
+            "type": "number",
+            "purpose": "Score answers only."
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
       }
     },
     "rules": {
@@ -331,6 +365,10 @@
       },
       "output.grounded": {
         "mode": "off",
+        "rollout": "shadow"
+      },
+      "plan.select": {
+        "mode": "local",
         "rollout": "shadow"
       }
     },

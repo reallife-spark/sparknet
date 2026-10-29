@@ -1,12 +1,14 @@
 # Cluster job realization design — one envelope, one index, N signed subtasks
 
-Status: **design proposal, nothing adopted.** This note creates no port, grants
-no capability, changes no contract and adds no daemon. It does not touch
-`contracts/capabilities.json`, `contracts/ports.json`,
-`shared/sparknet-authz.py` or `contracts/manifest.json` — the "nothing adopted"
-property of a design step is exactly the point, and `git status` proves it.
-Everything here is adopted only by its own commit, with both roles edited
-together and `make contract-test` green.
+Status: **design adopted in part — substrate half only.** The vector substrate
+half of adoption item 2 landed on 2026-10-22 as fabric Step 63: the bounded
+`chromadb` pin, explicit embedder, collection stamp and refusal, allow-listed
+corpus, and the no-excluded-path proof test. The `4223` service, registry check,
+task ingress, construction/placement, reduce, reindex timer, peer fan-out and
+live deploy remain **not adopted**. The rest of this note creates no port,
+grants no capability, changes no contract and adds no daemon. Everything else is
+adopted only by its own commit, with both roles edited together and
+`make contract-test` green.
 
 This is the fabric-root sibling of `CLUSTER_INFERENCE_DESIGN.md` (Step 17) and
 `COMPUTE_CAPABILITY_DESIGN.md` (Step 24). It **realizes** the first of those: the
@@ -80,8 +82,8 @@ arc depends on — the thing the parent design explicitly built to avoid the
 ### D2 — peer↔peer fan-out is unreachable on the authority plane
 
 `contracts/overlay.json` fixes a peer's `AllowedIPs` at exactly
-`10.100.0.1/32`: the Master, and nothing else. A peer's nftables egress rule
-matches. So a peer can send a subtask to the Master, and the Master to any peer,
+`10.100.0.1/32`: the Master, and nothing else. A peer's host-firewall egress
+rule (iptables on the deployed fleet) matches. So a peer can send a subtask to the Master, and the Master to any peer,
 but **peer A cannot reach peer B**. The parent design's fan-out diagram
 (`CLUSTER_INFERENCE_DESIGN.md:224`) shows `N × separate 1:1 signed subtasks`
 emitted by the initiator — which, when the initiator is a peer and N ≥ 3, is
@@ -220,7 +222,8 @@ n ≥ 3 is deferred as a named increment because it needs a **time-boxed,
 job-scoped data-plane stanza** on each target peer — a peer's egress rule grows a
 second, short-lived, job-scoped allowance that exists only for the duration of
 one job and is torn down when the job closes. That is a real change to
-`contracts/overlay.json` and to both roles' nftables, and it is deliberately not
+`contracts/overlay.json` and to both roles' host firewalls (iptables on the
+deployed fleet), and it is deliberately not
 smuggled in as a detail.
 
 Placement itself is the goSpark `internal/placement` package, unchanged in shape.
@@ -601,7 +604,9 @@ them. The order is the dependency chain, not the section order above.
    map, and the explicit incompleteness marker.
 6. **Reindex timer.** The `.timer`, with `units-check` extended to cover it.
 7. **Peer-to-peer fan-out at n ≥ 3 (D2).** The time-boxed, job-scoped data-plane
-   stanza. A real `contracts/overlay.json` change and a matching nftables change
+   stanza. A real `contracts/overlay.json` change and a matching host-firewall
+   change (iptables on the deployed fleet; the current renderer's nftables
+   fragment is spec-only) 
    in both roles — deliberately last, deliberately separate, and deliberately not
    implied by anything above.
 8. **Live deploy.** `make test-all`, `lint`, `contract-test`, `validate`,

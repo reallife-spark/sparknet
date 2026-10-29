@@ -27,9 +27,10 @@ Two channels, each degrading to nothing:
 A notification never raises and never blocks the install: it is a courtesy, and an
 item that landed must stay landed even if nobody could be pinged. Real-time push to
 a *remote* operator from a headless peer is not this module's job — a peer egresses
-only to the Master, so that rides signed telemetry to the Master's admin surface
-(Phase 4), not a local ping. Claiming otherwise would be the overclaim the
-phase-boundary rule exists to prevent.
+only to the Master, so that rides telemetry to the Master's admin surface (Step 70F,
+`kind=inbox_alert` from the guard), not a local ping. That report is unsigned and
+overlay-attributed, and it carries no authority. Claiming otherwise would be the
+overclaim the phase-boundary rule exists to prevent.
 """
 
 from __future__ import annotations

@@ -552,7 +552,7 @@ make shims-check   # proves every legacy name is still a symlink
 | Security policies | `manifests/security-policies.json` | |
 | Share regime | `manifests/share-regime.json` | |
 | WireGuard templates | `configs/wireguard/` | Rendered at `0600`; `APPLY=1` to write, dry-run by default. |
-| Host firewall | `configs/nftables/`, `configs/network/` | The peer's egress rule: only the Master is reachable. |
+| Host firewall | `scripts/sparknet-firewall.sh`, `systemd/sparknet-firewall.service` | iptables chains `SPARKNET-FW-IN`/`SPARKNET-FW-FWD`; protects 8181/11434/18000. `configs/nftables/` is a legacy template, not installed. |
 | State dir | `.state/` | `0700`; the keys inside are `0600`. Gitignored. |
 | Node compose env | `.state/spark.env` (or `spark-agx.env`) | Written by the setup script; gitignored. |
 

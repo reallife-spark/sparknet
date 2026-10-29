@@ -24,10 +24,12 @@ import os
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -38,6 +40,8 @@ ROLE_ROOT = Path(__file__).resolve().parent.parent
 FABRIC_ROOT = ROLE_ROOT.parent
 GUARD = FABRIC_ROOT / "peer-node" / "services" / "sparknet-guard-d.py"
 COMPOSER = ROLE_ROOT / "scripts" / "sparknet-rfi-answer.sh"
+INTAKE = ROLE_ROOT / "services" / "sparknet-peer-intake.py"
+INTAKE_ROUTE = "/api/v1/rfi-request"
 RFI_ROUTE = "/api/v1/rfi"
 OWNER_ID = "U-10421"
 
@@ -159,13 +163,18 @@ def _free_port() -> int:
         return int(probe.getsockname()[1])
 
 
-def _start_guard(vault: Path, state: Path, port: int) -> subprocess.Popen:
+def _start_guard(vault: Path, state: Path, port: int, *, extra_env: dict[str, str] | None = None) -> subprocess.Popen:
     """The peer's own guard, not a stub — the code that would run on the node."""
     # A bogus KDE device id keeps the arrival notification hermetic: the guard
     # calls the real notify path, and without this a dev host that happens to have
     # kdeconnect-cli paired would ping a real device on every install test. The
     # spool row is what the test asserts; whether a ping landed is host-dependent.
-    env = {**os.environ, "SPARKNET_STATE_DIR": str(state), "SPARKNET_KDE_DEVICES": "sparknet-test-nonexistent"}
+    env = {
+        **os.environ,
+        "SPARKNET_STATE_DIR": str(state),
+        "SPARKNET_KDE_DEVICES": "sparknet-test-nonexistent",
+        **(extra_env or {}),
+    }
     process = subprocess.Popen(
         [
             sys.executable,
@@ -228,6 +237,36 @@ def _post(port: int, artifact: dict, path: str = RFI_ROUTE) -> tuple[int, dict]:
             return error.code, {"raw": raw.decode("utf-8", "replace")}
 
 
+def _start_telemetry_intake(peer_fp: str, spool: Path):
+    """The real 8090 telemetry route, loopback-mapped to the destination peer."""
+    intake = _load("sparknet_peer_intake_alert", INTAKE)
+    directory = intake.PeerDirectory(
+        [{"fingerprint": peer_fp, "overlay_ipv4": "127.0.0.1/32", "capabilities": ["telemetry"]}]
+    )
+    server = ThreadingHTTPServer(("127.0.0.1", 0), intake._Handler)
+    server.directory = directory
+    server.spool = spool
+    server.seen_nonces = set()
+    server.request_queue = intake.RequestQueue(spool.parent / "requests")
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, thread, f"http://127.0.0.1:{server.server_address[1]}"
+
+
+def _write_telemetry_registry(vault: Path, master_key: Ed25519PrivateKey, capabilities=("telemetry",)) -> None:
+    identity = json.loads((vault / "manifests" / "node-identity.json").read_text())
+    entry = authz.sign_authorization(identity, master_key, list(capabilities))
+    (vault / "manifests" / "node-authorizations.json").write_text(
+        json.dumps({"schema_version": "1.0", "authorizations": [entry]}, indent=2) + "\n"
+    )
+
+
+def _telemetry_rows(spool: Path) -> list[dict]:
+    if not spool.exists():
+        return []
+    return [json.loads(line) for line in spool.read_text().splitlines() if line.strip()]
+
+
 def _compose(
     master_state: Path,
     url: str,
@@ -272,6 +311,50 @@ def content_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "answer-content.md"
     monkeypatch.setenv("RFI_CONTENT_FILE", str(path))
     return path
+
+
+def _start_intake(peer_fp: str, request_dir: Path):
+    """The real 8090 peer intake, loopback-mapped to the destination peer."""
+    intake = _load("sparknet_peer_intake_rfi", INTAKE)
+    directory = intake.PeerDirectory([{"fingerprint": peer_fp, "overlay_ipv4": "127.0.0.1/32", "capabilities": []}])
+    server = ThreadingHTTPServer(("127.0.0.1", 0), intake._Handler)
+    server.directory = directory
+    server.spool = request_dir.parent / "telemetry.jsonl"
+    server.seen_nonces = set()
+    server.request_queue = intake.RequestQueue(request_dir)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, thread, int(server.server_address[1])
+
+
+def _compose_from_request(
+    master_state: Path,
+    artifact: Path,
+    url: str,
+    *,
+    item_name="answer.md",
+    content_file: Path,
+    sources: str | None = None,
+) -> subprocess.CompletedProcess:
+    """The 70C path: the request artifact supplies peer, id, question and scope."""
+    env = {**os.environ, "SPARKNET_STATE_DIR": str(master_state)}
+    cmd = [
+        str(COMPOSER),
+        "--request",
+        str(artifact),
+        "--item-name",
+        item_name,
+        "--url",
+        url,
+        "--offline",
+        "--timeout",
+        "10",
+        "--content",
+        str(content_file),
+    ]
+    if sources is not None:
+        cmd += ["--sources", sources]
+    return subprocess.run(cmd, capture_output=True, text=True, env=env)
 
 
 def _acceptances(vault: Path) -> list[dict]:
@@ -322,6 +405,114 @@ def test_a_composed_answer_lands_in_the_inbox_and_is_recorded(
     assert isinstance(rows[0]["notified"], bool)
 
 
+def test_an_installed_answer_emits_an_overlay_attributed_inbox_alert(
+    master_state, peer_vault, content_file, tmp_path: Path
+) -> None:
+    """70F: the arrival reaches the Master as evidence, while 67B stays local.
+
+    The guard is the real subprocess, the intake is the real 8090 telemetry route,
+    and the composer is the real Master-side path — so this is the whole leg, not
+    a unit of ``_emit_inbox_alert``. The alert is unsigned and overlay-attributed
+    (the intake derives the same fingerprint from 127.0.0.1); it carries the item,
+    request id, digest and ledger hash, and no authority.
+    """
+    vault, state = peer_vault
+    mstate, master_key = master_state
+    peer_fp = _fingerprint(vault)
+    _write_telemetry_registry(vault, master_key)
+
+    telemetry_spool = tmp_path / "telemetry.jsonl"
+    server, thread, base = _start_telemetry_intake(peer_fp, telemetry_spool)
+    port = _free_port()
+    process = _start_guard(
+        vault,
+        state,
+        port,
+        extra_env={"SPARKNET_TELEMETRY_ENDPOINT": base + "/api/v1/telemetry"},
+    )
+    try:
+        result = _compose(
+            mstate,
+            f"http://127.0.0.1:{port}{RFI_ROUTE}",
+            peer_fp,
+            request_id="RFI-ALERT",
+            item_name="alert.md",
+            content=b"# alert\n",
+        )
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    rows = _telemetry_rows(telemetry_spool)
+    assert [row["kind"] for row in rows] == ["inbox_alert"]
+    report = {key: value for key, value in rows[0].items() if key != "source"}
+    ok, reason = authz.verify_telemetry_report(report, expected_fingerprint=peer_fp)
+    assert ok, reason
+    assert rows[0]["source"] == "127.0.0.1"
+    assert "signature_b64" not in report
+    payload = report["payload"]
+    assert payload["item"] == "01_Inbox/alert.md"
+    assert payload["source"] == "master-node"
+    assert payload["request_id"] == "RFI-ALERT"
+    assert payload["content_sha256"]
+    assert payload["audit_block"]
+    assert "grant" not in json.dumps(payload).lower()
+
+    # 67B is unchanged: the local durable spool still records the arrival.
+    arrivals = state / "notifications" / "arrivals.jsonl"
+    local = [json.loads(line) for line in arrivals.read_text().splitlines() if line.strip()]
+    assert local[0]["item"] == "01_Inbox/alert.md"
+    assert local[0]["request_id"] == "RFI-ALERT"
+
+
+def test_an_ungranted_peer_still_installs_but_sends_no_alert(
+    master_state, peer_vault, content_file, tmp_path: Path
+) -> None:
+    """No telemetry capability means no remote alert; acceptance is unaffected."""
+    vault, state = peer_vault
+    mstate, _master_key = master_state
+    peer_fp = _fingerprint(vault)
+    telemetry_spool = tmp_path / "telemetry.jsonl"
+    server, thread, base = _start_telemetry_intake(peer_fp, telemetry_spool)
+    port = _free_port()
+    process = _start_guard(
+        vault,
+        state,
+        port,
+        extra_env={"SPARKNET_TELEMETRY_ENDPOINT": base + "/api/v1/telemetry"},
+    )
+    try:
+        result = _compose(
+            mstate,
+            f"http://127.0.0.1:{port}{RFI_ROUTE}",
+            peer_fp,
+            request_id="RFI-NO-ALERT",
+            item_name="quiet.md",
+            content=b"# quiet\n",
+        )
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (vault / "01_Inbox" / "quiet.md").read_bytes() == b"# quiet\n"
+    assert not telemetry_spool.exists()
+    assert (state / "notifications" / "arrivals.jsonl").is_file()
+
+
 def test_an_empty_answer_is_a_legitimate_delivery(master_state, peer_vault, running_guard) -> None:
     """'Nothing found' crosses the wire and installs like any other answer."""
     vault, _state = peer_vault
@@ -331,6 +522,117 @@ def test_an_empty_answer_is_a_legitimate_delivery(master_state, peer_vault, runn
     assert result.returncode == 0, result.stdout + result.stderr
     assert (vault / "01_Inbox" / "empty.md").read_bytes() == b""
     assert json.loads((vault / "manifests" / "rfi-installation.json").read_text())["request_ids"] == ["RFI-EMPTY"]
+
+
+# --- 70C: a queued request drives the composer --------------------------------
+
+
+def test_a_queued_request_closes_the_peer_to_peer_loop(
+    master_state, peer_vault, running_guard, content_file, tmp_path: Path
+) -> None:
+    """request -> real 8090 intake -> queue artifact -> composer -> peer inbox."""
+    vault, _state = peer_vault
+    mstate, _key = master_state
+    peer_fp = _fingerprint(vault)
+    request_dir = tmp_path / "requests"
+    server, thread, port = _start_intake(peer_fp, request_dir)
+    try:
+        request = authz.build_rfi_request(
+            request_id="RFI-E2E",
+            peer_fingerprint=peer_fp,
+            question="which concepts cover the overlay?",
+            scope=["concepts"],
+        )
+        status, body = _post(port, request, path=INTAKE_ROUTE)
+        assert status == 202 and body == {"status": "queued", "request_id": "RFI-E2E"}
+        artifacts = list(request_dir.glob("*.json"))
+        assert len(artifacts) == 1
+
+        content_file.write_bytes(b"# scoped answer\n")
+        result = _compose_from_request(
+            mstate,
+            artifacts[0],
+            f"http://127.0.0.1:{running_guard}{RFI_ROUTE}",
+            item_name="scoped.md",
+            content_file=content_file,
+            sources="concepts",
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (vault / "01_Inbox" / "scoped.md").read_bytes() == b"# scoped answer\n"
+        assert json.loads((vault / "manifests" / "rfi-installation.json").read_text())["request_ids"] == ["RFI-E2E"]
+        document = json.loads(result.stdout)
+        assert document["request_id"] == "RFI-E2E"
+        assert document["peer_fingerprint"] == peer_fp
+        assert document["delivery"]["scope"] == ["concepts"]
+        assert document["delivery"]["sources"] == ["concepts"]
+        assert document["delivery"]["question"] == "which concepts cover the overlay?"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_the_composer_refuses_to_widen_the_request_scope(
+    master_state, peer_vault, running_guard, content_file, tmp_path: Path
+) -> None:
+    vault, _state = peer_vault
+    mstate, _key = master_state
+    peer_fp = _fingerprint(vault)
+    request_dir = tmp_path / "requests"
+    server, thread, port = _start_intake(peer_fp, request_dir)
+    try:
+        request = authz.build_rfi_request(
+            request_id="RFI-SCOPE",
+            peer_fingerprint=peer_fp,
+            question="anything",
+            scope=["concepts"],
+        )
+        assert _post(port, request, path=INTAKE_ROUTE)[0] == 202
+        artifact = next(request_dir.glob("*.json"))
+        content_file.write_bytes(b"# secret\n")
+        url = f"http://127.0.0.1:{running_guard}{RFI_ROUTE}"
+
+        missing = _compose_from_request(mstate, artifact, url, item_name="a.md", content_file=content_file)
+        assert missing.returncode != 0 and "must declare --sources" in missing.stderr
+
+        widened = _compose_from_request(
+            mstate, artifact, url, item_name="b.md", content_file=content_file, sources="security"
+        )
+        assert widened.returncode != 0 and "outside the request's scope" in widened.stderr
+        assert not (vault / "01_Inbox" / "a.md").exists()
+        assert not (vault / "01_Inbox" / "b.md").exists()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_the_composer_refuses_a_stale_request_artifact(
+    master_state, peer_vault, running_guard, content_file, tmp_path: Path
+) -> None:
+    _vault, _state = peer_vault
+    mstate, _key = master_state
+    peer_fp = _fingerprint(_vault)
+    stale = authz.build_rfi_request(
+        request_id="RFI-STALE",
+        peer_fingerprint=peer_fp,
+        question="too late",
+        scope=["concepts"],
+        ttl_seconds=-1,
+    )
+    artifact = tmp_path / "stale.json"
+    artifact.write_text(json.dumps(stale))
+    content_file.write_bytes(b"# nope\n")
+    result = _compose_from_request(
+        mstate,
+        artifact,
+        f"http://127.0.0.1:{running_guard}{RFI_ROUTE}",
+        item_name="stale.md",
+        content_file=content_file,
+        sources="concepts",
+    )
+    assert result.returncode != 0 and "[expired]" in result.stderr
+    assert not (tmp_path / "peer" / "01_Inbox" / "stale.md").exists()
 
 
 # --- refusals over the wire --------------------------------------------------

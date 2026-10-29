@@ -5,22 +5,46 @@
 > mirrors it, it does not own it. Per-session detail belongs in
 > `sessions/YYYY-MM-DD.md`.
 
-Updated: 2026-10-23
+Updated: 2026-10-29
 
 ## Standing State
 
-- **Plan cursor**: `plans/MASTER_BUILD_PLAN.md` `current: 20`. Phase 0 (13–18) and
-  honest verification (19) are complete; **Steps 1, 2, 5, 6 and 7 are complete**
-  (Steps 2 and 5 on 2026-10-22, Step 6 on 2026-10-23). **Step 7 (8090) was
-  re-scoped and closed by fabric Step 69C (2026-10-25)**: the instant-push purpose
-  was superseded by Step 6's 9090 push and retired (the `sparknet-registry-listener.py`
-  stub and the text-inspection `test_listener_8090.py` are deleted), and 8090 is now
-  the peer→Master **intake** listener — `services/sparknet-telemetry-intake.py` +
-  `systemd/sparknet-telemetry-intake.service` (staged, not enabled), overlay-only,
-  registry-attributed, `telemetry`-gated, evidence-not-authority, tested by
-  `test_telemetry_intake.py` over a real socket. Still unbuilt: signer liveness (20),
-  the admin console's remaining leg (21). The KillSwitch (8), the pooling scheduler
-  (9) and the sharing regime (10–12) are built.
+- **Plan cursor**: `plans/MASTER_BUILD_PLAN.md` `current: 10`. Phase 0 (13–18),
+  honest verification (19), Steps 1–9 and 20–21 are complete. **Steps 10–12 were
+  reopened 2026-10-29**: their scaffolds are not wired end to end. The KillSwitch
+  (8) is implemented (iptables chains; neither Master has nft), fake-runner
+  tested, dry-run verified, and live containment+recovery verified on the
+  deployed Master (`agx32`/`blue-team`, 2026-10-28). Step 9's premise was
+  **re-decided 2026-10-25**: `plans/NOCTURNAL_BATCH_DESIGN.md` replaces literal
+  pooled memory with a time-boxed batch lease over independent whole-node jobs.
+  **9D completed 2026-10-28**: scheduler dispatch is wired to the peer
+  cluster-job ingress loopback with result recording; live arming remains
+  operator-confirmed. Step 10's `services/sparknet-share-ratify.py` implements
+  the acceptance/ratification logic and asks the isolated signer for a canonical
+  signed envelope; no 4203 listener is deployed. Step 11's
+  `services/sparknet-evidence-capture.py` writes, hashes, records via the signer
+  and commits to `evidence-repo/`; `verify_repo` checks a clone against the
+  ledger. Step 12's `services/sparknet-review-agents.py` reviews evidence and
+  signs reversible `trust_level_changed` events; trust stays a belief, not a
+  registry field. The live listener, peer round trips and telemetry consumption
+  remain `DoD: confirm: user`. Do not read implementation or design as live proof.
+- **Step 7 (8090) was re-scoped and closed by fabric Step 69C (2026-10-25)**:
+  the instant-push purpose was superseded by Step 6's 9090 push and retired (the
+  `sparknet-registry-listener.py` stub and the text-inspection
+  `test_listener_8090.py` are deleted), and 8090 is now the peer→Master
+  **intake** listener — `services/sparknet-peer-intake.py` (renamed from
+  `sparknet-telemetry-intake.py` at fabric Step 70B) +
+  `systemd/sparknet-peer-intake.service` (staged, not enabled), overlay-only,
+  registry-attributed. Telemetry is `telemetry`-gated and recorded; RFI requests
+  need only a registered, non-revoked peer and are queued for the composer,
+  never answered here. Evidence-not-authority, tested by `test_peer_intake.py`
+  over a real socket.
+- **Step 20 is deployed live**, not a remaining leg: the signer answers a silent
+  client with a timeout, serves a second concurrent client, and serialises key
+  use, deployed 2026-10-09 under root `65d9ce25…`. **Step 21 is complete**:
+  console code landed 2026-10-12; live legs verified the same day; the admin
+  surface bound `10.100.0.1:8088` on 2026-10-19 and answered HTTP 200 from the
+  peer. A human browser check is an operator observation, not unbuilt code.
 - **`$SPARKNET_STATE_DIR` is outside the vault.** `$XDG_STATE_HOME/sparknet/master-node`
   or `~/.local/state/...`. Moving it was structural, not cosmetic: the admin surface
   bind-mounts the vault read-only into an LLM container, so the old default
@@ -41,7 +65,8 @@ Updated: 2026-10-23
   **cannot survive the loss of a member**; see the open question recorded in
   `contracts/consensus-protocol.md`. The admin page is **declared, and now
   deployed on the live Master at `10.100.0.1:8088`** (relocated from 8080, fabric
-  Step 55); on this development host nothing binds it (`DoD: confirm: user`).
+  Step 55); on this development host nothing binds it — that is a host limitation,
+  not an open implementation leg.
 
 ## Key Standing Facts
 
@@ -123,8 +148,9 @@ Updated: 2026-10-23
   `master-node/manifests/registry.schema.json` is a **symlink** to it, never a
   copy, and `../shared/sparknet-registry-schema.py` checks documents against it
   (standard library only — the runtime allow-list is `cryptography` alone).
-- The peer's live WireGuard, nftables, `chattr +i` and systemd behaviour is
-  unverified on the development host; do not claim otherwise.
+- The peer's live WireGuard, iptables, `chattr +i` and systemd behaviour is
+  unverified on the development host; do not claim otherwise. The deployed
+  fleet uses iptables (`SPARKNET-FW-*`), not nftables.
 - **`opencode agent list` must be read from a file, never a pipe.** It emits
   ~12 MB for this role and a pipe truncates it to ~1 MB, silently dropping the
   role's own agents — which sort last, so the test blames the agent file for a

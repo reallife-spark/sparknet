@@ -54,6 +54,11 @@ SHARE_SCHEMA = "sparknet-share/1"
 #: entry, and checked here against the node's own view of that registry.
 CROSS_DEPARTMENT_CAPABILITY = "cross-department-share"
 
+#: Precedence for combining per-share beliefs into the one level a status report
+#: carries. The most concerning belief wins: a node that shares flagged evidence
+#: must not look authenticated merely because another share was ratified.
+_TRUST_RANK = {"authenticated": 0, "flagged": 1, "unauthenticated": 2}
+
 
 class ShareError(Exception):
     """A regime rule refusal. ``status`` mirrors the bridge's HTTP vocabulary
@@ -115,6 +120,52 @@ def _load(name: str, contracts: Path) -> dict:
     if not path.is_file():
         raise FileNotFoundError(f"contract file missing: {path}")
     return json.loads(path.read_text())
+
+
+def trust_summary(records: list[dict], node_id: str) -> dict[str, Any]:
+    """Summarize this node's trust belief from persisted share records.
+
+    The evidence is the records the engine itself wrote. A ratified share moves
+    the endpoint to ``authenticated`` but keeps the ``flagged`` marker in
+    ``retained_flags``; telemetry surfaces that marker rather than inventing a
+    second trust store. The most concerning belief wins, so one unresolved share
+    cannot be hidden by another ratified one.
+
+    This function never mutates a record and has no authority: only the Master's
+    signed registry event moves a trust level.
+    """
+    level = "authenticated"
+    retained: set[str] = set()
+    evidence: list[dict[str, Any]] = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        endpoint = (record.get("endpoints") or {}).get(node_id)
+        if not isinstance(endpoint, dict):
+            continue
+        trust = str(endpoint.get("trust") or "flagged")
+        if trust not in _TRUST_RANK:
+            trust = "flagged"
+        if _TRUST_RANK[trust] > _TRUST_RANK[level]:
+            level = trust
+        flags = sorted({str(flag) for flag in endpoint.get("retained_flags") or [] if flag})
+        retained.update(flags)
+        if trust == "flagged" or flags:
+            offered_by = record.get("offered_by")
+            counterpart = record.get("toward") if offered_by == node_id else offered_by
+            evidence.append(
+                {
+                    "share_id": record.get("share_id"),
+                    "kind": record.get("accepted_kind") or record.get("kind"),
+                    "state": record.get("state"),
+                    "trust": trust,
+                    "retained_flags": flags,
+                    "counterpart": counterpart,
+                    "at": record.get("closed_at") or record.get("last_use") or record.get("created_at"),
+                }
+            )
+    evidence.sort(key=lambda row: str(row.get("share_id") or ""))
+    return {"level": level, "retained_flags": sorted(retained), "flagged_shares": evidence}
 
 
 class _Message:

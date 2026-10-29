@@ -1,12 +1,12 @@
 # Reflex decision design — a System One sensor beside the agentic layer
 
-Status: **design proposal, nothing adopted.** This note creates no port, grants
-no capability, changes no contract, and adds no daemon. It does not touch
-`contracts/capabilities.json`, `contracts/ports.json`, `contracts/manifest.json`,
-`shared/` or either role's executable surface. The "nothing adopted" property is
-the point of the design step, and `git status` proves it. Everything here is
-adopted only by its own commit, with both roles edited together and
-`make contract-test` green.
+Status: **adopted as code through 64F; 64G deferred (2026-10-24).** The local
+reflex sensor, decision contract, shared client, Master broker on `4224`, node
+`/v1/reflex/` surface, RAG pilot and local-only live pilot are implemented and
+tested. The hosted cloud backend was removed outright in Step 65, and no mode
+holds a credential. `reflex-consult` and peer broker access, the goSpark router
+client, Open WebUI filter, opencode tool-guard plugin, groundedness pass and MCP
+tool remain 64G work. New work gets its own step, not a renumbered 64.
 
 This is the fabric-root sibling of `CLUSTER_INFERENCE_DESIGN.md` (Step 17),
 `COMPUTE_CAPABILITY_DESIGN.md` (Step 24) and `CLUSTER_JOB_REALIZATION_DESIGN.md`
@@ -294,6 +294,39 @@ Expose `reflex_decide` as an MCP tool (goSpark `internal/mcp`) or a CLI verb so
 an agent can deliberately ask a typed question mid-task. Read-only and
 advisory; the same "never authority" rule applies.
 
+### 6.6 Plan selection — LLM proposer, reflex verifier (Step 72)
+
+The first consumer of the reversed flow. The agent/LLM generates 2-8 plans; the
+caller packages them with a rubric; the reflex layer answers **one**
+`plan.select` choice question and returns a ranking. The programmatic action is
+a recommendation, never an execution.
+
+- **Exactly one question per request.** The plan set travels in `state`; the
+  question criteria are the plan ids. A batch caller issues one request per
+  question and correlates by `request_id`.
+- **The decision carries the typed answer** for choice/score decisions: choice,
+  probabilities and confidence. Abstains carry no answer; the verifier may still
+  show a ranking from a captured answer, explicitly marked `advisory`.
+- **The distribution is the signal, not self-reported confidence.** The policy
+  (`plan-select-v1`) uses the top probability and top-two margin. The reported
+  confidence is floored at the top probability because small models copy a
+  template zero.
+- **Hard constraints are deterministic.** A `forbid` term list is applied to
+  the chosen plan's title and body after ranking. A violating plan is an abstain
+  (`constraint-violation`) even if the model ranked it first. This is the
+  caller's policy, not the LLM's judgment.
+- **Sparse answers are handled conservatively.** A sparse distribution is
+  accepted only when it names the chosen plan and its probabilities already sum
+  to one; omitted plans become zero. A truncated distribution is refused.
+- **Measurement (2026-10-29).** 12 golden cases, local `sparknet-reflex:v1`
+  (a copy of qwen2.5-3b) on the LAN Ollama endpoint, no egress: top-1 agreement
+  **0.833** (10/12), coverage **0.833**, abstain **0.167**, ECE **0.000**,
+  false accepts **0**, p95 **3497 ms**, cost **$0**. The `no-kubernetes` case
+  abstained correctly; `groundedness-policy` abstained (a miss). An explicit
+  `none` option was removed from the model's option set after it acted as an
+  attractor; abstention is now the policy's decision over the distribution.
+  The LLM remains advisory and no class moves to assist on this probe alone.
+
 ## 7. Data governance and threat model
 
 ### Data classes
@@ -334,19 +367,20 @@ request digest. Never the state, never the API key, never a raw answer.
 
 | Item | Status in this note |
 |---|---|
-| `4224` reflex-broker | **proposed only**; Master, overlay-only, `binds_to 10.100.0.1` |
+| `4224` reflex-broker | **implemented**; Master, overlay-only, `binds_to 10.100.0.1`; unit staged, not enabled |
 | Node port | **none**; the dispatch bridge already listens on 4096 |
-| `contracts/reflex-schema.json` | **proposed only**; added in its own cross-role commit |
-| `shared/sparknet-reflex.py` | **proposed only**; frozen filename, golden vectors |
-| `reflex-consult` capability | **deferred**; needed only when peers get broker access |
+| `contracts/reflex-schema.json` | **implemented**; added in its own cross-role commit |
+| `shared/sparknet-reflex.py` | **implemented**; frozen filename, golden vectors |
+| `reflex-consult` capability | **deferred (64G)**; needed only when peers get broker access |
 | `shared/sparknet-authz.py` | **unchanged**; no authority code in this design |
 | Guard / signer / registry | **unchanged**; never consult reflex |
 
 The `reflex-consult` capability, when it lands, is a confidentiality grant:
-the holder may send allow-listed node state to the Master broker, which forwards
-it to a third party. It belongs in the closed vocabulary as a `peer` capability
-and is `sensitive: true`, like `cluster-serve`, because it grants an outbound
-data path rather than a local read.
+the holder may send allow-listed node state to the Master broker, which consults
+the Master's **local** backend. It belongs in the closed vocabulary as a `peer`
+capability and is `sensitive: true`, like `cluster-serve`, because it grants a
+cross-node data path rather than a local read. There is no third-party egress:
+the cloud leg was removed in Step 65.
 
 ## 9. Phases
 
@@ -374,9 +408,9 @@ The plan cursor opens at Step 64. Each phase is adopted by its own commit.
   `master-node/tests/test_reflex_broker.py`.
 - `contracts/ports.json` entry; `master-node/Makefile` unit wiring; a master
   plan step for the port's status reference.
-- DoD: overlay-only bind; peer source refused in Phase 1; key via a credential
-  file; exact model pin; timeout -> abstain; budgets; `/healthz` leaks nothing;
-  `units-check` green.
+- DoD: overlay-only bind; peer source refused in Phase 1; **no credential** (the
+  cloud leg is removed); local backend/model selection; timeout -> abstain;
+  budgets; `/healthz` leaks nothing; `units-check` green.
 
 ### 64D — node surface
 
@@ -443,6 +477,9 @@ the broker and local-LLM paths stay **shadow**.
 4. opencode tool-guard plugin, tighten-only.
 5. Groundedness post-processing.
 6. Agent-callable MCP tool.
+
+Plan selection landed as **Step 72** (the advisory CLI + calibration harness);
+the legs above remain separate steps. The Step 72 measurement is in §6.6.
 
 ## 10. Evaluation
 

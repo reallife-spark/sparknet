@@ -22,9 +22,12 @@ for anything.
 
 It deliberately grants no authority. Liveness is a belief about a data-plane
 address. A revoked node can still answer a probe (the overlay does not stop
-carrying its traffic the moment the registry says so), which is why probes are
-signed and why this protocol only ever proposes eviction *of the local
-monitor's view* — never a registry edit, never a capability change.
+carrying its traffic the moment the registry says so), which is why a probe is
+answered on a port that carries no authority at all and why this protocol only
+ever proposes eviction *of the local monitor's view* — never a registry edit,
+never a capability change. The claim a monitor sends is attributed by the
+authenticated overlay, not by a signature this fabric cannot bind (see
+Security properties).
 
 ## Probe rhythm
 
@@ -34,7 +37,7 @@ A monitor probes its known peers on a fixed rhythm:
 |---|---|---|
 | Probe interval | 10 s | long enough not to fight share churn, short enough to notice a death within the 20 min idle-close window |
 | Probe target | address-only; **hostname re-resolved per probe** | a renumbered peer is found as itself, not remembered as a dead address — there is no keepalive to keep a stale mapping warm |
-| Probe port | a non-serving probe port, never the serving path | the monitor must not make the service it watches do work, and a serving 500 must not look like death |
+| Probe port | **4211**, a contracted non-serving probe port, never the serving path | the monitor must not make the service it watches do work, and a serving 500 must not look like death. 4211's only listener accepts a connection and closes it without reading or writing a byte |
 | Probe failure | consecutive misses, clock-measured | one dropped packet is noise; N consecutive misses is a fact |
 
 ## The three rules that keep it honest
@@ -64,19 +67,26 @@ has survivors:
 - the round is not a full-dark round.
 
 Eviction is **local and reversible**: it only removes the peer from what this
-monitor probes next cycle. If the peer's address resolves again it is probed
-again and, on success, re-admitted with a fresh missed-probe count. Eviction
-never writes the registry and never touches `revoked`.
+monitor probes next cycle. The deployed service holds one roster built from the
+signed registry, so an evicted peer is re-admitted when that registry is
+republished (the roster's file changes) or the service restarts; a re-admitted
+peer starts with a fresh missed-probe count. Eviction never writes the registry
+and never touches `revoked`.
 
 ## Security properties
 
-- **Probed and probing are signed.** A liveness claim is a signed envelope
-  like any other (the shared transport refuses unsigned traffic), so a node
-  that the registry no longer trusts cannot fabricate a clean bill of health —
-  the capability gate for *claims* is the same one that gates everything.
-- **No new trust path.** Liveness arrives over the overlay and is verified by
-  the same key the peer already trusts; nothing here introduces a second
-  signing vocabulary.
+- **Attribution is the overlay; claims are unsigned.** A liveness claim is a
+  `kind=liveness` telemetry report (`contracts/telemetry-schema.json`). Nothing
+  in the fabric binds a peer fingerprint to a node signing key (Step 68A), so a
+  node-key signature would be unverifiable theatre. The Master derives the
+  sender's fingerprint from the WireGuard-authenticated source address via its
+  own registry and refuses a report whose `peer_fingerprint` field disagrees
+  (`wrong_peer`). The probe itself carries no envelope at all: it is a TCP
+  connect to 4211 and an immediate close.
+- **No new trust path.** Liveness arrives on the same Master 8090 intake as
+  status and metrics, is gated by the same peer-held `telemetry` capability,
+  and shares the same nonce/expiry freshness guard. Nothing here introduces a
+  second signing vocabulary or a new authority-plane listener.
 - **Privilege is unchanged.** A peer does not gain the ability to evict anyone
   real. A master does not gain the ability to revoke by another name. The
   protocol's eviction has no authority-plane effect, stated plainly so it is
@@ -84,19 +94,22 @@ never writes the registry and never touches `revoked`.
 
 ## Implementation state
 
-**Designed, with a shared reference monitor.** `shared/sparknet-liveness.py`
-implements the probe+eviction state machine with an injected clock and the
-three rules above pinned as constants; `tests/test_liveness.py` exercises each
-rule. What is **not** built yet:
+**Built, unit-staged, not running here.** `shared/sparknet-liveness.py` is the
+one state machine (injected clock, the three rules pinned as constants);
+`tests/test_liveness.py` exercises each rule. The peer service
+`peer-node/services/sparknet-liveness-monitor.py` runs `ContinuousMonitor`
+against registry-derived, signature-checked peers, binds the contracted
+non-serving port **4211** (accept-and-close, no reads or writes), records an
+inbound probe as activity, and pushes `kind=liveness` over the 70A telemetry
+channel. Its unit is
+`peer-node/systemd/sparknet-liveness-monitor.service`, wired through all three
+installer touch points; `contracts/ports.json` marks 4211 `implemented` and
+`not-verifiable-here` (this host has no overlay). Tests:
+`tests/test_liveness.py` (rules) and `tests/test_liveness_service.py` (real
+listener, registry roster, claim accepted by the real 8090 intake).
 
-- a live probe service or systemd unit on either role that runs the monitor
-  against a real overlay (there is no overlay on the development host);
-- a signed liveness *endpoint* on a peer (the natural host is the guard's
-  `/api/v1/status` family, extended to the shared transport);
-- cross-node behaviour (what a peer does when a sibling it probes dies) is
-  **DoD: confirm: user** — it depends on a live pair, and no amount of
-  clock-injected unit tests can claim it.
-
-The honest pair is the same one the rest of the repo uses: `implemented`
-reference code, nothing deployed here, and the cross-node leg explicitly
-confirmed by a human on a live pair.
+What is **not** confirmed here: cross-node behaviour (what a peer does when a
+sibling it probes dies) is **DoD: confirm: user** — it depends on a live pair,
+and no amount of clock-injected unit tests can claim it. The honest pair is the
+same one the rest of the repo uses: the code is implemented and unit-tested,
+nothing is deployed on this host, and the cross-node leg is a human's to confirm.

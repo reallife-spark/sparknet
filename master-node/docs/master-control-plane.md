@@ -3,7 +3,7 @@ title: Master control plane
 type: specification
 role: master
 status: partially-built
-updated: 2026-10-22
+updated: 2026-10-25
 ---
 
 # Master control plane
@@ -54,11 +54,14 @@ infrastructure service may not load, invoke or proxy to the signing key.
 | Registry schema | machine-checkable shape for the signed record | built (Step 2) | 2 |
 | Signing CLI | `authz-sign`, `registry-verify`, `revoke` | built | 3 |
 | Overlay listener | master `wg0`, one stanza per authorized peer | built | 4 |
-| Approval issuer | signs and delivers `guard-apply` payloads | **half built** — the payload is signed and nonces are tracked; nothing has delivered one to a listening peer, and no test applies an issued payload on a peer stub | 5 |
-| Registry distribution | how a signed registry reaches a peer | **not built** — the channel is unspecified (`distribution: UNSPECIFIED`); peers read an operator-placed registry | 6 |
-| Peer intake (`8090`) | peer→Master telemetry evidence (and Step 68C's RFI requests) | **built (fabric Step 69C)** — `services/sparknet-telemetry-intake.py`, overlay-only, attributed by the registry, `telemetry`-gated, records evidence and acts on nothing. The old instant-push purpose was superseded by Step 6's 9090 registry push and is retired; the unit is staged, not enabled | 7 → fabric 69C |
-| Cluster KillSwitch | fabric-wide containment | built | 8 |
-| Pooling scheduler | idle detection, pooled-memory batches | built | 9 |
+| Approval issuer | signs and delivers `guard-apply` payloads | **built (Step 5)** — canonical approval, signer-socket signature, delivery, and application on the peer guard in the test path | 5 |
+| Registry distribution | how a signed registry reaches a peer | **built (Step 6)** — a signed `publication` pushed Master→peer guard on 9090, monotonic `sequence` | 6 |
+| Peer intake (`8090`) | peer→Master telemetry evidence and RFI requests | **built (fabric Steps 69C, 70B)** — `services/sparknet-peer-intake.py`, overlay-only, attributed by the registry. Telemetry is `telemetry`-gated and recorded; an RFI request needs only a registered, non-revoked peer and is queued for the composer, never answered here. Both act on nothing. The old instant-push purpose was superseded by Step 6's 9090 registry push and is retired; the unit is staged, not enabled | 7 → fabric 69C |
+| Cluster KillSwitch | fabric-wide containment | **built (Step 8); live run unverified** — `services/sparknet-killswitch.py` root-gates, defaults to dry-run, stops the control units and admin container, removes the overlay, and installs the `SPARKNET_EMERG_*` iptables chains without flushing the host ruleset. Fake-runner tests pass; the destructive run on a real Master is `DoD: confirm: user` | 8 |
+| Nocturnal batch scheduler | idle evidence + a time-boxed batch lease | **9A adopted, 9B built (2026-10-25), 9C built (2026-10-26)** — `plans/NOCTURNAL_BATCH_DESIGN.md` replaces literal pooled memory with whole-node jobs on idle nodes; `shared/sparknet-idle.py` collects session/GPU evidence into telemetry `metrics.idle`; `services/sparknet-wg-observer.py` supplies authoritative WireGuard deltas from a root snapshot; `services/sparknet-scheduler.py` implements `plan`/`arm`/`status`/`abort`, three-sample gating, the 02:00–05:00 window and two-step confirmation. Assignments are `[]` until 9D; no dispatch occurs | 9 |
+| Share ratification | ratify a peer's time-boxed share | **not built / gated** — `services/sparknet-share-ratify.py` scaffold; `4203` is `spec-only`/`not-listening` (test guard) | 10 |
+| Evidence/review repository | make share events reviewable | **not built** — the hash-chained ledger verifies, but no share events feed a repository and there is no retention policy or clone-and-compare path | 11 |
+| Review agents and trust decisions | produce findings and signed trust transitions | **not built** — no review service or finding producer; 70G only *surfaces* a retained flag, never decides | 12 |
 | Git / file share / NAT / vector DB (`4220`–`4223`) | infrastructure administration | **not built** — all four are `spec-only` in `contracts/ports.json` | `MASTER_ADMIN_PLAN.md` |
 
 ## The signing path
@@ -117,7 +120,8 @@ Revocation must be a signed fact, not just a routing event.
 - **Never adopt the peer egress rule.** A peer pins `wlan0` to `10.100.0.1`
   only; on the Master that would blackhole the fabric. The rule itself is in
   [`../../contracts/overlay.json`](../../contracts/overlay.json); the Master's
-  own egress posture is still to be specced (Step 3 of the build plan).
+  own egress posture is only bounded here — `docs/network-posture.md` is still
+  not written.
 - **Never issue an `AllowedIPs` mask wider than one `/32`** on a peer stanza,
   or that peer could source-spoof a sibling.
 - **Never let the private key leave the machine**, and never commit it.
@@ -180,7 +184,6 @@ protect, so the honest state is verify-only. Key custody is described in
 implied: `docs/network-posture.md`. (`docs/registry-protocol.md` exists since
 Step 2.) Do not read this page as covering the missing one in the meantime.
 
-[`killswitch-template.md`](killswitch-template.md) exists, but read its header
-first: it is the preserved earliest draft of the cluster KillSwitch, it logs its
-teardown steps instead of performing them, and it is a document rather than a
-script precisely so nothing can invoke it.
+[`killswitch-template.md`](killswitch-template.md) documents the working
+KillSwitch and preserves the earliest draft below it. The working control is
+`services/sparknet-killswitch.py`; the draft is provenance and is not executed.

@@ -5,11 +5,14 @@
 > own it. **All history lives in `log.md` and `sessions/YYYY-MM-DD.md`** — an
 > entry here is a durable fact you still need, never a record of what happened.
 
-Updated: 2026-10-25
+Updated: 2026-10-29
 
 ## Plan cursors
 
-- **root `PLAN.md` `current: 70`.** Step 64 (the reflex layer) opened
+- **root `PLAN.md` `current: done`.** Step 72 (plan selection: the LLM proposes, reflex ranks) is implemented and live-measured 2026-10-29: 12 golden cases on `sparknet-reflex:v1`, top-1 **0.833**, coverage **0.833**, abstain **0.167**, ECE **0.000**, false accepts **0**, p95 **3497 ms**, $0; the local 3B's explicit `none` option was removed after it acted as an attractor, and abstention is now the policy's decision plus a deterministic `forbid` list. No authority, port or capability was added. `make ci CI_QUICK=1` is green and `make test-all` is EXIT=0 (peer 545 passed/1 skipped; fabric/contract/master green). The two master-spec blockers were resolved on 2026-10-29: Master Steps 10–12 were reopened, then implemented (signed ratification, ledger-hashed evidence, signed trust events); their live legs remain `DoD: confirm: user`. The evidence-capture / review-agent CLIs are wired to `make -C master-node evidence-capture|review-agents`. Step 72 is complete. Step 70 closed 2026-10-25 (70A–70G); **Step 71 (inbox reviewer
+  sanitisation + acceptance gate) closed 2026-10-25**. The peer `vault-curator` is a deterministic CLI,
+  untrusted ingress needs an accepted `inbox_acceptance`, and reviewed bytes are `validity: sanitized` +
+  user-key signed. **Master Steps 8–9 are built and tested** (Step 8 live containment verified 2026-10-28; Step 9 live arming is operator-confirmed). **Master Steps 10–12 are code-complete but live legs remain `DoD: confirm: user`**, so the Master cursor is 10. Step 64 (the reflex layer) opened
   **2026-10-23**: local-only default, Master broker (`4224`) for the unified
   massive-task workload, RAG relevance first on the fabric corpus,
   shadow → assist → enforce, Master-local before peer access. 64A is
@@ -155,8 +158,9 @@ Updated: 2026-10-25
    `build_rfi_request` + `verify_rfi_request` in authz — **no `sign_rfi_request`**
    (a test fails if one appears): `verify_rfi_request` is a validator +
    overlay-fingerprint match (`wrong_peer`) + expiry/`not_yet_valid`/`replayed_nonce`,
-   never raises. **68C (the Master listener — recommended: re-scope `8090`, which
-   resolves Master Step 7's open question) and 68D (composer `--request`) remain.**
+    never raises. **68C and 68D were later delivered as Step 70B/70C**: the Master
+    listener re-scoped `8090` (closing Master Step 7) and the composer gained
+    `--request`.
    **Step 69 (Phase 4, Master observability) opened 2026-10-25 — 69A + 69B + 69C done;
    the operator sequenced Phase 4 *before* 68C–68D on purpose.** The theme is
    *signed evidence pushed to the Master, never interception* (peers talk directly;
@@ -180,57 +184,91 @@ Updated: 2026-10-25
    `admin-supervise`, bridge `/admin/*`) is complementary, not redundant: pull is
    Master-initiated/admin-supervise/auth-events, push is peer-initiated/`telemetry`-gated.
    **69C done (2026-10-25) — the Master peer-intake listener on a re-scoped 8090.**
-   `master-node/services/sparknet-telemetry-intake.py` binds `10.100.0.1` only and its
-   source gate is **registry-driven** (`PeerDirectory.attribute`: source address → the
-   Master's signed registry entry), refusing `off_overlay`/`revoked`/`capability_missing`
-   *before the body is read* — the last is what "wire the `telemetry` capability" means
+   `master-node/services/sparknet-peer-intake.py` (renamed at 70B from
+   `sparknet-telemetry-intake.py`) binds `10.100.0.1` only and its source gate is
+   **registry-driven** (`PeerDirectory.attribute`: source address → the Master's signed
+   registry entry), refusing `off_overlay`/`revoked`/`capability_missing` *before the
+   body is read* — the last is what "wire the `telemetry` capability" means
    concretely. It verifies via `verify_telemetry_report(expected_fingerprint=<derived>)`,
    records to `/mnt/log/sparknet-telemetry.jsonl` (0600) with in-memory nonce replay
    protection, and carries **no authority** (a source-scan test fails on any signing
-   primitive). The unit is staged (`make telemetry-intake-unit`), not enabled. **8090
+   primitive). The unit is staged (`make peer-intake-unit`), not enabled. **8090
    re-scoped** in `ports.json` (`master-instant-push`/`spec-only` → `master-peer-intake`/
    `implemented`), which **closed Master Step 7** (instant-push purpose retired as
    superseded by Step 6's 9090 push; Master cursor `7 -> 20`). The 7-line
    `sparknet-registry-listener.py` stub + its text-inspection `test_listener_8090.py`
-   are **deleted**, replaced by `test_telemetry_intake.py` (a real `ThreadingHTTPServer`,
-   15 tests); six master docs reconciled. **This is the surface 68C's RFI request route
-   joins — one listener, not two.**
+   are **deleted**, replaced by `test_peer_intake.py` (a real `ThreadingHTTPServer`);
+   six master docs reconciled. **70B joined the RFI request route to this one
+   listener — one surface, two routes.**
    **Step 70 (opened 2026-10-25) consolidates the entire remaining fabric roadmap
    into one verbose plan** — Steps 68 and 69 are **closed** (their delivered legs
    68A/68B and 69A/69B/69C are done+gated; their unfinished legs *moved*, not done).
-   Step 70's sub-steps, in dependency order: **70A** the peer telemetry pusher
-   (`telemetry`-gated, the keystone the riders need), **70B** the RFI request route
-   joining 69C's 8090 intake (+ rename `sparknet-telemetry-intake.py` →
-   `sparknet-peer-intake.py`), **70C** the composer's `--request` path (closes
-   peer→Master→peer), **70D** deploy `sparknet-liveness.py` (+ a contracted probe port,
-   recommend `4211`; reconcile `health-protocol.md` to Option B — claims unsigned,
-   overlay-attributed), **70E** anchor checkpoint Merkle roots
-   (`provenance.build_checkpoint_data` + push `checkpoint_anchor`), **70F** the
-   inbox-arrival remote alert (`inbox_alert` telemetry; closes Phase 3's third leg),
-   **70G** make `flagged` actionable (rides `kind=status` payload — no new kind; the
-   console surfaces it, never auto-remediates). Locked operator decisions: execute
-   sequentially gating each; 70D liveness → Option B; 70G flagged → `status` payload.
-   **Deliberately NOT in Step 70 and still honestly open** (not marked complete): the
-   reviewer-agent sanitisation leg (`agents/vault-curator` placeholder), Phase 5 (Open
-   WebUI), Phase 6 (data lake), master plan Steps 20/21, and the live `DoD: confirm:
-   user` items (Steps 54/56 hardware legs, the Step 66 registry re-sign, Phase 9's
-   destructive legs) — marking genuinely-undone work complete would be a false claim
-   the conformance tests reject.
+   Step 70's sub-steps, in dependency order: **70A** the peer telemetry pusher —
+   **DONE 2026-10-25** (`peer-node/services/sparknet-telemetry-push.py`, `telemetry`-gated,
+   10 tests against the real 69C intake; live push stays confirm:user), **70B DONE
+   2026-10-25** — `POST /api/v1/rfi-request` joins the (renamed) `sparknet-peer-intake.py`
+   with no capability requirement, verifying + queueing one content-addressed artifact
+   per request; 24 tests over the real intake, gates green; **70C DONE 2026-10-25** — the
+   composer's `--request` path consumes the queued artifact, re-verifies it, takes peer/id
+   from it, and refuses any `--sources` category outside the request scope (3 new transport
+   tests, incl. real request→intake→composer→inbox); **70D DONE 2026-10-25** — the
+   peer liveness service (`peer-node/services/sparknet-liveness-monitor.py`) runs the
+   shared `ContinuousMonitor` over a signature-checked registry roster, answers
+   probes on the contracted non-serving **4211** (accept/close, no bytes), feeds
+   inbound probes back as activity, and pushes `kind=liveness` via 70A; eviction is
+   local, a republished registry re-admits; `ContinuousMonitor` gained `on_round`;
+   `health-protocol.md` reconciled to Option B (unsigned, overlay-attributed);
+   11 service tests + the real 8090 intake, both bundles green; **70E DONE 2026-10-25** —
+   `sparknet-checkpoint-anchor.py` appends an idempotent signed checkpoint only when
+   the head moved (a newest checkpoint that snapshots every prior block means no
+   write), and pushes the full signed block as `checkpoint_anchor` over 8090; empty
+   chain silent, tampered chain refused, 15-min oneshot timer; 8 tests + real intake,
+   both bundles green; **70F DONE 2026-10-25** — the guard emits `inbox_alert` after
+   an installed RFI answer via the 70A pusher (telemetry-gated, unsigned,
+   overlay-attributed; payload item/request_id/digest/audit_block; failed push never
+   affects install), local 67B spool/ping unchanged; `SPARKNET_TELEMETRY_ENDPOINT`
+   added for daemon relocation/tests; 2 master tests + real intake, both bundles
+   green; **70G DONE 2026-10-25** — `sparknet-share-regime.py::trust_summary` is the
+   one reading of persisted share records (most-concerning belief wins; ratified
+   shares stay `authenticated` with the `flagged` marker retained); the pusher adds
+   it as `payload.trust` on the existing `status` report (no new kind), and the console
+   reads the Master's telemetry spool (`SPARKNET_TELEMETRY_SPOOL`, newest status per
+   fingerprint) to surface `trust.flagged` rows in `feed` and via a `trust` verb —
+   read-only, no registry/trust mutation, no auto-remediation; 2 push + 2 console
+   tests, both bundles green. **Step 70 is complete; fabric cursor `70 -> done`.**
+   Locked operator decisions: execute sequentially gating each; 70D liveness → Option
+   B; 70G flagged → `status` payload.
+   **Reviewer-agent sanitisation is complete as Step 71** (2026-10-25): the
+   `vault-curator` CLI refuses untrusted ingress until an accepted,
+   `sanitized: true` block names it, sanitizes active content, sets
+   `validity: sanitized` and signs with the user key. **Still honestly open**:
+   Phase 5 (Open WebUI), Phase 6 (data lake), master plan Steps 8–12 (Step 8 is
+   implemented but its live destructive run is unverified), and the live
+   `DoD: confirm: user` items (Step 56's hardware legs, Step 57's cable follow-up,
+   the Step 66 registry re-sign, Phase 9's destructive legs) — marking
+   genuinely-undone work complete would be a false claim the conformance tests
+   reject.
   **The pin hazard is closed** (`3d3bac9`): `goagx/GOSPARK_PIN` now names goSpark
   `0a6da00`, goSpark is pushed, and goagx was republished (`9898733`) since
   `tests/test_goagx_repo.py` binds the pin to the published manifest. **Still
   open, and not closable from this repo:** a live node must re-sign its registry
   and re-publish at a higher sequence, because the signed envelope changed shape.
-  Steps 1–54 closed/parked.
+  Steps 1–54 closed/parked: **Step 54 closed as fulfilled by Step 57** and
+  **Step 55 marked superseded (not completed)** by Step 57 on 2026-10-25.
 - **`peer-node/PLAN.md` `current: done`** — the peer arc is terminal; its last
   work (Steps 2–12: container, grants, bridge, Open WebUI surface, conversation
   passing, `MASTERSPIKE`, sharing regime, node admin agent) closed 2026-10-11/12.
   New peer work gets a **new** step.
-- **`master-node/plans/MASTER_BUILD_PLAN.md` `current: 7`** — Phase 0 (13–18),
-  honest verification (19), keypair/registry substrate (1), Steps 3–4,
-  **Step 2 (registry schema + the spec/impl boundary) closed 2026-10-22**,
-  **Step 5 (guard approval issuer) closed the same day**, and **Step 6
-  (registry distribution channel) closed 2026-10-23** are complete. The
+- **`master-node/plans/MASTER_BUILD_PLAN.md` `current: 8`** — Phase 0 (13–18),
+  honest verification (19), Steps 1–7 and Steps 20–21 are complete. **Step 2
+  (registry schema + the spec/impl boundary) closed 2026-10-22**, **Step 5
+  (guard approval issuer) closed the same day**, **Step 6 (registry distribution
+  channel) closed 2026-10-23**, and **Step 7 closed by fabric Step 69C
+  (2026-10-25)**. **Step 20 (signer liveness) was deployed live 2026-10-09** and
+  **Step 21 (admin console) is complete**, with the surface bound on
+  `10.100.0.1:8088` since 2026-10-19. **Steps 8–12 are open again** — their `[x]`
+  boxes had never been updated after the 2026-10-06 reopening: KillSwitch,
+  scheduler, share ratification, evidence repository and review agents. The
   registry's canonical shape is stated **once**, in
   `contracts/registry-schema.json`; the Master's path is a symlink to it and
   `shared/sparknet-registry-schema.py` checks documents against it (standard
@@ -243,11 +281,17 @@ Updated: 2026-10-25
   **publication** the Master pushes to each peer's guard on 9090
   (`contracts/registry-publication.json`, `shared/sparknet-registry-install.py`);
   its monotonic `sequence` is what makes replaying an older, un-revoked registry
-  fail. Steps 7, 20 and 21 remain unbuilt; the cursor sits at **7**. Step 7
-  needs **reconciliation before building**: Step 6's push channel superseded the
-  8090 pull listener *in direction*, so `contracts/ports.json` keeps 8090
-  `spec-only` until Step 7 decides whether it survives for ACL pushes, is
-  re-scoped, or is retired.
+  fail. The cursor sits at **8**; Steps 8–12 are the open set. Step 7 is closed:
+  fabric Step 69C re-scoped 8090 from the 8090 pull listener to the peer→Master
+  intake surface. Step 9's original pooled-memory premise predates the current
+  two-node hardware and was re-decided on 2026-10-25:
+  `master-node/plans/NOCTURNAL_BATCH_DESIGN.md` replaces literal pooled memory
+  with a time-boxed batch lease over independent whole-node jobs. **9B is
+  implemented**: `shared/sparknet-idle.py` feeds session/GPU/WireGuard evidence
+  into telemetry `metrics.idle`, failing closed as `null` plus an error. The
+  scheduler is still a 2-line scaffold; authoritative WireGuard counters remain
+  Master-side work because the unprivileged peer service cannot read `wg show`
+  and sysfs reports zero.
 
 ## What this repository is
 

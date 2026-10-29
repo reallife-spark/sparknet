@@ -169,6 +169,24 @@ it may not sign, grant, revoke, approve or widen.
 adds no dependency. Transport and vendor calls belong to the caller
 (`sparknet-reflex-broker.py` on the Master), not here.
 
+## `sparknet-verify.py`
+
+The first **proposer/verifier** consumer. A caller supplies a task, a rubric and
+2-8 candidate plans; the module builds one `plan.select` choice question,
+validates the typed answer, applies a versioned top/margin policy and a
+deterministic `forbid` list, and returns an advisory ranking.
+
+**The LLM is advisory.** It ranks; the caller's policy decides whether the
+ranking is confident enough, and hard constraints are checked deterministically
+after ranking. A violating plan abstains even if the model ranked it first.
+Nothing here executes a plan, grants, approves or widens anything, and the
+guard/signer/registry never consult it. The typed contract remains
+`shared/sparknet-reflex.py`; this module is the consumer that turns a choice
+answer into a ranking a caller can inspect.
+
+The CLI is `scripts/sparknet-verify-plans.py`; calibration is
+`scripts/sparknet-reflex-plan-eval.py` over `tests/reflex/plans-golden.json`.
+
 ## Adding to this directory
 
 Only if **both** roles need the same code and any divergence would be a

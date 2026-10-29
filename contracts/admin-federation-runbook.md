@@ -1,8 +1,14 @@
-# Admin federation runbook — Phase 5 live deploy (node131 + node133)
+# Admin federation runbook — Phase 5 live deploy (historical cluster2)
 
-> Status: **procedure, not proof.** Every claim below about a deployed node is
-> `DoD: confirm: user` until a human who can see that node confirms it. The
-> companion design is [`../ADMIN_FEDERATION_DESIGN.md`](../ADMIN_FEDERATION_DESIGN.md);
+> Status: **historical procedure; executed on the retired cluster2 pair.**
+> Every role-bound host name and command below describes that retired pair
+> (`.131` Master / `.133` peer). The current Step 57 pair is **`agx64` peer /
+> `agx32` Master**, with state dirs `~/sparknet/peer-node/.state` and
+> `~/.local/state/sparknet/master-node`. Do **not** copy a role-bound command
+> from this page onto the current pair without re-mapping the role. Admin
+> federation has not been redeployed on the current pair; that leg is
+> `DoD: confirm: user`. The companion design is
+> [`../ADMIN_FEDERATION_DESIGN.md`](../ADMIN_FEDERATION_DESIGN.md);
 > the signed shapes live in `capabilities.json`, `identity-schema.json` and
 > `shared/sparknet-authz.py`. If a command here disagrees with a contract, the
 > contract wins — this runbook is a script the operator reads, not a norm.
@@ -14,14 +20,19 @@ the two physical hosts, prove the live legs, and keep every live leg
 
 ## Hosts and addressing
 
-The two nodes were moved onto the flat `192.168.178.0/24` LAN on **2026-10-12**.
-The old `192.168.178.131` / `192.168.178.133` legs are **retired** and no longer
-resolve; do not use them. `~/.ssh/config` carries the current aliases.
+This table is the **retired cluster2** mapping on which Phase 5 was executed.
+The current pair is listed separately; the roles are swapped.
 
-| Role | SSH alias | Hostname | LAN | Overlay `wg1` | Node id | Cluster tree | State dir |
-|---|---|---|---|---|---|---|---|
-| Master | `ssh agx64` | `red-team` | `192.168.178.131` | `10.100.0.1/32` | `node131` | `/home/raxxar/sparknet-cluster2` | `/home/raxxar/.local/state/sparknet/cluster2` |
-| Peer | `ssh agx32` | `blue-team` | `192.168.178.133` | `10.100.0.2/32` | `node133` | `/home/raxxar/sparknet-cluster2` | `/home/raxxar/.local/state/sparknet/cluster2` |
+| Pair | Role | Host | LAN / overlay | Node id | State dir |
+|---|---|---|---|---|---|
+| cluster2 (retired) | Master | `agx64` / `red-team` | `192.168.178.131` / `10.100.0.1` | `node131` | `~/.local/state/sparknet/cluster2` |
+| cluster2 (retired) | Peer | `agx32` / `blue-team` | `192.168.178.133` / `10.100.0.2` | `node133` | `~/.local/state/sparknet/cluster2` |
+| current (Step 57) | Peer | `agx64` / `sparknet-node-0001` | `192.168.178.21` / `10.100.0.2` | `node-0001` | `~/sparknet/peer-node/.state` |
+| current (Step 57) | Master | `agx32` / `sparknet-node-0002` | `192.168.178.22` / `10.100.0.1` | `node-0002` | `~/.local/state/sparknet/master-node` |
+
+The cluster2 trees live under `/home/raxxar/sparknet-cluster2`; the current
+pair uses the role worktrees. The old `.131`/`.133` LAN legs are retired.
+`~/.ssh/config` carries the current aliases.
 
 Declared surfaces this touches (see `ports.json`): the peer bridge **4096**
 (`dispatch-bridge`, currently `--bind 127.0.0.1`) and the Master admin surface
