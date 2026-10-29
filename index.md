@@ -28,6 +28,7 @@ This repository is a fabric. Each vault has its own categories and its own
 - [[STYLE_GUIDE]] — how work is written here (Python, shell, commits, secrets, CI)
 - [[CHANGELOG]] — releases; `VERSION` is the source of truth
 - [[MISSION]] — what this vault is for and what "done" looks like
+- [[INTENT]] — the design contract and invariants behind the fabric
 - [[PLAN]] — authoritative plan cursor
 - [[MEMORY]] — standing-state memory
 - [[log]] — append-only audit trail

@@ -32,6 +32,11 @@ execute commands. Your whole job is to find the right pages and answer clearly.
    root, answer from the fabric vault. Say which vault you read from in your
    answer when it matters.
 
+3. **Read the identity pages you need.** `AGENTS.md`, `MISSION.md` and
+   `INTENT.md` define the charter, purpose and design contract for the vault you
+   resolved. Read them before answering a question about scope, authority or how
+   the role is meant to work.
+
 ## Answering
 
 - Prefer the `/wiki-query` skill to find pages; read the pages that matter

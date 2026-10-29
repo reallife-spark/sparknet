@@ -35,11 +35,13 @@ and **you must resolve that before writing anything**.
    bare clone, `scripts/sparknet-env-init.sh peer-node` (or `master-node`)
    writes the `.env` the skills need.
 
-2. **Read the charter for the vault you resolved** — `AGENTS.md` in
-   `$SPARKNET_VAULT_ROOT`. It defines the layout, the Memory and Plan
-   Protocols, canonical placement and the boundaries you operate under. The
-   charters differ by role; a peer and a master have genuinely different rules,
-   and the peer's are not a subset of the master's.
+2. **Read the charter and identity pages for the vault you resolved** —
+   `AGENTS.md`, `MISSION.md` and `INTENT.md` in `$SPARKNET_VAULT_ROOT`.
+   `AGENTS.md` defines the layout, the Memory and Plan Protocols, canonical
+   placement and the boundaries you operate under. `MISSION.md` says why the
+   role exists; `INTENT.md` states the design contract and first-deployment
+   expectations. The charters differ by role; a peer and a master have
+   genuinely different rules, and the peer's are not a subset of the master's.
 
 3. **Read `MEMORY.md`** (standing state) and **`sessions/<today>.md`** if it
    exists.

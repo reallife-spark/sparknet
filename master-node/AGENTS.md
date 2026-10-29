@@ -187,8 +187,10 @@ split is the security model rather than a detail — see `security/key-managemen
   blockers. Replace, never append indefinitely.
 - `sessions/YYYY-MM-DD.md` — that session's full record. One file per day;
   sessions spanning midnight use the start date.
-- Read `MEMORY.md` and today's session file at session start; write detail only
-  to today's session file. Never back-write history into `MEMORY.md`.
+- Read `AGENTS.md`, `MISSION.md` and `INTENT.md` at session start: the charter,
+  the role's purpose and the design contract behind it. Then read `MEMORY.md`
+  and today's session file; write detail only to today's session file. Never
+  back-write history into `MEMORY.md`.
 
 ## Plan Protocol
 

@@ -45,12 +45,20 @@ def _write(root: Path, rel: str, text: str = "x") -> None:
 
 
 def test_root_structure_files_are_included(tmp_path: Path) -> None:
-    for name in ("AGENTS.md", "MISSION.md", "index.md", "hot.md", "CLUSTER_INFERENCE_DESIGN.md"):
+    for name in (
+        "AGENTS.md",
+        "MISSION.md",
+        "INTENT.md",
+        "index.md",
+        "hot.md",
+        "CLUSTER_INFERENCE_DESIGN.md",
+    ):
         _write(tmp_path, name)
     got = {str(p) for p in rag.corpus_entries(tmp_path)}
     assert got == {
         "AGENTS.md",
         "MISSION.md",
+        "INTENT.md",
         "index.md",
         "hot.md",
         "CLUSTER_INFERENCE_DESIGN.md",
@@ -67,9 +75,16 @@ def test_the_contract_tree_is_included_whole(tmp_path: Path) -> None:
 def test_only_role_charters_are_included_from_a_role(tmp_path: Path) -> None:
     _write(tmp_path, "peer-node/AGENTS.md")
     _write(tmp_path, "peer-node/PLAN.md")
+    _write(tmp_path, "peer-node/MISSION.md")
+    _write(tmp_path, "peer-node/INTENT.md")
     _write(tmp_path, "peer-node/05_Knowledge/concepts/secret.md")  # role vault content
     got = {str(p) for p in rag.corpus_entries(tmp_path)}
-    assert got == {"peer-node/AGENTS.md", "peer-node/PLAN.md"}
+    assert got == {
+        "peer-node/AGENTS.md",
+        "peer-node/PLAN.md",
+        "peer-node/MISSION.md",
+        "peer-node/INTENT.md",
+    }
 
 
 def test_an_unlisted_root_page_is_out_by_default(tmp_path: Path) -> None:
@@ -167,12 +182,15 @@ def test_the_corpus_has_no_duplicate_basenames(tmp_path: Path) -> None:
     vault = tmp_path / "vault"
     _write(vault, "AGENTS.md")
     _write(vault, "MISSION.md")
+    _write(vault, "INTENT.md")
     _write(vault, "README.md")
     _write(vault, "peer-node/AGENTS.md")
     _write(vault, "peer-node/MISSION.md")
+    _write(vault, "peer-node/INTENT.md")
     _write(vault, "peer-node/README.md")
     _write(vault, "master-node/AGENTS.md")
     _write(vault, "master-node/MISSION.md")
+    _write(vault, "master-node/INTENT.md")
     _write(vault, "master-node/README.md")
     out = tmp_path / "corpus"
 
@@ -188,6 +206,7 @@ def test_the_node_allow_list_is_unchanged() -> None:
     expected = {
         "AGENTS.md",
         "MISSION.md",
+        "INTENT.md",
         "README.md",
         "index.md",
         "hot.md",

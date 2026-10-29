@@ -52,7 +52,7 @@ env-show: ## Print the paths this role resolves (vault, peer node, state dir)
 	@"$(VAULT_ROOT)/scripts/sparknet-master-env.sh"
 
 validate: ## Charter, plan, executables wired, and parity with the peer
-	@for f in AGENTS.md MEMORY.md MISSION.md plans/MASTER_BUILD_PLAN.md \
+	@for f in AGENTS.md MEMORY.md MISSION.md INTENT.md plans/MASTER_BUILD_PLAN.md \
 	          configs/wireguard/master-peer.template security/key-management.md; do \
 		  [ -f "$(VAULT_ROOT)/$$f" ] || { echo "missing $$f" >&2; exit 1; }; \
 	done

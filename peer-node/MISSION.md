@@ -1,6 +1,16 @@
+---
+title: sparknet peer-node — MISSION
+role: peer
+template: true
+updated: 2026-10-29
+---
+
 # sparknet peer-node — MISSION
 
 The **working node** role of the Sparknet fabric.
+
+Read `INTENT.md` for the design contract behind this mission. `AGENTS.md` is the
+operating charter and wins if the two ever disagree.
 
 ## Scope
 

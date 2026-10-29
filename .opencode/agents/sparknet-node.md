@@ -26,9 +26,9 @@ That prints the role (`peer`, `master`, or `fabric`), the role root and the
 *different* vault and every page you write lands in the wrong place with no error
 to tell you.
 
-Then read the charter in `$SPARKNET_VAULT_ROOT/AGENTS.md`, `MEMORY.md`, and
-today's `sessions/<date>.md`. The charters differ by role and a peer is not a
-subset of a master.
+Then read the charter in `$SPARKNET_VAULT_ROOT/AGENTS.md`, the role's
+`MISSION.md` and `INTENT.md`, `MEMORY.md`, and today's `sessions/<date>.md`.
+The charters differ by role and a peer is not a subset of a master.
 
 ## Two ways to involve another agent — pick the right one
 

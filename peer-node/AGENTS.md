@@ -128,8 +128,10 @@ the Master's signatures.
   blockers. Replace, never append indefinitely.
 - `02_Daily/YYYY-MM-DD.md` — that session's full record (`sessions/` is a shim
   to it). One file per day; sessions spanning midnight use the start date.
-- Read `MEMORY.md` and today's session file at session start; write detail only
-  to today's session file. Never back-write history into `MEMORY.md`.
+- Read `AGENTS.md`, `MISSION.md` and `INTENT.md` at session start: the charter,
+  the role's purpose and the design contract behind it. Then read `MEMORY.md`
+  and today's session file; write detail only to today's session file. Never
+  back-write history into `MEMORY.md`.
 
 ## Plan Protocol
 

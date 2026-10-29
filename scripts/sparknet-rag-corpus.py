@@ -66,6 +66,7 @@ from pathlib import Path
 NODE_ROOTS = {
     "AGENTS.md",
     "MISSION.md",
+    "INTENT.md",
     "README.md",
     "index.md",
     "hot.md",
@@ -97,7 +98,7 @@ DIR_PREFIXES = ("contracts",)
 
 #: Role subvaults contribute only their charter-level files, never their vault.
 ROLES = ("peer-node", "master-node")
-ROLE_ROOT_FILES = {"AGENTS.md", "MISSION.md", "README.md", "PLAN.md"}
+ROLE_ROOT_FILES = {"AGENTS.md", "MISSION.md", "INTENT.md", "README.md", "PLAN.md"}
 
 #: Suffixes worth ingesting. The contract tree's JSON (capabilities, ports,
 #: overlay, schemas) is structural and included; keys are ``.ed25519`` (always
@@ -196,8 +197,9 @@ def materialized_path(rel: Path) -> Path:
     Role charter files are namespaced (``peer-node/AGENTS.md`` ->
     ``peer-node__AGENTS.md``). Open WebUI flattens an ingested file to its
     basename, so the two roles both shipping ``AGENTS.md``/``MISSION.md``/
-    ``README.md`` would collide in one knowledge base and show as duplicates.
-    The namespaced name keeps both charters distinct without dropping either.
+    ``INTENT.md``/``README.md`` would collide in one knowledge base and show as
+    duplicates. The namespaced name keeps both charters distinct without
+    dropping either.
     """
     if len(rel.parts) == 2 and rel.parts[0] in ROLES:
         return Path(f"{rel.parts[0]}__{rel.parts[1]}")

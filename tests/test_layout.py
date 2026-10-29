@@ -56,6 +56,7 @@ EXPECTED_TOP_LEVEL = {
     "AGENTS.md",
     "MEMORY.md",
     "MISSION.md",
+    "INTENT.md",
     "PLAN.md",
     "README.md",
     "log.md",

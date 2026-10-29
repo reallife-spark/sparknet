@@ -19,7 +19,8 @@ numbered path; the shim exists so the vendored wiki suite and older
 instructions still resolve.
 
 `_staging/` is real, not a shim (it is the skill review queue). `AGENTS.md`,
-`MEMORY.md`, `MISSION.md` and `Makefile` stay at the root on purpose.
+`MISSION.md`, `INTENT.md`, `MEMORY.md` and `Makefile` stay at the root on
+purpose.
 
 ## 2. Where you may write
 

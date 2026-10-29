@@ -6,8 +6,9 @@
 > its knowledge base.
 
 Read `AGENTS.md` first: it is the charter (roles, layout, Memory/Plan
-Protocol, boundaries). `STYLE_GUIDE.md` is how work is written. `index.md` is
-the curated knowledge index; `PLAN.md` is the plan cursor.
+Protocol, boundaries). `MISSION.md` says why the fabric exists; `INTENT.md` is
+the design contract and invariants behind it. `STYLE_GUIDE.md` is how work is
+written. `index.md` is the curated knowledge index; `PLAN.md` is the plan cursor.
 
 `USER_MANUAL.md` is the developer-facing manual for the whole fabric: the
 five repositories, the architecture, the authority model, the contracts, the

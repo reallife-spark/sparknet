@@ -76,6 +76,14 @@ esac
 example="$target/.env.example"
 [ -f "$example" ] || die "missing template: $example"
 
+# Identity pages are role content, not generated here. A fresh role bundle
+# should already carry them; warn rather than invent content that must be
+# role-specific.
+for f in AGENTS.md MISSION.md INTENT.md; do
+  [ -f "$target/$f" ] || printf 'sparknet-env-init: WARNING — %s is missing; a role bundle should carry it.\n' \
+    "$target/$f" >&2
+done
+
 # Derive every path from the checkout location so nothing needs hand-editing.
 if [ "$is_fabric_root" -eq 1 ]; then
   fabric_root="$target"

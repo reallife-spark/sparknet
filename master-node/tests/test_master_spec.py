@@ -37,6 +37,7 @@ FABRIC_ROOT = VAULT_ROOT.parent
 PLAN = VAULT_ROOT / "plans" / "MASTER_BUILD_PLAN.md"
 AGENTS = VAULT_ROOT / "AGENTS.md"
 MISSION = VAULT_ROOT / "MISSION.md"
+INTENT = VAULT_ROOT / "INTENT.md"
 
 # Directories that make up this role's executable surface.
 EXECUTABLE_DIRS = ("scripts", "services", "systemd")
@@ -190,6 +191,14 @@ def test_charter_does_not_hard_code_a_machine_path() -> None:
 # executable surface landed (Step 15). Asserting it now would assert a lie, so
 # the status is asserted in the direction that still holds: the role *declares*
 # its build state, and the declaration must agree with the tree and the plan.
+
+
+def test_the_intent_page_exists_and_declares_the_role() -> None:
+    """INTENT is the design contract beside MISSION, not a signed note."""
+    fields = frontmatter(INTENT)
+    assert fields.get("role") == "master", "master-node/INTENT.md must declare role: master"
+    assert fields.get("template") == "true", "master-node/INTENT.md must declare template: true"
+    assert fields.get("intent") == "design-contract", "master-node/INTENT.md must declare intent: design-contract"
 
 
 def test_the_role_declares_a_build_status_that_agrees_with_the_tree() -> None:
