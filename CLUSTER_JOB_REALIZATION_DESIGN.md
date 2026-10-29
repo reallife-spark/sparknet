@@ -48,7 +48,7 @@ cites the file and line it was found on.
 
 | | Fabric (`shared/`) | goSpark (`proto/`, `internal/apiv1/`) |
 |---|---|---|
-| Timestamps | `created_at` / `expires_at`, ISO-8601 (`shared/sparknet-authz.py:468-469`) | `created_at_unix` / `expires_at_unix`, `int64` (`goSpark/proto/sparknet/v1/cluster.proto:41-42`, `internal/apiv1/types.go:183-184`) |
+| Timestamps | `created_at` / `expires_at`, ISO-8601 (`shared/sparknet-authz.py:468-469`) | `created_at_unix` / `expires_at_unix`, `int64` (`gospark/proto/sparknet/v1/cluster.proto:41-42`, `internal/apiv1/types.go:183-184`) |
 | Optional fields | always projected, as null (`shared/sparknet-authz.py:565`) | `omitempty` — dropped entirely when empty (`internal/apiv1/types.go:178-189`) |
 | Expiry check | `is_expired()` parses ISO-8601 (`shared/sparknet-authz.py:493`) | `int64` compare, no parser |
 
@@ -180,7 +180,7 @@ change and it is the one thing in increment 1 that touches the Master role.
 
 ## Seam B — building the job
 
-Nothing multi-subtask exists. `goSpark/internal/router/router.go` splits a
+Nothing multi-subtask exists. `gospark/internal/router/router.go` splits a
 prompt (`splitPrompt:151`) and picks **one** node
 (`internal/server/placement.go` `PlaceAndDispatch`). What is missing is the
 construction step between "here is a prompt" and "here are N signed subtasks".

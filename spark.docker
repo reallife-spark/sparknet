@@ -17,12 +17,12 @@
 # prebuilt goSpark binaries and the Python compute plane):
 #
 #   docker build -f spark.docker \
-#     --build-context gospark=/mnt/knowledge/goSpark \
+#     --build-context gospark=./gospark \
 #     -t sparknet-spark-node:dev .
 #
 # The goSpark binaries must already be built on the host:
 #
-#   make -C /mnt/knowledge/goSpark build build-gpu
+#   make -C gospark build build-gpu
 #
 # `sparknet-node-setup.sh` does all of the above; this header is the manual path.
 #

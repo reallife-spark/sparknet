@@ -8,6 +8,10 @@
 .state
 .cache
 dist
+# A local goSpark checkout is a separate repository (own .git) and is consumed
+# only through the BuildKit named context `gospark`; never upload it with the
+# fabric root build context.
+gospark
 __pycache__
 .pytest_cache
 .ruff_cache

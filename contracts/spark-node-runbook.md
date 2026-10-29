@@ -36,6 +36,7 @@ They say the artifact is sound; they never say the deployment is.
 
 - Docker with the `compose` v2+ plugin (`docker compose version`).
 - goSpark checkout with binaries built: `make build build-gpu` in that checkout.
+  The local default is `gospark/` in the fabric root (`GOSPARK_DIR` overrides).
   The image consumes `bin/` through the BuildKit named context `gospark`; it is
   **not** vendored into the fabric.
 - ~35 GB free disk for the image plus the vLLM base layers.
@@ -45,13 +46,13 @@ They say the artifact is sound; they never say the deployment is.
 ## 3. Build the image
 
 ```sh
-# in the goSpark checkout:
+# in the goSpark checkout (gospark/ by default):
 make build build-gpu
 
 # in the fabric root (the image build context IS the root):
 docker buildx build --network=host \
   -f spark.docker \
-  --build-context gospark=<path-to-goSpark> \
+  --build-context gospark=gospark \
   -t sparknet-spark-node:dev --load .
 ```
 

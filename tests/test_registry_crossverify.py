@@ -41,7 +41,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AUTHZ = REPO_ROOT / "shared" / "sparknet-authz.py"
-GOSPARK_DIR = Path(os.environ.get("GOSPARK_DIR", "/mnt/knowledge/goSpark"))
+GOSPARK_DIR = Path(os.environ.get("GOSPARK_DIR", REPO_ROOT / "gospark"))
 CTL = GOSPARK_DIR / "bin" / "sparknetctl"
 
 pytestmark = pytest.mark.integration

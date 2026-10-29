@@ -135,7 +135,7 @@ independent products — they are five views of one system.
 | `sparknet-peer` | The `peer-node/` subtree, verbatim. The role alone — no `contracts/`, no `shared/`. | Verbatim copy of the subtree. | `sparknet-peer/USER_MANUAL.md` |
 | `sparknet-master` | The `master-node/` subtree, verbatim. The role alone. | Verbatim copy of the subtree. | `sparknet-master/USER_MANUAL.md` |
 | `goagx` | A generated mirror of the fabric: both role subtrees, `contracts/`, `shared/`, the AGX image surface, the setup script. | One-way export (`make goagx-publish`). Never hand-edited. | `goagx/USER_MANUAL.md` |
-| `goSpark` | The Go control and service plane: identity, authz, dispatch, routing, gateway, GPU telemetry, KV transfer. A sibling, not a replacement. | Normal git. | `goSpark/USER_MANUAL.md` |
+| `goSpark` | The Go control and service plane: identity, authz, dispatch, routing, gateway, GPU telemetry, KV transfer. A sibling, not a replacement; checked out locally at `gospark/` (its own `.git`, gitignored). | Normal git. | `gospark/USER_MANUAL.md` |
 
 ### 3.1 The rule that explains the layout
 
@@ -160,8 +160,9 @@ itself implements the **compute plane**. The rule (goSpark ADR 0001):
 > Go runs the control and service plane; Python/CUDA runs the compute plane.
 
 The peer guard, the overlay anchor, and the Python/CUDA compute worker stay
-here. goSpark is a sibling repository that consumes the fabric's contracts
-(read-only snapshots of them live in `goSpark/spec/sparknet/`) and drives the
+here. goSpark is a sibling repository, checked out at `gospark/` (its own
+`.git`, gitignored and gated in place), that consumes the fabric's contracts
+(read-only snapshots of them live in `gospark/spec/sparknet/`) and drives the
 node's task dispatch, API gateway and GPU telemetry. The fabric's Python
 services and goSpark's Go services coexist in the same node container; they
 share the NATS bus, not a process.
@@ -607,8 +608,11 @@ which is what makes "self-contained" a checked claim rather than a description.
 
 ### 9.5 goSpark
 
+The checkout lives at `gospark/` in this fabric (a separate Git repository;
+`GOSPARK_DIR` overrides it for the setup script and compose).
+
 ```sh
-cd goSpark
+cd gospark
 make build        # pure-Go binaries into bin/ (CGO_ENABLED=0)
 make build-gpu    # the cgo GPU sidecar (NVML + DCGM)
 make test         # all tests
@@ -691,7 +695,7 @@ make goagx-drift-check # fail if the published goagx repo drifted from this tree
 | The peer role (guard, anchor, bridge, share regime, vault provisioner) | `peer-node/` | `peer-node/AGENTS.md`, `peer-node/USER_MANUAL.md` |
 | The master role (signer, ledger, parity, admin console) | `master-node/` | `master-node/AGENTS.md`, `master-node/USER_MANUAL.md` |
 | The AGX Xavier image surface | `goagx/` | `goagx/README.md`, `goagx/USER_MANUAL.md` |
-| The Go control/service plane (dispatch, routing, gateway, GPU telemetry) | the `goSpark` repository | `goSpark/README.md`, `goSpark/docs/architecture.md`, `goSpark/USER_MANUAL.md` |
+| The Go control/service plane (dispatch, routing, gateway, GPU telemetry) | the `gospark/` checkout | `gospark/README.md`, `gospark/docs/architecture.md`, `gospark/USER_MANUAL.md` |
 | The node image and compose graph | `spark.docker`, `spark.compose.yml` | `contracts/spark-node-runbook.md` |
 | The wiki skill suite | `.opencode/skills/` | `.opencode/skills/README.md` |
 

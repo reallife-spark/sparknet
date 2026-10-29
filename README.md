@@ -21,6 +21,7 @@ Not one node — a fabric with two node roles and a shared contract:
 | `master-node/` | master | **built** (Steps 15–18); runs the peer's services by path; isolated signer deployed on agx64, election/signer arc proven live 2026-10-07 |
 | `scripts/` | both | fabric tooling: skill vendoring, env init, bundling |
 | `goagx/` | both | the AGX Xavier twin of the node image surface (image, compose, audio shim, bootstrap, README) — `sparknet-node-setup.sh --platform spark\|agx` (Step 56); `make goagx-publish` generates the standalone `reallife-spark/goagx` deployment repo (Step 62) |
+| `gospark/` | both | the Go **control and service plane** checkout — a separate Git repository (own `.git`, gitignored, excluded from fabric gates). The node image consumes its built `bin/` through the BuildKit named context `gospark`; build it in place with `make -C gospark build build-gpu`. `GOSPARK_DIR` overrides the default `<fabric-root>/gospark` |
 | `.opencode/skills/` | both | the vendored wiki skill suite (33 skills: 32 vendored + 1 local, MIT) |
 
 **A role subvault alone is not a deployment.** A peer cannot verify a signature
@@ -39,7 +40,7 @@ role's own `AGENTS.md` before working inside it.
 | `peer-node/USER_MANUAL.md` | The peer role: its services, scripts, units, manifests and vault. Published at the root of `sparknet-peer`. |
 | `master-node/USER_MANUAL.md` | The master role: the election arc, the three keys, the isolated signer, the ledger and the admin surface. Published at the root of `sparknet-master`. |
 | `goagx/USER_MANUAL.md` | The AGX Xavier twin: the image, the compose surface, the audio shim, the bootstrap and the publish. Published at `goagx/USER_MANUAL.md`. |
-| `goSpark/USER_MANUAL.md` | The Go control and service plane, in the `goSpark` repository. |
+| `gospark/USER_MANUAL.md` | The Go control and service plane, in the `gospark/` checkout (the `reallife-spark/goSpark` repository). |
 
 ## Quick start
 

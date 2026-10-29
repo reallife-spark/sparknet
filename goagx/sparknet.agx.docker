@@ -27,12 +27,12 @@
 # Build (from the sparknet repo root; same named context as spark.docker):
 #
 #   docker build -f goagx/sparknet.agx.docker \
-#     --build-context gospark=/mnt/knowledge/goSpark \
+#     --build-context gospark=./gospark \
 #     -t sparknet-agx-node:dev .
 #
 # The goSpark binaries must already be built on the host:
 #
-#   make -C /mnt/knowledge/goSpark build build-gpu
+#   make -C gospark build build-gpu
 #
 # This compiles vLLM, xformers and two inference servers from source: expect
 # hours, and build it ON the Xavier (unified memory — a 16 GB Xavier NX wants

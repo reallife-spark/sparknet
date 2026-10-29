@@ -25,7 +25,7 @@
 #
 #   make -C peer-node dist
 #   cp dist/sparknet-peer.tar.gz peer-node/container/context/sparknet-peer.tar.gz
-#   make -C /mnt/knowledge/goSpark build build-gpu
+#   make -C gospark build build-gpu
 #   docker compose -f goagx/sparknet.agx.compose.yml --env-file peer-node/.state/spark-agx.env build
 #   docker compose -f goagx/sparknet.agx.compose.yml --env-file peer-node/.state/spark-agx.env up -d
 #
@@ -64,9 +64,9 @@ x-agx-node: &agx-node
     context: ..
     dockerfile: goagx/sparknet.agx.docker
     additional_contexts:
-      # The host's `make -C goSpark build build-gpu` output. A named context,
+      # The host's `make -C gospark build build-gpu` output. A named context,
       # not a COPY, so the goSpark source never enters this build context.
-      gospark: ${GOSPARK_DIR:-/mnt/knowledge/goSpark}
+      gospark: ${GOSPARK_DIR:-../gospark}
     args:
       L4T_BASE: ${L4T_BASE:-nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3}
       OPENCODE_VERSION: ${OPENCODE_VERSION:-1.18.35}

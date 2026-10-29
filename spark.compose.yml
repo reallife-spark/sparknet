@@ -53,9 +53,9 @@ x-spark-node: &spark-node
     context: .
     dockerfile: spark.docker
     additional_contexts:
-      # The host's `make -C goSpark build build-gpu` output. A named context,
+      # The host's `make -C gospark build build-gpu` output. A named context,
       # not a COPY, so the goSpark source never enters this build context.
-      gospark: ${GOSPARK_DIR:-/mnt/knowledge/goSpark}
+      gospark: ${GOSPARK_DIR:-./gospark}
     args:
       VLLM_BASE: ${VLLM_BASE:-nvcr.io/nvidia/vllm:26.04-py3}
       OPENCODE_VERSION: ${OPENCODE_VERSION:-1.18.35}

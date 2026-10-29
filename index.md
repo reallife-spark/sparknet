@@ -1,6 +1,6 @@
 ---
 title: sparknet Knowledge Index
-updated: 2026-10-23
+updated: 2026-10-29
 ---
 
 # sparknet — Knowledge Index
@@ -32,6 +32,7 @@ This repository is a fabric. Each vault has its own categories and its own
 - [[MEMORY]] — standing-state memory
 - [[log]] — append-only audit trail
 - `sessions/` — per-session agent memory
+- `gospark/` — the Go control and service plane checkout (separate Git repo; its own `AGENTS.md` and `USER_MANUAL.md`)
 
 ## Design proposals
 

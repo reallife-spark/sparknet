@@ -343,6 +343,13 @@ Updated: 2026-10-29
   the device. The AGX `Dockerfile` keeps every `ARG` a stage uses declared
   in-stage (BuildKit predefined values like `TARGETARCH` do **not** inherit
   from a global `ARG` — pinned by `test_agx_node.py` stage-scope check).
+- **The Go control/service plane is checked out at `gospark/`.** It is a
+  separate Git repository (own `.git`, gitignored, excluded from the fabric's
+  layout/lint/format/compose sweeps) whose module path stays
+  `github.com/reallife-spark/goSpark`. Build it in place
+  (`make -C gospark build build-gpu`); node images consume `bin/` through the
+  BuildKit named context `gospark`. Host defaults resolve to
+  `<fabric-root>/gospark` (`GOSPARK_DIR` overrides).
 - **`$SPARKNET_STATE_DIR` resolves outside the vault** (`$XDG_STATE_HOME/
   sparknet/<role>`, else `~/.local/state/...`) for the master; the peer keeps
   `<vault>/.state` on purpose (nothing mounts that vault). `keys-check` fails if
@@ -470,6 +477,14 @@ Updated: 2026-10-29
   on-host and the whole stack passed its battery — but from a **fabric tree,
   not a published-clone**, and on 32/64 GB Orins rather than a 16 GB Xavier.
   The clone-from-published-repo leg and the 16 GB budget leg stay open.
+- **agx32 (master) text vLLM is down since 2026-10-26**: `sparknet-vllm` is
+  `Exited (255)` after 989 restarts; the last failure is
+  `torch.cuda.OutOfMemoryError` plus `Bind for 10.100.0.1:8000 failed: port is
+  already allocated` from a lingering `docker-proxy`. `ollama` holds
+  `gemma4-4b-131k` (3.9 GB VRAM, keepalive `forever`), and the 30 GB unified
+  master cannot start Mistral-7B beside it. Operator decision: unload/stop
+  Ollama (or shorten its keepalive) and clear the stale proxy before starting
+  vLLM. The aux vLLM profiles are intentionally stopped on this host.
 - **Branch protection requiring the `gate` check** — unavailable on this plan
   (needs Pro or a public repo), so no check is enforced as required today;
   revisit if visibility or plan changes. **Live GitHub CI itself is proven**

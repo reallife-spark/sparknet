@@ -2,7 +2,7 @@
 """Emit a synthetic GPU telemetry fixture for goSpark's sim backend.
 
 The fixture matches goSpark's gputel.Snapshot JSON (see
-goSpark/internal/gputel/gputel.go) and lets sparknet-gpu report
+gospark/internal/gputel/gputel.go) and lets sparknet-gpu report
 `available=true` on a host with no NVIDIA driver, so the whole
 sidecar -> NATS -> control -> placement -> metrics path can be exercised
 hardware-free:

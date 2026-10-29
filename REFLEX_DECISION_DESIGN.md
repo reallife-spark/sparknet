@@ -242,9 +242,9 @@ reuses an ordering.
 
 ### 6.2 Intent and input screening
 
-The existing router is deterministic: `goSpark/internal/router/router.go:78`
+The existing router is deterministic: `gospark/internal/router/router.go:78`
 (`Router.Decide`) returns an `EscalationDecision`
-(`goSpark/internal/apiv1/types.go:67`) for `edge`/`dgx`/`cluster`. Ask two
+(`gospark/internal/apiv1/types.go:67`) for `edge`/`dgx`/`cluster`. Ask two
 separate questions, never one compound one:
 
 - `intent.route` (Choice): `local`, `cluster`, `escalate`.
@@ -527,8 +527,8 @@ to need this" and "we never decided" age very differently.
   class, source policy, grant check.
 - `scripts/sparknet-chroma.py:631,653` — the current query path.
 - `scripts/sparknet-rag-corpus.py:84` — the one policy, two allow-lists.
-- `goSpark/internal/router/router.go:78` — the deterministic routing seam.
-- `goSpark/internal/apiv1/types.go:67` — `EscalationDecision`.
+- `gospark/internal/router/router.go:78` — the deterministic routing seam.
+- `gospark/internal/apiv1/types.go:67` — `EscalationDecision`.
 - `scripts/plugins/kde-notify.ts:51,56` — `tool.execute.before`/`permission.ask`
   hook precedent.
 - `master-node/systemd/sparknet-master-signer.service` — the dedicated-unit,

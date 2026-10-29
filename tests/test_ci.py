@@ -28,7 +28,7 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-GOSPARK_ROOT = REPO_ROOT.parent / "goSpark"
+GOSPARK_ROOT = REPO_ROOT / "gospark"
 
 #: A pinned action ref: `owner/repo[/path]@` + a full 40-hex commit SHA.
 #: Moving tags (v4), branches (@main) and abbreviations are all rejected.

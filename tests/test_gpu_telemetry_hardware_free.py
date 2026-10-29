@@ -30,7 +30,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURE_SCRIPT = REPO_ROOT / "scripts" / "make-gpu-fixture.py"
-GOSPARK_DIR = Path(os.environ.get("GOSPARK_DIR", "/mnt/knowledge/goSpark"))
+GOSPARK_DIR = Path(os.environ.get("GOSPARK_DIR", REPO_ROOT / "gospark"))
 GPU_BIN = GOSPARK_DIR / "bin" / "sparknet-gpu"
 
 pytestmark = pytest.mark.integration

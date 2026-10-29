@@ -14,8 +14,9 @@
 # Usage: goagx/bootstrap-agx.sh [options] [sparknet-node-setup.sh args...]
 #
 # Options:
-#   --gospark DIR       goSpark checkout to use (default: .cache/goSpark,
-#                       fetched at the pin; forwarded to the setup script too)
+#   --gospark DIR       goSpark checkout to use (default: ./gospark when it
+#                       exists, else .cache/goSpark fetched at the pin;
+#                       forwarded to the setup script too)
 #   --allow-low-swap    continue even when swap is below the build minimum
 #   --allow-low-disk    continue even when free disk is below the image floor
 #   -h, --help          this text
@@ -46,8 +47,8 @@ bootstrap-agx.sh — bring up a sparknet AGX Xavier node from this repo.
 Usage: goagx/bootstrap-agx.sh [options] [sparknet-node-setup.sh args...]
 
 Options:
-  --gospark DIR       goSpark checkout (default: .cache/goSpark, fetched at
-                      the pin from goagx/GOSPARK_PIN)
+  --gospark DIR       goSpark checkout (default: ./gospark when present, else
+                      .cache/goSpark fetched at the pin from goagx/GOSPARK_PIN)
   --allow-low-swap    continue even when swap < 8 GiB (the source build
                       OOM-kills itself on a 16 GB Xavier without it)
   --allow-low-disk    continue even when free disk < ~25 GB
@@ -138,7 +139,13 @@ fetch_gospark() {
   [ -n "$repo" ] && [ -n "$sha" ] || die "goagx/GOSPARK_PIN is missing GOSPARK_REPO/GOSPARK_SHA"
 
   if [ -z "$GOSPARK_DIR" ]; then
-    GOSPARK_DIR="$ROOT/.cache/goSpark"
+    # A fabric checkout lives at <root>/gospark; a standalone goagx distribution
+    # has no such tree and falls back to the pinned fetch cache.
+    if [ -d "$ROOT/gospark/.git" ]; then
+      GOSPARK_DIR="$ROOT/gospark"
+    else
+      GOSPARK_DIR="$ROOT/.cache/goSpark"
+    fi
   fi
 
   if [ -d "$GOSPARK_DIR/.git" ]; then

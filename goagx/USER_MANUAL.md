@@ -299,11 +299,12 @@ down rather than leaving a half-serving profile.
 ## 9. Bootstrap
 
 `bootstrap-agx.sh` is the device-side entry point. It preflights the
-hardware, fetches goSpark at the pin, builds it, and then hands over to the
+hardware, uses `./gospark` when a fabric checkout is present (otherwise fetches
+goSpark at the pin into `.cache/goSpark`), builds it, and then hands over to the
 fabric's setup script.
 
 ```sh
-./bootstrap-agx.sh                       # preflight + goSpark at the pin, then setup
+./bootstrap-agx.sh                       # preflight + goSpark (or the pin), then setup
 ./bootstrap-agx.sh --gospark DIR         # use an existing goSpark checkout
 ./bootstrap-agx.sh --allow-low-swap      # continue despite < 8 GiB swap
 ./bootstrap-agx.sh --allow-low-disk      # continue despite < ~25 GB free

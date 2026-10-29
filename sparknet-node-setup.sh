@@ -30,7 +30,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NODE_STATE="$REPO/peer-node/.state"
 ENV_FILE="$NODE_STATE/spark.env"
 COMPOSE_FILE="$REPO/spark.compose.yml"
-GOSPARK_DIR="${GOSPARK_DIR:-/mnt/knowledge/goSpark}"
+GOSPARK_DIR="${GOSPARK_DIR:-$REPO/gospark}"
 
 ROLE="${SPARKNET_ROLE:-peer}"
 PROFILES="${SPARK_PROFILES:-}"
@@ -74,7 +74,7 @@ Options:
   --registry FILE      Master-signed node-authorizations registry to adopt; copied
                        into the node state dir and passed to the goSpark agent.
   --no-build           skip the bundle + image build (use the existing image)
-  --gospark DIR        goSpark checkout (default /mnt/knowledge/goSpark)
+  --gospark DIR        goSpark checkout (default <fabric-root>/gospark)
   -h, --help           this text
 EOF
 }

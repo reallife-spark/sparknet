@@ -30,7 +30,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SETUP = REPO_ROOT / "sparknet-node-setup.sh"
 ENTRYPOINT = REPO_ROOT / "spark-entrypoint.sh"
-GOSPARK_DIR = Path(os.environ.get("GOSPARK_DIR", "/mnt/knowledge/goSpark"))
+GOSPARK_DIR = Path(os.environ.get("GOSPARK_DIR", REPO_ROOT / "gospark"))
 CTL = GOSPARK_DIR / "bin" / "sparknetctl"
 
 pytestmark = pytest.mark.integration

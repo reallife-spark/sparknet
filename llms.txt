@@ -14,7 +14,8 @@ five repositories, the architecture, the authority model, the contracts, the
 node image, the vault, every gate, and how to change something without
 breaking the fabric. The role manuals are `peer-node/USER_MANUAL.md` and
 `master-node/USER_MANUAL.md`; the AGX manual is `goagx/USER_MANUAL.md`; the
-Go control plane's manual is `USER_MANUAL.md` in the `goSpark` repository.
+Go control plane's manual is `gospark/USER_MANUAL.md` (a separate Git checkout
+at `gospark/`, gitignored and gated in place).
 
 ## Contracts and shared code
 
