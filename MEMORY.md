@@ -318,6 +318,12 @@ Updated: 2026-10-29
   a full-tree release; fixes go into the fabric and get republished. Its root
   README/manifest carry the pinned sparknet SHA, the goSpark pin
   (`goagx/GOSPARK_PIN`) and the image ARG pins.
+- **The goSpark pin is `91a6ef9` (2026-10-29).** It carries the
+  context-propagation fix: NATS handler contexts inherit the subscriber's
+  context, the agent uses it for the post-adoption health re-publish and the
+  signed result publish, and the control plane uses the signal context for both
+  dispatch paths. The commit was pushed to `goSpark` (`0a6da00..91a6ef9`)
+  before the pin bump; `VERSIONS.json` records it.
 - **The local vector index is derived state, and it is stamped.** The corpus
   in the vault is the source of truth; the index under `.state/chroma/` is
   rebuilt from it, never patched. The collection carries

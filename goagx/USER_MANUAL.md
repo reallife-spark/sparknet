@@ -345,7 +345,7 @@ distribution builds against. It carries two values:
 
 ```
 GOSPARK_REPO=https://github.com/reallife-spark/goSpark.git
-GOSPARK_SHA=0a6da00d77efcc539e1199459b1deacf4985a4aa
+GOSPARK_SHA=91a6ef9ad28a0f4daa3a33eb1e80a026274125fa
 ```
 
 Consumed by:
