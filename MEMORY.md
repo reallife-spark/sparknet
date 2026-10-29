@@ -477,14 +477,17 @@ Updated: 2026-10-29
   on-host and the whole stack passed its battery — but from a **fabric tree,
   not a published-clone**, and on 32/64 GB Orins rather than a 16 GB Xavier.
   The clone-from-published-repo leg and the 16 GB budget leg stay open.
-- **agx32 (master) text vLLM is down since 2026-10-26**: `sparknet-vllm` is
-  `Exited (255)` after 989 restarts; the last failure is
-  `torch.cuda.OutOfMemoryError` plus `Bind for 10.100.0.1:8000 failed: port is
-  already allocated` from a lingering `docker-proxy`. `ollama` holds
-  `gemma4-4b-131k` (3.9 GB VRAM, keepalive `forever`), and the 30 GB unified
-  master cannot start Mistral-7B beside it. Operator decision: unload/stop
-  Ollama (or shorten its keepalive) and clear the stale proxy before starting
-  vLLM. The aux vLLM profiles are intentionally stopped on this host.
+- **agx32 (master) text vLLM is stopped deliberately (contained 2026-10-29).**
+  It had been crash-looping since 2026-10-26 (`Exited (255)`, 989 restarts):
+  `torch.cuda.OutOfMemoryError` plus a stale `docker-proxy` on
+  `10.100.0.1:8000`. Stopping the loop released the port and recovered memory
+  (26 GiB used → 15 GiB used, 14 GiB available). It was **not** restarted:
+  `ollama` (raxxar `infra` compose) holds `gemma4-4b-131k` at 131k context
+  (9.2 GiB RSS, keepalive forever), and Mistral-7B cannot load beside it
+  without risking the OOM killer taking raxxar services. `agx64`'s vLLM is the
+  fabric inference path and answers `200` over the overlay from agx32.
+  Restarting vLLM on agx32 requires unloading Ollama, shortening its context,
+  or using a smaller model. The aux vLLM profiles stay stopped on this host.
 - **Branch protection requiring the `gate` check** — unavailable on this plan
   (needs Pro or a public repo), so no check is enforced as required today;
   revisit if visibility or plan changes. **Live GitHub CI itself is proven**
