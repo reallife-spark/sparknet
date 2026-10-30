@@ -143,7 +143,8 @@ below are measured, not estimated.
 Image facts that hold on both: vLLM 0.2.7, torch
 `2.0.0a0+ec3941ad.nv23.02`, transformers 4.37.2, xformers 0.0.20, jinja2
 3.1.6, whisper.cpp 1.9.5, llama.cpp 0.7.0, goSpark `f547751`, goagx
-`5cfe888`.
+`5cfe888`. These are the revisions **at measurement time**, not the current
+pins; `GOSPARK_PIN` and `VERSIONS.json` carry the current ones.
 
 Four findings that change how the node is run:
 

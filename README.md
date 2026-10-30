@@ -15,10 +15,10 @@ Not one node — a fabric with two node roles and a shared contract:
 
 | Path | Role | State |
 |---|---|---|
-| `contracts/` | both | overlay, capabilities, identity, ports, guard protocol — the single source of truth |
+| `contracts/` | both | overlay, capabilities, identity, ports, registry publication, and the guard / share / consensus / health / provenance / proposal / reflex / telemetry / RFI protocols — the single source of truth |
 | `shared/` | both | `sparknet-authz.py`, the one canonical signing implementation |
 | `peer-node/` | peer | **implemented** — guard, anchor, dispatch, its own vault |
-| `master-node/` | master | **built** (Steps 15–18); runs the peer's services by path; isolated signer deployed on agx64, election/signer arc proven live 2026-10-07 |
+| `master-node/` | master | **built** (Steps 15–18) and live: runs the peer's services by path; the election/signer arc was proven on 2026-10-07 and re-formed 2/2 on 2026-10-19 with **agx32** as the Master |
 | `scripts/` | both | fabric tooling: skill vendoring, env init, bundling |
 | `goagx/` | both | the AGX Xavier twin of the node image surface (image, compose, audio shim, bootstrap, README) — `sparknet-node-setup.sh --platform spark\|agx` (Step 56); `make goagx-publish` generates the standalone `reallife-spark/goagx` deployment repo (Step 62) |
 | `gospark/` | both | the Go **control and service plane** checkout — a separate Git repository (own `.git`, gitignored, excluded from fabric gates). The node image consumes its built `bin/` through the BuildKit named context `gospark`; build it in place with `make -C gospark build build-gpu`. `GOSPARK_DIR` overrides the default `<fabric-root>/gospark` |
@@ -104,7 +104,7 @@ Details in `peer-node/docs/`, starting with `wireguard.md` and
 `node-authorization.md`.
 
 > **Verified live on agx64+agx32 (2026-10-07):** unanimous 2/2 election formed; `sparknet-master-signer.service` active and restart-stable; signed registry entry distributed to a peer and verified by the root alone; revoke→peer-inert→re-authorize cycle executed live one-peer-at-a-time; reboot survival on agx64 (signer unit comes back, ledger intact, peer auth still verifies); overlay handshakes + ICMP ping ~2 ms 0% loss over real NICs via the gateway UDP relay.
-> **Designed but undemonstrated on a dev host:** kernel WireGuard path (`CONFIG_WIREGUARD=n` here; the deployed nodes use userspace `wireguard-go` via their enabled anchor units); `iptables` containment rules; `chattr +i` enforcement of protected paths; `guard-apply` with euid 0 and `--apply-enabled` (required, off by default). Phase 9's destructive legs (rollback / replace-Master re-formation) remain documented-but-unexecuted at operator choice.
+> **Not demonstrated on a dev host, by design:** kernel WireGuard path (`CONFIG_WIREGUARD=n` here; the deployed nodes use userspace `wireguard-go` via their enabled anchor units); live KillSwitch containment on a real Master (the iptables implementation and its fake-runner tests are complete; the destructive run is operator-only); `chattr +i` enforcement of protected paths; `guard-apply` with euid 0 and `--apply-enabled` (required, off by default). Phase 9's destructive legs (rollback / replace-Master re-formation) remain documented-but-unexecuted at operator choice.
 
 ## Configuration in `/etc`
 
