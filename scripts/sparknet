@@ -52,6 +52,16 @@ EOF
 
 _dry() { [ "${SPARKNET_DRY:-}" = "1" ]; }
 
+# no_extra — reject arguments a command does not take. Silently ignoring them is
+# how `sparknet validate --suites peer` would look like it narrowed the run when
+# it did not.
+no_extra() {
+  if [ "$#" -gt 0 ]; then
+    printf 'sparknet: unexpected argument: %s\n' "$1" >&2
+    exit 2
+  fi
+}
+
 # run_make <target> [make args…] — exec the target, or print it under SPARKNET_DRY.
 run_make() {
   if _dry; then
@@ -69,24 +79,26 @@ shift
 
 case "$cmd" in
   version)
+    no_extra "$@"
     if _dry; then printf 'cat %s\n' "$ROOT/VERSION"; exit 0; fi
     exec cat "$ROOT/VERSION" ;;
-  validate)     run_make validate ;;
-  test)         run_make test-all ;;
-  contract-test) run_make contract-test ;;
-  lint)         run_make lint ;;
-  format-check) run_make format-check ;;
-  render)       run_make render ;;
-  render-check) run_make render-check ;;
-  drift-check)  run_make drift-check ;;
-  sbom)         run_make sbom ;;
-  sbom-check)   run_make sbom-check ;;
-  keys-check)   run_make keys-check ;;
-  shims-check)  run_make shims-check ;;
-  wiki-verify)  run_make wiki-verify ;;
-  layout)       run_make layout ;;
+  validate)     no_extra "$@"; run_make validate ;;
+  test)         no_extra "$@"; run_make test-all ;;
+  contract-test) no_extra "$@"; run_make contract-test ;;
+  lint)         no_extra "$@"; run_make lint ;;
+  format-check) no_extra "$@"; run_make format-check ;;
+  render)       no_extra "$@"; run_make render ;;
+  render-check) no_extra "$@"; run_make render-check ;;
+  drift-check)  no_extra "$@"; run_make drift-check ;;
+  sbom)         no_extra "$@"; run_make sbom ;;
+  sbom-check)   no_extra "$@"; run_make sbom-check ;;
+  keys-check)   no_extra "$@"; run_make keys-check ;;
+  shims-check)  no_extra "$@"; run_make shims-check ;;
+  wiki-verify)  no_extra "$@"; run_make wiki-verify ;;
+  layout)       no_extra "$@"; run_make layout ;;
   bundle)
     role="${1:-}"
+    [ "$#" -le 1 ] || { printf 'sparknet: unexpected argument: %s\n' "$2" >&2; exit 2; }
     case "$role" in
       peer|master) ;;
       *) printf 'sparknet: bundle needs a role: peer|master\n' >&2; exit 2 ;;

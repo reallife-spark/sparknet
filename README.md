@@ -53,6 +53,8 @@ make env-init      # write each vault's .env and category skeleton
 make test-all      # every suite: contract, fabric, peer, master
 make contract-test # the cross-role check alone: contracts/ vs both roles
 make validate      # both roles' charters, plans and manifests
+make sbom          # regenerate sbom/sparknet.cdx.json (CycloneDX release surface)
+scripts/sparknet version   # the unified CLI over these make targets
 ```
 
 Then pick a role and work inside it:
@@ -74,7 +76,10 @@ make bundle ROLE=master         # vault + peer parity; ships peer-node/ because 
 ```
 
 A bundle carries the role, `contracts/`, `shared/`, `scripts/`, the base skill
-suite, the role-local sellable catalog and `opencode.json`. Verification runs
+suite, the role-local sellable catalog, `opencode.json`, and the release data
+(`VERSION` + `sbom/sparknet.cdx.json`). The `sparknet` CLI and the SBOM generator
+are fabric-root tools and are deliberately **not** bundled: a node has no root
+Makefile, so shipping them would ship a command that cannot run. Verification runs
 `env-init`, the wiki preflight, the role skill manifest check, role validation
 and that role's test suite **from the extracted copy**, at a different path —
 which is what makes "self-contained" a checked claim rather than a description.

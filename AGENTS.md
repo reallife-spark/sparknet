@@ -74,19 +74,21 @@ ch role can do |
 | `make validate` | both roles' charters, plans and manifests |
 | `make test-all` | **every** suite: contract, fabric, peer, master |
 | `make contract-test` | the peer still matches `contracts/` |
-| `make ci` / `make ci CI_QUICK=1` | the local pre-merge gate (`scripts/pre-merge-gate.sh`): keys, shims, lint, format-check, shellcheck, validate, contract-test, render-check; `CI_QUICK=1` skips the full suite. **Authoritative** — the SHA-pinned GitHub Actions in `.github/workflows/` run the same script as a mirror |
+| `make ci` / `make ci CI_QUICK=1` | the local pre-merge gate (`scripts/pre-merge-gate.sh`): keys, shims, lint, format-check, shellcheck, validate, contract-test, render-check, sbom-check; `CI_QUICK=1` skips the full suite. **Authoritative** — the SHA-pinned GitHub Actions in `.github/workflows/` run the same script as a mirror |
 | `make format-check` / `make shellcheck` | incremental `ruff format --check` (new files only) / shellcheck gate — **required**: provisions the pinned binary into `.cache/tools/` when it is not on `PATH` |
 | `make lint` | blocking ruff over the whole fabric: `E,F,I,UP` plus `B,SIM,RUF,S` (bugbear/simplify/bandit; the widened set became the gate in PLAN Step 49) — `make lint-strict` is an alias |
 | `make test-report SCOPE=fabric\|peer\|master\|all` | JUnit XML + `.state/reports/summary.json` |
 | `make render` / `make render-check` | regenerate `contracts/manifest.json` from the contract SSOT / fail if it is stale |
+| `make sbom` / `make sbom-check` | regenerate `sbom/sparknet.cdx.json` (CycloneDX: `VERSION`, `cryptography`, every vendored skill by tree hash, role catalogs) / fail if it is stale |
+| `scripts/sparknet <cmd>` | unified CLI over the make targets (`version`, `validate`, `test`, `render`, `sbom`, `bundle peer`, …); `SPARKNET_DRY=1` prints the make invocation instead of running it |
 | `make nv-search q="…"` | **resource-first**: look in NVIDIA's catalog before building our own (`scripts/sparknet-nv-search.sh --help`); see `references/nvidia-build-catalog.md` |
 | `make drift-check` | fail if anything *derived* drifted: `render-check` + `sbom-check` + `wiki-verify` + `role-skills-check` + `contract-test` + goagx |
 | `make wiki-sync` / `make wiki-verify` | re-vendor the wiki suite / prove no drift |
 | `make wiki-preflight` | prove the skills resolve *this* vault |
 | `make role-skills-check` | verify both role-local catalogs, licenses and removal list |
 | `make tui` | launch the TUI from the fabric root **with** KDE notifications (`OPENCODE_CONFIG=…kde-notif.opencode.json`) — roles launch plugin-free with plain `opencode` |
-| `make bundle ROLE=peer\|master` | build a standalone node bundle in `dist/` |
-| `make bundle-verify ROLE=…` | extract it elsewhere and prove it runs |
+| `make bundle ROLE=peer\|master` | build a standalone node bundle in `dist/` — ships `VERSION` + `sbom/` as data; the `sparknet` CLI and SBOM generator stay fabric-root-local |
+| `make bundle-verify ROLE=…` | extract it elsewhere and prove it runs (including the release-data/tool-absence rule) |
 | `make keys-check` | no key-shaped names or PEM blocks tracked; `.state/keys/` and `.state/secrets/` at 0600 (dirs 0700) |
 | `make shims-check` | every legacy name in `peer-node/` and `master-node/` is still a symlink |
 | `make hooks` | point this clone at `.githooks/` so commits run `keys-check` |

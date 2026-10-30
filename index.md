@@ -1,6 +1,6 @@
 ---
 title: sparknet Knowledge Index
-updated: 2026-10-29
+updated: 2026-10-30
 ---
 
 # sparknet — Knowledge Index
@@ -167,5 +167,8 @@ The unified `scripts/sparknet` CLI routes each command to its `make` target
 | Path | Holds |
 |---|---|
 | `VERSION` | the fabric version — the single source of truth for `pyproject.toml` and the SBOM |
-| `sbom/sparknet.cdx.json` | generated CycloneDX SBOM (`make sbom`; `make sbom-check` gates drift) |
+| `sbom/sparknet.cdx.json` | generated CycloneDX SBOM (`make sbom`; `make sbom-check` gates drift) — per-skill tree hashes and the license each component actually carries (`skill-creator` is Apache-2.0; the repo itself is `NOASSERTION` until C1) |
 | `scripts/sparknet-sbom.py` | the deterministic SBOM generator (mirrors `scripts/sparknet-render.py`) |
+
+Node bundles ship `VERSION` and `sbom/` as data; the CLI and generator stay
+fabric-root-local because a node has no root `Makefile`.

@@ -133,8 +133,10 @@ Updated: 2026-10-29
   `published_at`, signs that projection plus the registry digest, and writes
   `<out>/current.json`; `make registry-deliver` POSTs it to each peer's
   `9090/api/v1/registry`. The sequence is inside the signature, so an old
-  un-revoked registry cannot be replayed (`409 stale_publication`), and the
-  route is not gated on the peer's `guard-apply` — a revocation must reach the
+  un-revoked registry cannot be replayed (`409 stale_publication`); a lower
+  sequence is a rollback, while re-delivering the exact installed publication
+  (equal sequence and digest) is an idempotent no-op so the timer stays green.
+  The route is not gated on the peer's `guard-apply` — a revocation must reach the
   node it revokes. The acceptance rule lives once, in
   `../shared/sparknet-registry-install.py`, because the live guard and the
   offline `registry-fetch` path must agree; the publisher checks its own output

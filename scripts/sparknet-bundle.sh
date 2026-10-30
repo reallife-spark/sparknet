@@ -132,6 +132,16 @@ verify_bundle() {
   step "opencode config present"
   [ -f "$root/opencode.json" ] && ok "opencode.json" || bad "opencode.json missing"
 
+  step "release surface: data present, fabric-root tools absent"
+  [ -f "$root/VERSION" ] && ok "VERSION $(cat "$root/VERSION")" || bad "VERSION missing"
+  [ -f "$root/sbom/sparknet.cdx.json" ] && ok "SBOM present" || bad "sbom/sparknet.cdx.json missing"
+  for tool in sparknet sparknet-sbom.py; do
+    [ ! -e "$root/scripts/$tool" ] && ok "scripts/$tool absent as expected" \
+      || bad "scripts/$tool must not be bundled"
+  done
+  [ ! -e "$root/scripts/plugins" ] && ok "scripts/plugins absent as expected" \
+    || bad "scripts/plugins must not be bundled"
+
   step "no secrets in the archive"
   # Assembled from fragments so this scanner does not match its own source,
   # which would otherwise flag itself as a leak on every run.
@@ -308,6 +318,17 @@ role_dir="$REPO_ROOT/$role-node"
 [ -d "$SKILLS_DIR" ] || die "vendored skills missing: $SKILLS_DIR (run make wiki-sync)"
 [ -d "$AGENTS_DIR" ] || die "role agents missing: $AGENTS_DIR (docs name .opencode/agents/, plural)"
 
+# A worktree bundle ships the working tree's SBOM as data, so a stale one would
+# be a false statement about what is inside the archive. Fail closed before we
+# stage anything. (A --from-git bundle reads VERSION and the SBOM from the ref
+# itself; consistency there is what the pre-merge gate checks before commit.)
+if [ -z "$from_git" ]; then
+  sbom_py="python3"
+  [ -x "$REPO_ROOT/.venv/bin/python" ] && sbom_py="$REPO_ROOT/.venv/bin/python"
+  "$sbom_py" "$REPO_ROOT/scripts/sparknet-sbom.py" --check >/dev/null 2>&1 \
+    || die "the SBOM is stale — run make sbom before bundling"
+fi
+
 # Excluded from the working-tree copy. `.opencode/node_modules` matters most:
 # it is a multi-megabyte dependency tree with nothing to do with the vault.
 # `.env` is excluded on purpose: it is gitignored, machine-local, and its
@@ -320,8 +341,25 @@ EXCLUDES=(
   --exclude=.git --exclude=.venv --exclude=dist --exclude=.state --exclude=.cache
   --exclude=__pycache__ --exclude=.pytest_cache --exclude=.ruff_cache
   --exclude=node_modules --exclude=.opencode/node_modules
-  --exclude='*.pyc' --exclude='.trash' --exclude='.env'
+  --exclude='*.pyc' --exclude='.trash' --exclude=.env
 )
+
+# Fabric-root-local tools that must NOT ship. Both assume a repo root with a
+# root Makefile and/or VERSION, which a node bundle deliberately does not have
+# (the bundle root carries only the role, contracts, shared, scripts, the
+# release data and opencode.json). Shipping them would hand a node a command
+# that exits "no makefile found" or "VERSION is missing" — worse than absent,
+# because it looks like a supported surface. The release *data* does ship.
+EXCLUDE_SCRIPT_FILES=(sparknet sparknet-sbom.py)
+# Desktop-only plugin surface: fabric-root sessions only (see BUNDLE.md).
+EXCLUDE_SCRIPT_DIRS=(plugins)
+
+prune_fabric_only_tools() {  # <bundle-root>
+  local root="$1" name
+  for name in "${EXCLUDE_SCRIPT_FILES[@]}"; do rm -f "$root/scripts/$name"; done
+  for name in "${EXCLUDE_SCRIPT_DIRS[@]}"; do rm -rf "$root/scripts/$name"; done
+}
+
 
 stamp="$(date +%Y%m%d-%H%M%S)"
 tree_label="worktree"
@@ -354,6 +392,13 @@ if [ -n "$from_git" ]; then
   done
   cp "$REPO_ROOT/opencode.json" "$target/opencode.json"
   cp "$REPO_ROOT/requirements.txt" "$target/requirements.txt"
+  # Release data comes from the same ref, not the working tree: a from-git
+  # bundle must describe exactly the commit it names.
+  mkdir -p "$target/sbom"
+  git -C "$REPO_ROOT" show "$from_git:VERSION" > "$target/VERSION" \
+    || die "VERSION is missing at $from_git (commit the release surface)"
+  git -C "$REPO_ROOT" show "$from_git:sbom/sparknet.cdx.json" > "$target/sbom/sparknet.cdx.json" \
+    || die "sbom/sparknet.cdx.json is missing at $from_git (run make sbom and commit it)"
 else
   if [ -n "$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null || true)" ]; then
     printf 'WARNING: working tree is dirty — the bundle includes uncommitted work.\n'
@@ -374,16 +419,25 @@ else
   rsync -a "${EXCLUDES[@]}" "$AGENTS_DIR/" "$target/.opencode/agents/"
   cp "$REPO_ROOT/opencode.json" "$target/opencode.json"
   cp "$REPO_ROOT/requirements.txt" "$target/requirements.txt"
+  cp "$REPO_ROOT/VERSION" "$target/VERSION"
+  mkdir -p "$target/sbom"
+  cp "$REPO_ROOT/sbom/sparknet.cdx.json" "$target/sbom/sparknet.cdx.json"
   printf '  copied   .opencode/skills (%s skills), .opencode/agents (%s agents)\n' \
     "$(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d | wc -l)" \
     "$(find "$AGENTS_DIR" -mindepth 1 -maxdepth 1 -name '*.md' | wc -l)"
 fi
+
+# Fabric-root tools and the desktop plugin are pruned in both build paths, so
+# the bundle contains exactly what a node can run.
+prune_fabric_only_tools "$target"
+
 
 # --- the bundle's own manifest ------------------------------------------------
 {
   printf '# sparknet %s bundle\n\n' "$role"
   printf 'Assembled by `scripts/sparknet-bundle.sh` from %s.\n\n' \
     "$( [ -n "$from_git" ] && printf '`%s`' "$from_git" || printf 'the working tree (uncommitted work included)')"
+  printf 'Version: `%s`\n\n' "$(cat "$target/VERSION")"
   cat <<'EOF'
 ## What is in here
 
@@ -396,8 +450,11 @@ fi
 | `<role>-node/.opencode/skills/` | the role-local sellable catalog (90 peer / 1,652 master) with `.inventory.json` |
 | `.opencode/agents/`      | the role-aware agents (built-ins + vendored) — `catalog`, `chart`, sparknet-node, vault, chat |
 | `scripts/plugins/kde-notify.*` | intentionally **not** bundled; KDE Connect desktop notifications are fabric-root-local only (`.opencode/plugin/*` was never created; notifications are injected via `OPENCODE_CONFIG` at the root) |
+| `scripts/sparknet`, `scripts/sparknet-sbom.py` | intentionally **not** bundled — fabric-root tools that assume a root Makefile; a node cannot run them. The release data below ships instead |
 | `opencode.json` | registers the skills and agent with opencode |
 | `requirements.txt` | `cryptography`, the only runtime dependency |
+| `VERSION` | the fabric version this bundle was built from |
+| `sbom/sparknet.cdx.json` | the generated CycloneDX SBOM for that version |
 
 `contracts/`, `shared/` and `.opencode/` are not optional extras. A copy of the
 role directory on its own fails validation on purpose: the role cannot verify a

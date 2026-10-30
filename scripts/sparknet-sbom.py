@@ -13,8 +13,9 @@ puts the answer in one generated, machine-readable place — ``sbom/sparknet.cdx
 Two consequences worth holding onto:
 
 1. **It is generated, never hand-edited.** ``--check`` fails when ``VERSION``,
-   the runtime dependency or the vendored skill suite changed without the SBOM
-   being regenerated. That is the drift gate: edit one of them, run ``make sbom``.
+   the runtime dependency, the vendored skill suite or a role catalog changed
+   without the SBOM being regenerated. That is the drift gate: edit one of
+   them, run ``make sbom``.
 2. **Determinism is the contract.** No timestamp, no hostname, and a stable
    component order — the same inputs always render byte-identical output, so
    ``--check`` compares text rather than trying to understand it. The CycloneDX
@@ -26,11 +27,19 @@ What goes in it
 The SBOM is deliberately small and honest, because sparknet is not a package
 with a lockfile:
 
-* the **application** — ``sparknet`` at the version in ``VERSION``;
+* the **application** — ``sparknet`` at the version in ``VERSION``. Its license
+  is ``NOASSERTION`` until C1 chooses one, which is a fact, not an omission;
 * its one **runtime dependency** — ``cryptography`` at the *declared* constraint
   from ``requirements.txt`` (there is no lockfile, so pinning a concrete version
   would be a lie);
-* the **vendored wiki skill suite** — one component per skill, hashed, MIT.
+* the **vendored wiki skill suite** — one component per skill, with a hash over
+  the **whole skill directory** (not just ``SKILL.md``, so a changed reference
+  file is drift) and the license the skill actually carries. The suite is MIT,
+  but ``skill-creator`` ships its own Apache-2.0 ``LICENSE.txt``; a local skill
+  has no grant while C1 is deferred and is recorded as ``NOASSERTION``;
+* the **role-local catalogs** — one component per catalog, pinned by the hash of
+  its ``.inventory.json`` (which already records per-skill hashes, licenses and
+  provenance, so the SBOM stays small and still detects drift).
 
 Usage::
 
@@ -56,7 +65,7 @@ DEFAULT_OUT = Path("sbom") / "sparknet.cdx.json"
 SPEC_VERSION = "1.5"
 
 #: Bumped only if this document's own shape changes.
-SBOM_SCHEMA_VERSION = "1.0"
+SBOM_SCHEMA_VERSION = "1.1"
 
 #: The one runtime dependency, read from requirements.txt rather than hardcoded
 #: so the SBOM cannot silently disagree with what `make bundle` installs.
@@ -66,8 +75,24 @@ RUNTIME_DEPENDENCY = "cryptography"
 SKILLS_DIR = ".opencode/skills"
 SKILL_MARKER = "SKILL.md"
 
-#: The vendored suite's license, as recorded in .opencode/skills/README.md.
-VENDORED_SKILL_LICENSE = "MIT"
+#: Files a skill may carry to declare its own license. ``skill-creator`` is the
+#: case that made this list necessary: it ships Apache-2.0, not the suite MIT.
+SKILL_LICENSE_FILES = ("LICENSE", "LICENSE.txt", "LICENSE.md", "LICENSE.rst", "COPYING")
+
+#: The suite fallback, from ``.opencode/skills/LICENSE`` (MIT, © Ar9av).
+SUITE_LICENSE = "MIT"
+
+#: Skills authored in-repo rather than vendored. Mirrors ``LOCAL_SKILLS`` in
+#: ``scripts/sync-wiki-skills.py`` (the authoritative list) and is drift-gated by
+#: ``tests/test_release.py``. A local skill has no upstream license grant, so
+#: until C1 chooses a repo license the honest value is NOASSERTION.
+LOCAL_SKILLS = frozenset({"wiki-audit"})
+
+#: SPDX's "no assertion" value, used where a license is genuinely undecided.
+NOASSERTION = "NOASSERTION"
+
+#: Build noise that must not move a skill's tree hash.
+SKILL_TREE_SKIP_PARTS = {"__pycache__", ".git"}
 
 #: Role-local catalogs. Each is represented by its manifest hash rather than
 #: one component per skill: the manifest already records per-skill hashes,
@@ -89,6 +114,66 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(65536), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _tree_sha256(root: Path) -> str:
+    """Return a deterministic tree hash: sorted relative path + file hash.
+
+    Hashing only ``SKILL.md`` would miss a changed ``references/`` file or
+    ``LICENSE.txt``, which is exactly the kind of drift a bill of materials is
+    supposed to detect. Directory order is sorted by POSIX relative path and
+    build noise (``__pycache__``, ``*.pyc``) is excluded, so the digest is stable
+    across machines and runs.
+    """
+    digest = hashlib.sha256()
+    for path in sorted(root.rglob("*"), key=lambda p: p.relative_to(root).as_posix()):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(root)
+        if SKILL_TREE_SKIP_PARTS & set(rel.parts) or path.suffix == ".pyc":
+            continue
+        digest.update(rel.as_posix().encode("utf-8") + b"\0")
+        digest.update(sha256_file(path).encode("ascii") + b"\n")
+    return digest.hexdigest()
+
+
+def _spdx_from_text(text: str) -> str:
+    """Best-effort SPDX identifier for a license file, or NOASSERTION.
+
+    Deliberately small: the vendored suite is MIT plus the one Apache-2.0
+    outlier, and an unrecognised license must be reported as NOASSERTION rather
+    than guessed. Apache is checked first because its text also contains the
+    permissive grant phrasing used by MIT.
+    """
+    low = text.lower()
+    if "apache license" in low and "version 2.0" in low:
+        return "Apache-2.0"
+    if "mit license" in low or "permission is hereby granted, free of charge" in low:
+        return "MIT"
+    if "bsd 3-clause" in low or "redistribution and use in source and binary forms" in low:
+        return "BSD-3-Clause"
+    if "isc license" in low:
+        return "ISC"
+    if "cc0" in low or "creative commons zero" in low:
+        return "CC0-1.0"
+    if "the unlicense" in low:
+        return "Unlicense"
+    return NOASSERTION
+
+
+def _skill_license(skill_dir: Path, name: str) -> tuple[str, str]:
+    """Return ``(spdx, source)`` for one skill.
+
+    A skill's own license file wins; a local (in-repo) skill has no grant until
+    C1 chooses one; every other vendored skill falls back to the suite license.
+    """
+    for candidate in SKILL_LICENSE_FILES:
+        path = skill_dir / candidate
+        if path.is_file():
+            return _spdx_from_text(path.read_text(encoding="utf-8", errors="replace")), f"skill {candidate}"
+    if name in LOCAL_SKILLS:
+        return NOASSERTION, "local skill (repo license deferred)"
+    return SUITE_LICENSE, "suite LICENSE"
 
 
 def _read_version(root: Path) -> str:
@@ -122,7 +207,7 @@ def _read_dependency_constraint(root: Path, name: str) -> str:
 
 
 def _vendored_skills(root: Path) -> list[dict]:
-    """Return the vendored skills, sorted by name, each with a SKILL.md hash."""
+    """Return the vendored skills, sorted by name, each with a tree hash and license."""
     skills_dir = root / SKILLS_DIR
     if not skills_dir.is_dir():
         raise ValueError(f"{skills_dir} is missing (run make wiki-sync)")
@@ -131,11 +216,15 @@ def _vendored_skills(root: Path) -> list[dict]:
         marker = entry / SKILL_MARKER
         if not (entry.is_dir() and marker.is_file()):
             continue
+        license_id, license_source = _skill_license(entry, entry.name)
         skills.append(
             {
                 "name": entry.name,
-                "path": f"{SKILLS_DIR}/{entry.name}/{SKILL_MARKER}",
-                "sha256": sha256_file(marker),
+                "path": f"{SKILLS_DIR}/{entry.name}",
+                "entrypoint": f"{SKILLS_DIR}/{entry.name}/{SKILL_MARKER}",
+                "sha256": _tree_sha256(entry),
+                "license": license_id,
+                "license_source": license_source,
             }
         )
     if not skills:
@@ -148,13 +237,26 @@ def _role_catalog(root: Path, role: str) -> dict:
     manifest = path / ".inventory.json"
     if not manifest.is_file():
         raise ValueError(f"{manifest} is missing (run make role-skills)")
-    data = json.loads(manifest.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        count = data["counts"]["skills"]
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise ValueError(f"{manifest}: missing counts.skills") from exc
+    if not isinstance(count, int) or count < 0:
+        raise ValueError(f"{manifest}: counts.skills is not a non-negative integer")
     return {
         "role": role,
         "path": f"{ROLE_CATALOGS[role]}/.inventory.json",
-        "count": data["counts"]["skills"],
+        "count": count,
         "sha256": sha256_file(manifest),
     }
+
+
+def _license_choice(license_id: str) -> list[dict]:
+    """Render an SPDX id as CycloneDX ``licenses``; NOASSERTION is an expression."""
+    if license_id == NOASSERTION:
+        return [{"expression": NOASSERTION}]
+    return [{"license": {"id": license_id}}]
 
 
 def _role_component(catalog: dict) -> dict:
@@ -191,10 +293,14 @@ def _skill_component(skill: dict) -> dict:
         "type": "data",
         "bom-ref": f"vendored-wiki-skill:{skill['name']}",
         "name": skill["name"],
+        "licenses": _license_choice(skill["license"]),
         "properties": [
             {"name": "sparknet:kind", "value": "vendored-wiki-skill"},
             {"name": "sparknet:path", "value": skill["path"]},
-            {"name": "sparknet:license", "value": VENDORED_SKILL_LICENSE},
+            {"name": "sparknet:entrypoint", "value": skill["entrypoint"]},
+            {"name": "sparknet:hash-scope", "value": "tree"},
+            {"name": "sparknet:license", "value": skill["license"]},
+            {"name": "sparknet:license-source", "value": skill["license_source"]},
         ],
         "hashes": [{"alg": "SHA-256", "content": skill["sha256"]}],
     }
@@ -203,9 +309,9 @@ def _skill_component(skill: dict) -> dict:
 def build(root: Path) -> dict:
     """Return the SBOM dict rendered from the fabric at ``root``.
 
-    Pure and deterministic: reads ``VERSION``, ``requirements.txt`` and the
-    vendored skill suite, and assembles a fixed component list. Raises
-    ``ValueError`` on an unreadable input so the caller can fail closed.
+    Pure and deterministic: reads ``VERSION``, ``requirements.txt``, the vendored
+    skill suite and the two role catalogs, and assembles a fixed component list.
+    Raises ``ValueError`` on an unreadable input so the caller can fail closed.
     """
     version = _read_version(root)
     constraint = _read_dependency_constraint(root, RUNTIME_DEPENDENCY)
@@ -228,6 +334,7 @@ def build(root: Path) -> dict:
                 "name": "sparknet",
                 "version": version,
                 "description": "The sparknet fabric: cross-role contracts, a peer node and an elected signing master.",
+                "licenses": _license_choice(NOASSERTION),
             },
             "tools": [
                 {
@@ -275,9 +382,9 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         if out.read_text(encoding="utf-8") != text:
             print(
-                f"sparknet-sbom: {out} is stale — VERSION, requirements.txt or the "
-                f"vendored skills changed without the SBOM being regenerated. "
-                f"Run `make sbom`.",
+                f"sparknet-sbom: {out} is stale — VERSION, requirements.txt, the "
+                f"vendored skills or a role catalog changed without the SBOM being "
+                f"regenerated. Run `make sbom`.",
                 file=sys.stderr,
             )
             return 1

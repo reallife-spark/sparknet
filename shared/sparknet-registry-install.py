@@ -24,10 +24,15 @@ What accepting means
 4. the registry conforms to ``contracts/registry-schema.json``, entries included
    (``sparknet-registry-schema.py``), so a peer never installs a shape no other
    node agrees with;
-5. the sequence is strictly greater than the installed one. *Not greater* is a
-   refusal, because equal or lower is a replay - an older registry in which this
-   node was not yet revoked is exactly what an attacker with write access to the
-   channel would serve.
+5. the sequence is not lower than the installed one. A lower sequence is a
+   rollback - an older registry in which this node was not yet revoked is
+   exactly what an attacker with write access to the channel would serve.
+6. an *equal* sequence is only the same publication: it is accepted as a no-op
+   (``REGISTRY_ALREADY_INSTALLED``, nothing written) when its digest matches the
+   installed digest, and refused as ``stale_publication`` when it does not,
+   because an equal sequence with different content is a fork, not a replay.
+   Accepting the equal case is what makes the Master's 60 s re-delivery a
+   success instead of a unit that is red on every tick.
 
 The sequence record is written *after* the registry, so a crash between the two
 writes leaves the new registry with the old record: re-delivery of the same
@@ -174,23 +179,45 @@ def accept_publication(
 
     Returns ``{"status", "sequence", "registry_sha256", "entries", ...}``. In
     dry-run the status is ``REGISTRY_VERIFIED_DRY_RUN`` and nothing is written;
-    otherwise ``REGISTRY_INSTALLED``.
+    a new publication is ``REGISTRY_INSTALLED``; re-delivering the publication
+    that is already installed is ``REGISTRY_ALREADY_INSTALLED`` and writes
+    nothing.
+
+    Idempotent re-delivery matters because the Master re-pushes the current
+    publication on a timer: without it every steady-state tick would be refused
+    as a replay and the delivery unit would stay red. Equality is only accepted
+    when the digest matches too — an equal sequence carrying a *different*
+    registry is a fork, not a replay, and is refused.
     """
     verified = verify_publication(publication, public_key, authz, schema)
-    previous = installed_sequence(vault_root)
-    if verified["sequence"] <= previous:
-        raise InstallError(
-            409,
-            "stale_publication",
-            f"sequence {verified['sequence']} is not greater than the installed sequence {previous}",
-        )
-
+    previous = installation_record(vault_root)
+    try:
+        previous_sequence = int(previous.get("sequence") or 0)
+    except (TypeError, ValueError):
+        previous_sequence = 0
     result = {
         "sequence": verified["sequence"],
         "published_at": verified["published_at"],
         "registry_sha256": verified["registry_sha256"],
         "entries": verified["entries"],
     }
+
+    if verified["sequence"] < previous_sequence:
+        raise InstallError(
+            409,
+            "stale_publication",
+            f"sequence {verified['sequence']} is lower than the installed sequence {previous_sequence}; "
+            "a lower sequence is a rollback",
+        )
+    if verified["sequence"] == previous_sequence and previous_sequence:
+        if previous.get("registry_sha256") == verified["registry_sha256"]:
+            return {"status": "REGISTRY_ALREADY_INSTALLED", **result}
+        raise InstallError(
+            409,
+            "stale_publication",
+            f"sequence {verified['sequence']} is already installed with a different registry digest",
+        )
+
     if dry_run:
         return {"status": "REGISTRY_VERIFIED_DRY_RUN", **result}
 

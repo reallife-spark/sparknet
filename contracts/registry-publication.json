@@ -24,7 +24,7 @@
         "registry_digest": "sha256 hex of json.dumps(registry, sort_keys=True, separators=(',', ':'))",
         "digest_rule": "registry_sha256 must equal the digest of the registry the publication carries; a publication whose digest and document disagree is refused before any entry is read",
         "signature_covers": "the projection (sequence, published_at, registry_sha256); the registry is bound by its digest",
-        "sequence_rule": "integer >= 1, strictly increasing across publications. A peer remembers the highest sequence it installed and refuses anything not greater, which is what makes replaying an older unrevoked registry a refusal rather than a rollback.",
+        "sequence_rule": "integer >= 1, strictly increasing across publications. A peer remembers the highest sequence and digest it installed. A lower sequence is refused as a rollback; an equal sequence with the same digest is a no-op success (REGISTRY_ALREADY_INSTALLED, nothing written) because the Master re-delivers the current publication on a timer; an equal sequence with a different digest is refused as a fork.",
         "why_digest_not_document": "The registry's canonical byte form is deliberately not an authority-bearing thing: only its shape is contracted (contracts/registry-schema.json). Signing a digest binds exactly the bytes the Master published without turning a serialisation choice into a signature input."},
     "field_semantics": {
         "sequence": "monotonic publication counter. Inside the signature, so it cannot be raised (to strand a peer on a future value) or lowered (to replay) without the Master's key.",
@@ -43,7 +43,7 @@
             "malformed_publication": "400 - missing or extra field, bad types, or a digest that does not match the registry",
             "bad_signature": "403 - the projection does not verify under the pinned key",
             "wrong_master_key": "403 - the registry names a key other than the pinned one",
-            "stale_publication": "409 - the sequence is not greater than the installed one",
+            "stale_publication": "409 - the sequence is lower than the installed one, or equal with a different registry digest",
             "invalid_registry": "400 - the signature is valid but the document does not satisfy contracts/registry-schema.json (shape, capability vocabulary, or an entry signature)",
             "no_master_key": "503 - the guard has no pinned key, so it cannot verify anything",
             "no_contract": "503 - the peer cannot load the shared contract/checker, so it cannot decide; it refuses rather than guess"},
@@ -55,7 +55,7 @@
         "bound_by": "peer",
         "body": "the five-field artifact, JSON; no wrapper and no second signature - the publication is self-authenticating",
         "source_gate": "the peer accepts loopback and the Master's overlay address (10.100.0.1); every other source is refused with 403 off_overlay before the body is read",
-        "idempotence": "re-delivering the installed publication is refused as stale_publication (equal sequence). Re-delivery after a crash between the registry write and the record write is accepted, because the record still names the older sequence.",
+        "idempotence": "re-delivering the installed publication (equal sequence, equal digest) answers REGISTRY_ALREADY_INSTALLED and writes nothing, so the 60 s re-delivery pass is a no-op rather than a refusal. An equal sequence with a different digest is a fork and is refused as stale_publication. Re-delivery after a crash between the registry write and the record write is accepted, because the record still names the older sequence.",
         "apply_flag": "installing a registry does not require --apply-enabled: that flag arms writes to protected /etc paths, and a registry lives in the peer's own vault."},
     "implementation_state": {
         "master": "built - registry-publish emits the publication, registry-deliver pushes it, the re-delivery timer converges peers",

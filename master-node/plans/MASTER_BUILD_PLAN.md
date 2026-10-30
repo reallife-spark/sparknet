@@ -319,7 +319,8 @@ containment and scheduling.
         install: a document edited under its digest (`400
         malformed_publication`), a consistent envelope signed by a foreign key
         (`403 bad_signature`), and a registry naming a foreign Master key (`403
-        wrong_master_key`). A fourth test proves the replay refusal.
+        wrong_master_key`). Further tests prove the replay refusal, the
+        timer's idempotent re-push, and the master-anchor skip.
         (5) the same suite publishes an authorising registry, delivers it, sees
         the capability take effect, then publishes a revoked registry, delivers
         it, and sees `evaluate` deny with `REASON_REVOKED`. The window is the
@@ -327,8 +328,11 @@ containment and scheduling.
         states it; a successful push is immediate.
       - **Install order** is registry first, sequence record second, so a crash
         between the writes makes the publication idempotent rather than
-        permanently refusable; re-delivering an installed publication is a
-        `409 stale_publication`, which is what makes equality the replay signal.
+        permanently refusable. A *lower* sequence is a rollback (`409
+        stale_publication`); an equal sequence is accepted as a no-op
+        (`REGISTRY_ALREADY_INSTALLED`) only when its digest matches, which is
+        what keeps the 60 s re-delivery a green unit, and refused when it does
+        not, because an equal sequence with different content is a fork.
         Registry installation needs neither `--apply-enabled` nor euid 0: it
         writes the peer's own vault, not a protected `/etc` path.
       - **Enabling change**: `sign_authorization` gained `revoked=`, because

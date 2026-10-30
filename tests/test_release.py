@@ -31,6 +31,7 @@ SBOM_SCRIPT = REPO_ROOT / "scripts" / "sparknet-sbom.py"
 SBOM = REPO_ROOT / "sbom" / "sparknet.cdx.json"
 CLI = REPO_ROOT / "scripts" / "sparknet"
 SKILLS_DIR = REPO_ROOT / ".opencode" / "skills"
+BUNDLE_SCRIPT = REPO_ROOT / "scripts" / "sparknet-bundle.sh"
 
 SBOM_RUN = [sys.executable, str(SBOM_SCRIPT)]
 
@@ -122,6 +123,69 @@ def test_sbom_covers_the_runtime_dependency_and_every_skill() -> None:
         p.name for p in SKILLS_DIR.iterdir() if (p / "SKILL.md").is_file()
     }
     assert set(by_name) == expected_names
+
+
+def _spdx(component: dict) -> str:
+    choice = component["licenses"][0]
+    return choice.get("license", {}).get("id") or choice["expression"]
+
+
+def test_sbom_records_the_license_each_component_actually_carries() -> None:
+    """A BOM that guesses licenses is worse than one that admits it does not know.
+
+    The suite is MIT, but `skill-creator` ships its own Apache-2.0 LICENSE.txt and
+    local `wiki-audit` has no grant while the repo license (C1) is deferred.
+    """
+    by_name = {c["name"]: c for c in _sbom()["components"]}
+
+    assert _spdx(by_name["skill-creator"]) == "Apache-2.0"
+    assert _spdx(by_name["wiki-audit"]) == "NOASSERTION"
+    assert _spdx(by_name["wiki-query"]) == "MIT"
+    assert _spdx(_sbom()["metadata"]["component"]) == "NOASSERTION"
+
+    skills = [
+        c
+        for c in by_name.values()
+        if any(p["name"] == "sparknet:kind" and p["value"] == "vendored-wiki-skill" for p in c["properties"])
+    ]
+    assert len(skills) == _shipped_skill_count()
+    for component in skills:
+        assert component["licenses"], f"{component['name']} carries no license"
+        props = {p["name"]: p["value"] for p in component["properties"]}
+        assert props["sparknet:hash-scope"] == "tree"
+        assert props["sparknet:license"] == _spdx(component)
+
+
+def test_skill_hash_covers_files_beyond_skill_md(tmp_path: Path) -> None:
+    """A changed reference file is drift even when SKILL.md is untouched."""
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    for root, text in ((first, "one"), (second, "two")):
+        (root / "references").mkdir(parents=True)
+        (root / "SKILL.md").write_text("identical\n", encoding="utf-8")
+        (root / "references" / "notes.md").write_text(text, encoding="utf-8")
+
+    assert sbom_mod._tree_sha256(first) == sbom_mod._tree_sha256(first)
+    assert sbom_mod._tree_sha256(first) != sbom_mod._tree_sha256(second)
+
+
+def test_sbom_local_skills_match_the_sync_manifest() -> None:
+    """`LOCAL_SKILLS` is a copy of a fact the sync manifest already knows."""
+    sync = json.loads((SKILLS_DIR / ".sync.json").read_text(encoding="utf-8"))
+    local = {name for name, meta in sync["skills"].items() if meta.get("source") == "local"}
+    assert local == set(sbom_mod.LOCAL_SKILLS), "scripts/sparknet-sbom.py's LOCAL_SKILLS drifted from .sync.json"
+
+
+def test_role_catalog_fails_closed_on_a_malformed_inventory(tmp_path: Path) -> None:
+    catalog = tmp_path / "peer-node" / ".opencode" / "skills"
+    catalog.mkdir(parents=True)
+    (catalog / ".inventory.json").write_text("{}", encoding="utf-8")
+    try:
+        sbom_mod._role_catalog(tmp_path, "peer")
+    except ValueError as exc:
+        assert "counts.skills" in str(exc)
+    else:  # pragma: no cover - the assertion above is the contract
+        raise AssertionError("a malformed role inventory was accepted")
 
 
 def test_sbom_generation_is_deterministic() -> None:
@@ -224,6 +288,7 @@ def test_cli_routes_each_command_to_its_make_target() -> None:
         "test": "test-all",
         "contract-test": "contract-test",
         "lint": "lint",
+        "format-check": "format-check",
         "render": "render",
         "render-check": "render-check",
         "drift-check": "drift-check",
@@ -256,3 +321,38 @@ def test_cli_refuses_an_unknown_command() -> None:
     proc = _run_cli("frobnicate")
     assert proc.returncode == 2
     assert "unknown command" in proc.stderr
+
+
+def test_cli_refuses_arguments_a_command_does_not_take() -> None:
+    proc = _run_cli("validate", "--suites", "peer")
+    assert proc.returncode == 2
+    assert "unexpected argument" in proc.stderr
+
+
+# --- 5. the bundle carries the data, not the fabric-root tools -----------------
+
+
+def test_bundle_ships_release_data_and_prunes_fabric_root_tools() -> None:
+    """The bundle policy is a property of the script, asserted at the source.
+
+    `bundle-verify` proves it on a real archive; this keeps the rule visible in
+    a fast test so a future edit cannot quietly re-ship a CLI that has no root
+    Makefile to call.
+    """
+    text = BUNDLE_SCRIPT.read_text(encoding="utf-8")
+    assert "EXCLUDE_SCRIPT_FILES=(sparknet sparknet-sbom.py)" in text
+    assert "EXCLUDE_SCRIPT_DIRS=(plugins)" in text
+    assert 'cp "$REPO_ROOT/VERSION" "$target/VERSION"' in text
+    assert "$target/sbom/sparknet.cdx.json" in text
+    assert 'prune_fabric_only_tools "$target"' in text
+    assert 'sparknet-sbom.py" --check' in text, "the bundle build must fail closed on a stale SBOM"
+
+
+def test_goagx_publish_applies_the_same_release_policy() -> None:
+    """The AGX distribution is another node surface; it gets the same rule."""
+    text = (REPO_ROOT / "scripts" / "sparknet-goagx-publish.sh").read_text(encoding="utf-8")
+    assert "EXCLUDE_SCRIPT_FILES=(sparknet sparknet-sbom.py)" in text
+    assert "EXCLUDE_SCRIPT_DIRS=(plugins)" in text
+    assert 'prune_fabric_only_tools "$target"' in text
+    assert "goagx sbom)" in text, "sbom/ must be a published subtree"
+    assert "USER_MANUAL.md\n  VERSION\n)" in text, "VERSION must be a published root file"

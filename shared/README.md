@@ -132,9 +132,12 @@ to fall back to a local copy.
 
 The peer-side **acceptance rule** for a registry publication: exact envelope,
 signature over the canonical projection, the registry naming the key the peer
-pinned, the document satisfying `registry-schema.json`, and a sequence strictly
-greater than the installed one. It installs atomically (registry, then the
-sequence record) and refuses a replay.
+pinned, the document satisfying `registry-schema.json`, and a sequence that is
+not lower than the installed one. It installs atomically (registry, then the
+sequence record), refuses a lower sequence as a rollback, and answers
+`REGISTRY_ALREADY_INSTALLED` for a re-delivery of the exact installed
+publication (equal sequence *and* digest) — the timer's steady state. An equal
+sequence with a different digest is a fork and is refused.
 
 **Why it is here and not in a role.** Both roles run it. The peer runs it on both
 receive paths — the guard's live `POST /api/v1/registry` and the offline

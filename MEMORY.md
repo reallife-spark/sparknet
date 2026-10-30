@@ -5,11 +5,11 @@
 > own it. **All history lives in `log.md` and `sessions/YYYY-MM-DD.md`** — an
 > entry here is a durable fact you still need, never a record of what happened.
 
-Updated: 2026-10-29
+Updated: 2026-10-30
 
 ## Plan cursors
 
-- **root `PLAN.md` `current: done`.** Step 72 (plan selection: the LLM proposes, reflex ranks) is implemented and live-measured 2026-10-29: 12 golden cases on `sparknet-reflex:v1`, top-1 **0.833**, coverage **0.833**, abstain **0.167**, ECE **0.000**, false accepts **0**, p95 **3497 ms**, $0; the local 3B's explicit `none` option was removed after it acted as an attractor, and abstention is now the policy's decision plus a deterministic `forbid` list. No authority, port or capability was added. `make ci CI_QUICK=1` is green and `make test-all` is EXIT=0 (peer 545 passed/1 skipped; fabric/contract/master green). The two master-spec blockers were resolved on 2026-10-29: Master Steps 10–12 were reopened, then implemented (signed ratification, ledger-hashed evidence, signed trust events); their live legs remain `DoD: confirm: user`. The evidence-capture / review-agent CLIs are wired to `make -C master-node evidence-capture|review-agents`. Step 72 is complete. Step 70 closed 2026-10-25 (70A–70G); **Step 71 (inbox reviewer
+- **root `PLAN.md` `current: done`.** Step 72 (plan selection: the LLM proposes, reflex ranks) is implemented and live-measured 2026-10-29: 12 golden cases on `sparknet-reflex:v1`, top-1 **0.833**, coverage **0.833**, abstain **0.167**, ECE **0.000**, false accepts **0**, p95 **3497 ms**, $0; the local 3B's explicit `none` option was removed after it acted as an attractor, and abstention is now the policy's decision plus a deterministic `forbid` list. No authority, port or capability was added. `make ci CI_QUICK=1` is green and `make test-all` is EXIT=0 (peer 545 passed/1 skipped; fabric/contract/master green). The two master-spec blockers were resolved on 2026-10-29: Master Steps 10–12 were reopened, then implemented (signed ratification, ledger-hashed evidence, signed trust events); their live legs remain `DoD: confirm: user`. The evidence-capture / review-agent CLIs are wired to `make -C master-node evidence-capture|review-agents`. Step 72 is complete. **Step 74 (release-surface hardening) is complete**: SBOM licenses are per-skill (`skill-creator` Apache-2.0, local `wiki-audit` NOASSERTION), skill hashes cover whole trees, bundles ship `VERSION` + `sbom/` and exclude the CLI/generator/plugins, and a stale SBOM aborts the bundle build. The goagx publish script applies the same policy (ship `VERSION`/`sbom/`, prune the CLI/generator/plugins) and the distribution was republished `203e95b → 52de5d8`; `goagx-drift-check` and the full `drift-check` are green. The publication is from the dirty worktree, so release-grade still requires a fabric commit + republish from it. Step 70 closed 2026-10-25 (70A–70G); **Step 71 (inbox reviewer
   sanitisation + acceptance gate) closed 2026-10-25**. The peer `vault-curator` is a deterministic CLI,
   untrusted ingress needs an accepted `inbox_acceptance`, and reviewed bytes are `validity: sanitized` +
   user-key signed. **Master Steps 8–9 are built and tested** (Step 8 live containment verified 2026-10-28; Step 9 live arming is operator-confirmed). **Master Steps 10–12 are code-complete but live legs remain `DoD: confirm: user`**, so the Master cursor is 10. Step 64 (the reflex layer) opened
@@ -108,8 +108,9 @@ Updated: 2026-10-29
    `rfi_answer_message`/`sign_rfi_answer`/`verify_rfi_answer` in authz and
    `shared/sparknet-rfi-install.py` as the one acceptance rule; installing composes
    with 67A (writes the item, records the request id, appends an `inbox_acceptance`).
-   No monotonic sequence: a registry *supersedes* so a lower sequence is a replay,
-   while answers *accumulate*, so the idempotence key is the `request_id`.
+   No monotonic sequence: a registry *supersedes* so a lower sequence is a replay
+   (an equal sequence with the same digest is now a no-op, see 2026-10-30), while
+   answers *accumulate*, so the idempotence key is the `request_id`.
    **67D done (2026-10-25) — the RFI *answer* transport is live over a wire:**
    `POST /api/v1/rfi` is a *third route on the guard's 9090* (not a new port),
    `handle_rfi` in `peer-node/services/sparknet-guard-d.py`, source-gated +

@@ -95,7 +95,7 @@ REMOTE="${SPARKNET_GOAGX_REMOTE:-$REMOTE_DEFAULT}"
 # fabric scripts the node machinery calls, the vendored wiki suite + agents,
 # the goagx image surface, and the root files the image build COPYs or the
 # setup script drives.
-SUBTREES=(peer-node master-node contracts shared scripts .opencode/skills .opencode/agents goagx)
+SUBTREES=(peer-node master-node contracts shared scripts .opencode/skills .opencode/agents goagx sbom)
 # Root files the image build or the node flow names. spark.docker and
 # spark.compose.yml stay: the setup script's default platform IS spark, and a
 # distribution shipping half the platform pair fails the moment it runs bare.
@@ -110,8 +110,22 @@ ROOT_FILES=(
   .env.example
   .dockerignore .gitignore opencode.json requirements.txt
   USER_MANUAL.md
+  VERSION
 )
 TEMPLATES="$REPO_ROOT/goagx/publish-templates"
+
+# The release *data* (VERSION, sbom/) ships; the fabric-root tools do not. A
+# distribution has no root Makefile, so `scripts/sparknet` would exit "no
+# makefile found" and `scripts/sparknet-sbom.py` would have nothing to read a
+# root version from. Same policy as `scripts/sparknet-bundle.sh`.
+EXCLUDE_SCRIPT_FILES=(sparknet sparknet-sbom.py)
+EXCLUDE_SCRIPT_DIRS=(plugins)
+
+prune_fabric_only_tools() {  # <root>
+  local root="$1" name
+  for name in "${EXCLUDE_SCRIPT_FILES[@]}"; do rm -f "$root/scripts/$name"; done
+  for name in "${EXCLUDE_SCRIPT_DIRS[@]}"; do rm -rf "$root/scripts/$name"; done
+}
 
 # The export surface is selected with git's own view of the tree: tracked
 # files plus untracked files git would not refuse to add. That keeps .env,
@@ -194,6 +208,8 @@ stage_into() {  # <target-dir>
     done
   fi
 
+  prune_fabric_only_tools "$target"
+
   # Generated artefacts: the deploy-first README, the machine-readable pin
   # manifest, and the distribution's own CI workflow (same verify command).
   [ -f "$TEMPLATES/README.md.tmpl" ] || die "missing template $TEMPLATES/README.md.tmpl"
@@ -275,10 +291,19 @@ verify_tree() {  # <root>
     spark.compose.cpu.yml bootstrap-agx.sh \
     contracts shared scripts peer-node master-node \
     .opencode/skills .opencode/agents opencode.json requirements.txt \
+    VERSION sbom/sparknet.cdx.json \
     README.md USER_MANUAL.md VERSIONS.json SHA256SUMS .github/workflows/verify.yml
   do
     [ -e "$root/$p" ] && ok "$p" || bad "missing $p"
   done
+
+  step "release surface: fabric-root tools absent"
+  for tool in sparknet sparknet-sbom.py; do
+    [ ! -e "$root/scripts/$tool" ] && ok "scripts/$tool absent as expected" \
+      || bad "scripts/$tool must not be published"
+  done
+  [ ! -e "$root/scripts/plugins" ] && ok "scripts/plugins absent as expected" \
+    || bad "scripts/plugins must not be published"
 
   step "role-local skill catalogs"
   local role n_role

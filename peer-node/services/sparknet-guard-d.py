@@ -723,7 +723,12 @@ class Guard:
             self.ledger.append("registry_refused", {"code": exc.code, "sequence": sequence, "detail": exc.detail[:500]})
             raise Refusal(exc.status, exc.code, exc.detail) from exc
 
-        event = "registry_verified_dry_run" if self.dry_run else "registry_installed"
+        if self.dry_run:
+            event = "registry_verified_dry_run"
+        elif result.get("status") == "REGISTRY_ALREADY_INSTALLED":
+            event = "registry_unchanged"
+        else:
+            event = "registry_installed"
         block = self.ledger.append(
             event,
             {

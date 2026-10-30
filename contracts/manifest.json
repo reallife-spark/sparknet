@@ -47,7 +47,7 @@
       "contract": "registry-publication",
       "file": "registry-publication.json",
       "schema_version": "1.0",
-      "sha256": "51576ee9e7a8b700713c3715d0497b3296d8829464280a80973e34ea4325776a"
+      "sha256": "9a2ff3a020eef1636084b0942bb718aa794aad6e8ca32604b4251791af60e92a"
     },
     {
       "contract": "registry-schema",

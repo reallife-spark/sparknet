@@ -1,6 +1,6 @@
 ---
 title: sparknet Plan
-updated: 2026-10-29
+updated: 2026-10-30
 current: done
 ---
 
@@ -4028,3 +4028,47 @@ standing one.
   `make goagx-drift-check` is green. The release is not release-grade until the
   fabric changes are committed and goagx is republished from that commit; the
   published `VERSIONS.json` names HEAD `47bbed4`. No fabric commit was made.
+
+## Step 74 — Release-surface hardening (SBOM licenses + bundle policy)
+
+- **Why**: the Step 41 release surface is mechanically green but misstates
+  licenses and ships a CLI/generator that cannot run inside a node bundle.
+- **Decisions**: the release *data* (`VERSION`, `sbom/sparknet.cdx.json`) ships
+  in bundles; the CLI (`scripts/sparknet`) and generator
+  (`scripts/sparknet-sbom.py`) stay **fabric-root-local** and are excluded from
+  bundles, like the KDE plugin.
+- **DoD**:
+  1. SBOM licenses are per component: `skill-creator` → `Apache-2.0` (its own
+     `LICENSE.txt`), local `wiki-audit` → `NOASSERTION` (C1 deferred), the other
+     31 vendored skills → `MIT`; emitted as CycloneDX `licenses`, not a
+     property; tests assert all three cases.
+  2. Each skill component hashes the **whole skill tree**, not just `SKILL.md`;
+     a test proves a non-`SKILL.md` edit moves the digest.
+  3. `_role_catalog` fails closed with `ValueError` on a malformed inventory;
+     `--check` message and docstring name role catalogs too.
+  4. Bundles: `VERSION` and `sbom/` are at the bundle root and in `BUNDLE.md`;
+     `scripts/sparknet`, `scripts/sparknet-sbom.py` and `scripts/plugins/` are
+     absent; the build fails closed if the SBOM is stale.
+  5. CLI: rejects unexpected extra args; `scripts/sparknet` is shellchecked;
+     the `format-check` route is covered by the dispatch test.
+  6. Docs: `AGENTS.md` + `README.md` list `make sbom`/`sbom-check` and the CLI;
+     `index.md` is current.
+  7. Gates: `make sbom-check`, `render-check`, `drift-check`, `lint`,
+     `format-check`, `shellcheck` (when installed), `keys-check`, `shims-check`,
+     `validate`, full `test-all`, `make ci CI_QUICK=1`; both `make bundle` +
+     `bundle-verify` (archive inspected for the presence/absence rules).
+- **Status**: complete 2026-10-30. `reallife-spark/goagx` was republished
+  (`203e95b → 52de5d8`) with the same release policy — it now ships `VERSION` +
+  `sbom/` and excludes `scripts/sparknet`, `scripts/sparknet-sbom.py` and
+  `scripts/plugins/` — and `make drift-check` is green end to end, including
+  `goagx-drift-check`. The publication is from the current (dirty) worktree, so
+  it is not release-grade until the fabric is committed and goagx republished
+  from that commit; the published `VERSIONS.json` names the current HEAD.
+  Everything verified: licenses are 31 MIT + Apache-2.0 (`skill-creator`) +
+  NOASSERTION (`wiki-audit`); skill hashes cover the whole tree; role-catalog
+  failure is fail-closed; both bundles contain `VERSION` + `sbom/` and exclude
+  `scripts/sparknet`, `scripts/sparknet-sbom.py`, `scripts/plugins`; a stale
+  SBOM aborts the bundle build; `make bundle-verify ROLE=peer|master` green;
+  full `test-all` green (fabric 1385 passed + 6 skipped, peer 545 + 1 skipped,
+  master); `make ci CI_QUICK=1` green; `make shellcheck` 0.11.0 clean (now
+  includes `scripts/sparknet`).
