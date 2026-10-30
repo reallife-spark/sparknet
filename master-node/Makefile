@@ -39,7 +39,7 @@ REASON ?=
         env-show parity ledger evidence-capture review-agents keygen keys-check units units-check \
         signer signer-unit reflex-unit peer-intake-unit wg-observer-unit console \
         provenance-verify user-init provenance-append ingest precommit shims-check \
-        bundle wiki-preflight wiki-status wiki-lint wiki-query clean
+        bundle wiki-preflight wiki-status wiki-lint wiki-query skills-sync skills-check clean
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -325,7 +325,7 @@ ingest: ## Land STDIN or SRC= as an unsigned note in 01_Inbox/ (SOURCE=master-no
 shims-check: ## Prove every legacy name is a symlink to its numbered home
 	@$(PROV_PY) $(PROV) $(PROV_VAULT) shims
 
-precommit: keys-check ## keys-check + secret scan + provenance-verify --strict
+precommit: keys-check skills-check ## keys-check + skill manifest + secret scan + provenance-verify --strict
 	@$(PROV_PY) $(PROV) $(PROV_VAULT) scan
 	@$(PROV_PY) $(PROV) $(PROV_VAULT) verify --strict
 	@echo "precommit: clean"
@@ -346,6 +346,12 @@ wiki-lint: ## Preflight, then /wiki-lint on this role's vault
 wiki-query: ## Preflight, then /wiki-query against this role's vault
 	@source "$(FABRIC_ROOT)/scripts/sparknet-wiki-env.sh"
 	@echo "Run /wiki-query in opencode, e.g. /wiki-query how does revocation work"
+
+skills-sync: ## Rebuild this role's local skill catalog
+	@$(PY) $(FABRIC_ROOT)/scripts/sync-role-skills.py --apply --role master
+
+skills-check: ## Verify this role's skill catalog, licenses and manifest
+	@$(PY) $(FABRIC_ROOT)/scripts/sync-role-skills.py --check --role master
 
 clean: ## Remove caches
 	@find "$(VAULT_ROOT)" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true

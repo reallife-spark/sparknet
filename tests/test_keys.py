@@ -98,6 +98,19 @@ def test_a_pem_block_in_a_ordinary_file_fails(scratch: Path):
     assert "private key block" in result.stderr
 
 
+def test_a_pem_block_in_vendored_role_skills_is_skipped(scratch: Path):
+    skill = scratch / ".opencode" / "skills" / "x"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text(PEM_MARKER + "\nMCowBQYDK2Vw\n")
+    result = run_checker(scratch)
+    assert result.returncode == 0, result.stderr
+
+    (scratch / "notes.md").write_text(PEM_MARKER + "\nMCowBQYDK2Vw\n")
+    result = run_checker(scratch)
+    assert result.returncode == 1
+    assert "private key block" in result.stderr
+
+
 def test_the_gitignore_backstop_is_required(scratch: Path):
     (scratch / ".gitignore").write_text("*.ed25519\n")  # patterns deleted
     result = run_checker(scratch)

@@ -280,6 +280,18 @@ verify_tree() {  # <root>
     [ -e "$root/$p" ] && ok "$p" || bad "missing $p"
   done
 
+  step "role-local skill catalogs"
+  local role n_role
+  for role in peer master; do
+    n_role="$(find "$root/$role-node/.opencode/skills" -mindepth 2 -maxdepth 2 -name SKILL.md 2>/dev/null | wc -l)"
+    [ "$n_role" -gt 0 ] && ok "$role-node: $n_role role-local skills" || bad "$role-node: no role-local skills"
+    if python3 "$root/scripts/sync-role-skills.py" --check --role "$role" >/dev/null 2>&1; then
+      ok "$role-node: role manifest, licenses and removal list verify"
+    else
+      bad "$role-node: role-local skill manifest failed verification"
+    fi
+  done
+
   step "integrity manifest (SHA256SUMS)"
   if [ ! -f "$root/SHA256SUMS" ]; then
     bad "SHA256SUMS missing"
@@ -355,9 +367,11 @@ PY
   # regex, whose character class is what keeps the check from matching the
   # detection strings in the checker scripts themselves.
   local keys pem
-  keys="$(cd "$root" && find . -type f -not -path './.git/*' | sed 's|^\./||' \
+  # Vendored role-local skill content is third-party and covered by the role
+  # manifest hashes; upstream examples must not read as our key material.
+  keys="$(cd "$root" && find . -type f -not -path './.git/*' -not -path '*/.opencode/skills/*' | sed 's|^\./||' \
     | grep -E '(\.ed25519|\.pem|\.key|\.seed)$|(^|/)privkey|(^|/)id_ed25519' | head -5 || true)"
-  pem="$(cd "$root" && find . -type f -not -path './.git/*' -print0 2>/dev/null \
+  pem="$(cd "$root" && find . -type f -not -path './.git/*' -not -path '*/.opencode/skills/*' -print0 2>/dev/null \
     | xargs -0 grep -lsE -- '-----BEGIN [A-Z ]*PRIVATE KEY-----' 2>/dev/null | head -5 || true)"
   if [ -n "$keys" ]; then
     bad "key-shaped files present: $keys"

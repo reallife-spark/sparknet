@@ -42,7 +42,12 @@ REQUIRED_PATTERNS=('*.ed25519' '*.pem' '*.key' 'privkey*' 'id_ed25519*' '*.seed'
 # On-disk fallback only (a bundle has no .git): skip places where a key-shaped
 # name is either not content or is the key store itself — .state/keys is
 # *meant* to hold private keys and is checked by mode below, not by name.
-EXCLUDE='(^|/)(\.git|\.venv|\.state|\.cache|node_modules|dist|__pycache__|\.pytest_cache|\.ruff_cache|\.mypy_cache|\.trash)/'
+# The vendored role-local skill trees are third-party content, not authored
+# secrets. Their integrity is covered by the role-skill manifest hashes; scanning
+# upstream examples here only produces false positives (PEM markers in cyber
+# detection skills). The exclusion is path-shaped so a real key elsewhere still
+# fails.
+EXCLUDE='(^|/)(\.git|\.venv|\.state|\.cache|node_modules|dist|__pycache__|\.pytest_cache|\.ruff_cache|\.mypy_cache|\.trash)/|(^|/)\.opencode/skills/'
 
 fail=0
 problems=()
@@ -74,6 +79,9 @@ check_dir() {
   # 1. names
   while IFS= read -r path; do
     [ -n "$path" ] || continue
+    case "$path" in
+      */.opencode/skills/*|.opencode/skills/*) continue ;;
+    esac
     if printf '%s\n' "$path" | grep -Eq "$PATTERN"; then
       note_problem "$dir: tracked file looks like key material: $path"
     fi
@@ -86,6 +94,9 @@ check_dir() {
       | sed "s|^|$dir/|" \
       | while IFS= read -r f; do
           [ -f "$f" ] || continue
+          case "$f" in
+            */.opencode/skills/*|.opencode/skills/*) continue ;;
+          esac
           if grep -qsE -- '-----BEGIN [A-Z ]*PRIVATE KEY-----' "$f"; then
             printf '%s\n' "${f#"$dir"/}"
           fi

@@ -526,6 +526,10 @@ def test_nothing_in_the_repo_still_says_worker():
                 continue
             if {"__pycache__", ".pytest_cache", ".ruff_cache"} & set(path.parts):
                 continue
+            # Vendored role-local skills are third-party content, not current
+            # sparknet vocabulary; upstream prose legitimately says "worker".
+            if ".opencode" in path.parts:
+                continue
             # Plans are provenance: they may record what things were called at
             # the time (see the VOCABULARY_SURFACES comment above).
             if "plans" in set(path.parts):

@@ -39,7 +39,7 @@ SCOPE ?= fabric
         chroma-index chroma-stamp chroma-query reflex-eval reflex-live-check reflex-live-query \
         reflex-plan-eval verify-plans env-init wiki-sync wiki-verify \
         wiki-preflight bundle bundle-verify status-plan clean dist \
-        keys-check shims-check hooks
+        role-skills role-skills-check keys-check shims-check hooks
 
 help: ## Show this help
 	@echo "sparknet — fabric root"
@@ -123,7 +123,7 @@ hooks: ## Point this clone at .githooks/ so every commit runs keys-check
 	@echo "core.hooksPath = .githooks"
 
 lint: ## Lint the whole fabric (ruff E,F,I,UP,B,SIM,RUF,S — see pyproject.toml)
-	@"$(PY)" -m ruff check .
+	@"$(PY)" -m ruff check . --extend-exclude peer-node/.opencode --extend-exclude master-node/.opencode
 
 # The widened rule set (flake8-bugbear B, flake8-simplify SIM, Ruff-specific
 # RUF, bandit S) became the blocking gate in Step 49, configured in
@@ -131,7 +131,7 @@ lint: ## Lint the whole fabric (ruff E,F,I,UP,B,SIM,RUF,S — see pyproject.toml
 lint-strict: lint ## Deprecated alias for `lint` (the widened set is now the gate)
 
 format-check: ## ruff format --check across the whole fabric (whole-tree since Step 49)
-	@"$(PY)" -m ruff format --check .
+	@"$(PY)" -m ruff format --check . --extend-exclude peer-node/.opencode --extend-exclude master-node/.opencode
 
 # Pinned like the SHA-pinned GitHub Actions: the gate must not silently change
 # what it enforces when a new shellcheck release starts reporting something new.
@@ -176,7 +176,7 @@ shellcheck: ## shellcheck tracked scripts (provisions the pinned binary, then ru
 	@set -e; \
 	$(shellcheck-resolve); \
 	echo "shellcheck: $$("$$sc" --version | awk 'NR==2 {print $$2}') ($$sc)"; \
-	files="$$(git -C "$(VAULT_ROOT)" ls-files '*.sh' | grep -v '^\.opencode/skills/' || true)"; \
+	files="$$(git -C "$(VAULT_ROOT)" ls-files '*.sh' | grep -v '/\.opencode/skills/' || true)"; \
 	if [ -z "$$files" ]; then echo "shellcheck: no tracked shell scripts"; exit 0; fi; \
 	printf '%s\n' "$$files" | xargs "$$sc"
 
@@ -231,6 +231,8 @@ drift-check: ## Fail if derived artifacts drifted (manifest, SBOM, skills, contr
 	@$(MAKE) --no-print-directory sbom-check
 	@echo "drift-check: vendored wiki skills"
 	@$(MAKE) --no-print-directory wiki-verify
+	@echo "drift-check: role-local skill catalogs"
+	@$(MAKE) --no-print-directory role-skills-check
 	@echo "drift-check: cross-role contract parity"
 	@$(MAKE) --no-print-directory contract-test
 	@echo "drift-check: published goagx distribution"
@@ -321,6 +323,13 @@ wiki-verify: ## Fail if the vendored suite drifted from its pinned source
 
 wiki-preflight: ## Prove the vendored skills resolve the vault you are standing in
 	@source "$(VAULT_ROOT)/scripts/sparknet-wiki-env.sh"
+
+# --- role-local skill catalogs -------------------------------------------------
+role-skills: ## Rebuild peer-node and master-node role-local skill catalogs
+	@$(PY) scripts/sync-role-skills.py --apply
+
+role-skills-check: ## Verify role-local catalogs, licenses and removal list
+	@$(PY) scripts/sync-role-skills.py --check
 
 # --- standalone node bundles ---------------------------------------------------
 

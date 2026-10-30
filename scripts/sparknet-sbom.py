@@ -69,6 +69,14 @@ SKILL_MARKER = "SKILL.md"
 #: The vendored suite's license, as recorded in .opencode/skills/README.md.
 VENDORED_SKILL_LICENSE = "MIT"
 
+#: Role-local catalogs. Each is represented by its manifest hash rather than
+#: one component per skill: the manifest already records per-skill hashes,
+#: licenses and provenance, so the SBOM stays small and still detects drift.
+ROLE_CATALOGS = {
+    "peer": "peer-node/.opencode/skills",
+    "master": "master-node/.opencode/skills",
+}
+
 _VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -135,6 +143,35 @@ def _vendored_skills(root: Path) -> list[dict]:
     return skills
 
 
+def _role_catalog(root: Path, role: str) -> dict:
+    path = root / ROLE_CATALOGS[role]
+    manifest = path / ".inventory.json"
+    if not manifest.is_file():
+        raise ValueError(f"{manifest} is missing (run make role-skills)")
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    return {
+        "role": role,
+        "path": f"{ROLE_CATALOGS[role]}/.inventory.json",
+        "count": data["counts"]["skills"],
+        "sha256": sha256_file(manifest),
+    }
+
+
+def _role_component(catalog: dict) -> dict:
+    return {
+        "type": "data",
+        "bom-ref": f"role-skill-catalog:{catalog['role']}",
+        "name": f"{catalog['role']}-skill-catalog",
+        "properties": [
+            {"name": "sparknet:kind", "value": "role-skill-catalog"},
+            {"name": "sparknet:path", "value": catalog["path"]},
+            {"name": "sparknet:skills", "value": str(catalog["count"])},
+            {"name": "sparknet:license-policy", "value": "sellable"},
+        ],
+        "hashes": [{"alg": "SHA-256", "content": catalog["sha256"]}],
+    }
+
+
 def _component(name: str, *, constraint: str) -> dict:
     return {
         "type": "library",
@@ -173,9 +210,11 @@ def build(root: Path) -> dict:
     version = _read_version(root)
     constraint = _read_dependency_constraint(root, RUNTIME_DEPENDENCY)
     skills = _vendored_skills(root)
+    catalogs = [_role_catalog(root, role) for role in ROLE_CATALOGS]
 
     components = [_component(RUNTIME_DEPENDENCY, constraint=constraint)]
     components += [_skill_component(skill) for skill in skills]
+    components += [_role_component(catalog) for catalog in catalogs]
     components.sort(key=lambda c: c["name"])
 
     return {

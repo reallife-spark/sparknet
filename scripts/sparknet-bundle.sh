@@ -117,7 +117,17 @@ verify_bundle() {
 
   step "vendored skills present"
   n="$(find "$root/.opencode/skills" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)"
-  [ "$n" -gt 0 ] && ok "$n skills" || bad "no skills bundled"
+  [ "$n" -gt 0 ] && ok "$n base skills" || bad "no base skills bundled"
+
+  step "role-local skills present and sellable"
+  n_role="$(find "$root/$vrole-node/.opencode/skills" -mindepth 2 -maxdepth 2 -name SKILL.md 2>/dev/null | wc -l)"
+  [ "$n_role" -gt 0 ] && ok "$n_role role-local skills" || bad "no role-local skills bundled"
+  if python3 "$root/scripts/sync-role-skills.py" --check --role "$vrole" >/dev/null 2>&1; then
+    ok "role manifest, licenses and removal list verify"
+  else
+    bad "role-local skill manifest failed verification"
+    python3 "$root/scripts/sync-role-skills.py" --check --role "$vrole" 2>&1 | head -8 | sed 's/^/      /'
+  fi
 
   step "opencode config present"
   [ -f "$root/opencode.json" ] && ok "opencode.json" || bad "opencode.json missing"
@@ -129,6 +139,9 @@ verify_bundle() {
   hits="$(grep -rlE "$secret_re" "$root" 2>/dev/null || true)"
   # This file legitimately contains the pattern itself.
   hits="$(printf '%s' "$hits" | grep -v 'sparknet-bundle.sh$' || true)"
+  # Vendored role-local skill content is third-party and covered by the role
+  # manifest hashes; upstream examples must not read as our secrets here.
+  hits="$(printf '%s' "$hits" | grep -v '/\.opencode/skills/' || true)"
   if [ -n "$hits" ]; then
     bad "possible secret material found"
     printf '%s\n' "$hits" | sed 's/^/      /'
@@ -379,7 +392,8 @@ fi
 | `peer-node/` / `master-node/` | the role itself |
 | `contracts/` | the overlay, capability, identity, port and guard contracts this role obeys |
 | `shared/` | the canonical implementations — signed authorization, consensus, plus the http/liveness/oob layers |
-| `.opencode/skills/` | the vendored wiki skill suite — no global skill farm needed |
+| `.opencode/skills/` | the vendored base skill suite — no global skill farm needed |
+| `<role>-node/.opencode/skills/` | the role-local sellable catalog (90 peer / 1,652 master) with `.inventory.json` |
 | `.opencode/agents/`      | the role-aware agents (built-ins + vendored) — `catalog`, `chart`, sparknet-node, vault, chat |
 | `scripts/plugins/kde-notify.*` | intentionally **not** bundled; KDE Connect desktop notifications are fabric-root-local only (`.opencode/plugin/*` was never created; notifications are injected via `OPENCODE_CONFIG` at the root) |
 | `opencode.json` | registers the skills and agent with opencode |
@@ -424,7 +438,12 @@ sha256sum -c SHA256SUMS        # or: shasum -a 256 -c SHA256SUMS
   master role signs but its key is provisioned on the master itself.
 - **`__pycache__`, caches, `node_modules`.** Build noise, nothing else.
 - **Cluster-only skills.** Four skills that read this cluster's agent histories
-  were withheld; see `.opencode/skills/README.md` for which and why.
+  were withheld from the base suite; see `.opencode/skills/README.md` for which
+  and why.
+- **Proprietary and non-sellable skills.** The role-local catalogs exclude the
+  twelve restricted names, GPL/AGPL, CC BY-SA, modified-Apache and unclear
+  licenses. `claude-api` is retained only from its Apache-2.0 source and is
+  marked optional.
 EOF
 } > "$target/BUNDLE.md"
 
@@ -447,5 +466,8 @@ tar -czf "$archive" -C "$stage" "$prefix"
 printf '\nWrote %s\n' "${archive#$REPO_ROOT/}"
 printf '  size    : %s\n' "$(du -h "$archive" | cut -f1)"
 printf '  contents: %s\n' "$(tar -tzf "$archive" | wc -l) entries"
-printf '  skills  : %s\n' "$(tar -tzf "$archive" | grep -c '/\.opencode/skills/[^/]*/SKILL.md$') vendored"
+printf '  skills  : %s base, %s %s-local\n' \
+  "$(tar -tzf "$archive" | grep '/\.opencode/skills/[^/]*/SKILL.md$' | grep -v -E '/(peer|master)-node/' | grep -c . || true)" \
+  "$(tar -tzf "$archive" | grep -c "/$role-node/\.opencode/skills/[^/]*/SKILL.md$" || true)" \
+  "$role"
 printf '\nVerify it actually runs:\n  scripts/sparknet-bundle.sh --verify %s\n' "$archive"

@@ -26,7 +26,7 @@ to one role as though it described the whole system.
 | `scripts/` | both | fabric-level tooling: vendoring, env, bundling |
 | `goagx/` | both | the AGX Xavier twin of the node image surface: `sparknet.agx.docker` (L4T r35, vLLM built from source), its parity compose file, the whisper audio shim, `bootstrap-agx.sh` + `GOSPARK_PIN`, and the platform README — selected by `sparknet-node-setup.sh --platform spark\|agx` (fabric Step 56). `make goagx-publish` generates the standalone deployment repo `reallife-spark/goagx` from it (Step 62); `make goagx-drift-check` catches drift |
 | `gospark/` | both | the Go **control and service plane** checkout — a **separate Git repository** (its own `.git`, gitignored, excluded from the fabric's layout/lint/format/compose sweeps). Its `bin/` is what the node image consumes through the BuildKit named context `gospark`; build and gate it in place (`make -C gospark build build-gpu`, `make -C gospark ci`). Host defaults resolve to `<fabric-root>/gospark`; `GOSPARK_DIR` overrides |
-| `.opencode/skills/` | both | the vendored wiki suite |
+| `.opencode/skills/` | both | the vendored base wiki suite; each role adds a role-local catalog under `<role>/.opencode/skills/` |
 
 Three consequences worth holding onto:
 
@@ -80,9 +80,10 @@ ch role can do |
 | `make test-report SCOPE=fabric\|peer\|master\|all` | JUnit XML + `.state/reports/summary.json` |
 | `make render` / `make render-check` | regenerate `contracts/manifest.json` from the contract SSOT / fail if it is stale |
 | `make nv-search q="…"` | **resource-first**: look in NVIDIA's catalog before building our own (`scripts/sparknet-nv-search.sh --help`); see `references/nvidia-build-catalog.md` |
-| `make drift-check` | fail if anything *derived* drifted: `render-check` + `wiki-verify` + `contract-test` |
+| `make drift-check` | fail if anything *derived* drifted: `render-check` + `sbom-check` + `wiki-verify` + `role-skills-check` + `contract-test` + goagx |
 | `make wiki-sync` / `make wiki-verify` | re-vendor the wiki suite / prove no drift |
 | `make wiki-preflight` | prove the skills resolve *this* vault |
+| `make role-skills-check` | verify both role-local catalogs, licenses and removal list |
 | `make tui` | launch the TUI from the fabric root **with** KDE notifications (`OPENCODE_CONFIG=…kde-notif.opencode.json`) — roles launch plugin-free with plain `opencode` |
 | `make bundle ROLE=peer\|master` | build a standalone node bundle in `dist/` |
 | `make bundle-verify ROLE=…` | extract it elsewhere and prove it runs |
@@ -180,6 +181,14 @@ activity — it updates only when the agent calls the `todowrite` tool.
 bare clone or an extracted node bundle can run the whole suite. Re-vendor with
 `make wiki-sync`, verify with `make wiki-verify`.
 
+**Role-local catalogs** are separate and must not be confused with the base
+suite. `peer-node/.opencode/skills/` holds the expanded engineering set;
+`master-node/.opencode/skills/` holds every unique skill whose license permits
+commercial redistribution. Both are sellable by construction: MIT, Apache-2.0,
+BSD, ISC, CC0/Unlicense, and original dual MIT/Apache skills only. Proprietary,
+no-license, GPL/AGPL, CC BY-SA and modified-Apache skills are excluded. The
+manifests are `.inventory.json`; check them with `make role-skills-check`.
+
 Skills resolve the vault from the **nearest** `.env`, which is what keeps a role
 subvault honest. Run `make wiki-preflight` before using one; if it fails, run
 `./scripts/sparknet-env-init.sh <role-dir>` once. Never work around the failure:
@@ -207,8 +216,10 @@ Run `/wiki-status` first to see the ingest delta, then:
   vault, and a page that serves exactly one role belongs in that role's subvault.
 - **No secrets.** Never commit tokens, keys or `.env` contents. Reference the
   secret *path* only.
-- **Offensive security is out of scope** for a general/default agent session.
-  Route offensive work to the `red` role and defensive work to `blue`.
+- **Offensive security is out of scope** for a fabric-root or peer default
+  session. The master role-local catalog includes the Apache-2.0 cyber corpus
+  for reference, but loading a skill is not authorization to act: operational
+  offensive work still routes to `red`, defensive work to `blue`.
 - Cite sources. A distilled page without provenance is a guess — mark it as one.
 - Prefer editing an existing page over adding a near-duplicate; cross-link
   instead of copying.

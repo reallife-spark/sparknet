@@ -525,6 +525,18 @@ def test_the_scanner_finds_a_registered_secret_in_a_tracked_file(
     assert code == 0, report
 
 
+def test_the_scanner_skips_vendored_skill_trees(vault: Path, provenance: ModuleType):
+    write(vault / ".opencode" / "skills" / "x" / "SKILL.md", "password: 'hunter2hunter2'\n")
+    code, report = provenance.scan(vault)
+    assert code == 0, report
+
+    write(vault / "03_Sources" / "leak.md", "password: 'hunter2hunter2'\n")
+    code, report = provenance.scan(vault)
+    assert code == 1, report
+    assert "leak.md" in report
+    assert ".opencode/skills" not in report
+
+
 def test_the_scanner_finds_key_shaped_literals(vault: Path, provenance: ModuleType):
     write(vault / "03_Sources" / "oops.md", note("password: 'hunter2hunter2'"))
     code, report = provenance.scan(vault)

@@ -32,8 +32,10 @@ staged=()
 while IFS= read -r f; do
   case "$f" in
     *.py)
+      # Role-local trees carry their own pyproject.toml; ruff would resolve
+      # that config and format vendored files when they are named explicitly.
       case "$f" in
-        .opencode/*|references/*) continue ;;
+        .opencode/*|*/.opencode/*|references/*) continue ;;
       esac
       staged+=("$f")
       ;;

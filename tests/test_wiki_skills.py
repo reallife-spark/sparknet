@@ -311,6 +311,7 @@ def test_readme_documents_exclusions_and_provenance():
 OBSIDIAN_EXTERNAL_ARTIFACTS = (
     re.compile(r"\.obsidian"),  # the editor's own config directory
     re.compile(r"obsidian-wiki"),  # the upstream repository this suite is vendored from
+    re.compile(r"obsidian-skills|opencode-obsidian"),  # external repositories in the role catalog registry
     re.compile(r"obsidian\.md|obsidianmd"),  # documentation and GitHub-org URLs
     re.compile(r"Obsidian CLI"),  # the external command-line tool some skills drive
     re.compile(r"obsidian-(?:bases|cli|markdown)"),  # upstream skill names the dialect maps FROM
@@ -346,8 +347,8 @@ def _ours_with_old_editor_name() -> list[tuple[str, int, str]]:
             continue
         if path == Path(__file__).resolve():
             continue  # this file names the boundary it enforces
-        if rel.startswith(".opencode/skills/") or rel in OBSIDIAN_RENAME_MECHANISM:
-            continue  # vendored (sha256-pinned, dialect applied) or the dialect itself
+        if rel.startswith(".opencode/skills/") or "/.opencode/skills/" in rel or rel in OBSIDIAN_RENAME_MECHANISM:
+            continue  # vendored (base or role-local) or the dialect itself
         if rel in OBSIDIAN_HOST_SNAPSHOTS:
             continue
         for lineno, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):

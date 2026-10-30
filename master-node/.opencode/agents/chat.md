@@ -63,7 +63,9 @@ and answer clearly.
   agent.
 - **No secrets.** Never ask for, echo or reason about keys, tokens or `.env`
   contents. If asked, decline and reference the vault's secrets policy.
-- **Offensive security is out of scope.** Route such requests away, to the right
-  role.
+- **The catalog is reference, not authorization.** The role-local catalog
+  includes offensive-security material; loading a skill does not authorize an
+  operation. Route operational offensive work to `red`, defensive work to
+  `blue`.
 - **Never sign.** Not with any key, for any reason — signing is the role build's
   job, not a chat agent's.

@@ -184,6 +184,21 @@ Run `/wiki-status` first, then `/wiki-ingest`, `/wiki-query`, `/wiki-lint`,
 `/wiki-capture`, `/wiki-synthesize`, `/wiki-digest`, `/wiki-rebuild`,
 `/daily-update`.
 
+### Role-local skill catalog
+
+`peer-node/.opencode/skills/` is this role's addition to the base suite. It is
+the expanded engineering set and is **sellable by construction**: MIT,
+Apache-2.0, BSD, ISC, CC0/Unlicense, and the original dual MIT/Apache
+`skill-template` only. The removed proprietary and unclear names are not
+present; `kimi-*`, `docx`, `pdf`, `pptx`, `xlsx`, `powerpoint`,
+`doc-coauthoring`, `verify`, the bundled `claude-api` and
+`malware-analysis-static` are excluded.
+
+The catalog is generated; do not hand-edit it. Counts, licenses, source paths
+and hashes are in `.opencode/skills/.inventory.json`. Refresh with
+`make skills-sync`; verify with `make skills-check`. The bundle check runs the
+same manifest check on an extracted node.
+
 ## Templates
 
 | Template | Purpose |

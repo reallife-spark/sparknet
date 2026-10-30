@@ -3997,3 +3997,34 @@ host access — a bind-mount allowlist plus a signed `guard-apply` for privilege
 mutations — delivers the same capability as an auditable exception instead of a
 standing one.
 
+## Step 73 — Role-local sellable skill catalogs (peer 90, master sellable)
+
+- **Goal**: give peer-node and master-node role-local skill catalogs without
+  changing the base suite, and make the master catalog legally sellable.
+- **DoD**:
+  1. `scripts/sync-role-skills.py` builds both catalogs and writes
+     `.inventory.json` with source, license, hash, tier and skipped entries.
+  2. peer-node has 90 role-local skills: the previous set minus the five
+     restricted names it carried (`docx`, `pdf`, `pptx`, `xlsx`,
+     `doc-coauthoring`), plus `skill-template`, `writing-for-agents`,
+     `nano-pdf`, `file-conversion`, `mcp-developer`, `grill-me` and `handoff`.
+  3. master-node has every unique skill whose license permits commercial
+     redistribution, plus the original dual MIT/Apache `skill-template`; the
+     twelve restricted names and the AGPL/GPL, CC BY-SA, modified-Apache and
+     unclear families are excluded. `claude-api` is present only from its
+     Apache-2.0 source and is `tier: optional`, `standard: false`.
+  4. `make role-skills-check`, `make keys-check`, `make lint`,
+     `make format-check`, `make shellcheck`, `make test-all`, and both
+     `bundle-verify` runs are green.
+  5. The global opencode config no longer force-loads
+     `/mnt/nvme/skills/raxxar-active`; project skills win.
+- **Status**: complete 2026-10-29. peer 90 role-local (33 base, 123 visible);
+  master 1,652 role-local (33 base, 1,685 visible); four invalid upstream
+  skills skipped (`customer-questions-remind`, `kb-weekly-update`,
+  `nightly-analyze`, `scorecard-analyze`); one long description truncated
+  (`managing-third-party-vendor-risk`). `make test-all` green (peer 545
+  passed/1 skipped); both bundles verify, including the role manifest check.
+  `make goagx-publish` released `6663e44` from the dirty worktree and
+  `make goagx-drift-check` is green. The release is not release-grade until the
+  fabric changes are committed and goagx is republished from that commit; the
+  published `VERSIONS.json` names HEAD `47bbed4`. No fabric commit was made.

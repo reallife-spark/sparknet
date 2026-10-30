@@ -118,7 +118,9 @@ def test_sbom_covers_the_runtime_dependency_and_every_skill() -> None:
         assert component["hashes"][0]["alg"] == "SHA-256"
         assert len(component["hashes"][0]["content"]) == 64, component["name"]
 
-    expected_names = {"cryptography"} | {p.name for p in SKILLS_DIR.iterdir() if (p / "SKILL.md").is_file()}
+    expected_names = {"cryptography", "peer-skill-catalog", "master-skill-catalog"} | {
+        p.name for p in SKILLS_DIR.iterdir() if (p / "SKILL.md").is_file()
+    }
     assert set(by_name) == expected_names
 
 

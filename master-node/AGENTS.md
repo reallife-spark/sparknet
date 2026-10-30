@@ -241,6 +241,22 @@ Run `/wiki-status` first, then `/wiki-ingest`, `/wiki-query`, `/wiki-lint`,
 `/wiki-capture`, `/wiki-synthesize`, `/wiki-digest`, `/wiki-rebuild`,
 `/daily-update`.
 
+### Role-local sellable catalog
+
+`master-node/.opencode/skills/` holds every unique skill whose license permits
+commercial redistribution, plus the original dual MIT/Apache `skill-template`.
+It is **sellable by construction**: MIT, Apache-2.0, BSD, ISC, CC0/Unlicense
+and original dual MIT/Apache only. The restricted names (`docx`, `pdf`, `pptx`,
+`xlsx`, `powerpoint`, `kimi-*`, `doc-coauthoring`, `verify`, the bundled
+`claude-api`, `malware-analysis-static`, `template`) are excluded, as are
+GPL/AGPL, CC BY-SA, modified-Apache and unclear licenses.
+
+`claude-api` is retained only from its Apache-2.0 source and is marked
+`tier: optional`, `standard: false`; it is not in the peer set and is not a
+default skill. Counts, licenses, source paths and hashes are in
+`.opencode/skills/.inventory.json`. Refresh with `make skills-sync`; verify
+with `make skills-check`.
+
 ## Templates
 
 | Template | Purpose |
@@ -257,8 +273,10 @@ Run `/wiki-status` first, then `/wiki-ingest`, `/wiki-query`, `/wiki-lint`,
 - **No secrets.** Never commit tokens, keys or `.env` contents. Reference the
   secret *path* only. The Master private key is the most sensitive secret in
   the entire fabric.
-- **Offensive security is out of scope** for a general/default agent session.
-  Route offensive work to the `red` role and defensive work to `blue`.
+- **The catalog is reference, not authorization.** The role-local catalog
+  includes the Apache-2.0 cyber corpus, including offensive-security material.
+  Loading a skill does not authorize an operation; operational offensive work
+  still routes to `red`, defensive work to `blue`.
 - Cite sources. A distilled page without provenance is a guess — mark it as one.
 - **Do not overclaim what the live run proves.** The code on this role is real
   and tested, and the election→signer→registry arc was **deployed and proven

@@ -24,6 +24,16 @@ directory is a **knowledge category for how-to pages**, per `AGENTS.md`.
 Dropping agent skills there would blur two unrelated things and would make the
 category listing lie. Do not move them.
 
+## Role-local catalogs are separate
+
+This directory is the **base** suite shared by the fabric root and both roles.
+The roles add their own generated catalogs under `peer-node/.opencode/skills/`
+and `master-node/.opencode/skills/`. Those are not managed by
+`make wiki-sync`; they are built by `scripts/sync-role-skills.py`, carry their
+own `.inventory.json`, and are restricted to licenses that permit commercial
+redistribution. The master catalog excludes the twelve restricted names and
+keeps the Apache-2.0 `claude-api` as optional only.
+
 ## Re-syncing
 
 ```bash

@@ -514,6 +514,23 @@ Updated: 2026-10-29
 - Phase 9's destructive legs (rollback / replace-Master re-formation) are
   documented in `contracts/deployment-runbook.md` and deliberately unexecuted.
 
+## Role-local skill catalogs (2026-10-29)
+
+- Base suite: `.opencode/skills/` (33, MIT). Role-local additions:
+  `peer-node/.opencode/skills/` (90 sellable) and
+  `master-node/.opencode/skills/` (1,652 sellable role-local; 33 base + 1,652 =
+  1,685 visible). Manifests: `.inventory.json`; gate: `make role-skills-check`.
+- The twelve restricted names are removed from both roles. The master catalog
+  excludes GPL/AGPL, CC BY-SA, modified-Apache and unclear licenses; the
+  Apache-2.0 `claude-api` is present as `tier: optional` only, not in peer.
+  `skill-template` is the only newly authored skill (dual MIT/Apache).
+- The global opencode config no longer force-loads
+  `/mnt/nvme/skills/raxxar-active`; project skills now win.
+- `goagx` release `6663e44` was published from the dirty worktree on
+  2026-10-29; `make goagx-drift-check` is green. It is not release-grade until
+  the sparknet changes are committed and goagx is republished from that commit
+  (the published `VERSIONS.json` currently names HEAD `47bbed4`).
+
 ## Command / environment gotchas
 
 - **Local gates are authoritative**; the SHA-pinned GitHub Actions run the same

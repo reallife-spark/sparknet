@@ -276,7 +276,11 @@ def current_surfaces() -> list[Path]:
 
 def test_no_undocumented_top_level_entries():
     """Catches the emptied leftovers the split could not delete."""
-    actual = {p.name for p in REPO_ROOT.iterdir() if p.name not in UNTRACKED_TOP_LEVEL}
+    actual = {
+        p.name
+        for p in REPO_ROOT.iterdir()
+        if p.name not in UNTRACKED_TOP_LEVEL and not p.name.endswith((".swp", ".swo", "~"))
+    }
     undocumented = sorted(actual - EXPECTED_TOP_LEVEL)
     assert not undocumented, (
         f"top-level entries exist that nothing documents: {undocumented}. "

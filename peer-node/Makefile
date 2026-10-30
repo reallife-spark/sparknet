@@ -22,7 +22,7 @@ PY := $(if $(wildcard $(VENV_PY)),$(VENV_PY),$(if $(wildcard $(FABRIC_VENV_PY)),
 
 .PHONY: help env-init validate test lint devtools provision dist bundle install-units \
         install-config keys wg-render authz-verify anchor guard-status guard-contract \
-        peer-manifest containment wiki-preflight wiki-status wiki-lint wiki-capture clean \
+        peer-manifest containment wiki-preflight wiki-status wiki-lint wiki-capture skills-sync skills-check clean \
         provenance-verify user-init provenance-append ingest accept-inbox review-inbox precommit shims-check keys-check \
         ai-stack-config admin-agent-help container-build container-load container-config container-preflight container-up \
         container-health container-down model-generate model-verify model-build model-serve
@@ -197,7 +197,7 @@ shims-check: ## Prove every legacy name is a symlink to its numbered home
 keys-check: ## No key material tracked; state-dir keys are 0600
 	@$(FABRIC_ROOT)/scripts/sparknet-keys-check.sh "$(VAULT_ROOT)"
 
-precommit: keys-check ## keys-check + secret scan + provenance-verify --strict
+precommit: keys-check skills-check ## keys-check + skill manifest + secret scan + provenance-verify --strict
 	@$(PROV_PY) $(PROV) $(PROV_VAULT) scan
 	@$(PROV_PY) $(PROV) $(PROV_VAULT) verify --strict
 	@echo "precommit: clean"
@@ -222,6 +222,12 @@ wiki-lint: ## Preflight, then /wiki-lint on this role's vault
 wiki-capture: ## Preflight, then /wiki-capture (--quick for a raw drop)
 	@source "$(FABRIC_ROOT)/scripts/sparknet-wiki-env.sh"
 	@echo "Run /wiki-capture in opencode to persist a finding from this session."
+
+skills-sync: ## Rebuild this role's local skill catalog
+	@$(PY) $(FABRIC_ROOT)/scripts/sync-role-skills.py --apply --role peer
+
+skills-check: ## Verify this role's skill catalog, licenses and manifest
+	@$(PY) $(FABRIC_ROOT)/scripts/sync-role-skills.py --check --role peer
 
 clean: ## Remove caches and build output
 	@find "$(VAULT_ROOT)" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true

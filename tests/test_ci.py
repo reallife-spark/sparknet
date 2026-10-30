@@ -44,6 +44,7 @@ PRE_MERGE_GATE_STEPS = (
     "lint",
     "format-check",
     "shellcheck",
+    "role-skills-check",
     "validate",
     "contract-test",
     "render-check",

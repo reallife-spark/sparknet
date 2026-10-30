@@ -2362,6 +2362,12 @@ def scan(vault: Path) -> tuple[int, str]:
         rel = str(path.relative_to(vault))
         if rel in _SCAN_EXEMPT or "tests" in path.parts:
             continue
+        # Vendored role-local skills are third-party content with upstream
+        # examples that can contain key-shaped strings. Their integrity is
+        # covered by the role-skill manifest; the authored-vault scan skips
+        # them so an upstream detection example is not reported as our secret.
+        if rel.startswith(".opencode/skills/") or "/.opencode/skills/" in rel:
+            continue
         try:
             raw = path.read_bytes()
             text = raw.decode("utf-8")

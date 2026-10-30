@@ -79,8 +79,9 @@ decision than one who knows it is missing. Say which is which.
 
 - No secrets. The Master private key is referenced by **path** only, never by
   value, and never copied into a page, a session note or a command line.
-- Offensive-security work is out of scope here: route it to `red`, defensive work
-  to `blue`.
+- The role-local catalog includes offensive-security references, but loading
+  one is not authorization to act. Route operational offensive work to `red`,
+  defensive work to `blue`.
 - Do not claim live verification of anything network-, kernel- or
   privilege-dependent. Those paths are untested on a development host.
 - Do not edit `contracts/` casually. It is the single source of truth for both

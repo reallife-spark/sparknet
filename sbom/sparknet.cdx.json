@@ -219,6 +219,35 @@
       "type": "data"
     },
     {
+      "bom-ref": "role-skill-catalog:master",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "98b8fe69ad34570e98db4c5d6cb2432f73f624283c367710bacadd7ba0e55f24"
+        }
+      ],
+      "name": "master-skill-catalog",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "role-skill-catalog"
+        },
+        {
+          "name": "sparknet:path",
+          "value": "master-node/.opencode/skills/.inventory.json"
+        },
+        {
+          "name": "sparknet:skills",
+          "value": "1652"
+        },
+        {
+          "name": "sparknet:license-policy",
+          "value": "sellable"
+        }
+      ],
+      "type": "data"
+    },
+    {
       "bom-ref": "vendored-wiki-skill:orchestrator-bases",
       "hashes": [
         {
@@ -289,6 +318,35 @@
         {
           "name": "sparknet:license",
           "value": "MIT"
+        }
+      ],
+      "type": "data"
+    },
+    {
+      "bom-ref": "role-skill-catalog:peer",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "83aaaff3a629dad2b5e6ce326562f97e2136f21625f25a6f850c6a977b94a656"
+        }
+      ],
+      "name": "peer-skill-catalog",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "role-skill-catalog"
+        },
+        {
+          "name": "sparknet:path",
+          "value": "peer-node/.opencode/skills/.inventory.json"
+        },
+        {
+          "name": "sparknet:skills",
+          "value": "90"
+        },
+        {
+          "name": "sparknet:license-policy",
+          "value": "sellable"
         }
       ],
       "type": "data"
