@@ -1,6 +1,6 @@
 ---
 title: goagx — user manual
-updated: 2026-10-21
+updated: 2026-10-30
 ---
 
 # goagx — user manual
@@ -389,6 +389,20 @@ The published root README is rendered from
 `publish-templates/README.md.tmpl` — never edited in place — and carries the
 published timestamp, the fabric SHA, the goSpark SHA, the pins, the deploy
 commands and the layout table.
+
+The distribution ships the whole manual set, and every one of them resolves
+inside the distribution:
+
+| In the published tree | Covers |
+|---|---|
+| `USER_MANUAL.md` | The master manual for the whole system. |
+| `goagx/USER_MANUAL.md` | This surface (this file). |
+| `peer-node/USER_MANUAL.md` | The peer role. |
+| `master-node/USER_MANUAL.md` | The master role. |
+
+That is possible because the distribution carries `contracts/` and `shared/`:
+the cross-repository references in those manuals are real files here, not
+promises.
 
 The distribution also ships `VERSIONS.json` and `SHA256SUMS`, and a `verify`
 workflow that runs the publish tool's `--verify` mode on every push.

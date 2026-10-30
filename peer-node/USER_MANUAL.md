@@ -1,6 +1,6 @@
 ---
 title: sparknet-peer — user manual
-updated: 2026-10-21
+updated: 2026-10-30
 ---
 
 # sparknet-peer — user manual
@@ -105,9 +105,9 @@ explains the code.
 
 | Path | What it is |
 |---|---|
-| `services/` | The seven peer services. Each is a single-file, `#!/usr/bin/env python3` program with a `--help`. |
-| `scripts/` | The 24 operational scripts: identity, keys, overlay, firewall, lockdown, sync, provisioning, the run helper. |
-| `systemd/` | Nine units. A unit contains **no vault path** — it calls a generated shim. |
+| `services/` | The ten peer services. Each is a single-file, `#!/usr/bin/env python3` program with a `--help`. |
+| `scripts/` | The 23 operational scripts: identity, keys, overlay, firewall, lockdown, sync, provisioning, the run helper. |
+| `systemd/` | Twelve services and two timers. A unit contains **no vault path** — it calls a generated shim. |
 | `manifests/` | The node's declared identity, capabilities, protected paths, policies and templates. |
 | `configs/` | Templates: `wireguard/`, `network/`, `nftables/`, `container/`, `ai-stack/`. |
 | `00_System/` … `07_Archives/` | The vault, in the numbered PARA layout. |
@@ -147,7 +147,7 @@ every legacy name is still a symlink, and `tests/test_shims.py` enforces it.
 
 ## 4. The services
 
-Seven services. Each is a standalone program with a `--help`, and each is
+Ten services. Each is a standalone program with a `--help`, and each is
 wired into a unit.
 
 ### `sparknet-guard-d.py` — the guard daemon
@@ -225,9 +225,12 @@ make registry-status                                          # sequence + capab
 
 The same acceptance rule runs on both paths
 (`shared/sparknet-registry-install.py`): exact envelope, signature under the
-pinned Master key, a registry the contract accepts, and a sequence strictly
-greater than the installed one. A replayed older publication is refused as
-`stale_publication` — that is what stops a revocation from being undone.
+pinned Master key, a registry the contract accepts, and a sequence that is not
+lower than the installed one. A replayed *older* publication is refused as
+`stale_publication` — that is what stops a revocation from being undone. Re-
+installing the exact publication already installed (equal sequence and digest)
+answers `REGISTRY_ALREADY_INSTALLED` and writes nothing, so the Master's timed
+re-delivery is a no-op rather than an error.
 
 ### `sparknet-vault-provisioner.py` — the vault provisioner
 
@@ -235,19 +238,50 @@ Materialises the knowledge-vault slice this node is entitled to and wires the
 knowledge base around it. It runs after the guard has established which paths
 are protected.
 
+### `sparknet-telemetry-push.py` — the telemetry pusher
+
+Pushes the peer's status and metrics to the Master's 8090 peer intake as
+**evidence, never authority**. It is deliberately **unsigned**: attribution is
+the WireGuard-authenticated overlay, and the Master maps the source address to
+a fingerprint through the signed registry. A peer without the `telemetry`
+capability is silent — the Master refuses the report before reading the body.
+
+```sh
+python3 services/sparknet-telemetry-push.py --kind status --dry-run
+python3 services/sparknet-telemetry-push.py --kind metrics
+```
+
+### `sparknet-liveness-monitor.py` — the liveness probe
+
+The peer's presence evidence, on `4211`. It probes and claims; it never
+authorises anything. A **dedicated probe port** is the point: the monitor must
+never make the serving path do probe work, so a hung engine cannot make the
+node look dead. Like telemetry, there is no signature — the Master derives the
+same fingerprint from the overlay source, and the contract is
+`health-protocol.md`.
+
+### `sparknet-checkpoint-anchor.py` — the checkpoint anchor
+
+Anchors the peer's **ledger head** and pushes the signed checkpoint as
+evidence. It builds one checkpoint per unchanged head — naively rebuilding on
+every tick would see `size + 1` each time and produce an endless chain that
+says nothing — and the payload is the full signed block, not just its digest.
+The Master may have missed a checkpoint; the ledger does not change because of
+one.
+
 ### `sparknet-admin-agent.py` — the node admin agent
 
 The peer's side of the admin surface: auth-event ingest, webhook
 registration, and pending supervision. It is **pending** by design — the
 supervision it waits for is granted by the Master through the
-`admin-supervise` capability, which is one of the two sensitive capabilities
-in the vocabulary.
+`admin-supervise` capability, one of the three sensitive capabilities in the
+vocabulary.
 
 ---
 
 ## 5. The scripts
 
-24 scripts, all `bash` with `set -euo pipefail`, all answering `--help` **and
+23 scripts, all `bash` with `set -euo pipefail`, all answering `--help` **and
 changing nothing when they do** (enforced by `tests/test_shell.py`).
 
 | Script | Purpose |
@@ -283,7 +317,7 @@ commit rather than by a reviewer.
 
 ## 6. The units
 
-Nine units in `systemd/`:
+Twelve services and two timers in `systemd/`:
 
 | Unit | Purpose |
 |---|---|
@@ -292,6 +326,9 @@ Nine units in `systemd/`:
 | `sparknet-dispatch-bridge.service` | The dispatch bridge. |
 | `sparknet-vault-provisioner.service` | The vault provisioner. |
 | `sparknet-admin-agent.service` | The admin agent. |
+| `sparknet-liveness-monitor.service` | The liveness probe on `4211`. |
+| `sparknet-telemetry-push.service` + `.timer` | Telemetry evidence, on a timer. |
+| `sparknet-checkpoint-anchor.service` + `.timer` | The ledger-head checkpoint, on a timer. |
 | `sparknet-sync.service` + `.timer` | Vault sync, on a timer. |
 | `sparknet-firewall.service` | The egress policy. |
 | `sparknet-wifi-guard.service` | The wireless guard. |
@@ -421,6 +458,8 @@ The suite is behaviour-first. Its files:
 | `test_share_regime.py` | The clocked, contract-driven sharing regime. |
 | `test_proposal_exchange.py` | The proposal exchange over the share ports. |
 | `test_vault_provisioner.py` | The vault provisioner: knowledge-vault slice materialisation and KB wiring. |
+| `test_vault_curator.py` | The vault curator: the deterministic CLI and the acceptance gate for untrusted ingress. |
+| `test_reflex_surface.py` | The peer's reflex surface: a sensor, never authority. |
 | `test_admin_agent.py` | The node admin agent: auth-event ingest, webhook registration, pending supervision. |
 | `test_admin_supervise.py` | The signed admin surface. |
 | `test_containment.py` | Relocation and write-safety regressions. |
@@ -590,21 +629,27 @@ decision.
 
 Broadly, in this role:
 
-- **Implemented and exercised** — the guard, the overlay anchor, the dispatch
-  bridge, the share regime, the proposal exchange, the registry client, the
-  vault provisioner, the admin agent's pending-supervision path, the firewall
-  and wireless guards, the containment script, the MASTERSPIKE generator, the
-  vault provisioning and signing flow, the Open WebUI wiring, the shim
-  discipline, the container surface.
-- **Contracted and scaffolding** — parts of the admin surface, the
-  agent-domain ports, the nocturnal scheduler (Master-side, but the peer's
-  participation is only specified), share ratification (Master-side).
+- **Implemented and exercised** — the guard, the overlay anchor (kernel or
+  userspace `wireguard-go`), the dispatch bridge, the share regime, the
+  proposal exchange, the registry client and the shared publication install
+  rule, the vault provisioner, the vault curator, the admin agent's
+  pending-supervision path, the liveness probe, telemetry push, the checkpoint
+  anchor, the firewall and wireless guards, the containment script, the
+  MASTERSPIKE generator, the vault provisioning and signing flow, the Open
+  WebUI wiring, the reflex surface, the shim discipline, the container
+  surface.
+- **Contracted and scaffolding** — parts of the admin surface; the
+  agent-domain ports `4097`, `4098` and `4100` are provisioned but nothing
+  binds them; the nocturnal scheduler and share ratification are Master-side,
+  and the peer's participation in them is only specified.
 - **Deliberately parked** — the destructive legs of the cluster's own
   runbook (rollback; replace-Master re-formation) are documented and
-  deliberately left unexecuted.
+  deliberately left unexecuted. The reflex **enforce** stage is deferred;
+  shadow and assist are what run.
 
 The honest test: **if you cannot point at a command that exercises it, it is
-specified.** Do not describe a specified-only surface as working.
+specified.** Do not describe a specified-only surface as working. The peer's
+ports are in `contracts/ports.json`; the role has no signing path at all.
 
 ---
 

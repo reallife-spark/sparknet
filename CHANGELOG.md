@@ -9,6 +9,11 @@ Entries are written per release, not per commit: the commit history and
 
 ## [Unreleased]
 
+- Developer manuals for all five repositories: `USER_MANUAL.md` at each root
+  (the fabric one is the master manual and is also published at the root of
+  the `goagx` distribution), the peer/master/goagx manuals in their subtrees,
+  and the goSpark manual in `gospark/`. Refreshed 2026-10-30 against the
+  current contracts, ports, services, units, tests and package counts.
 - NVIDIA/dsx standard-practice adoption arc (PLAN Steps 45–52): reference-repo
   inventory, `STYLE_GUIDE.md`, resource-first `make nv-search`, community
   files, GitHub Actions mirror, format/lint sweep, functional adoptions.

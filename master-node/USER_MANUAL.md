@@ -1,6 +1,6 @@
 ---
 title: sparknet-master — user manual
-updated: 2026-10-21
+updated: 2026-10-30
 ---
 
 # sparknet-master — user manual
@@ -119,9 +119,9 @@ explains the code.
 
 | Path | What it is |
 |---|---|
-| `services/` | The eight master services. Each is a single-file program with a `--help`. |
-| `scripts/` | The 13 operational scripts: keys, approvals, registry, overlay, the KillSwitch. |
-| `systemd/` | Five units. |
+| `services/` | The twelve master services. Each is a single-file program with a `--help`. |
+| `scripts/` | The 16 operational scripts: keys, approvals, registry publication and delivery, RFI answers, overlay, the KillSwitch. |
+| `systemd/` | Nine units. |
 | `manifests/` | The master's declared identity, trust root, registry schema and admin-surface intent. |
 | `plans/` | The build plan, the admin plan, the pair-reformation design, the viability report, the EU AI Act compliance note. |
 | `docs/` | The control-plane overview, the registry protocol, the role transition, the KillSwitch template, the unverifiable-claims register. |
@@ -307,9 +307,14 @@ key, signs through the isolated signer (or `--offline`), and writes
 each peer's address from the publication itself and pushes it; revoked entries
 are delivered to as well, because the node being revoked has to learn about it.
 A peer that refuses or is offline is recorded, and the command exits non-zero —
-the installed `sparknet-registry-deliver.timer` retries every 60 s.
+the installed `sparknet-registry-deliver.timer` retries every 60 s. Re-pushing a
+publication a peer already installed is a success (the peer answers
+`REGISTRY_ALREADY_INSTALLED`), so the steady state is a green unit; the anchor
+address itself is skipped because it is this Master, not a peer.
 
-`sparknet-peer-intake.py` is the Master's **peer-intake listener** on `8090`
+### `sparknet-peer-intake.py` — the peer-intake listener
+
+The Master's **peer-intake listener** on `8090`
 (fabric Step 69C, re-scoped from the retired instant-push stub, which is deleted;
 renamed at Step 70B when it gained a second route). It binds `10.100.0.1` only and
 carries two routes. `POST /api/v1/telemetry` attributes the WireGuard-authenticated
@@ -364,8 +369,52 @@ window needs three probes at least five minutes apart. See
 
 ### `sparknet-share-ratify.py` — the share ratification service
 
-A scaffold: it ratifies a peer↔peer share so both ends agree on its scope and
-its clocks. Specified and sketched, not finished.
+The Master's side of a peer↔peer share: it accepts a share request only when
+the peer's grant verifies against the signed registry, then issues a
+Master-signed, time-boxed ratification. The two-hour clock is the Master's;
+the request does not choose it.
+
+```sh
+python3 services/sparknet-share-ratify.py --request <request.json> --decision approve
+```
+
+### `sparknet-reflex-broker.py` — the reflex broker
+
+The Master's **local-first sensor** on `4224` (overlay-only). It may rank,
+annotate, route or flag; it **never** signs, grants, revokes, approves a guard
+application or widens a permission. On timeout, low confidence, budget
+exhaustion or any doubt it **abstains** and the caller falls back to the
+deterministic path. The contract is `contracts/reflex-schema.json`; the unit is
+staged by `make reflex-broker-unit` and is not enabled by an install.
+
+### `sparknet-evidence-capture.py` — evidence capture
+
+Validates one share-evidence event, writes it under the review repository's
+`events/` directory, and records its digest in the ledger. It is the write side
+of the accountability chain: an event that does not validate is refused rather
+than stored.
+
+```sh
+make -C master-node evidence-capture
+```
+
+### `sparknet-review-agents.py` — the review agents
+
+Applies a **review/trust-level transition** (authenticated / unauthenticated /
+flagged) as a signed event, with the reason recorded. The previous level is part
+of the input, so a transition cannot be replayed against a different starting
+point.
+
+```sh
+make -C master-node review-agents
+```
+
+### `sparknet-wg-observer.py` — the WireGuard observer
+
+The root observer that supplies the **authoritative** WireGuard counters to the
+scheduler, written as a bounded snapshot to `/mnt/log/sparknet-wg.json`. It is
+staged by `make wg-observer-unit`, **not enabled**: reading `wg show` as root is
+an operator decision. A missing probe is `null` plus an error, never zero.
 
 ---
 
@@ -385,6 +434,7 @@ changing nothing when they do**.
 | `sparknet-registry-sign.sh` | Sign a registry entry. |
 | `sparknet-registry-sign-socket.sh` | Sign a registry entry **through the signer socket**, recording a ledger block. |
 | `sparknet-registry-verify.sh` | Verify a registry. |
+| `sparknet-rfi-answer.sh` | Answer a queued RFI request: sign the answer, bind its digest, and address it to the requesting peer. |
 | `sparknet-registry-publish.sh` | Sign+emit a registry **publication** (`<out>/current.json`). |
 | `sparknet-registry-deliver.sh` | Push a signed publication to the peers' guards on 9090. |
 | `sparknet-registry-revoke.sh` | Sign a **revoked** entry for an identity. |
@@ -442,7 +492,7 @@ accepted, and quotes the peer's own answer.
 
 ### 8.2 The units
 
-Five units in `systemd/`:
+Nine services and two timers in `systemd/`:
 
 | Unit | Purpose |
 |---|---|
@@ -451,6 +501,10 @@ Five units in `systemd/`:
 | `sparknet-master-parity.service` | The parity loader — the peer's services, run by path. |
 | `sparknet-master-wireguard-anchor.service` | The overlay anchor. |
 | `sparknet-master-firewall.service` | The Master's egress rule. |
+| `sparknet-peer-intake.service` | The 8090 peer-intake listener (telemetry + RFI requests). Staged, not enabled. |
+| `sparknet-registry-deliver.service` + `.timer` | Registry delivery to the peers, retried every 60 s. |
+| `sparknet-reflex-broker.service` | The reflex broker on `4224`. Staged, not enabled. |
+| `sparknet-wg-observer.service` + `.timer` | The root WireGuard observer for the scheduler. Staged, not enabled. |
 
 `make units-check` asserts every unit in `systemd/` is enabled by the
 Makefile — **nothing inert**. A unit that no target enables is a file that
@@ -609,10 +663,17 @@ The suite:
 | `test_ledger.py` (via `make ledger`) | The hash-chained ledger. |
 | `test_approval.py` | Signed approvals: issue, deliver, verify, refuse. |
 | `test_registry_cli.py`, `test_registry_cli_step3.py` | The registry CLI: sign, verify, revoke. |
-| `test_registry_dist.py` | Registry distribution end to end: publish → push → the peer's own guard installs, refuses a tampered artifact and refuses a replay. |
+| `test_registry_dist.py` | Registry distribution end to end: publish → push → the peer's own guard installs, refuses a tampered artifact and a rollback, treats the timer's re-push as a no-op, and skips the master anchor. |
 | `test_admin_console.py` | The admin console. |
-| `test_killswitch.py` | The KillSwitch. |
+| `test_killswitch.py` | The KillSwitch: both modes root-gated, dry-run by default, order, absent-vs-failure, the no-flush policy, and no peer copy. |
 | `test_peer_intake.py` | The 8090 peer-intake listener over a real socket: registry attribution, the `telemetry` capability gate, revocation, replay, the RFI request route (no capability, queueing, replay), and the no-authority posture. |
+| `test_rfi_transport.py` | The RFI answer transport: the signed answer, its digest and the `01_Inbox/` landing. |
+| `test_registry_schema.py` | The registry schema: the document shape the Master signs and the peer verifies. |
+| `test_evidence_and_review.py` | Evidence capture and the review/trust-level transition. |
+| `test_reflex_broker.py` | The reflex broker: a sensor, never authority; abstain on doubt. |
+| `test_scheduler.py` | The nocturnal scheduler's state machine (`plan` / `arm` / `status` / `abort`). |
+| `test_share_ratify.py` | Share ratification: verify the peer's grant against the registry, then sign a time-boxed ratification. |
+| `test_wg_observer.py` | The root WireGuard observer and its bounded snapshot. |
 | `test_wg_anchor.py`, `test_wg_render.py` | The overlay anchor and the rendering. |
 | `test_step1_keypair.py` | The three-key generation. |
 | `test_master_scripts.py` | The role's scripts. |
@@ -778,16 +839,21 @@ Broadly, in this role:
 - **Implemented and exercised** — the three-key generation, the isolated
   signer and its socket, the trust-root installation, the election approval
   path, the hash-chained ledger, the parity loader, the registry signing,
-  verification, publication and revocation, the approval issue/deliver path
-  (exercised against the peer's own guard daemon, loaded by path, so "the two
-  sides agree" is a fact the suite enforces), the admin console, the overlay
-  anchor, the admin surface's capability boundary, the role-scoped agents, the
-  KillSwitch's implementation against a fake runner.
-- **Contracted and scaffolding** — share ratification, the evidence/review
-  repository and review agents, and several
-  master-side ports (`4203`,
-  `4220`–`4223`). Registry distribution itself is built: a signed publication is
-  pushed to each peer's guard on 9090.
+  verification, publication and revocation, the registry delivery channel
+  (including the idempotent re-push and the anchor skip), the approval
+  issue/deliver path (exercised against the peer's own guard daemon, loaded by
+  path, so "the two sides agree" is a fact the suite enforces), the 8090
+  peer-intake listener, the RFI answer transport, evidence capture, the review
+  agents, the reflex broker, the admin console, the overlay anchor, the admin
+  surface's capability boundary, the role-scoped agents, and the KillSwitch's
+  implementation against a fake runner.
+- **Built but not fully exercised in the field** — the cluster KillSwitch
+  (the destructive run on a real Master is `DoD: confirm: user`), the
+  nocturnal scheduler's state machine (it dispatches nothing yet), and the
+  signer/election live legs on the production pair.
+- **Contracted and scaffolding** — the master-side ports `4220`–`4223` (git,
+  file-share, NAT gateway, vector embed) are spec-only, and the admin surface
+  is provisioned but nothing binds `8088` in the shipped tree.
 - **Deliberately parked** — the destructive legs of the deployment runbook
   (rollback; replace-Master re-formation) are documented and deliberately left
   unexecuted by operator decision. `plans/PAIR_REFORMATION_DESIGN.md` designs

@@ -1,6 +1,6 @@
 ---
 title: sparknet — user manual
-updated: 2026-10-21
+updated: 2026-10-30
 ---
 
 # sparknet — user manual
@@ -227,12 +227,29 @@ peer is actively harmful on the Master.
 
 1. The Master's signer signs a **registry entry** (an identity, a capability
    set, an overlay address, validity timestamps) with the operational key.
-2. The registry is distributed to the peer.
-3. The peer's **guard** verifies the signature against the pinned Master public
-   key. A valid signature plus the `guard-apply` capability plus `euid 0` plus a
-   protected target path plus `--apply-enabled` (off by default) is what
-   actually turns into a filesystem write.
-4. Every step is written to the peer's hash-chained **ledger** and every note to
+   Entries are signed **per entry**; the registry document itself is unsigned,
+   so a revoked flag lives inside the signature.
+2. The signed entries are assembled into a **publication** — the channel
+   described by `contracts/registry-publication.json`: the five-field
+   publication, a signed projection and its digest, and a **monotonic
+   sequence** that only increases.
+3. The Master **pushes** the publication to each peer's guard on `9090`, and
+   the `sparknet-registry-deliver.timer` retries every 60 s. Re-pushing a
+   publication the peer already installed is a **success**
+   (`REGISTRY_ALREADY_INSTALLED`, nothing written), so the timer's steady state
+   is a green unit; a lower sequence is refused (`stale_publication`), which is
+   what stops a revocation from being undone. The overlay anchor address is
+   skipped, because it is the Master, not a peer.
+4. The peer's **guard** verifies the publication against the pinned Master
+   public key. A valid publication plus the `guard-apply` capability plus
+   `euid 0` plus a protected target path plus `--apply-enabled` (off by
+   default) is what actually turns into a filesystem write.
+5. Separately, the Master's **peer-intake listener** on `8090` accepts a
+   peer's telemetry report and its RFI (request-for-information) requests,
+   attributing both to the WireGuard-authenticated source through the signed
+   registry. It carries no authority: it records evidence and queues a
+   question, and it never answers.
+6. Every step is written to the peer's hash-chained **ledger** and every note to
    the **provenance** chain.
 
 A peer that loses its anchor degrades to standalone: the vault still works, the
@@ -260,12 +277,21 @@ there first.
 | `cluster-dispatch` | Submit a cluster job: split a prompt into signed subtasks and fan them out. | no |
 | `cluster-serve` | Accept and execute dispatched subtasks. | no |
 | `admin-supervise` | Supervise a node's admin surface. | **yes** |
+| `cross-department-share` | Offer or accept a share with a node whose Master-attested `department` differs from this node's own. Inside a department, the ordinary share rules need no extra grant. | **yes** |
 
 `guard-apply` is the one that matters operationally: without it the guard
 verifies and audits but refuses to apply, however valid the signature is.
 `cluster-vote` is deliberately weak — a vote is deduplicated by member
 identity, so three votes for yourself is still one vote. It confers nothing; it
 is a say, not a grant.
+
+`cross-department-share` is the newest and the subtlest. The department it
+compares is the one in the **signed registry entry**, never anything a node
+says about itself — a self-declared department would let a node claim its way
+into whichever department it wanted to read, and in-department sharing is the
+*easier* path, so that is exactly the direction an attacker would push. The
+boundary binds only when both sides carry an attested department and the two
+differ; where the Master has attested none, there is no boundary to cross.
 
 ### 5.2 The signed envelope
 
@@ -326,9 +352,15 @@ time.
 | `overlay.json` | Addressing, MTU, keepalive, AllowedIPs discipline. |
 | `capabilities.json` | The closed capability vocabulary and who may hold each. |
 | `identity-schema.json` | Canonical identity, fingerprinting, the signed envelope. |
+| `registry-schema.json` | The shape of the node-authorization registry: the document the Master signs and a peer verifies, its entries, and the `signature_b64` field name. |
+| `registry-publication.json` | The channel that carries a registry: the five-field publication, the signed projection and digest, the monotonic sequence, the peer's acceptance order and refusal codes, and the re-delivery window. |
 | `ports.json` | Every listener and dial target, with `implementation_state` (code) kept separate from `runtime` (observed on one host). |
 | `guard-protocol.md` | The Master↔peer approval conversation. |
+| `guard-approval.json` | The approval envelope itself: the signed fields, the canonicalisation rule, where the capability comes from, and the transport. |
 | `health-protocol.md` | Peer liveness and eviction: probe rhythm, activity-trumps-eviction, the full-dark rule. |
+| `telemetry-schema.json` | Peer→Master observability evidence: overlay-attributed, unsigned, `kind`-tagged reports the Master records and acts on nothing. |
+| `rfi-schema.json` | The request-for-information channel: the peer's overlay-attributed request, the Master's signed answer, the digest binding its content, and the `01_Inbox/` destination rule. |
+| `reflex-schema.json` | The typed decision contract for the reflex layer: a local sensor, never authority; abstain is first-class, and the backend vocabulary has no egress member. |
 | `share-protocol.md` | The peer↔peer sharing regime: offers, share types, the four clocks, trust levels, isolation, evidence. |
 | `consensus-protocol.md` | How the members agree on who holds the signing key: election, the cluster trust root, re-formation. |
 | `provenance-protocol.md` | The narrative behind the tracking schema: the accountability chain, stale-vs-invalid, ledger-only approvals, secret custody. |
@@ -340,7 +372,35 @@ time.
 | `admin-federation-runbook.md` | The operational procedure for live cross-node admin federation: addressing, the route-class binding change, the `admin-supervise` grant, the node agent, the console, rollback. |
 | `spark-node-runbook.md` | The operational procedure for the node image in both platform variants, and what is provable without a GPU. |
 
-### 6.1 Changing a contract
+### 6.1 The registry distribution channel
+
+The registry is not a file that is copied around. It is a **publication**:
+
+```
+ signed registry entry ──► publication ──► push to each peer's guard :9090
+ (per entry, by the        (five fields,     (sparknet-registry-deliver,
+  operational key)         signed digest,    retried every 60 s)
+                           monotonic
+                           sequence)
+```
+
+`contracts/registry-schema.json` states the registry's shape;
+`contracts/registry-publication.json` states the channel that carries it. The
+acceptance rule lives in `shared/sparknet-registry-install.py`, and both the
+Master's deliverer and the peer's guard use it, so the two cannot disagree:
+
+| Publication arrives | Answer | Written? |
+|---|---|---|
+| sequence **lower** than installed | `409 stale_publication` | no — this is what stops a revocation being undone |
+| sequence **equal**, same digest | `REGISTRY_ALREADY_INSTALLED` | no — the timer's steady state |
+| sequence **equal**, different digest | `409 stale_publication` | no — a fork |
+| sequence **higher**, valid signature | accepted | yes |
+
+The Master's deliverer skips the overlay anchor (`10.100.0.1`) because that
+address is the Master itself, not a peer, and records the skip explicitly
+rather than failing the unit.
+
+### 6.2 Changing a contract
 
 1. Edit the file in `contracts/`.
 2. Run `make contract-test` — it tells you which role files now disagree.
@@ -350,7 +410,7 @@ time.
 Never edit a contract to make a test pass without asking whether the *other*
 role should change too. That question is the entire value of this directory.
 
-### 6.2 What is deliberately not here
+### 6.3 What is deliberately not here
 
 Nothing executable. Contracts state rules; `shared/` binds them to code; each
 role wraps that code in its own CLI. Note the layering that keeps signing,
@@ -442,28 +502,37 @@ uncapped precontext overflows the engine's context window — on the AGX the
 
 **Fabric namespace** (the overlay; the two roles' listeners):
 
-| Port | Service | Bound by | Overlay only |
-|---|---|---|---|
-| 51820/udp | wireguard | both | no (the Master must be dialed from behind NAT) |
-| 9090 | guard | peer | yes |
-| 4096 | dispatch-bridge | peer | no |
-| 4097–4100 | per-domain agent ports | peer | no |
-| 4201 / 4202 | share-intake / session-transfer | peer | yes |
-| 4210 | cluster-election | both | yes |
-| 8088 | admin-surface | master | yes |
-| 8090 | master-instant-push | master | yes |
-| 4203 / 4220–4223 | ratification, git, file-share, nat-gateway, vector-embed | master | yes |
+| Port | Service | Bound by | State | Overlay only |
+|---|---|---|---|---|
+| 51820/udp | wireguard | both | implemented | no (the Master must be dialed from behind NAT) |
+| 4096 | dispatch-bridge | peer | implemented | no |
+| 4097 / 4098 / 4100 | agent-engineering / agent-cyber / agent-vault-curator | peer | provisioned | no |
+| 4200 | opencode-serve | peer | spec-only | no |
+| 4201 / 4202 | share-intake / session-transfer | peer | implemented | yes |
+| 4203 | share-ratification | master | implemented | yes |
+| 4210 | cluster-election | both | implemented | yes |
+| 4211 | liveness-probe | peer | implemented | yes |
+| 4220–4223 | git-repo / file-share / nat-gateway / vector-embed | master | spec-only | yes |
+| 4224 | reflex-broker | master | implemented | yes |
+| 8088 | admin-surface | master | provisioned | yes |
+| 8090 | master-peer-intake | master | implemented | yes |
+| 9090 | guard | peer | implemented | yes |
 
-**Node namespace** (the docker host-publishes inside the node):
+`4203` and `4224` are the two that moved: share ratification and the reflex
+broker are implemented, while the git/file/nat/vector siblings remain
+spec-only by role boundary. `8090` is the **peer-intake** listener
+(telemetry and RFI requests), not the retired instant-push stub.
+
+**Node namespace** (the docker host-publishes inside the node; all implemented):
 
 | Port | Service | | Port | Service |
 |---|---|---|---|---|
 | 3000 | node-webui | | 8081 | node-control-gateway |
-| 8000 | node-vllm | | 8899 | node-control-admin |
-| 8001–8003 | embed / rerank / audio | | 9090 | node-compute |
-| 8080 | node-agent-gateway | | 9100 | node-kvrouter |
-| 4222 / 8222 | node-nats / monitor | | 9180 | node-control-metrics |
-| 4200 | node-opencode | | | |
+| 4200 | node-opencode | | 8899 | node-control-admin |
+| 4222 / 8222 | node-nats / monitor | | 9090 | node-compute |
+| 8000 | node-vllm | | 9100 | node-kvrouter |
+| 8001–8003 | embed / rerank / audio | | 9180 | node-control-metrics |
+| 8080 | node-agent-gateway | | | |
 
 A shared *number* is not a collision — the **address** decides. `implementation_state`
 in the contract says whether the code exists; `runtime` says what was observed
@@ -559,22 +628,28 @@ make test-report SCOPE=all   # JUnit XML + .state/reports/summary.json
 root Makefile actually delegates to both roles, so "all" cannot quietly mean
 less.
 
-The fabric suite at `tests/` covers the cross-cutting concerns:
+The fabric suite at `tests/` covers the cross-cutting concerns. It is 47 files;
+the groups below are the map, and `ls tests/` is the enumeration.
 
-| Test | Covers |
+| Group | Files |
 |---|---|
-| `test_contracts.py` | Cross-role contract conformance. |
-| `test_layout.py` | The repository layout matches what the documentation claims; links resolve; no hard-coded host paths. |
-| `test_claims.py` | Live surfaces state current truth — counts match disk, and past-true statements stay dead. |
-| `test_shims.py` | Every legacy name is a symlink to its numbered home. |
-| `test_keys.py` | No key material is ever tracked. |
-| `test_election.py`, `test_consensus.py`, `test_election_simulation.py` | The election arc, in process, with no sleeps. |
-| `test_authz_golden.py` | Pinned, keyless deterministic outputs of the signing implementation. |
-| `test_registry_crossverify.py` | Cross-language authority: the Python authz and goSpark's Go authz must agree byte for byte. |
-| `test_agx_node.py`, `test_goagx_repo.py` | The AGX twin's parity, and the generated distribution's export manifest. |
-| `test_cpu_node_smoke.py`, `test_election_container.py` | The whole node graph with no GPU, and the election arc inside the built image. |
-| `test_shell.py` | Shell scripts: the mistakes `bash -n` cannot see. Every script must answer `--help` and change nothing when it does. |
-| `test_ci.py` | The GitHub workflows are a pinned mirror of the local gate, and nothing more. |
+| Contracts and authority | `test_contracts.py`, `test_authz_golden.py`, `test_registry_crossverify.py`, `test_consensus.py` |
+| Election and trust roots | `test_election.py`, `test_election_simulation.py`, `test_election_container.py` |
+| Layout, claims and key hygiene | `test_layout.py`, `test_claims.py`, `test_agents.py`, `test_shims.py`, `test_keys.py`, `test_identity_pages.py` |
+| Gate, release and tooling | `test_ci.py`, `test_shell.py`, `test_release.py`, `test_render.py`, `test_role_skills.py`, `test_wiki_skills.py`, `test_nv_search.py`, `test_notify.py`, `test_plugin.py` |
+| Node and image | `test_cpu_node_smoke.py`, `test_agx_node.py`, `test_goagx_repo.py`, `test_node_setup_join.py`, `test_service_timeouts.py`, `test_hardening.py` |
+| Vault and knowledge | `test_chroma.py`, `test_precontext.py`, `test_rag_corpus.py`, `test_vector_corpus.py`, `test_provenance.py`, `test_proposal.py`, `test_oob.py` |
+| Evidence, liveness and transport | `test_checkpoints.py`, `test_merkle.py`, `test_checkpoint_anchor.py`, `test_idle_evidence.py`, `test_liveness.py`, `test_liveness_service.py`, `test_telemetry_push.py`, `test_http_transport.py` |
+| Reflex layer | `test_reflex_contract.py`, `test_reflex_plan.py`, `test_reflex_rag.py` |
+| Telemetry without hardware | `test_gpu_telemetry_hardware_free.py` |
+
+Three of these are worth calling out because they are the ones a newcomer
+underestimates: `test_claims.py` enforces that live surfaces state current
+truth (counts match disk, and past-true statements stay dead);
+`test_layout.py` enforces that the documented layout matches the tree, that
+links resolve and that no host path is hard-coded; and
+`test_registry_crossverify.py` proves the Python and Go verifiers agree, so
+the two implementations cannot drift apart.
 
 ### 9.3 The `sparknet` CLI
 
@@ -645,6 +720,7 @@ The gate steps, and the file that enforces each rule:
 | `lint` | Ruff over the whole fabric: `E,F,I,UP` plus `B,SIM,RUF,S`. | `pyproject.toml` |
 | `format-check` | `ruff format --check`, whole tree. | `pyproject.toml` |
 | `shellcheck` | Shell scripts, under the pinned binary the target provisions. | `.shellcheckrc` |
+| `role-skills-check` | Both role-local catalogs: manifests, licenses and the removal list. | `scripts/sync-role-skills.py` + `.inventory.json` |
 | `validate` | Both roles' charters, plans and manifests. | each role's `Makefile` |
 | `contract-test` | The peer still matches `contracts/`. | `tests/test_contracts.py` |
 | `render-check` | `contracts/manifest.json` is not stale. | `scripts/sparknet-render.py` |
@@ -793,8 +869,9 @@ lists, and vice versa. Change one, change the other, in the same commit.
 | Cluster trust root | `master-node/manifests/cluster-trust-root.json` | Formed by a unanimous election. |
 | WireGuard templates | `peer-node/configs/wireguard/`, `master-node/configs/wireguard/` | Rendered at `0600`; `APPLY=1` to write, dry-run by default. |
 | Node compose env | `peer-node/.state/spark.env` (or `spark-agx.env`) | Written by the setup script; gitignored. |
-| goSpark config | `configs/*.example.yaml` in the goSpark repository | YAML with `GOSPARK_*` environment overrides. |
-| goSpark pins | `goagx/GOSPARK_PIN` | One goSpark revision this distribution builds against. |
+| goSpark config | `gospark/configs/*.example.yaml` | Copy and edit; never commit the copy. YAML with `GOSPARK_*` environment overrides. |
+| goSpark pin | `goagx/GOSPARK_PIN` | One goSpark revision this distribution builds against. |
+| Role-local skills | `peer-node/.opencode/skills/`, `master-node/.opencode/skills/` | Generated catalogs with `.inventory.json` provenance; re-generated by `scripts/sync-role-skills.py`, checked by `make role-skills-check`. |
 
 **Secrets** live under `.state/` — directory `0700`, files `0600`, gitignored —
 and are referenced by path only. For the master role the state directory
@@ -842,19 +919,33 @@ Broadly:
 
 - **Implemented and exercised** — the signed authorization scheme, the
   election and trust-root machinery, the isolated signer, the peer's guard,
-  the overlay anchor, the dispatch bridge, the share regime, the proposal
-  exchange, the provenance chain, the node image and its compose graph, the
-  bundles, the gates.
-- **Contracted and scaffolding** — the master-side registry push listener, the
-  nocturnal scheduler, share ratification, the cluster KillSwitch, several
-  master-side ports (`4203`, `4220`–`4223`), the agent domain ports `4097`–
-  `4100`.
+  the overlay anchor (userspace `wireguard-go` on the AGX hosts), the dispatch
+  bridge, the share regime, the proposal exchange, the provenance chain, the
+  registry publication and delivery channel, the 8090 peer intake (telemetry
+  and RFI requests), the reflex broker and its schema, evidence capture, the
+  review agents, the WireGuard observer, peer telemetry push, liveness, the
+  checkpoint anchor and the merkle primitive, the vault curator, the node
+  image and its compose graph, the bundles, and the gates.
+- **Built but not fully exercised in the field** — the cluster KillSwitch: the
+  implementation and its fake-runner tests are complete (iptables, dry-run by
+  default, root-gated), but the destructive run on a real Master is
+  `DoD: confirm: user`. The nocturnal scheduler's state machine (`plan` /
+  `arm` / `status` / `abort`) is built; it dispatches nothing until its next
+  increment.
+- **Contracted and scaffolding** — the agent domain ports `4097`, `4098` and
+  `4100`, the admin surface (`8088`, configuration exists but nothing binds in
+  the shipped tree), and the master-side ports `4220`–`4223` (git, file-share,
+  NAT gateway, vector embed) are spec-only by deliberate role boundary. `4200`
+  `opencode-serve` is spec-only.
 - **Deliberately parked** — the destructive legs of the deployment runbook
   (rollback; replace-Master re-formation) are documented and deliberately left
-  unexecuted by operator decision. Do not describe them as run.
+  unexecuted by operator decision. The reflex layer's enforce stage is
+  deferred; shadow and assist are what run.
 
 The honest test: if you cannot point at a command that exercises it, it is
-specified.
+specified. `contracts/ports.json` is the machine-readable version of this
+paragraph, and `tests/test_claims.py` keeps the live surfaces from claiming
+more.
 
 ---
 
@@ -868,6 +959,7 @@ specified.
 | **Contract** | A rule both roles must agree on, held in `contracts/`. |
 | **Capability** | One entry of the closed vocabulary in `contracts/capabilities.json`. |
 | **Registry** | The Master-signed statement of which node may hold which capability. |
+| **Publication** | The signed, sequenced artifact that carries a registry to a peer (`contracts/registry-publication.json`). |
 | **Envelope** | A signed bundle of identity, capabilities and validity timestamps. |
 | **Guard** | The peer's daemon that verifies Master-signed approvals and applies them to protected paths. |
 | **Anchor** | The overlay bring-up unit; it owns the `wg0` interface and pins its config. |
