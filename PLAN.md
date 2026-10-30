@@ -4064,6 +4064,9 @@ standing one.
   `goagx-drift-check`. The publication is from the current (dirty) worktree, so
   it is not release-grade until the fabric is committed and goagx republished
   from that commit; the published `VERSIONS.json` names the current HEAD.
+  **Update:** the fabric was committed at `dd9c2d5` and the distribution
+  republished from that commit (`52de5d8 → 170fd6c`), so this is release-grade;
+  the published `VERSIONS.json` names `dd9c2d5`, and the worktree is clean.
   Everything verified: licenses are 31 MIT + Apache-2.0 (`skill-creator`) +
   NOASSERTION (`wiki-audit`); skill hashes cover the whole tree; role-catalog
   failure is fail-closed; both bundles contain `VERSION` + `sbom/` and exclude
