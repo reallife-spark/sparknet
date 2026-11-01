@@ -211,6 +211,10 @@ behaviour, since no suite on this machine can see it.
 
 ## Phase 9 — rollback and re-formation
 
+> The approved 2026-11-08 destructive recovery exercise has its own procedure:
+> [`phase9-recovery-runbook.md`](phase9-recovery-runbook.md). Do not substitute
+> that restore proof for the election rollback below; they are different risks.
+
 - Rollback an election: `systemctl disable --now sparknet-master-signer.service`,
   remove the state trust root and the flipped identity fields, `ip link del wg1`,
   rebuild from Phase 0.

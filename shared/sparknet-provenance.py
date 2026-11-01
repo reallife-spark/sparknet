@@ -523,6 +523,8 @@ def verify_note(path: Path, record: dict[str, Any] | None = None, vault: Path | 
     try:
         frontmatter, body = split_note(raw)
     except (FrontmatterError, UnicodeDecodeError) as exc:
+        if path.parent.name == "01_Inbox" and not raw.startswith(b"---"):
+            return "pending", "raw inbox item awaiting acceptance"
         return "invalid", f"unparseable: {exc}"
     try:
         tracking = tracking_of(frontmatter)
@@ -1031,6 +1033,7 @@ def ingest_note(
     agent: str = "ingest",
     model: str = "local",
     clock=None,
+    target_name: str | None = None,
 ) -> Path:
     """Land one item in `01_Inbox/` as an unsigned, therefore pending, note.
 
@@ -1061,7 +1064,13 @@ def ingest_note(
     )
     label = title or heading or source
     slug = slugify(label)
-    target = vault / "01_Inbox" / f"{slug}.md"
+    if target_name is not None:
+        if not target_name or "/" in target_name or "\\" in target_name or target_name.startswith("."):
+            raise ProvenanceError("target_name must be a single safe filename")
+        filename = target_name
+    else:
+        filename = f"{slug}.md"
+    target = vault / "01_Inbox" / filename
     if target.exists():
         raise ProvenanceError(f"{target} already exists — refusing to overwrite an inbox item")
 
@@ -1294,6 +1303,15 @@ def build_approval_data(
     return data
 
 
+def _adopt_vault_owner(path: Path, vault: Path) -> None:
+    """A root-run service writing into a user's vault must not leave root-owned files."""
+    try:
+        st = vault.stat()
+        os.chown(path, st.st_uid, st.st_gid)
+    except OSError:
+        pass
+
+
 def append_block(vault: Path, data: dict[str, Any]) -> dict[str, Any]:
     """Append one signed, hash-chained block to this vault's ledger.
 
@@ -1332,6 +1350,7 @@ def append_block(vault: Path, data: dict[str, Any]) -> dict[str, Any]:
     tmp.write_text(json.dumps(ledger, indent=2) + "\n")
     tmp.chmod(0o600)
     os.replace(tmp, ledger_path)
+    _adopt_vault_owner(ledger_path, vault)
     ok, detail = verify_chain(ledger)
     if not ok:
         raise ProvenanceError(f"appended a block that does not verify: {detail}")

@@ -65,6 +65,7 @@ from pathlib import Path
 #: This is the **node** allow-list: what a node's own Open WebUI may ingest.
 NODE_ROOTS = {
     "AGENTS.md",
+    "CONTEXT.md",
     "MISSION.md",
     "INTENT.md",
     "README.md",
@@ -98,7 +99,7 @@ DIR_PREFIXES = ("contracts",)
 
 #: Role subvaults contribute only their charter-level files, never their vault.
 ROLES = ("peer-node", "master-node")
-ROLE_ROOT_FILES = {"AGENTS.md", "MISSION.md", "INTENT.md", "README.md", "PLAN.md"}
+ROLE_ROOT_FILES = {"AGENTS.md", "CONTEXT.md", "MISSION.md", "INTENT.md", "README.md", "PLAN.md"}
 
 #: Suffixes worth ingesting. The contract tree's JSON (capabilities, ports,
 #: overlay, schemas) is structural and included; keys are ``.ed25519`` (always

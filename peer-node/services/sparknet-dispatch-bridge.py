@@ -270,6 +270,20 @@ def _load_guard_replay() -> Any:
     return module
 
 
+def _load_rfi_client() -> Any:
+    """The one RFI request client, loaded by path so the bridge adds no transport."""
+    path = Path(__file__).resolve().parent / "sparknet-rfi-client.py"
+    if "sparknet_rfi_client_bridge" in sys.modules:
+        return sys.modules["sparknet_rfi_client_bridge"]
+    spec = importlib.util.spec_from_file_location("sparknet_rfi_client_bridge", path)
+    if spec is None or spec.loader is None:
+        raise FileNotFoundError(f"RFI client missing at {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def _state_dir(vault_root: Path) -> Path:
     """Runtime state: keys and sessions. Never the vault, never the repo."""
     env = os.environ.get("SPARKNET_STATE_DIR", "").strip()
@@ -1164,6 +1178,34 @@ class Bridge:
             "grant_use_id": block["data"].get("grant_use_id"),
         }
 
+    def vault_rfi(self, body: dict[str, Any], grant: dict[str, Any]) -> dict[str, Any]:
+        """Ask the Master for missing fabric knowledge, within this grant's scope."""
+        question = body.get("question")
+        if not isinstance(question, str) or not question.strip():
+            raise _HttpRequestError(400, "malformed", "question must be a non-empty string")
+        requested = body.get("scope")
+        if requested is None:
+            requested = ["contracts", "docs"]
+        if not isinstance(requested, list) or not requested or any(not isinstance(s, str) or not s for s in requested):
+            raise _HttpRequestError(400, "malformed", "scope must be a non-empty list of categories")
+        client = _load_rfi_client()
+        try:
+            result = client.request_knowledge(
+                self.vault_root,
+                question=question,
+                scope=requested,
+                endpoint=str(body.get("endpoint") or "") or None,
+                timeout=float(body.get("timeout") or 10),
+            )
+        except (RuntimeError, OSError, ValueError) as exc:
+            raise _HttpRequestError(502, "master-unreachable", str(exc))
+        return {
+            "ok": bool(result.get("ok")),
+            "request_id": result["request"]["request_id"],
+            "status": result.get("status"),
+            "record": result.get("record"),
+        }
+
     # -- dispatch ----------------------------------------------------------------
 
     # -- admin requests (admin-supervise, fabric Step 29 phase 2) -------------
@@ -1548,6 +1590,8 @@ class Bridge:
             return 200, self.vault_promote(body, grant)
         if method == "POST" and path == "/vault/patch":
             return 200, self.vault_patch(body, grant)
+        if method == "POST" and path == "/vault/rfi":
+            return 200, self.vault_rfi(body, grant)
         raise _HttpRequestError(404, "unknown-path", f"{method} {path}")
 
 

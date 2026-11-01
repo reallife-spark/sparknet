@@ -94,5 +94,11 @@
     "general": {
       "model": "agx64/qwen3.6-35b-262k-q8"
     }
-  }
+  },
+  "instructions": [
+    "CONTEXT.md",
+    "AGENTS.md",
+    "MISSION.md",
+    "INTENT.md"
+  ]
 }

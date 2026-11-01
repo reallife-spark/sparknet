@@ -79,7 +79,7 @@ example="$target/.env.example"
 # Identity pages are role content, not generated here. A fresh role bundle
 # should already carry them; warn rather than invent content that must be
 # role-specific.
-for f in AGENTS.md MISSION.md INTENT.md; do
+for f in AGENTS.md CONTEXT.md MISSION.md INTENT.md; do
   [ -f "$target/$f" ] || printf 'sparknet-env-init: WARNING — %s is missing; a role bundle should carry it.\n' \
     "$target/$f" >&2
 done

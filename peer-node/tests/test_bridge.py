@@ -623,7 +623,7 @@ def test_openapi_spec_describes_the_vault_tools() -> None:
         for op in item.values()
         if isinstance(op, dict) and op.get("operationId")
     }
-    for tool in ("vault_list", "vault_cat", "vault_capture", "vault_promote", "vault_patch", "listModels"):
+    for tool in ("vault_list", "vault_cat", "vault_capture", "vault_promote", "vault_patch", "vault_rfi", "listModels"):
         assert tool in operations, f"OpenAPI must describe the {tool} operation"
     assert "/v1/models" in spec["paths"]
     assert "BearerAuth" in spec.get("components", {}).get("securitySchemes", {})

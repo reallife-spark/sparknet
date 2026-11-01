@@ -175,7 +175,7 @@ def test_the_model_is_selectable_as_an_agent():
 
     compose = (ROLE_ROOT / "configs" / "ai-stack" / "docker-compose.yml").read_text()
     assert "masterspike" in compose
-    assert 'MODEL_FILTER_LIST: "plan,build,vault,node-orchestrator,masterspike"' in compose
+    assert 'MODEL_FILTER_LIST: "llama3.2:latest,plan,build,vault,node-orchestrator,masterspike"' in compose
 
     stake = json.loads((ROLE_ROOT / "manifests" / "masterspike.json").read_text())
     assert stake["agent"]["selectable"] is True

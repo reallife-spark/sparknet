@@ -401,7 +401,7 @@ EXCLUDE_PARTS = {
     ".ruff_cache",
 }
 
-SCOPES = ("peer", "master", "fabric")
+SCOPES = ("peer", "master", "fabric", "shared")
 DEFAULT_MAX_CHARS = 2000
 
 
@@ -422,6 +422,9 @@ def resolve_scope(scope: str) -> tuple[str, Path, Path]:
         vault = REPO_ROOT / "peer-node"
     elif scope == "master":
         vault = REPO_ROOT / "master-node"
+    elif scope == "shared":
+        vault = REPO_ROOT / "master-node"
+        return "sparknet-shared", vault, vault / ".state" / "chroma-shared"
     else:
         vault = REPO_ROOT
     return f"sparknet-{scope}", vault, vault / ".state" / "chroma"
@@ -517,6 +520,27 @@ def chunk_text(text: str, max_chars: int = DEFAULT_MAX_CHARS) -> list[str]:
     return chunks
 
 
+def _shared_docs(vault: Path) -> list[dict[str, object]]:
+    """Only markdown payloads an accepted share staged under 01_Inbox/share-*.
+
+    Privacy model A: an explicit share is the only way a page reaches the
+    Master's shared collection. The ordinary fabric allow-list is not used
+    here, because it excludes 01_Inbox by design; this narrower rule admits a
+    path only when its first two parts are exactly the share staging shape.
+    """
+    docs: list[dict[str, object]] = []
+    for path in sorted(vault.glob("01_Inbox/share-*/**/*.md")):
+        if path.is_symlink() or not path.is_file():
+            continue
+        relative = path.relative_to(vault)
+        if len(relative.parts) < 4 or relative.parts[0] != "01_Inbox" or not relative.parts[1].startswith("share-"):
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for index, chunk in enumerate(chunk_text(text)):
+            docs.append({"id": f"shared:{relative}#{index}", "document": chunk, "path": str(relative)})
+    return docs
+
+
 def plan_index(scope: str, vault: Path) -> list[dict[str, object]]:
     """List every doc that ``index`` would write, without touching chromadb.
 
@@ -526,6 +550,8 @@ def plan_index(scope: str, vault: Path) -> list[dict[str, object]]:
     The ``fabric`` scope is the shared store, so it is an allow-list; the role
     scopes index their own vault whole.
     """
+    if scope == "shared":
+        return _shared_docs(vault)
     allow_list = _policy().FABRIC_ROOTS if scope == "fabric" else None
     docs: list[dict[str, object]] = []
     for rel in iter_markdown(vault, allow_list=allow_list):

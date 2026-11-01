@@ -39,6 +39,8 @@ PINNED_USES = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._/-]+@[0-9a-f]{40}$")
 #: is the vocabulary the mirror has to match. A deliberate edit to the script
 #: must edit this line too — that is the point.
 PRE_MERGE_GATE_STEPS = (
+    "context-check",
+    "governance-check",
     "keys-check",
     "shims-check",
     "lint",

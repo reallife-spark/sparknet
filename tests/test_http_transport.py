@@ -401,3 +401,45 @@ def test_slow_client_is_dropped_then_a_fresh_connection_is_served(http, keypair,
         assert payload["ok"] is True
     finally:
         server.close()
+
+
+def test_a_keyring_reports_which_peer_key_verified(http, authz, keypair) -> None:
+    """4203 has more than one peer; the transport must not pin one key.
+
+    The router receives the matching key id, not a caller-supplied claim. It
+    still decides whether that id may do anything.
+    """
+    seen: list[str | None] = []
+
+    def router(method, path, body, identity):
+        seen.append(identity.get("verified_key_id"))
+        return 200, {"ok": True}
+
+    _, first = authz.generate_keypair()
+    second_priv_b64 = authz.generate_keypair()[1]
+    second = authz.private_key_from_b64(second_priv_b64)
+    port = _free_port()
+    server = http.serve(
+        router,
+        bind="127.0.0.1",
+        port=port,
+        public_keys={"peer-a": authz.private_key_from_b64(first).public_key(), "peer-b": second.public_key()},
+    )
+    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
+    thread.start()
+    try:
+        status, body = http.post_json(f"http://127.0.0.1:{port}", "POST", "/v1/x", {"x": 1}, second)
+        assert (status, body["ok"]) == (200, True)
+        assert seen == ["peer-b"]
+        status, body = http.post_json(
+            f"http://127.0.0.1:{port}",
+            "POST",
+            "/v1/x",
+            {"x": 1},
+            authz.private_key_from_b64(authz.generate_keypair()[1]),
+        )
+        assert status == 401 and body["reason"] == "bad-signature"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)

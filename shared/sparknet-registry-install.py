@@ -146,6 +146,14 @@ def verify_publication(publication: Any, public_key: Any, authz: Any, schema: An
     }
 
 
+def _adopt_vault_owner(path: Path, vault: Path) -> None:
+    try:
+        st = vault.stat()
+        os.chown(path, st.st_uid, st.st_gid)
+    except OSError:
+        pass
+
+
 def _atomic_write_text(path: Path, text: str) -> None:
     """Replace ``path`` with ``text`` in one step, readable by concurrent readers."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -224,10 +232,14 @@ def accept_publication(
     manifests = Path(vault_root) / "manifests"
     # Registry first, record second: see the module docstring. A crash in
     # between makes the publication idempotent instead of permanently refusable.
-    _atomic_write_text(manifests / REGISTRY_FILE, json.dumps(verified["registry"], indent=2) + "\n")
+    registry_path = manifests / REGISTRY_FILE
+    _atomic_write_text(registry_path, json.dumps(verified["registry"], indent=2) + "\n")
+    _adopt_vault_owner(registry_path, Path(vault_root))
     record = {
         **result,
         "installed_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
-    _atomic_write_text(manifests / INSTALLATION_FILE, json.dumps(record, indent=2) + "\n")
+    installation_path = manifests / INSTALLATION_FILE
+    _atomic_write_text(installation_path, json.dumps(record, indent=2) + "\n")
+    _adopt_vault_owner(installation_path, Path(vault_root))
     return {"status": "REGISTRY_INSTALLED", **result}

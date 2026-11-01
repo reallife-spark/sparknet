@@ -54,6 +54,7 @@ EXPECTED_TOP_LEVEL = {
     ".opencode",
     # project files
     "AGENTS.md",
+    "CONTEXT.md",
     "MEMORY.md",
     "MISSION.md",
     "INTENT.md",

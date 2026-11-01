@@ -205,6 +205,7 @@ def test_the_node_allow_list_is_unchanged() -> None:
     """The node's corpus was defined before the fabric list existed; it stays put."""
     expected = {
         "AGENTS.md",
+        "CONTEXT.md",
         "MISSION.md",
         "INTENT.md",
         "README.md",

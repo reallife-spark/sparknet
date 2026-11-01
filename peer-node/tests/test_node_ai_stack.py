@@ -145,7 +145,7 @@ def test_open_webui_declares_the_node_agent_surface():
         "any other base URL routes the node's agents through something foreign"
     )
     assert env.get("MODEL_FILTER_ENABLED") == "true"
-    assert env.get("MODEL_FILTER_LIST") == "plan,build,vault,node-orchestrator,masterspike"
+    assert env.get("MODEL_FILTER_LIST") == "llama3.2:latest,plan,build,vault,node-orchestrator,masterspike"
     assert env.get("DEFAULT_MODELS") == "llama3.2:latest", (
         "the default chat model is a local Ollama model present on every node, "
         "so chat keeps answering even if the bridge grant lapses; the node's "
@@ -215,7 +215,9 @@ def test_the_declared_models_match_the_webui_model_filter():
     webui = _compose_services()["open-webui"]
     filter_list = webui.get("environment", {}).get("MODEL_FILTER_LIST", "").split(",")
     ids = [m["id"] for m in manifest["selectable"]]
-    assert filter_list == ids, "the model filter and agent-models.json must name the same surface"
+    assert filter_list == ["llama3.2:latest", *ids], (
+        "the model filter names the local chat default plus every agent model"
+    )
 
 
 # --- the boundary the stack must not cross ------------------------------------

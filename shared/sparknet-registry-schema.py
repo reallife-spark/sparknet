@@ -88,7 +88,7 @@ FIELD_KEYWORDS = frozenset(
 ANNOTATION_KEYWORDS = frozenset({"purpose", "description"})
 
 #: The value formats a field may declare.
-FORMATS = frozenset({"base64", "base64_32", "base64_64", "timestamp", "ipv4"})
+FORMATS = frozenset({"base64", "base64_32", "base64_64", "timestamp", "ipv4", "ipv4_host"})
 
 #: The JSON types a field may declare.
 TYPES = frozenset({"string", "boolean", "object", "array", "null"})
@@ -196,6 +196,12 @@ def _check_format(value: str, fmt: str, where: str, problems: list[str]) -> None
         match = _IPV4.match(value)
         if not match or any(int(part) > 255 for part in match.groups()):
             problems.append(f"{where}: {value!r} is not an IPv4 address")
+        return
+    if fmt == "ipv4_host":
+        address, _, prefix = value.partition("/")
+        match = _IPV4.match(address)
+        if not match or any(int(part) > 255 for part in match.groups()) or (prefix and prefix != "32"):
+            problems.append(f"{where}: {value!r} is not an IPv4 host address or /32")
         return
     problems.append(f"{where}: unknown format {fmt!r}")
 

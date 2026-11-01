@@ -75,6 +75,14 @@ def installed_request_ids(vault_root: Path) -> list[str]:
     return [str(x) for x in installation_record(vault_root).get("request_ids") or []]
 
 
+def _adopt_vault_owner(path: Path, vault: Path) -> None:
+    try:
+        st = vault.stat()
+        os.chown(path, st.st_uid, st.st_gid)
+    except OSError:
+        pass
+
+
 def _atomic_write(path: Path, data: bytes) -> None:
     """Write via a temp file in the same directory, so a reader never sees half."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -131,6 +139,7 @@ def accept_answer(
         return {"status": "refused", "reason": authz.REASON_RFI_UNSAFE_ITEM_NAME, "item": None}
 
     _atomic_write(target, content)
+    _adopt_vault_owner(target, vault_root)
 
     record = installation_record(vault_root)
     ids = [str(x) for x in record.get("request_ids") or []]
@@ -146,10 +155,9 @@ def accept_answer(
             "installed_at": (now or datetime.now(timezone.utc)).isoformat(),
         },
     }
-    _atomic_write(
-        vault_root / INSTALL_RECORD_RELPATH,
-        (json.dumps(record, indent=2, sort_keys=True) + "\n").encode("utf-8"),
-    )
+    record_path = vault_root / INSTALL_RECORD_RELPATH
+    _atomic_write(record_path, (json.dumps(record, indent=2, sort_keys=True) + "\n").encode("utf-8"))
+    _adopt_vault_owner(record_path, vault_root)
 
     block = provenance.build_inbox_acceptance(
         vault_root,

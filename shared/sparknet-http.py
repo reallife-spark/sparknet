@@ -352,18 +352,29 @@ class _Handler(TimeoutHandler):
         parsed_ts = self._parse_ts(timestamp)
         if parsed_ts is None:
             raise RequestError(401, "bad-timestamp", "timestamp is not ISO-8601 UTC")
-        key = self.server.public_key  # type: ignore[attr-defined]
-        if key is None:
-            raise RequestError(503, "no-verifier", "this endpoint has no public key configured")
-        if not authz.verify_signature(key, signature, request_message(self.command, self.path, body, timestamp)):
-            raise RequestError(401, "bad-signature", "signature does not verify against the configured key")
+        message = request_message(self.command, self.path, body, timestamp)
+        keyring = getattr(self.server, "public_keys", None) or {}
+        if keyring:
+            for key_id, candidate in keyring.items():
+                if authz.verify_signature(candidate, signature, message):
+                    verified_key_id = key_id
+                    break
+            else:
+                raise RequestError(401, "bad-signature", "signature does not verify against any configured key")
+        else:
+            key = self.server.public_key  # type: ignore[attr-defined]
+            if key is None:
+                raise RequestError(503, "no-verifier", "this endpoint has no public key configured")
+            if not authz.verify_signature(key, signature, message):
+                raise RequestError(401, "bad-signature", "signature does not verify against the configured key")
+            verified_key_id = None
 
         now = self.server.clock() if self.server.clock else datetime.now(timezone.utc)  # type: ignore[attr-defined]
         age = now - parsed_ts
         if age < -timedelta(seconds=5) or age > timedelta(seconds=self.server.max_age_seconds):  # type: ignore[attr-defined]
             raise RequestError(401, "stale", f"request is {age.total_seconds():.0f}s outside the freshness window")
 
-        return {}
+        return {"verified_key_id": verified_key_id}
 
     @staticmethod
     def _parse_ts(value: str) -> datetime | None:
@@ -381,12 +392,8 @@ class _Handler(TimeoutHandler):
             return
         raw = self._read_body()
         try:
-            self._verify(raw)
-        except RequestError as exc:
-            self._refuse(exc)
-            return
-        try:
-            identity = {"source_kind": source_kind(self.client_address)}
+            identity = self._verify(raw)
+            identity["source_kind"] = source_kind(self.client_address)
             code, payload = self.server.router("GET", self.path, {}, identity)  # type: ignore[attr-defined]
         except RequestError as exc:
             self._refuse(exc)
@@ -437,13 +444,20 @@ def serve(
     *,
     bind: str = DEFAULT_BIND,
     port: int,
-    public_key: Any,
+    public_key: Any | None = None,
+    public_keys: dict[str, Any] | None = None,
     max_age_seconds: int = DEFAULT_MAX_AGE_SECONDS,
     now: Callable[[], datetime] | None = None,
     ready: Callable[[], None] | None = None,
     loopback_only_routes: tuple[str, ...] = (),
 ) -> ThreadingHTTPServer:
     """Start a signed JSON server on ``(bind, port)``.
+
+    Exactly one of ``public_key`` (one pinned caller) or ``public_keys``
+    (``key_id -> key``, e.g. one per registry node) must be supplied. A keyring
+    verifies against every candidate and tells the router which key matched in
+    ``identity["verified_key_id"]``; the router still decides what that key may
+    do. The transport never chooses an authorisation from a key id alone.
 
     ``router(method, path, body, identity) -> (status, payload)`` answers every
     request. ``ready`` is called once the socket is listening so a test can
@@ -454,9 +468,12 @@ def serve(
     the router carries ``source_kind`` (``"loopback"`` or ``"overlay"``), so a
     router can apply its own per-class policy after the envelope verifies.
     """
+    if (public_key is None) == (not public_keys):
+        raise ValueError("serve() needs exactly one of public_key or public_keys")
     server = ThreadingHTTPServer((bind, port), _Handler)
     server.router = router  # type: ignore[attr-defined]
     server.public_key = public_key  # type: ignore[attr-defined]
+    server.public_keys = dict(public_keys) if public_keys else {}  # type: ignore[attr-defined]
     server.clock = now  # type: ignore[attr-defined]
     server.max_age_seconds = max_age_seconds  # type: ignore[attr-defined]
     server.loopback_only_routes = loopback_only_routes  # type: ignore[attr-defined]

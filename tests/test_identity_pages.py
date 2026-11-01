@@ -50,8 +50,6 @@ def test_identity_page_exists_at_the_scope_root(scope: str, name: str) -> None:
 @pytest.mark.parametrize("scope", SCOPES)
 @pytest.mark.parametrize("name", IDENTITY_FILES)
 def test_identity_page_declares_its_role_and_template_flag(scope: str, name: str) -> None:
-    if scope == "master" and name == "MISSION.md":
-        pytest.skip("master-node/MISSION.md is deliberately retained as the build-status declaration")
     fields = frontmatter(SCOPES[scope] / name)
     assert fields.get("role") == scope, f"{scope}/{name} must declare role: {scope}, found {fields.get('role')!r}"
     assert fields.get("template") == "true", (
@@ -83,7 +81,7 @@ def test_intent_is_unsigned_root_governance(scope: str) -> None:
 
 
 def test_master_mission_keeps_its_build_status_contract() -> None:
-    """The master MISSION is deliberately retained as the status declaration."""
+    """The master MISSION declares status in frontmatter, not in prose."""
     fields = frontmatter(SCOPES["master"] / "MISSION.md")
     assert fields.get("status") in BUILD_STATUSES, (
         "master-node/MISSION.md must keep a build status from the closed vocabulary"
@@ -94,7 +92,7 @@ def test_master_mission_keeps_its_build_status_contract() -> None:
 def test_role_config_loads_the_identity_pages(scope: str) -> None:
     """A role session must get the role's own charter, purpose and contract."""
     config = json.loads((SCOPES[scope] / "opencode.json").read_text(encoding="utf-8"))
-    assert {"AGENTS.md", "MISSION.md", "INTENT.md"} <= set(config["instructions"]), (
+    assert {"CONTEXT.md", "AGENTS.md", "MISSION.md", "INTENT.md"} <= set(config["instructions"]), (
         f"{scope}/opencode.json must load AGENTS.md, MISSION.md and INTENT.md"
     )
     assert config["references"]["knowledge"]["path"] == ".", (

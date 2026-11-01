@@ -110,6 +110,7 @@ SLICE_INCLUDED_TOP = frozenset(
         "07_Archives",
         "_staging",
         "AGENTS.md",
+        "CONTEXT.md",
         "MISSION.md",
         "INTENT.md",
         "docs",
@@ -532,8 +533,23 @@ def organize_into_directories(
     return moved
 
 
+def _read_context(template: Path) -> str:
+    """The generated operating context, if this template carries one."""
+    path = template / "CONTEXT.md"
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
 def create_user_model(
-    base: str, token: str, user_id: str, kb_id: str, base_model: str = "plan", display_name: str | None = None
+    base: str,
+    token: str,
+    user_id: str,
+    kb_id: str,
+    base_model: str = "llama3.2:latest",
+    display_name: str | None = None,
+    system_context: str = "",
 ) -> str:
     """Create the user's own model bound to `base_model` with their KB attached."""
     model_id = f"peer-{user_id}"
@@ -542,7 +558,7 @@ def create_user_model(
         "base_model_id": base_model,
         "name": display_name or f"peer-{user_id}",
         "meta": {"knowledge": [kb_id]},
-        "params": {},
+        "params": {"system": system_context} if system_context else {},
         "access_grants": [_grant(user_id, "read")],
         "is_active": True,
     }
@@ -558,7 +574,7 @@ def provision_user(
     template: Path,
     knowledge_root: Path,
     user: dict,
-    base_model: str = "plan",
+    base_model: str = "llama3.2:latest",
     progress: Any = None,
 ) -> dict:
     """Provision a peer- vault + KB + default model for one approved user.
@@ -634,7 +650,15 @@ def provision_user(
 
         if progress:
             progress("creating default model")
-        model_id = create_user_model(base, token, user_id, kb_id, base_model=base_model, display_name=f"peer-{name}")
+        model_id = create_user_model(
+            base,
+            token,
+            user_id,
+            kb_id,
+            base_model=base_model,
+            display_name=f"peer-{name}",
+            system_context=_read_context(template),
+        )
         staged["model_id"] = model_id
         staged["stage"] = "done"
     finally:
@@ -701,7 +725,7 @@ def run_watch(
     password: str,
     template: Path,
     knowledge_root: Path,
-    base_model: str = "plan",
+    base_model: str = "llama3.2:latest",
     interval: int = 90,
     provision_existing: bool = True,
     master_copy=False,
@@ -780,7 +804,7 @@ def main() -> None:
             or "~/.local/state/sparknet/cluster2/webui-admin-password"
         ),
     )
-    p.add_argument("--base-model", default="plan")
+    p.add_argument("--base-model", default="llama3.2:latest")
     p.add_argument("--interval", type=int, default=90)
     p.add_argument("--no-provision-existing", action="store_true")
     p.add_argument("--once", action="store_true", help="one poll, then exit")

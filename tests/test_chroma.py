@@ -78,6 +78,11 @@ def test_scope_resolution_places_data_inside_the_scope_vault() -> None:
         REPO_ROOT,
         REPO_ROOT / ".state" / "chroma",
     )
+    assert chroma.resolve_scope("shared") == (
+        "sparknet-shared",
+        REPO_ROOT / "master-node",
+        REPO_ROOT / "master-node" / ".state" / "chroma-shared",
+    )
 
 
 def test_rejects_unknown_scope() -> None:
@@ -550,3 +555,14 @@ def test_a_chunk_that_left_the_corpus_leaves_the_index(tmp_path: Path) -> None:
     count_after = client.get_collection("sparknet-fabric").count()
     assert count_after < count_before
     assert count_after == len(chroma.plan_index("fabric", vault))
+
+
+def test_shared_scope_indexes_only_explicit_share_staging(tmp_path: Path) -> None:
+    (tmp_path / "01_Inbox" / "share-share-1" / "notes").mkdir(parents=True)
+    (tmp_path / "01_Inbox" / "share-share-1" / "notes" / "shared.md").write_text("explicit")
+    (tmp_path / "01_Inbox" / "unrelated.md").parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "01_Inbox" / "unrelated.md").write_text("not a share")
+    (tmp_path / "concepts").mkdir()
+    (tmp_path / "concepts" / "private.md").write_text("private")
+    docs = chroma.plan_index("shared", tmp_path)
+    assert [doc["path"] for doc in docs] == ["01_Inbox/share-share-1/notes/shared.md"]

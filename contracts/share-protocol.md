@@ -2,22 +2,26 @@
 
 Both roles implement this conversation. The peer side landed in
 `peer-node/PLAN.md` Steps 6 and 8, the Master side in
-`master-node/plans/MASTER_BUILD_PLAN.md` Steps 10–12, so the offer lifecycle, the
+`master-node/PLAN.md` Steps 10–12, so the offer lifecycle, the
 four clocks, the trust levels and the reconciliation rules are built and tested —
 against in-process node pairs with injected clocks, on a host that has no
 overlay.
 
-What is **not** built is the deployment. `peer-node/manifests/share-regime.json`
-records the status as `wired, not deployed`, and its `not_built_yet` names the
-live 4201/4202/4203 listeners, the stanza application and host-firewall
-exception, the Master's ratification service and the Master-hosted evidence
-repo; those are target-node legs marked `DoD: confirm: user`. The deployed fleet
+The 4201/4202 transport is live on the two-node pair as of 2026-10-31:
+`sparknet-node-0001` (agx64) and `sparknet-node-0002` (agx32) exchanged a real
+`kb-share` and `session-handoff`, staged payloads under
+`01_Inbox/share-<id>/`, and closed both shares. `peer-node/manifests/share-regime.json`
+records that state. The 4203 queue (`master-node/services/sparknet-share-ratify.py`)
+is built and rehearsed on loopback, but its live service is not deployed on the
+two-node pair; a three-node live fleet, stanza application, the host-firewall exception and
+the Master-hosted evidence repo remain `DoD: confirm: user`. The deployed fleet
 uses iptables, not nftables: the in-process renderer still emits a spec-only
 `nftables_exception` and must be translated to `SPARKNET-FW-*`/iptables before
-any live share transport is enabled. `contracts/ports.json` says the same
-thing in its own vocabulary — 4201 and 4202 are `implemented` in code and
-`not-listening` at runtime; 4203 is implemented in code (registry-checked and
-signer-signed) but has no listener, so its live leg is `DoD: confirm: user`.
+the time-boxed stanza is applied. `contracts/ports.json` keeps `runtime`
+`not-listening` because that axis describes the development host; its `status`
+records the dated live pair. The 4203 listener queues a verified request; it
+never signs. Only an explicit human `--approve`/`--refuse` reaches the
+isolated signer.
 
 The normative machine-readable policy is `contracts/capabilities.json`
 (`share_types`, `trust_levels`), `contracts/identity-schema.json` (`grant`),

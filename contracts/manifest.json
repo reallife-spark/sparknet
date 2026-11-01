@@ -29,7 +29,7 @@
       "contract": "ports",
       "file": "ports.json",
       "schema_version": "2.0",
-      "sha256": "7e0e9e6d8d65aa6a4a6d8dffe7fff19f9996d361dee945794e439f3cb0f41fff"
+      "sha256": "09ee7ce484abee29a6903cdb7c77b220638356868660a54c3d8299bf1f296ee9"
     },
     {
       "contract": "proposal-schema",
@@ -53,13 +53,13 @@
       "contract": "registry-schema",
       "file": "registry-schema.json",
       "schema_version": "1.0",
-      "sha256": "c5da6abd1578314bce9cccdeb4cf30b5568d07216a749b8e5ba5ea6e27641b22"
+      "sha256": "0f3b79f15a2692c7788a53f223faf1f6851321ebeaa34fb070aa35ad831b53e6"
     },
     {
       "contract": "rfi-schema",
       "file": "rfi-schema.json",
       "schema_version": "1.0",
-      "sha256": "84f03ab8b457feebc4b3c99137a12f69823fdb2dddfe942d6db6a2c6fd030e50"
+      "sha256": "377f608c1bfc001d2c4226ea4640a46aac7820d8131fdac8d4d9cdaeb57191c3"
     },
     {
       "contract": "telemetry-schema",
@@ -251,25 +251,25 @@
     },
     "4220": {
       "bound_by": "master",
-      "implementation_state": "spec-only",
+      "implementation_state": "implemented",
       "runtime": "not-listening",
       "service": "git-repo"
     },
     "4221": {
       "bound_by": "master",
-      "implementation_state": "spec-only",
+      "implementation_state": "implemented",
       "runtime": "not-listening",
       "service": "file-share"
     },
     "4222": {
       "bound_by": "master",
-      "implementation_state": "spec-only",
+      "implementation_state": "implemented",
       "runtime": "not-listening",
       "service": "nat-gateway"
     },
     "4223": {
       "bound_by": "master",
-      "implementation_state": "spec-only",
+      "implementation_state": "implemented",
       "runtime": "not-listening",
       "service": "vector-embed"
     },

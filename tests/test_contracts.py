@@ -373,7 +373,7 @@ def test_ports_that_are_not_implemented_say_so_and_point_at_a_real_plan(ports: d
             f"but its status does not say so: {status!r}"
         )
         referenced = re.findall(
-            r"((?:\.\./)?peer-node/PLAN\.md|master-node/plans/MASTER_BUILD_PLAN\.md|master-node/plans/MASTER_ADMIN_PLAN\.md)",
+            r"((?:\.\./)?peer-node/PLAN\.md|master-node/PLAN\.md|master-node/plans/MASTER_ADMIN_PLAN\.md)",
             status,
         )
         assert referenced, f"port {number} must point at the plan step that will build it"
@@ -766,16 +766,29 @@ def test_share_protocol_states_its_own_build_boundary(ports: dict):
     # Neither direction may drift: the manifest's status and ports.json's
     # code-vs-runtime split are what the page's claim rests on.
     regime = json.loads((PEER / "manifests" / "share-regime.json").read_text())
-    assert regime["status"] == "wired, not deployed", (
-        "share-regime.json's status moved; re-check share-protocol.md's build boundary against it"
-    )
+    assert regime["status"] in (
+        "wired, not deployed",
+        "listener built, not deployed",
+        "live on the peer_pair; 4203 not bound",
+    ), "share-regime.json's status moved; re-check share-protocol.md's build boundary against it"
+    if regime["status"] != "wired, not deployed":
+        assert (PEER / "services" / "sparknet-share-serve.py").is_file(), (
+            "the manifest claims a listener; the listener service must exist"
+        )
+        assert (MASTER / "services" / "sparknet-share-ratify.py").is_file(), (
+            "the manifest claims 4203; the ratification service must exist"
+        )
     for port in ("4201", "4202"):
         assert ports["ports"][port]["implementation_state"] == "implemented", port
-        assert ports["ports"][port]["runtime"] == "not-listening", (
-            f"{port} is listening now, so 'wired, not deployed' understates the build state"
+        assert ports["ports"][port]["runtime"] == "not-listening", f"{port} is not bound on this development host"
+        assert "2026-10-31" in ports["ports"][port]["runtime_why"], (
+            f"{port} must record the dated live-pair observation beside the local runtime axis"
         )
     assert ports["ports"]["4203"]["implementation_state"] in ("implemented", "provisioned"), (
         "4203 should be implemented/provisioned for the ratification side"
+    )
+    assert ports["ports"]["4203"]["runtime"] == "not-listening", (
+        "the 4203 listener is built but no unit is enabled; runtime must still say not-listening"
     )
 
 
@@ -1035,9 +1048,9 @@ def test_the_share_plane_grants_no_authority(ports: dict):
     nor hands out a capability (share-protocol.md "What a share is";
     proposal-schema.json verify_proposal_chain.not_authority). Step 36 changes
     only the *state*: the share engine (sparknet-share-regime.py) and the
-    proposal route (sparknet-proposal-exchange.py) now exist, so share-intake and
-    session-transfer are `implemented` + `not-listening` — the code routes when
-    invoked, and no daemon binds. The Master's side of the share plane
+    proposal route (sparknet-proposal-exchange.py) now exist; on 2026-10-31 the
+    share listeners were bound on the live pair, so share-intake and
+    session-transfer are `implemented` + `not-listening` locally, live on the pair. The Master's side of the share plane
     (share-ratification) — implemented for Step 10 — must be declared and not
     grant authority; opencode-serve stays as specified.
     """
@@ -1052,7 +1065,7 @@ def test_the_share_plane_grants_no_authority(ports: dict):
                 f"must say so"
             )
             assert spec["runtime"] == "not-listening", (
-                f"port {number} ({spec['service']}) opens no socket, so runtime must be not-listening, not running"
+                f"port {number} ({spec['service']}) is not bound on this development host"
             )
             assert spec.get("runtime_why"), (
                 f"port {number} ({spec['service']}) is implemented with no running listener; it must record why"

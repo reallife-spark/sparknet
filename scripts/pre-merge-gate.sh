@@ -31,7 +31,7 @@ case "${1:-}" in
       '' \
       '--quick   run the fast gates only (skip the full test suite)' \
       '' \
-      'Runs keys-check, shims-check, lint, format-check, shellcheck (provisioning' \
+      'Runs keys-check, shims-check, context-check, governance-check, lint, format-check, shellcheck (provisioning' \
       'the pinned binary when it is absent), role-skills-check, validate,' \
       'contract-test, render-check, sbom-check, then' \
       'the full suite. Reports every failure it finds, and exits non-zero if' \
@@ -65,6 +65,8 @@ run_step() {
   return 0
 }
 
+run_step "context-check" make --no-print-directory -C "$ROOT" context-check
+run_step "governance-check" make --no-print-directory -C "$ROOT" governance-check
 run_step "keys-check"    make --no-print-directory -C "$ROOT" keys-check
 run_step "shims-check"   make --no-print-directory -C "$ROOT" shims-check
 run_step "lint"          make --no-print-directory -C "$ROOT" lint

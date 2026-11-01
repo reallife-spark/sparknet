@@ -46,8 +46,8 @@ and **you must resolve that before writing anything**.
 3. **Read `MEMORY.md`** (standing state) and **`sessions/<today>.md`** if it
    exists.
 
-4. **Work the plan** — `PLAN.md` for a peer, `plans/MASTER_BUILD_PLAN.md` for a
-   master. Follow the `current:` cursor. Verify a step's DoD *before* marking it
+4. **Work the plan** — `PLAN.md` for a peer, `master-node/PLAN.md` for a master
+   (`plans/MASTER_BUILD_PLAN.md` is a compatibility symlink). Follow the `current:` cursor. Verify a step's DoD *before* marking it
    done, write the plan back immediately, and append one transition line to
    `log.md`.
 

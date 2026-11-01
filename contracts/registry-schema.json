@@ -59,8 +59,8 @@
     "overlay_ipv4": {
       "type": ["string", "null"],
       "required": true,
-      "format": "ipv4",
-      "purpose": "The address the peer presents with. Inside the signed envelope: moving it would let anyone who can edit the registry file redirect a node's traffic."
+      "format": "ipv4_host",
+      "purpose": "The address the peer presents with, as a bare IPv4 address or a /32 host route. Inside the signed envelope: moving it would let anyone who can edit the registry file redirect a node's traffic."
     },
     "issued_at": {
       "type": "string",
@@ -96,7 +96,7 @@
     "node_id": { "type": "string", "required": true },
     "role": { "type": "string", "required": true },
     "wireguard_public_key_b64": { "type": "string", "required": true },
-    "overlay_ipv4": { "type": ["string", "null"], "required": true, "format": "ipv4" },
+    "overlay_ipv4": { "type": ["string", "null"], "required": true, "format": "ipv4_host" },
     "requested_capabilities": { "type": "array", "required": true, "items": "string" }
   },
 

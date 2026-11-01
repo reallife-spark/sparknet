@@ -31,7 +31,9 @@ fails validation instead of pretending to work. `make bundle` assembles what a
 node actually needs.
 
 The two roles are not symmetric, and their charters differ in substance. Read the
-role's own `AGENTS.md` before working inside it.
+role's own `AGENTS.md` before working inside it. `CONTEXT.md` is the generated
+operating context every AI surface loads; `contracts/knowledge-flow.md` is the
+map of what may cross from Master to peer and what may never cross.
 
 ## Documentation
 

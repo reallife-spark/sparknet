@@ -16,7 +16,7 @@ User=root
 # --apply-enabled is deliberately absent, so the daemon starts in verify-and-audit
 # mode. Arming is an explicit operator decision, because applying means lifting
 # chattr +i on root-owned /etc files. Only one ExecStart is valid for Type=simple.
-ExecStart=/usr/local/libexec/sparknet/sparknet-guard --dry-run
+ExecStart=/usr/local/libexec/sparknet/sparknet-guard
 Restart=on-failure
 RestartSec=10
 

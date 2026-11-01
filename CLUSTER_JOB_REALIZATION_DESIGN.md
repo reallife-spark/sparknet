@@ -1,14 +1,13 @@
 # Cluster job realization design — one envelope, one index, N signed subtasks
 
-Status: **design adopted in part — substrate half only.** The vector substrate
-half of adoption item 2 landed on 2026-10-22 as fabric Step 63: the bounded
-`chromadb` pin, explicit embedder, collection stamp and refusal, allow-listed
-corpus, and the no-excluded-path proof test. The `4223` service, registry check,
-task ingress, construction/placement, reduce, reindex timer, peer fan-out and
-live deploy remain **not adopted**. The rest of this note creates no port,
-grants no capability, changes no contract and adds no daemon. Everything else is
-adopted only by its own commit, with both roles edited together and
-`make contract-test` green.
+Status: **adopted through the 4223 service.** The substrate landed on
+2026-10-22 (Step 63); the signed 4223 service, registry capability check,
+`sparknet-fabric` collection and explicit `sparknet-shared` collection went live
+on 2026-10-31 (fabric Step 78). Task ingress, construction/placement, reduce,
+the reindex timer, peer fan-out and the time-boxed job stanza remain **not
+adopted**. The rest of this note creates no additional port or capability;
+everything else is adopted only by its own commit, with both roles edited
+together and `make contract-test` green.
 
 This is the fabric-root sibling of `CLUSTER_INFERENCE_DESIGN.md` (Step 17) and
 `COMPUTE_CAPABILITY_DESIGN.md` (Step 24). It **realizes** the first of those: the
@@ -318,11 +317,13 @@ The design therefore is:
 
 A Master-hosted HTTP service over the **`fabric`-scope** Chroma store that
 `scripts/sparknet-chroma.py` already declares itself the substrate for (its
-module docstring says so). It serves exactly **one collection,
-`sparknet-fabric`**. The node-local RAG on `127.0.0.1:18000` (provisioned out of
-band in the node's `~/infra` stack, per `peer-node/configs/ai-stack/docker-
-compose.yml:7`) and goSpark's separate `.state/rag/index.json` path are named
-here as **not this**, and are not changed by anything in this note.
+module docstring says so). It serves **two collections**: `sparknet-fabric`
+(the allow-listed structural corpus) and `sparknet-shared` (only markdown
+payloads an accepted share staged under `01_Inbox/share-*`, privacy model A).
+The node-local RAG on `127.0.0.1:18000` (provisioned out of band in the node's
+`~/infra` stack, per `peer-node/configs/ai-stack/docker-compose.yml:7`) and
+goSpark's separate `.state/rag/index.json` path are named here as **not this**,
+and are not changed by anything in this note.
 
 ### F2 — the backing store
 
@@ -588,12 +589,11 @@ them. The order is the dependency chain, not the section order above.
    `master-node/plans/MASTER_ADMIN_PLAN.md`; `contracts/ports.json` flips
    `4223` to `provisioned` and `make render` regenerates the manifest in the same
    commit.
-   **Substrate half taken (2026-10-22, PLAN Step 63):** the bounded pin, the
-   explicit embedder, the stamp and its refusal, the allow-list corpus and the
-   proof test are implemented in `scripts/sparknet-chroma.py` and
-   `scripts/sparknet-rag-corpus.py`. The 4223 service itself, the registry
-   check and the `provisioned` flip are **not** part of that step — `4223`
-   stays `spec-only` and no port changes.
+   **Built and live 2026-10-31 (fabric Step 78):**
+   `master-node/services/sparknet-vector-serve.py` serves signed queries,
+   `master-node/Makefile vector-reindex` rebuilds both collections, and the
+   service is enabled on agx32. The reindex timer and the task-side consumers
+   remain open.
 3. **Task ingress (Seam E).** The loopback `submit`/`status`/`result` routes on
    the dispatch bridge, the acceptance checks, and `--execute-enabled` off by
    default.

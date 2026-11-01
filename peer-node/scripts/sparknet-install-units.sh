@@ -78,6 +78,7 @@ shim_body() {
     telemetry-push) printf 'exec %q %q %q "$@"' "$SPARKNET_VAULT_ROOT/scripts/sparknet-run" "$SPARKNET_PYTHON" "$SPARKNET_VAULT_ROOT/services/sparknet-telemetry-push.py" ;;
     liveness-monitor) printf 'exec %q %q %q "$@"' "$SPARKNET_VAULT_ROOT/scripts/sparknet-run" "$SPARKNET_PYTHON" "$SPARKNET_VAULT_ROOT/services/sparknet-liveness-monitor.py" ;;
     checkpoint-anchor) printf 'exec %q %q %q "$@"' "$SPARKNET_VAULT_ROOT/scripts/sparknet-run" "$SPARKNET_PYTHON" "$SPARKNET_VAULT_ROOT/services/sparknet-checkpoint-anchor.py" ;;
+    vault-health) printf 'exec %q %q %q %q "$@"' "$SPARKNET_PYTHON" "$SPARKNET_VAULT_ROOT/../scripts/sparknet-vault-health.py" --root "$SPARKNET_VAULT_ROOT" ;;
     *) echo "unknown shim: $1" >&2; exit 1 ;;
   esac
 }
@@ -104,7 +105,7 @@ write_shim() {
 }
 
 echo "User launcher shims -> $BIN_DIR (for user units)"
-for name in guard wifi-guard sync wireguard-anchor telemetry-push liveness-monitor checkpoint-anchor; do
+for name in guard wifi-guard sync wireguard-anchor telemetry-push liveness-monitor checkpoint-anchor vault-health; do
   write_shim "$BIN_DIR" "$name"
 done
 
@@ -122,7 +123,7 @@ done
 # --- units ------------------------------------------------------------------
 # System units run as root (the guard is root-gated); the sync pair is a user unit.
 SYSTEM_UNITS=(sparknet-wireguard-anchor.service sparknet-guard-daemon.service sparknet-dispatch-bridge.service sparknet-wifi-guard.service sparknet-vault-provisioner.service sparknet-admin-agent.service sparknet-firewall.service)
-USER_UNITS=(sparknet-sync.service sparknet-sync.timer sparknet-telemetry-push.service sparknet-telemetry-push.timer sparknet-liveness-monitor.service sparknet-checkpoint-anchor.service sparknet-checkpoint-anchor.timer)
+USER_UNITS=(sparknet-sync.service sparknet-sync.timer sparknet-telemetry-push.service sparknet-telemetry-push.timer sparknet-liveness-monitor.service sparknet-checkpoint-anchor.service sparknet-checkpoint-anchor.timer sparknet-vault-health.service sparknet-vault-health.timer)
 
 echo
 echo "System units -> $SYSTEM_UNIT_DIR (requires root)"
@@ -168,6 +169,7 @@ if [[ "$APPLY" -eq 1 ]]; then
   echo "  systemctl --user enable --now sparknet-telemetry-push.timer"
   echo "  systemctl --user enable --now sparknet-liveness-monitor.service"
   echo "  systemctl --user enable --now sparknet-checkpoint-anchor.timer"
+  echo "  systemctl --user enable --now sparknet-vault-health.timer"
 else
   note "Nothing was written. Re-run with --apply to install."
 fi

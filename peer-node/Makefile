@@ -23,9 +23,9 @@ PY := $(if $(wildcard $(VENV_PY)),$(VENV_PY),$(if $(wildcard $(FABRIC_VENV_PY)),
 .PHONY: help env-init validate test lint devtools provision dist bundle install-units \
         install-config keys wg-render authz-verify anchor guard-status guard-contract \
         peer-manifest containment wiki-preflight wiki-status wiki-lint wiki-capture skills-sync skills-check clean \
-        provenance-verify user-init provenance-append ingest accept-inbox review-inbox precommit shims-check keys-check \
+        provenance-verify user-init provenance-append ingest accept-inbox review-inbox precommit shims-check keys-check context-pack context-check governance-check \
         ai-stack-config admin-agent-help container-build container-load container-config container-preflight container-up \
-        container-health container-down model-generate model-verify model-build model-serve
+        container-health container-down model-generate model-verify model-build model-serve rfi-request vault-health vault-heal
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -33,6 +33,15 @@ help: ## Show this help
 
 env-init: ## Write this role's .env + wiki dirs from .env.example (idempotent)
 	@$(FABRIC_ROOT)/scripts/sparknet-env-init.sh "$(VAULT_ROOT)"
+
+context-pack: ## Regenerate this role's CONTEXT.md
+	@$(PY) $(FABRIC_ROOT)/scripts/sparknet-context-pack.py --root "$(VAULT_ROOT)" --role peer
+
+governance-check: ## Enforce the five-file shape and budgets
+	@$(PY) $(FABRIC_ROOT)/scripts/sparknet-governance-check.py
+
+context-check: ## Fail if this role's CONTEXT.md is stale
+	@$(PY) $(FABRIC_ROOT)/scripts/sparknet-context-pack.py --root "$(VAULT_ROOT)" --role peer --check
 
 validate: ## Env contract + manifest checks
 	@./scripts/sparknet-validate.sh
@@ -244,6 +253,19 @@ registry-fetch: ## install a signed registry publication (PUBLICATION=... [DRY_R
 	@test -n "$(PUBLICATION)" || (echo "PUBLICATION=<publication.json> required" >&2; exit 1)
 	@$(ROLE_ROOT)/scripts/sparknet-registry-fetch.sh --publication "$(PUBLICATION)" \
 	  $(if $(DRY_RUN),--dry-run) $(if $(JSON),--json)
+
+vault-health: ## Diagnose the vault (read-only; writes 00_System/vault-health.json)
+	@$(PY) $(FABRIC_ROOT)/scripts/sparknet-vault-health.py --root "$(VAULT_ROOT)"
+
+vault-heal: ## Safe derived repairs only (skeleton, shims, CONTEXT.md, health report)
+	@$(PY) $(FABRIC_ROOT)/scripts/sparknet-vault-health.py --root "$(VAULT_ROOT)" --repair
+
+rfi-request: ## Ask the Master for scoped knowledge (QUESTION= SCOPE=cat1,cat2 [REQUEST_ID=])
+	@test -n "$(QUESTION)" || (echo "QUESTION=... is required" >&2; exit 1)
+	@test -n "$(SCOPE)" || (echo "SCOPE=cat1,cat2 is required" >&2; exit 1)
+	@$(PY) "$(VAULT_ROOT)/services/sparknet-rfi-client.py" --vault-root "$(VAULT_ROOT)" \
+	  --question "$(QUESTION)" --scope "$(SCOPE)" $(if $(REQUEST_ID),--request-id "$(REQUEST_ID)") \
+	  $(if $(ENDPOINT),--endpoint "$(ENDPOINT)")
 
 registry-status: ## installed publication sequence and this node's capabilities
 	@$(ROLE_ROOT)/scripts/sparknet-registry-fetch.sh --status

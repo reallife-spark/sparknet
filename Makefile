@@ -33,7 +33,7 @@ SCOPE ?= fabric
         contract-test lint lint-strict format-check shellcheck test-report ci \
         shellcheck-install \
         container-test \
-        render render-check sbom sbom-check nv-search drift-check \
+        render render-check sbom sbom-check nv-search drift-check context-pack context-check governance-check \
         goagx-publish goagx-drift-check \
         devtools chroma-dev chroma-init chroma-inspect \
         chroma-index chroma-stamp chroma-query reflex-eval reflex-live-check reflex-live-query \
@@ -71,6 +71,12 @@ layout: ## Show the repository layout
 	  "├── tests/               fabric + vendored-skill tests" \
 	  "├── sbom/                generated CycloneDX SBOM" \
 	  "└── .opencode/skills/    vendored wiki suite (33 skills: 32 vendored + 1 local)"
+
+share-rehearsal: ## Three-node loopback share rehearsal (offer, payload, 4203 queue, signed lift)
+	@scripts/sparknet-share-rehearsal.sh $(if $(WORK),--work "$(WORK)")
+
+recovery-rehearse: ## Snapshot a local role tree, delete one file, restore and verify
+	@set -e; work="$${WORK:-/tmp/opencode/phase9-rehearsal}"; rm -rf "$$work"; mkdir -p "$$work"; scripts/sparknet-recovery.py snapshot --root peer-node --out "$$work/peer.tar.gz"; scripts/sparknet-recovery.py rehearse "$$work/peer.tar.gz" --work "$$work/restore";
 
 validate: ## Validate every role that has an implementation
 	@$(MAKE) --no-print-directory -C peer-node validate
@@ -192,6 +198,19 @@ shellcheck-install: ## Provision the pinned shellcheck binary without running th
 ci: ## Run the local pre-merge gate (CI_QUICK=1 to skip the full suite)
 	@./scripts/pre-merge-gate.sh $(if $(filter 1,$(CI_QUICK)),--quick,)
 
+context-pack: ## Regenerate CONTEXT.md for the fabric and both roles
+	@$(PY) scripts/sparknet-context-pack.py --root "$(VAULT_ROOT)" --role fabric
+	@$(PY) scripts/sparknet-context-pack.py --root "$(VAULT_ROOT)/peer-node" --role peer
+	@$(PY) scripts/sparknet-context-pack.py --root "$(VAULT_ROOT)/master-node" --role master
+
+governance-check: ## Enforce the five-file shape, budgets and template parity
+	@$(PY) scripts/sparknet-governance-check.py
+
+context-check: ## Fail if any CONTEXT.md is stale vs its source pages
+	@$(PY) scripts/sparknet-context-pack.py --root "$(VAULT_ROOT)" --role fabric --check
+	@$(PY) scripts/sparknet-context-pack.py --root "$(VAULT_ROOT)/peer-node" --role peer --check
+	@$(PY) scripts/sparknet-context-pack.py --root "$(VAULT_ROOT)/master-node" --role master --check
+
 render: ## Regenerate contracts/manifest.json from the contract SSOT
 	@"$(PY)" scripts/sparknet-render.py
 
@@ -226,6 +245,10 @@ nv-search: ## Look in NVIDIA's catalog first (q="llama"; details: scripts/sparkn
 # convenience drift detector, not a required offline gate. Run
 # `make goagx-drift-check` alone for the strict, authenticated form.
 drift-check: ## Fail if derived artifacts drifted (manifest, SBOM, skills, contracts, goagx)
+	@echo "drift-check: operating context"
+	@$(MAKE) --no-print-directory context-check
+	@echo "drift-check: governance set"
+	@$(MAKE) --no-print-directory governance-check
 	@echo "drift-check: contract manifest"
 	@$(MAKE) --no-print-directory render-check
 	@echo "drift-check: software bill of materials"

@@ -527,7 +527,11 @@ def _parser() -> argparse.ArgumentParser:
 
     ski = sub.add_parser("skills-import", help="import .opencode/skills into Workspace > Skills")
     ski.add_argument(
-        "--skills-dir", type=Path, default=Path("~").expanduser() / "sparknet-cluster2" / ".opencode" / "skills"
+        "--skills-dir",
+        type=Path,
+        default=Path(os.environ.get("SPARKNET_VAULT_ROOT") or Path(__file__).resolve().parent.parent)
+        / ".opencode"
+        / "skills",
     )
 
     tools = sub.add_parser("tools-register", help="register the dispatch bridge as the vault tool server")
@@ -535,7 +539,11 @@ def _parser() -> argparse.ArgumentParser:
     tools.add_argument("--spec-path", default=DEFAULT_SPEC_PATH)
 
     rs = sub.add_parser("rebuild-structure", help="rebuild the KB as a mirror of the role vault")
-    rs.add_argument("--vault-root", type=Path, default=Path("~").expanduser() / "sparknet-cluster2" / "peer-node")
+    rs.add_argument(
+        "--vault-root",
+        type=Path,
+        default=Path(os.environ.get("SPARKNET_VAULT_ROOT") or Path(__file__).resolve().parent.parent),
+    )
     rs.add_argument("--kb-name", default=DEFAULT_KB_NAME)
 
     dm = sub.add_parser("default-model", help="set the default chat model")

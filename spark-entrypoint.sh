@@ -190,7 +190,8 @@ build_precontext() {  # -> prints the template path on stdout, or "" on failure
   local args=(template --model "$model" --out "$out")
   [ -n "${SPARKNET_PRECONTEXT_MAX_BYTES:-}" ] && args+=(--max-bytes "$SPARKNET_PRECONTEXT_MAX_BYTES")
   local f
-  for f in "$CONTEXT_DIR/masterspike-system-prompt.md" "$CONTEXT_DIR/fabric-digest.md"; do
+  for f in "${SPARKNET_NODE_DIR:-/srv/sparknet/peer-node}/CONTEXT.md" \
+           "$CONTEXT_DIR/masterspike-system-prompt.md" "$CONTEXT_DIR/fabric-digest.md"; do
     [ -s "$f" ] && args+=(--prompt-file "$f")
   done
   if "$py" /opt/sparknet/spark-precontext.py "${args[@]}" >&2; then

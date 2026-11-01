@@ -18,7 +18,7 @@ This repository is a fabric. Each vault has its own categories and its own
 |---|---|---|
 | `.` (fabric root) | cross-role knowledge, contracts, tooling | [[PLAN]] |
 | `peer-node/` | the implemented node role | `peer-node/PLAN.md` |
-| `master-node/` | the elected signing role — **built**; runs the peer's services by path | `master-node/plans/MASTER_BUILD_PLAN.md` |
+| `master-node/` | the elected signing role — **built**; runs the peer's services by path | `master-node/PLAN.md` |
 
 ## Start here
 
@@ -27,6 +27,7 @@ This repository is a fabric. Each vault has its own categories and its own
 - [[SECURITY]] — how to report, and the fail-closed authority model it protects
 - [[STYLE_GUIDE]] — how work is written here (Python, shell, commits, secrets, CI)
 - [[CHANGELOG]] — releases; `VERSION` is the source of truth
+- [[CONTEXT]] — generated operating context loaded by every AI surface
 - [[MISSION]] — what this vault is for and what "done" looks like
 - [[INTENT]] — the design contract and invariants behind the fabric
 - [[PLAN]] — authoritative plan cursor
@@ -65,7 +66,7 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/registry-schema.json` | the shape of the signed node-authorization registry — fields, types, the `signature_b64` name |
 | `contracts/registry-publication.json` | the Master→peer registry publication channel: envelope, digest, sequence, refusals, the 60 s re-delivery window |
 | `contracts/reflex-schema.json` | the typed decision contract for the reflex layer — a local sensor, never authority; abstain first-class |
-| `contracts/rfi-schema.json` | the request-for-information channel: overlay-attributed request, signed digest-bound answer into `01_Inbox/`, acceptance order and refusals. Answer transport (listener + composer) built; the request channel is Step 68 |
+| `contracts/rfi-schema.json` | the request-for-information channel: overlay-attributed request, signed digest-bound answer into `01_Inbox/`, acceptance order and refusals. The answer transport and the 8090 request route are built; the peer client and Master responder are the user-node step |
 | `contracts/ports.json` | which role listens where |
 | `contracts/guard-protocol.md` | the approval conversation |
 | `contracts/guard-approval.json` | the guard-apply approval envelope — the eight fields, the canonical bytes, the transport |
@@ -77,7 +78,9 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/tracking-schema.json` | tracking envelope schema |
 | `contracts/proposal-schema.json` | the proposal/review/decision records and the draft→submitted→reviewed→decided lifecycle |
 | `contracts/proposal-protocol.md` | the narrative behind the proposal workflow: fail-closed transitions, inline keys, why a verified chain is not an authority to write |
+| `contracts/knowledge-flow.md` | the map of every Master→peer, peer→Master and peer↔peer channel: payload, authentication, refusals, and the rule that authority and knowledge never share a channel |
 | `contracts/deployment-runbook.md` | phased deployment guide (live on agx64+agx32) |
+| `contracts/phase9-recovery-runbook.md` | approved destructive recovery: snapshot, restore proof, verification and rollback |
 | `contracts/admin-federation-runbook.md` | Phase 5 live deploy of cross-node admin federation |
 | `contracts/spark-node-runbook.md` | DGX Spark node image: CPU smoke, simulated telemetry, containerised election today; the confirm-on-the-Spark list; AGX Xavier variant of the surface under `--platform agx` |
 | `contracts/README.md` | the contract index — what each file governs |
