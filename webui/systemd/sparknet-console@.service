@@ -1,0 +1,16 @@
+[Unit]
+Description=Sparknet read-only WebUI console (%i)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/sparknet-console --role %i
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=read-only
+
+[Install]
+WantedBy=default.target

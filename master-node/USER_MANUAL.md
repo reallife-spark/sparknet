@@ -895,3 +895,8 @@ trying.
 | **KillSwitch** | The cluster-wide, root-gated containment and teardown. Master-side; no revoke. |
 | **Containment** | One node's own root-gated teardown. Peer-side. A different thing. |
 | **Spec-only** | Designed and contracted, no code, by deliberate role boundary. |
+
+## Fleet memory
+
+See `docs/memory.md` for the signed `memory-supervise` read-through,
+policy actions, audit visibility and the no-mirror rule.

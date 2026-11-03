@@ -452,7 +452,7 @@ search helper is `make nv-search q="…"`.
 
 ### 7.2 The compose graph
 
-`spark.compose.yml` declares 14 services. The AGX compose declares the same 14
+`spark.compose.yml` declares 15 services. The AGX compose declares the same 15
 with the same names, container names, profiles and published ports — parity is
 asserted by `tests/test_agx_node.py`.
 
@@ -638,7 +638,7 @@ the groups below are the map, and `ls tests/` is the enumeration.
 | Layout, claims and key hygiene | `test_layout.py`, `test_claims.py`, `test_agents.py`, `test_shims.py`, `test_keys.py`, `test_identity_pages.py` |
 | Gate, release and tooling | `test_ci.py`, `test_shell.py`, `test_release.py`, `test_render.py`, `test_role_skills.py`, `test_wiki_skills.py`, `test_nv_search.py`, `test_notify.py`, `test_plugin.py` |
 | Node and image | `test_cpu_node_smoke.py`, `test_agx_node.py`, `test_goagx_repo.py`, `test_node_setup_join.py`, `test_service_timeouts.py`, `test_hardening.py` |
-| Vault and knowledge | `test_chroma.py`, `test_precontext.py`, `test_rag_corpus.py`, `test_vector_corpus.py`, `test_provenance.py`, `test_proposal.py`, `test_oob.py` |
+| Vault and knowledge | `test_vector.py`, `test_precontext.py`, `test_rag_corpus.py`, `test_vector_corpus.py`, `test_provenance.py`, `test_proposal.py`, `test_oob.py` |
 | Evidence, liveness and transport | `test_checkpoints.py`, `test_merkle.py`, `test_checkpoint_anchor.py`, `test_idle_evidence.py`, `test_liveness.py`, `test_liveness_service.py`, `test_telemetry_push.py`, `test_http_transport.py` |
 | Reflex layer | `test_reflex_contract.py`, `test_reflex_plan.py`, `test_reflex_rag.py` |
 | Telemetry without hardware | `test_gpu_telemetry_hardware_free.py` |

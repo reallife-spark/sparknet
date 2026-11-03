@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
 updated: 2026-11-01
-current: done
+current: 85
 ---
 
 # sparknet — Active Plan
@@ -169,6 +169,206 @@ current: done
     to fingerprint `84bd134e…`, and the WebUI grant was re-minted. User vaults
     were backed up but not overwritten.
 
+
+## Step 81 — Qdrant substrate, uplift and Master distillation
+
+- [x] **Step 81** — Replace ChromaDB with Qdrant, lift consented vectors and
+  inventory to the Master, and build the same-family distillation scaffold.
+  - [x] **81A — Contracts.** `contracts/vector-store.md`, `uplift-schema.json`,
+    `inventory-schema.json`, `distillation-schema.json`, the 8091 port, the
+    `model-uplift` capability, the knowledge-flow channel and the superseded
+    design note. `make contract-test` and `make render` pass.
+  - [x] **81B — Substrate.** `scripts/sparknet-vector.py` is the Qdrant
+    implementation; `sparknet-chroma.py` is a one-release alias. It keeps the
+    scopes, chunking, stamp, reflex, shared/fabric policy and exact-corpus
+    deletion. `tests/test_vector.py`, `test_vector_corpus.py` and
+    `test_reflex_rag.py` pass locally; the real-Qdrant round trip skips when
+    the optional package is absent.
+  - [x] **81C — 4223 and Open WebUI.** Live 2026-11-01: Qdrant
+    `v1.20.0` runs loopback-only on agx64 and agx32; Open WebUI was migrated to
+    `VECTOR_DB=qdrant`, its 4 KBs and 107 files reindexed in 477 s, and
+    per-KB and per-file retrieval both answered 200. 4223 serves
+    `sparknet-fabric`/`sparknet-shared` from Qdrant and passed a signed peer
+    query. ChromaDB is stopped and the old volume is retained for 14 days.
+  - [x] **81D — Inventory.** `peer-node/services/sparknet-inventory-agent.py`
+    projects users, models, KBs and content-free usage into
+    `sparknet-inventory` and pushes through a durable outbox.
+  - [x] **81E — Uplift.** `scripts/sparknet-uplift-push.py` and
+    `master-node/services/sparknet-uplift-intake.py` implement signed 8091
+    inventory, trace, snapshot and raw-KV artifact storage with digest checks.
+    Peer timers `sparknet-inventory` (2 min) and `sparknet-uplift-sync`
+    (15 min) are staged; the trace push path accepts JSONL batches.
+    `scripts/sparknet-kv-export.py` packages a safetensors export and refuses
+    `--from-vllm` until a version-pinned connector is proven.
+  - [x] **81F — Distillation scaffold.** `master-node/services/sparknet-distill.py`
+    plus `configs/distill.json`: dataset selection/redaction, doctor, planned
+    run, evaluation, model card and an isolated-signer run record.
+  - [x] **81G — Live rollout.** Registry sequence 7 grants `model-uplift` and
+    was delivered 200. The inventory agent mirrors 41 user/model/KB/usage
+    records into the Master's `uplift-inventory`; four Qdrant collection
+    snapshots (peer, Open WebUI files/knowledge, inventory) were uploaded and
+    one restored into a scratch collection (40 points). A real
+    Qwen2.5-7B→Qwen2.5-1.5B QLoRA run (`run-20261101T101033Z-…`) trained on
+    27 consented traces, evaluated at 0.2226 held-out teacher agreement, was
+    signed through the isolated signer and published as a model card.
+  - [x] **81H — Raw KV live capture.** vLLM 0.2.7 has no KVConnector API, so
+    `peer-node/scripts/sparknet-vllm-kv-patch.sh` installs a fail-open
+    in-process prefill hook (`sparknet-vllm-kv-dump.py`) into the live engine.
+    A real request captured 299 KV blocks (32 layers, 8 KV heads, head_dim 128,
+    fp16) as a 627 MB safetensors file; `sparknet-kv-export.py` compressed it
+    to 554 MB and it was pushed to `/srv/sparknet/uplift/kv/…` on agx32
+    (sha256 `f2ece221…`, gzip test and manifest digest verified).
+  - **DoD**: `make contract-test`, `make test-all`, `make lint`,
+    `make format-check`, `make shellcheck`, `make render-check`,
+    `make sbom-check`, `make drift-check`, `make context-check`,
+    `make validate`, `make keys-check`, `make shims-check`,
+    `make bundle-verify ROLE=peer|master`; live legs are `DoD: confirm: user`.
+  - **Status 2026-11-01:** complete. Local code and tests are green; the live
+    Qdrant migration, 4223, inventory, four snapshots, one restore, consent
+    grant, same-family distillation run and raw-KV capture are verified on
+    agx64/agx32. Chroma volumes are retained for 14 days.
+
+
+## Step 82 — Model catalog, store and runtime leases
+
+- [x] **Step 82** — Make model placement and on-demand runtimes declarative:
+  - [x] **82A — Catalog and placement.** `contracts/model-catalog.json` and
+    `contracts/model-store.md`: the teacher is eligible only on `agx64` (64 GB
+    peer), the student only on `agx32` (32 GB Master), embeddings on both, and
+    teacher backup weights are forbidden on `agx32`. The catalog pins repo,
+    revision, quant, runtime, license and fit.
+  - [x] **82B — Pull and verify.** `scripts/sparknet-model-pull.py` selects by
+    node, resolves the Hugging Face tree, verifies SHA-256, enforces a free-disk
+    guard, writes a pinned manifest and refuses a hash or size mismatch. The
+    token is read from `HF_TOKEN`/`--token-file`, never written or printed.
+  - [x] **82C — Runtime leases.** `scripts/sparknet-model-runtime.py` plus
+    `peer-node/configs/model-runtime/` and `master-node/configs/model-runtime/`:
+    compose profiles for the teacher and student, `restart: "no"`, loopback
+    health, memory guard, conflict refusal, `--replace`, idle-stop `reap` and a
+    `0600` lease/audit state. The teacher and student runtimes cannot coexist on
+    the same node, and the teacher is not a Master profile.
+  - [x] **82D — Tests and gates.** `tests/test_model_catalog.py`,
+    `tests/test_model_pull.py`, `tests/test_model_runtime.py`, the Make targets,
+    `make render` and the contract README index. Local tests never pull a model
+    or start a container.
+  - **DoD**: `make model-catalog-check`, the three model test modules, `make
+    contract-test`, `make render-check`, `make lint`, `make format-check`,
+    `make test-all`, `make validate` and `make context-check` green. Live pulls,
+    real teacher/student starts and the bake-off are `DoD: confirm: user`.
+  - **Status 2026-11-01:** foundation implemented and locally tested; no model
+    was downloaded and no container was started on this development host.
+
+## Step 83 — On-demand teacher/student serving and bake-off
+
+- [x] **Step 83** — Serve the teacher on `agx64`, the student on `agx32`, run
+  the fixed benchmark matrix and record the pair. Training keeps an exclusive
+  lease and stops student inference first.
+  - [x] **83A — Benchmark harness.** `scripts/sparknet-model-bench.py` plus
+    peer/master `bakeoff.json`: Ollama/OpenAI-compatible endpoints, load and
+    decode metrics, resident memory, a fixed six-prompt quality suite, a
+    deterministic leaderboard and a `0600` result file. It never pulls or
+    starts a model.
+  - [x] **83B — Teacher bake-off on agx64.** Thinking off, 8K context, aux
+    embed/rerank/audio stopped. Qwen3.6-35B-A3B **Q4_K_M** (the preloaded
+    `qwen3.6-35b-262k:latest`): **22.22 tok/s**, **21.21 GiB**, **100%**.
+    Q8_0: **17.79 tok/s**, **34.39 GiB**, **100%**; Q4_K_M is the winner.
+  - [x] **83C — Student pull and bake-off on agx32.** Pulled and verified
+    `qwen3.5-9b-q8` (8.9 GiB) and `qwen3.8-27b-q4` (15.3 GiB) into
+    `/mnt/ai/models`, imported both into the Master's Ollama. 9B Q8:
+    **11.27 tok/s**, **8.06 GiB**, **100%**. 27B Q4: **4.75 tok/s**,
+    **14.73 GiB**, **100%**. **Qwen3.5-9B is the winner.**
+  - [x] **83D — Serving posture.** Qwen3.6 Q4_K_M is available on agx64 and
+    benchmarks at 22.22 tok/s / 21.21 GiB; it loads on first use with a 30 min
+    Ollama keep-alive. Qwen3.5-9B is available on agx32 (11.27 tok/s / 8.06
+    GiB). The peer WebUI filter includes both teacher candidates; llama3.2
+    stays the fallback default. vLLM, embed, rerank and audio are stopped
+    because Q4_K_M plus vLLM does not fit; the node-image text engine is
+    on-demand.
+  - [x] **83E — Runtime support finding.** Qwen3.8-Flash-Next 3.84 bpw is not
+    downloaded: Ollama 0.32.13 / the image llama.cpp has no qwen4exp support.
+    The 85 GB build would be unrunnable; it stays a catalog candidate pending a
+    compatible runtime.
+  - **DoD**: teacher/student health and `ollama ps` 100% GPU; student manifests
+    hash-verified; memory within catalog limits; fixed suite 100%; winner pair
+    recorded. The live serving path is **Ollama**, not the staged
+    llama.cpp compose profile; that profile remains the declarative GGUF path
+    for a future runtime.
+  - **Status 2026-11-01:** complete on agx64/agx32. No training run was
+    started in this step.
+
+## Step 84 — Sparknet WebUI surface
+
+- [ ] **Step 84** — Add the thin Open WebUI sidebar patch and the Mesh, Vectors
+  and Learning pages, Qdrant settings, the scoped vector proxy and the 3D
+  teacher/student data cloud.
+  - [x] **84A — Contract.** `contracts/webui-surface.md`: peer/master menus,
+    console scope, Open WebUI session validation, service-token fallback,
+    read-only boundary and the honest 3D pilot label.
+  - [x] **84B — Console service.** `scripts/sparknet-console.py`: loopback
+    HTTP, Open WebUI token validation (peer user/admin, Master admin), Qdrant
+    read-only view with uplift/training excluded, deterministic 3D projection,
+    distillation run view, no secrets and no write path.
+  - [x] **84C — Pages.** `webui/console/`: dependency-free Mesh/Vectors/Learning
+    pages, collection table, interactive 3D canvas with role colors and cluster
+    titles, teacher/student legend and run view.
+  - [x] **84D — Open WebUI shell.** `webui/patch-openwebui.py` (idempotent
+    0.12.x sidebar patch) and `webui/nginx.conf.template` (same-origin `/sparknet-console/`
+    proxy). The patch is tested against a synthetic sidebar; the live patched
+    image and nginx unit remain target-node actions.
+  - [x] **84E — Live same-origin surface.** nginx is live in front of Open
+    WebUI on `agx64:8181` and `agx32:10.100.0.1:8088`: Open WebUI is loopback
+    (`127.0.0.1:8180` peer, `127.0.0.1:8080` Master), `/sparknet-console/`
+    routes to the read-only console, and `/sparknet-menu.js` is injected into
+    the Open WebUI HTML. The peer console accepted an Open WebUI admin token
+    and returned a 500-point map; the Master returned 153 points. Browser click
+    confirmation is `DoD: confirm: user`.
+  - [x] **84F — Persistent units and snapshot.** `webui/systemd/sparknet-console@.service`
+    plus `webui/install-console.py` write a user shim and enable the console on
+    agx64/agx32. On the Master, root `sparknet-distill-status.service` + `.timer`
+    write a sanitized `0644` snapshot of 5 runs; Learning now reads it without
+    touching `/srv/sparknet/distill`. The optional source-level sidebar image is
+    deferred; the live launcher is nginx-injected.
+  - [ ] **84G — Browser confirmation.** Click Mesh, Vectors and Learning from a
+    signed-in peer and Master browser session; confirm the peer hides Learning,
+    the 3D cloud rotates/zooms, and the Master Learning runs render.
+    **DoD: confirm: user.**
+  - **DoD**: local gates green; live peer owner sees Mesh/Vectors, Master admin
+    sees Mesh/Vectors/Learning; read-only vector exploration and the 3D pilot;
+    Qdrant/training exclusions hold; live clicks are `DoD: confirm: user`.
+
+## Step 85 — Per-vault typed memory and local delegates
+
+- [ ] **Step 85** — Add the typed memory plane and the local delegate broker
+  without creating a second vault or a second authority path:
+  - [x] **85A — Contract.** `contracts/memory-schema.json`, the
+    `memory-supervise` capability, the `4110` node port, the knowledge-flow
+    rows, the memory-bundle profile in `share-protocol.md` and the WebUI memory
+    menu. `make contract-test` and `make render` pass.
+  - [x] **85B — Go store.** `gospark/internal/memory`, `internal/delegates`,
+    `cmd/sparknet-memory` and the delegate plan/run/event store; per-vault
+    isolation, redaction, retention, export/import, lexical retrieval, vault-page
+    indexing and an optional Qdrant semantic path are tested.
+  - [x] **85C — Authority gateway.** `shared/sparknet-memory-gateway.py` verifies
+    signed grants and Open WebUI sessions, narrows to one vault, and forwards
+    only to the loopback Go service. A grant cannot name a sibling vault.
+  - [x] **85D — Node surface.** `spark.compose.yml` and
+    `goagx/sparknet.agx.compose.yml` carry the `memory` service; the image
+    asserts `sparknet-memory`; the dispatcher has a `memory` subcommand; the
+    setup script generates the gateway/local/WebUI tokens. Parity tests pass.
+  - [x] **85E — Adapters.** An OpenCode MCP server, an Open WebUI filter, a bridge
+    `memory_*` admin action family, and a read-only console Memory page.
+  - [x] **85F — Project lifecycle and bundles.** `scripts/sparknet-project.py`
+    creates signed `PROJECT.md`/`PLAN.md`, runs bounded delegates and files
+    signed reports; `scripts/sparknet-memory-bundle.py` exports, validates,
+    stages and imports a `sparknet-memory-bundle/1` payload. Project agents are
+    role-local; the report is never written by a delegate.
+  - **DoD**: `make memory-check`, `make contract-test`, `make render-check`,
+    `make test-agx-node`, `make test-webui-console`, `make test-admin-supervise`,
+    `make context-check`, `make lint`, `make format-check`, `make shellcheck`,
+    `make test-all`, `make bundle-verify ROLE=peer|master`; live node starts,
+    browser memory page and a live Master `memory_status` are
+    `DoD: confirm: user`.
+  - **Status: local implementation complete 2026-11-02.** Code, tests, contracts and both bundle verifications pass; live node/browser legs are `DoD: confirm: user`.
 
 ## Standing verification rules
 

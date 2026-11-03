@@ -1,0 +1,42 @@
+{
+  "schema_name": "sparknet-distillation",
+  "schema_version": 1,
+  "description": "A same-family teacher->student distillation run: dataset manifest, training config, evaluation result, signed run record and model card.",
+  "authority": "The Master owns the run record and signs it through the isolated signer after operator approval. The trainer holds no signer.",
+  "config": {
+    "teacher_model_id": "string",
+    "student_base_model": "string",
+    "family": "string; teacher and student must match unless an explicit cross-family experiment is recorded",
+    "sequence_length": "integer",
+    "method": "lora|qlora|full",
+    "epochs": "integer",
+    "learning_rate": "float",
+    "eval_set": "path",
+    "data_window_days": "integer"
+  },
+  "dataset": {
+    "inputs": ["uplift traces by model family", "consented vector excerpts", "optional architecture-compatible KV artifacts"],
+    "selection": "family + consent + window; opted-out users excluded",
+    "redaction": "keys, secrets and excluded personal paths removed; dedupe by prompt hash",
+    "outputs": "train/val/test JSONL plus a manifest",
+    "manifest_fields": ["dataset_id", "run_id", "teacher_model_id", "family", "created_at", "trace_count", "prompt_sha256_set", "split_digests", "redaction_report"]
+  },
+  "evaluation": {
+    "baseline": "the unmodified student base model",
+    "metrics": ["held_out_teacher_agreement", "golden_set_regression", "perplexity", "refusal_rate", "latency"],
+    "reject_if": "any configured threshold is missed; the run is recorded as rejected and no model card is published"
+  },
+  "run_record": {
+    "ledger_event": "distillation_run",
+    "fields": ["run_id", "dataset_id", "teacher_model_id", "teacher_sha256", "student_base_model", "student_base_sha256", "hyperparameters", "eval_metrics", "artifact_sha256", "decided_by", "decided_at", "approved"]
+  },
+  "model_card": {
+    "fields": ["model_id", "family", "base_model", "teacher_model", "run_id", "artifact_uri", "artifact_sha256", "eval_metrics", "license", "notes"],
+    "publication": "optional, through the signed 4221 file share after operator approval; a peer deploys it only as a distinct model, never by overwriting its base"
+  },
+  "limits": {
+    "raw_kv": "raw KV tensors are archived/research data; cross-size distillation trains on traces/logits unless an architecture-compatible experiment is explicitly recorded",
+    "hardware": "make distill-doctor must pass before a run; a failed check refuses the run",
+    "no_auto_training": "a run is operator-triggered; data volume alone never starts one"
+  }
+}

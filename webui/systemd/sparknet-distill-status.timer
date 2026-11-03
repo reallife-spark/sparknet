@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh the Sparknet Master distillation status snapshot
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+AccuracySec=30s
+Persistent=true
+Unit=sparknet-distill-status.service
+
+[Install]
+WantedBy=timers.target

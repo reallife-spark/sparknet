@@ -1,0 +1,15 @@
+# Render @ROOT@ and @PYTHON@ at install time. This unit runs as root because the
+# distill state is root-only; it writes only a sanitized status snapshot for the
+# operator-owned console.
+[Unit]
+Description=Sparknet Master distillation status snapshot
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=@PYTHON@ @ROOT@/master-node/services/sparknet-distill-status.py --config @ROOT@/master-node/configs/distill.json --state /srv/sparknet/distill --out @ROOT@/master-node/.state/webui/distill-status.json
+Nice=10
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=@ROOT@/master-node/.state/webui /srv/sparknet/distill

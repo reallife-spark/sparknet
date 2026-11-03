@@ -12,9 +12,9 @@ reports the numbers Step 64E requires:
 - cost per 1,000 queries (zero for the offline reranker; the live broker is
   measured in Step 64F).
 
-The reranker is the same one ``scripts/sparknet-chroma.py --reflex`` uses, so
+The reranker is the same one ``scripts/sparknet-vector.py --reflex`` uses, so
 the evaluation cannot drift from the product. It is local and deterministic:
-no network, no key, no chromadb *writes*. The scope is forced to ``fabric``
+no network, no key, no Qdrant *writes*. The scope is forced to ``fabric``
 because the node and personal vaults are opt-in and require the data
 governance decision in ``REFLEX_DECISION_DESIGN.md`` §7.
 
@@ -30,7 +30,7 @@ fabric-allow-listed chunks to that broker, which answers them locally: there is
 no credential to provision and no path off the fabric, so nothing this script
 reads can leave it. No node or personal vault is read.
 
-Exit codes: 0 ok, 1 user/golden error, 2 chromadb missing, 3 the index's
+Exit codes: 0 ok, 1 user/golden error, 2 qdrant-client missing, 3 the index's
 stamp does not match this build, 4 the live preflight is not satisfied.
 """
 
@@ -58,9 +58,9 @@ RELEVANCE_INSTRUCTIONS = (
 
 
 def _load_chroma():
-    """Load ``sparknet-chroma.py`` (the filename is not a module name)."""
-    path = REPO_ROOT / "scripts" / "sparknet-chroma.py"
-    spec = importlib.util.spec_from_file_location("sparknet_chroma", path)
+    """Load ``sparknet-vector.py`` (the filename is not a module name)."""
+    path = REPO_ROOT / "scripts" / "sparknet-vector.py"
+    spec = importlib.util.spec_from_file_location("sparknet_vector", path)
     if spec is None or spec.loader is None:
         raise SystemExit(f"reflex-eval: cannot load {path}")
     module = importlib.util.module_from_spec(spec)

@@ -1,7 +1,7 @@
 ---
 title: sparknet master-node Plan
-updated: 2026-10-31
-current: 10
+updated: 2026-11-01
+current: 24
 ---
 
 # sparknet master-node — Active Plan
@@ -84,6 +84,48 @@ current: 10
     `make test-all`; live units and cross-node delivery are
     `DoD: confirm: user`.
   - **Status: complete and live-verified on agx32 2026-10-31.** 8090 intake and the responder run; a real peer RFI was answered and installed; the admin console `feed`/`users` paths work; registry sequence 2 was re-signed and delivered. Master tests and bundle verify pass.
+
+## Step 23 — Qdrant Master store, uplift intake and distillation
+
+- [x] **Step 23** — Run the Master's Qdrant-backed 4223 store, receive consented
+  uplift on 8091, and operate the same-family distillation scaffold.
+  - [x] **23A — 4223.** `services/sparknet-vector-serve.py` loads
+    `scripts/sparknet-vector.py`; only `sparknet-fabric` and
+    `sparknet-shared` are served. Local tests pass.
+  - [x] **23B — Uplift intake.** `services/sparknet-uplift-intake.py` verifies
+    overlay source, node signature, `model-uplift`, freshness and nonce, then
+    stores inventory, traces, snapshots and KV manifests. It holds no key.
+  - [x] **23C — Distillation.** `services/sparknet-distill.py` builds a
+    consented, redacted dataset, refuses a failed doctor, evaluates a candidate
+    and can sign a `distillation_run` through the isolated signer.
+  - [x] **23D — Live.** Qdrant `v1.20.0` on agx32; registry sequence 7 grants
+    `model-uplift` and delivered 200; 8091 intake mirroring 41 inventory
+    records; four agx64 snapshots uploaded and one restored (40 points); a real
+    Qwen2.5-7B→Qwen2.5-1.5B LoRA run was signed (`run-20261101T101033Z-…`) and
+    its model card published. Raw vLLM KV capture remains open (root 81H).
+  - **DoD**: master suite green; live legs `DoD: confirm: user`.
+
+## Step 24 — Master memory control and read-through
+
+- [ ] **Step 24** — Let the Master govern fleet memory without a mirror:
+  - [x] **24A — Capability and actions.** `memory-supervise` is a sensitive
+    Master-issued capability; `memory_status`, `memory_policy_set`,
+    `memory_read` and `memory_purge` are signed admin actions with fields inside
+    the canonical projection.
+  - [x] **24B — Peer execution.** The bridge verifies the signature, the target
+    and `memory-supervise`, then forwards to the local Python gateway; the
+    content is transient and the peer audits it.
+  - [x] **24C — Console posture.** The Master console carries a read-only Memory
+    menu and the admin console composes the memory verbs; no content mirror is
+    stored.
+  - [x] **24D — Project memory.** The shared `06_Projects` lifecycle and memory
+    bundle commands work in the Master role vault; reports are signed by the
+    operator, not the Master AI.
+  - **DoD**: `make test-master`, `make test-admin-supervise`,
+    `make contract-test`, `make context-check`, `make bundle-verify ROLE=master`;
+    live `memory_status` and an on-demand content read are
+    `DoD: confirm: user`.
+  - **Status: local implementation complete 2026-11-02.** Code, tests, contracts and both bundle verifications pass; live node/browser legs are `DoD: confirm: user`.
 
 ## Next
 

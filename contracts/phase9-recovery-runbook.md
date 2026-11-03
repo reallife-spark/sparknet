@@ -69,7 +69,7 @@ grants no authority.
 | `agx32` `sparknet-node-0002` | `/home/raxxar/sparknet/master-node` | `/home/raxxar/.local/state/sparknet/master-node` |
 | `agx32` read-only artifacts | `/srv/sparknet/share`, `/srv/sparknet/git` | re-creatable; not in the destructive proof |
 
-The tool excludes `.state/chroma` (derived, rebuildable) and caches. It includes
+The tool excludes `.state/qdrant` and `.state/chroma` (derived, rebuildable) and caches. It includes
 `.env`, `.state/keys`, manifests, ledger, sessions and shared-share state. The
 archive therefore contains key material: keep it on encrypted/root-only media,
 mode 0600, never in the vault and never in git.
@@ -79,9 +79,9 @@ Docker data is snapshotted separately because it is not under the role root:
 ```sh
 # WebUI DB (stop the container first; see freeze below)
 docker cp sparknet-webui:/app/backend/data/webui.db /backup/phase9/webui.db
-# Chroma volume (agx64; Master uses its own store)
-docker run --rm -v infra_chroma_data:/data -v /backup/phase9:/backup alpine \
-  tar czf /backup/chroma-data.tar.gz -C /data .
+# Qdrant volume (agx64; Master uses its own store)
+docker run --rm -v sparknet-qdrant-data:/data -v /backup/phase9:/backup alpine \
+  tar czf /backup/qdrant-data.tar.gz -C /data .
 ```
 
 Restore is the reverse (`docker cp` back, or extract the volume tar into a fresh

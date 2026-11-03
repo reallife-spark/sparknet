@@ -267,6 +267,7 @@ RUN chmod 0755 /usr/local/bin/sparknet-* /usr/local/bin/stub-vllm \
  && test -x /usr/local/bin/sparknet-control \
  && test -x /usr/local/bin/sparknet-agent \
  && test -x /usr/local/bin/sparknetctl \
+ && test -x /usr/local/bin/sparknet-memory \
  && test -x /usr/local/bin/stub-vllm
 
 # --- compute plane + configs (from the same named context) -------------------

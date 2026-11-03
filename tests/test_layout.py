@@ -51,6 +51,7 @@ EXPECTED_TOP_LEVEL = {
     "master-node",
     "scripts",
     "tests",
+    "webui",
     ".opencode",
     # project files
     "AGENTS.md",

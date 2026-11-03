@@ -36,6 +36,8 @@ CORE_SERVICES = {
     "compute",
     "kvrouter",
     "agent",
+    "memory",
+    "memory-gateway",
     "control",
     "gpu",
     "webui",
@@ -420,6 +422,7 @@ def test_agx_compose_config_resolves():
         proc = subprocess.run(
             ["docker", "compose", *args, "config", "-q"],
             cwd=REPO_ROOT,
+            env={**__import__("os").environ, "SPARKNET_QDRANT_API_KEY": "placeholder"},
             capture_output=True,
             text=True,
             check=False,
@@ -427,3 +430,60 @@ def test_agx_compose_config_resolves():
         if proc.returncode != 0 and "Cannot connect to the Docker daemon" in proc.stderr:
             pytest.skip("no docker daemon")
         assert proc.returncode == 0, f"docker compose config failed:\n{proc.stderr}"
+
+
+# --- 6. typed memory service -------------------------------------------------
+
+
+def test_memory_service_is_loopback_and_one_plane(agx: dict, spark: dict):
+    """Both node surfaces run the same Go memory service, on loopback only.
+    It is the single per-vault memory plane for OpenCode and Open WebUI; a
+    second surface-local store would make the same vault mean two things."""
+    for services in (agx, spark):
+        memory = services["memory"]
+        assert memory["container_name"] == "sparknet-memory"
+        assert memory["command"] == ["memory"]
+        assert _ports(memory) == {"4110"}
+        assert "127.0.0.1" in str(memory["ports"][0]), "memory must never be a fabric edge"
+        assert memory["environment"]["GOSPARK_MEMORY_LISTEN"] == "127.0.0.1:4110"
+        assert memory["environment"]["GOSPARK_MEMORY_STATE"].endswith("/.state/memory")
+        assert memory.get("healthcheck"), "memory needs a readiness healthcheck"
+        assert memory.get("volumes"), "memory needs the state mount and the knowledge roots"
+    keys = {k for k in agx["memory"]["environment"] if k.startswith("GOSPARK_MEMORY_")}
+    assert keys == {k for k in spark["memory"]["environment"] if k.startswith("GOSPARK_MEMORY_")}
+    for key in keys:
+        assert agx["memory"]["environment"][key] == spark["memory"]["environment"][key]
+
+
+def test_memory_binary_is_in_both_images_and_the_entrypoint():
+    """The dispatcher starts the service by name; a missing binary is a build
+    error, not a restart loop on a real node."""
+    for docker in (SPARK_DOCKER, AGX_DOCKER):
+        text = docker.read_text(encoding="utf-8")
+        assert "test -x /usr/local/bin/sparknet-memory" in text, f"{docker}: memory binary is not asserted"
+    entrypoint = ENTRYPOINT.read_text(encoding="utf-8")
+    assert re.search(r"^\s+memory\)", entrypoint, re.M), "dispatcher has no memory subcommand"
+    assert "cmd_memory()" in entrypoint
+    assert "sparknet-memory" in entrypoint
+
+
+def test_memory_gateway_is_the_only_front_door(agx: dict, spark: dict):
+    for services in (agx, spark):
+        gateway = services["memory-gateway"]
+        assert gateway["container_name"] == "sparknet-memory-gateway"
+        assert gateway["command"] == ["memory-gateway"]
+        assert gateway.get("network_mode") == "host"
+        assert gateway["environment"]["SPARKNET_MEMORY_GATEWAY_BIND"] == "127.0.0.1:4093"
+        assert gateway["environment"]["SPARKNET_MEMORY_URL"] == "http://127.0.0.1:4110"
+        assert gateway.get("healthcheck")
+    keys = {
+        k
+        for k in agx["memory-gateway"]["environment"]
+        if k.startswith(("SPARKNET_MEMORY_", "GOSPARK_MEMORY_", "SPARKNET_USER_"))
+    }
+    for key in keys:
+        assert agx["memory-gateway"]["environment"][key] == spark["memory-gateway"]["environment"][key]
+    entrypoint = ENTRYPOINT.read_text(encoding="utf-8")
+    assert re.search(r"^\s+memory-gateway\)", entrypoint, re.M)
+    assert "cmd_memory_gateway()" in entrypoint
+    assert "sparknet-memory-gateway.py" in entrypoint

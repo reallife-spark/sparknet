@@ -13,7 +13,6 @@ not a plan, a runbook or a status page. `PLAN.md` is the work order;
 `MISSION.md` is why the fabric exists; `AGENTS.md` is the operating charter.
 
 ## Why two roles
-
 The fabric separates **usefulness** from **authority**.
 
 - A **peer** is the user's node: local chat, agentic planning and building, its
@@ -53,13 +52,17 @@ escalate. The Master supplies authority and knowledge, not control.
    user's KB, an accepted RFI answer, a reconciled share or the build-time
    context pack. Registry entries, approvals, telemetry and admin responses are
    never knowledge. The map is `contracts/knowledge-flow.md`.
-9. **Every AI instance loads one context.** `CONTEXT.md` is generated from the
-   identity pages and the knowledge-flow map; OpenCode, Open WebUI, per-user
-   models and the vLLM/MASTERSPIKE precontext load it. It is never hand-edited.
+9. **Every AI instance loads one context.** `CONTEXT.md` is generated and loaded
+   by OpenCode, Open WebUI, per-user models and the vLLM/MASTERSPIKE precontext.
 10. **Local-first is the default.** With no Master, chat, planning, building,
-    vault reads and self-healing keep working. The node loses authority and
-    external knowledge, not usefulness.
-
+    vault reads and self-healing still work; the node loses authority, not use.
+11. **Uplift is consented training data, not an answer corpus.** Snapshots,
+    traces and KV artifacts feed distillation only; they are never served.
+12. **Memory is an index, not a second vault.** The five types are per-vault
+    indexes over allowed sources; they keep provenance, grant no authority and
+    never cross a `vault_id`. Every surface is an adapter over one store.
+13. **The Master reads memory only through a signed, audited read-through.**
+    `memory-supervise` is on-demand and transient; no mirror, no answer corpus.
 ## First deployment
 
 1. `make env-init` writes the vault `.env` and category skeleton.
@@ -68,10 +71,8 @@ escalate. The Master supplies authority and knowledge, not control.
 4. `make wiki-preflight` proves the vendored skills resolve this vault.
 5. An AI session reads `CONTEXT.md`, `AGENTS.md`, `MISSION.md`, `INTENT.md`,
    `MEMORY.md` and today's session file before acting.
-
 Nothing about the deployment is hand-edited into these identity pages. A new
 node inherits the role's intent, not another node's history.
-
 ## AI operating model
 
 - `AGENTS.md` defines the rules and wins on conflict.
@@ -81,7 +82,6 @@ node inherits the role's intent, not another node's history.
 - Plans hold the work order; identity pages do not track live progress.
 - Agents must not claim live verification of network, kernel, signer or systemd
   behaviour from a development host.
-
 ## Change intent
 
 New work gets a plan step, not a rewrite. Change `INTENT.md` only when the

@@ -4,13 +4,16 @@
 > The plan and cursor live in `PLAN.md`; history belongs in
 > `02_Daily/YYYY-MM-DD.md` and `00_System/log.md`.
 
-Updated: 2026-10-31
+Updated: 2026-11-02
 
 ## Plan cursor
 
 - `PLAN.md` — read its `current:` field. Do not mirror step history here.
 
 ## Durable facts
+- **Fleet memory (2026-11-02):** the Master inspects peer memory only through
+  signed, on-demand `memory-supervise`; no mirror. The peer audits the read and
+  the user sees the access log. Other memory data is counts and posture.
 
 - **Current deployment**: `agx32` is the elected Master
   (`sparknet-node-0002`, `wg1 10.100.0.1/32`); `agx64` is the peer
@@ -42,7 +45,6 @@ Updated: 2026-10-31
 - **Knowledge flow**: a signed RFI answer is the only Master→peer knowledge
   channel. Registry, approvals, telemetry and admin requests are not knowledge;
   see `../contracts/knowledge-flow.md`.
-
 ## Blockers
 
 - A three-node cluster cannot survive the loss of a member under the current
@@ -50,7 +52,6 @@ Updated: 2026-10-31
   `../contracts/consensus-protocol.md`.
 - Live signer, overlay, admin-surface and RFI delivery claims require the real
   pair; this development host has none of them.
-
 ## Local vs live
 
 - The code, tests, ledgers and boundaries are verifiable here. WireGuard,

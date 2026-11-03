@@ -193,7 +193,7 @@ Question classes and their consumers:
 
 ### 6.1 RAG relevance — the first pilot
 
-Current query path: `scripts/sparknet-chroma.py:631` (`cmd_query`) opens the
+Current query path: `scripts/sparknet-vector.py:1234` (`cmd_query`) opens the
 collection and calls `collection.query(query_texts=[query], n_results=top_k)`
 at `:653`. The corpus policy is one allow-list with two scopes
 (`scripts/sparknet-rag-corpus.py:84`); the fabric scope is 28 structural files /
@@ -421,7 +421,7 @@ The plan cursor opens at Step 64. Each phase is adopted by its own commit.
 
 ### 64E — RAG pilot (shadow -> assist)
 
-- `scripts/sparknet-chroma.py --reflex`, reranker cascade, cache,
+- `scripts/sparknet-vector.py --reflex`, reranker cascade, cache,
   `make reflex-eval`, golden set.
 - DoD: fabric scope only; shadow agreement reported; fail-open on abstain;
   precision@5, recall, abstain rate, p95, cost per 1k; no regression without
@@ -525,7 +525,7 @@ to need this" and "we never decided" age very differently.
 - `peer-node/AGENTS.md:43` — peer egress is restricted to the Master.
 - `peer-node/services/sparknet-dispatch-bridge.py:73,1277,1287` — local route
   class, source policy, grant check.
-- `scripts/sparknet-chroma.py:631,653` — the current query path.
+- `scripts/sparknet-vector.py:1234,653` — the current query path.
 - `scripts/sparknet-rag-corpus.py:84` — the one policy, two allow-lists.
 - `gospark/internal/router/router.go:78` — the deterministic routing seam.
 - `gospark/internal/apiv1/types.go:67` — `EscalationDecision`.

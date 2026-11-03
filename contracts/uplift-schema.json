@@ -1,0 +1,122 @@
+{
+  "schema_name": "sparknet-uplift",
+  "schema_version": 1,
+  "description": "Peer -> Master consented uplift: inventory, Qdrant snapshots, teacher traces and raw-KV manifests. Transport is 8091, signed by the peer node key, overlay-only, gated on the peer-held model-uplift capability.",
+  "transport": {
+    "port": 8091,
+    "bind": "10.100.0.1",
+    "direction": "peer -> master",
+    "authentication": "overlay source + Ed25519 request signature from a pinned peer node key + registry entry with model-uplift + freshness + nonce",
+    "routes": [
+      "/api/v1/inventory",
+      "/api/v1/vector-snapshot",
+      "/api/v1/trace-batch",
+      "/api/v1/kv-artifact",
+      "/v1/health"
+    ],
+    "never": "authority, a grant, a peer write path, an answer corpus"
+  },
+  "consent": {
+    "capability": "model-uplift",
+    "scope": "the node operator enables it; a user may opt out and their traces are excluded from datasets",
+    "deletion": "a user deletion request purges local and Master trace/inventory rows within 30 days; snapshots age out by retention",
+    "raw_kv": "captured only for opted-in training sessions or sampled prefixes; never every request by default"
+  },
+  "inventory": {
+    "point_id": "uuid5(node_id, kind, object_id)",
+    "kinds": [
+      "user",
+      "model",
+      "usage",
+      "knowledge_base"
+    ],
+    "payload": {
+      "schema": "sparknet-inventory/1",
+      "node_id": "string",
+      "kind": "user|model|usage|knowledge_base",
+      "object_id": "string",
+      "user_id": "string or null",
+      "email": "string or null",
+      "role": "string or null",
+      "status": "string or null",
+      "model_id": "string or null",
+      "base_model_id": "string or null",
+      "family": "string or null",
+      "source": "open-webui|ollama|vllm|bridge",
+      "first_seen": "ISO8601",
+      "last_seen": "ISO8601",
+      "usage": "object with counts and token totals, never prompt text",
+      "kb_ids": "array of strings"
+    }
+  },
+  "snapshot": {
+    "fields": [
+      "upload_id",
+      "node_id",
+      "collection",
+      "sha256",
+      "size",
+      "point_count",
+      "stamp",
+      "qdrant_version",
+      "created_at"
+    ],
+    "body": "the snapshot bytes",
+    "idempotency": "upload_id + sha256; a duplicate returns 200 and writes nothing",
+    "restore": "only into a scratch collection; never overwrite a live collection"
+  },
+  "trace": {
+    "fields": [
+      "trace_id",
+      "node_id",
+      "user_id",
+      "model_id",
+      "prompt_sha256",
+      "response_sha256",
+      "blob_sha256",
+      "usage",
+      "created_at",
+      "consent",
+      "source",
+      "kv_artifact_id"
+    ],
+    "content": "full prompt/response in a compressed content-addressed blob, not in a Qdrant payload",
+    "redaction": "keys, secrets and excluded personal paths are removed before upload"
+  },
+  "kv_artifact": {
+    "fields": [
+      "artifact_id",
+      "node_id",
+      "model_id",
+      "architecture",
+      "num_layers",
+      "num_kv_heads",
+      "head_dim",
+      "dtype",
+      "token_start",
+      "token_end",
+      "block_hashes",
+      "sha256",
+      "size",
+      "created_at",
+      "trace_id"
+    ],
+    "body": "compressed safetensors bytes",
+    "compatibility": "usable for training only when the artifact's architecture matches the student, or through an explicit adapter experiment",
+    "retention_days": 7
+  },
+  "retention_days": {
+    "snapshots": 30,
+    "traces": 30,
+    "datasets": 180,
+    "kv_artifact_default": 7,
+    "retired_chroma_volume": 14
+  },
+  "implementation_state": {
+    "listener": "master-node/services/sparknet-uplift-intake.py",
+    "peer_client": "scripts/sparknet-uplift-push.py",
+    "capability": "contracts/capabilities.json model-uplift",
+    "live_pair": "DoD: confirm: user",
+    "kv_capture": "peer-node/scripts/sparknet-vllm-kv-patch.sh installs sparknet-vllm-kv-dump.py into the live vLLM 0.2.7 model runner; a marker file triggers a prefill-only KV block dump. Verified live 2026-11-01 (299 blocks, 627 MB)."
+  }
+}

@@ -1,0 +1,239 @@
+{
+  "schema_version": "1.0",
+  "contract": "model-catalog",
+  "description": "The operator-owned model catalog. It names every model the fabric may pull, which node may serve it, the quant, the runtime, the license and the approximate fit. Weights are not knowledge, not authority and never enter a vault, a bundle or 4223. The peer (agx64, 64 GB) serves the teacher; the Master (agx32, 32 GB) serves the student. The teacher is deliberately not eligible for agx32: a 32 GB node cannot serve it, and a cold backup of those weights there is not a deployment.",
+  "updated": "2026-11-01",
+  "store": {
+    "root": "/mnt/ai/models",
+    "manifest_dir": "manifests",
+    "min_free_gb": 80,
+    "note": "The store is a host path, never a vault path. A model pull is an operator action; it is not an LLM tool."
+  },
+  "role_placement": {
+    "peer": {
+      "node": "agx64",
+      "roles": [
+        "teacher",
+        "embedding"
+      ],
+      "why": "64 GB unified memory is the only node that can hold the teacher with context headroom."
+    },
+    "master": {
+      "node": "agx32",
+      "roles": [
+        "student",
+        "embedding"
+      ],
+      "why": "32 GB unified memory is the student node; it trains and serves the smaller same-family model."
+    }
+  },
+  "models": [
+    {
+      "id": "qwen3.8-flash-next-3.84bpw",
+      "family": "qwen3.8",
+      "generation": "3.8",
+      "role": "teacher",
+      "nodes": [
+        "agx64"
+      ],
+      "repo": "AtomicChat/Qwen3.8-Flash-Next-GGUF",
+      "revision": "main",
+      "include": [
+        "*3.84bpw*.gguf"
+      ],
+      "format": "gguf",
+      "runtime": "llama.cpp",
+      "license": "Qwen Community License 1.0",
+      "license_url": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next",
+      "size_gb": 85,
+      "fast_memory_gb": 46,
+      "context_tokens": 32768,
+      "serving_port": 8100,
+      "status": "candidate",
+      "why": "The newest open-weight MoE that fits agx64. The n-gram table stays on NVMe; fast memory is about 45.8 GB. Benchmark before promoting.",
+      "runtime_note": "Blocked on the current stack: Ollama 0.32.13 / the image llama.cpp does not provide qwen4exp support. Do not download the 85 GB build until a qwen4exp-capable runtime is selected."
+    },
+    {
+      "id": "qwen3.6-35b-a3b-q4-k-m",
+      "family": "qwen3.6",
+      "generation": "3.6",
+      "role": "teacher",
+      "nodes": [
+        "agx64"
+      ],
+      "repo": "unsloth/Qwen3.6-35B-A3B-GGUF",
+      "revision": "main",
+      "include": [
+        "*Q4_K_M*.gguf"
+      ],
+      "format": "gguf",
+      "runtime": "llama.cpp",
+      "license": "Apache-2.0",
+      "license_url": "https://huggingface.co/Qwen/Qwen3.6-35B-A3B",
+      "size_gb": 23,
+      "fast_memory_gb": 23,
+      "context_tokens": 131072,
+      "serving_port": 8100,
+      "status": "active",
+      "why": "Proven fallback on Orin 64 GB: faster, much more context headroom, near-lossless compared with the newest 2-bit teacher.",
+      "notes": "Live teacher winner 2026-11-01: Q4_K_M via Ollama, 22.22 tok/s, 21.21 GiB resident, 100% on the fixed suite (thinking off)."
+    },
+    {
+      "id": "qwen3.6-35b-a3b-q8",
+      "family": "qwen3.6",
+      "generation": "3.6",
+      "role": "teacher",
+      "nodes": [
+        "agx64"
+      ],
+      "repo": "unsloth/Qwen3.6-35B-A3B-GGUF",
+      "revision": "main",
+      "include": [
+        "*Q8_0*.gguf"
+      ],
+      "format": "gguf",
+      "runtime": "llama.cpp",
+      "license": "Apache-2.0",
+      "license_url": "https://huggingface.co/Qwen/Qwen3.6-35B-A3B",
+      "size_gb": 40,
+      "fast_memory_gb": 40,
+      "context_tokens": 262144,
+      "serving_port": 8100,
+      "status": "candidate",
+      "why": "Quality reference for the bake-off. It fits 64 GB but leaves less room than Q4_K_M for the peer's other services.",
+      "notes": "Live quality reference 2026-11-01: 17.79 tok/s, 34.39 GiB resident, 100% on the fixed suite (thinking off). Needs vLLM/aux stopped."
+    },
+    {
+      "id": "qwen3.8-27b-q4",
+      "family": "qwen3.8",
+      "generation": "3.8",
+      "role": "student",
+      "nodes": [
+        "agx32"
+      ],
+      "repo": "unsloth/Qwen3.8-27B-GGUF",
+      "revision": "main",
+      "include": [
+        "*Q4_K_M*.gguf"
+      ],
+      "format": "gguf",
+      "runtime": "llama.cpp",
+      "license": "Apache-2.0",
+      "license_url": "https://huggingface.co/Qwen/Qwen3.8-27B",
+      "size_gb": 18,
+      "fast_memory_gb": 18,
+      "context_tokens": 32768,
+      "serving_port": 8101,
+      "status": "candidate",
+      "why": "The smallest Qwen3.8 generation model. It fits agx32 for inference, but QLoRA training is tight; use only in an exclusive training window.",
+      "notes": "Live same-generation student experiment 2026-11-01: 4.75 tok/s, 14.73 GiB resident, 100%; slower than 9B."
+    },
+    {
+      "id": "qwen3.5-9b-q8",
+      "family": "qwen3.5",
+      "generation": "3.5",
+      "role": "student",
+      "nodes": [
+        "agx32"
+      ],
+      "repo": "unsloth/Qwen3.5-9B-GGUF",
+      "revision": "main",
+      "include": [
+        "*Q8_0*.gguf"
+      ],
+      "format": "gguf",
+      "runtime": "llama.cpp",
+      "license": "Apache-2.0",
+      "license_url": "https://huggingface.co/Qwen/Qwen3.5-9B",
+      "size_gb": 10,
+      "fast_memory_gb": 10,
+      "context_tokens": 32768,
+      "serving_port": 8101,
+      "status": "active",
+      "why": "The safe default student: same Qwen family, comfortable QLoRA on 32 GB, and leaves room for the Master's services.",
+      "notes": "Live student winner 2026-11-01: 11.27 tok/s, 8.06 GiB resident, 100% on the fixed suite; imported into agx32 Ollama."
+    },
+    {
+      "id": "qwen3.5-4b-q8",
+      "family": "qwen3.5",
+      "generation": "3.5",
+      "role": "student",
+      "nodes": [
+        "agx32"
+      ],
+      "repo": "unsloth/Qwen3.5-4B-GGUF",
+      "revision": "main",
+      "include": [
+        "*Q8_0*.gguf"
+      ],
+      "format": "gguf",
+      "runtime": "llama.cpp",
+      "license": "Apache-2.0",
+      "license_url": "https://huggingface.co/Qwen/Qwen3.5-4B",
+      "size_gb": 5,
+      "fast_memory_gb": 5,
+      "context_tokens": 32768,
+      "serving_port": 8101,
+      "status": "candidate",
+      "why": "The low-memory student fallback for the bake-off and for a Master that must keep more services resident."
+    },
+    {
+      "id": "qwen3-embedding-0.6b",
+      "family": "qwen3",
+      "generation": "3",
+      "role": "embedding",
+      "nodes": [
+        "agx64",
+        "agx32"
+      ],
+      "repo": "Qwen/Qwen3-Embedding-0.6B",
+      "revision": "main",
+      "include": [
+        "*.safetensors",
+        "*.json",
+        "tokenizer*",
+        "*.model",
+        "*.txt"
+      ],
+      "format": "safetensors",
+      "runtime": "transformers",
+      "license": "Apache-2.0",
+      "license_url": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B",
+      "size_gb": 2,
+      "fast_memory_gb": 2,
+      "context_tokens": 32768,
+      "serving_port": null,
+      "status": "candidate",
+      "why": "One embedding model for the 3D teacher/student map. The same model is used for both roles."
+    },
+    {
+      "id": "bge-m3",
+      "family": "bge",
+      "generation": "m3",
+      "role": "embedding",
+      "nodes": [
+        "agx64",
+        "agx32"
+      ],
+      "repo": "BAAI/bge-m3",
+      "revision": "main",
+      "include": [
+        "*.safetensors",
+        "*.json",
+        "tokenizer*",
+        "*.model",
+        "*.txt"
+      ],
+      "format": "safetensors",
+      "runtime": "transformers",
+      "license": "MIT",
+      "license_url": "https://huggingface.co/BAAI/bge-m3",
+      "size_gb": 2,
+      "fast_memory_gb": 2,
+      "context_tokens": 8192,
+      "serving_port": null,
+      "status": "candidate",
+      "why": "Existing embedding baseline; keeps the vector map comparable with the current Qdrant indexes."
+    }
+  ]
+}

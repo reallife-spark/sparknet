@@ -1,0 +1,42 @@
+{
+  "schema_name": "sparknet-inventory",
+  "schema_version": 1,
+  "description": "The local and Master-mirrored user/model inventory Qdrant keeps. Open WebUI remains authoritative; Qdrant is a searchable mirror and the backup source.",
+  "collection": "sparknet-inventory",
+  "point": {
+    "id": "uuid5(NAMESPACE, node_id + ':' + kind + ':' + object_id)",
+    "vector": "one zero float; the inventory is filtered/scrollled, not similarity-searched",
+    "payload": {
+      "schema": "sparknet-inventory/1",
+      "node_id": "string",
+      "kind": "user|model|usage|knowledge_base",
+      "object_id": "string",
+      "user_id": "string or null",
+      "email": "string or null",
+      "role": "string or null",
+      "status": "string or null",
+      "model_id": "string or null",
+      "base_model_id": "string or null",
+      "family": "string or null",
+      "source": "open-webui|ollama|vllm|bridge",
+      "first_seen": "ISO8601",
+      "last_seen": "ISO8601",
+      "usage": {"requests": "integer", "prompt_tokens": "integer", "completion_tokens": "integer"},
+      "kb_ids": ["string"]
+    }
+  },
+  "sources": {
+    "users": "GET /api/v1/users/ with the node service-account token",
+    "custom_models": "GET /api/v1/models/all",
+    "bridge_models": "GET /v1/models",
+    "ollama_models": "GET /api/tags",
+    "vllm_models": "GET /v1/models",
+    "usage": "chat.finished/message events and bridge session model metadata only; never persisted prompt text"
+  },
+  "rules": {
+    "single_writer": "the inventory agent writes Qdrant; an operator or model never edits a point by hand",
+    "event_driven": "auth/user/model/chat events update immediately; a full reconciliation runs at startup and every five minutes",
+    "durable_outbox": "the peer keeps an outbox and retries until the Master acknowledges",
+    "no_authority": "an inventory point is descriptive; it grants no capability and changes no registry entry"
+  }
+}

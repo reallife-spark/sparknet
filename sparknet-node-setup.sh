@@ -65,7 +65,7 @@ Options:
                         env-file, so switching platforms never inherits
                         the other's base/model lines)
   --engine vllm|stub   model engine (default vllm; stub = CPU-only OpenAI stub, no GPU/model)
-  --profiles A,B,C     compose profiles to enable: kv control webui embed rerank audio ingest backup opencode
+  --profiles A,B,C     compose profiles to enable: kv vector control webui embed rerank audio ingest backup opencode
   --master-pub KEY     the elected Master's Ed25519 public key (base64) or a file
                        holding it; joins the node to the fabric instead of running
                        open. With --registry and no key, the key is read from the
@@ -256,6 +256,29 @@ VLLM_SHM_SIZE=${VLLM_SHM_SIZE:-4gb}"
     chmod 600 "$secret"
   fi
   local secret_val; secret_val="$(cat "$secret")"
+  local qdrant_secret="$NODE_STATE/qdrant.api.key"
+  if [ ! -s "$qdrant_secret" ]; then
+    head -c 32 /dev/urandom | base64 | tr -d '\n' > "$qdrant_secret"
+    chmod 600 "$qdrant_secret"
+  fi
+  local qdrant_val; qdrant_val="$(cat "$qdrant_secret")"
+  local memory_secret="$NODE_STATE/memory.gateway.token"
+  if [ ! -s "$memory_secret" ]; then
+    head -c 32 /dev/urandom | base64 | tr -d '\n' > "$memory_secret"
+    chmod 600 "$memory_secret"
+  fi
+  local memory_val; memory_val="$(cat "$memory_secret")"
+  local memory_local_secret="$NODE_STATE/memory.local.token"
+  if [ ! -s "$memory_local_secret" ]; then
+    head -c 32 /dev/urandom | base64 | tr -d '\n' > "$memory_local_secret"
+    chmod 600 "$memory_local_secret"
+  fi
+  local memory_webui_secret="$NODE_STATE/memory.webui.token"
+  if [ ! -s "$memory_webui_secret" ]; then
+    head -c 32 /dev/urandom | base64 | tr -d '\n' > "$memory_webui_secret"
+    chmod 600 "$memory_webui_secret"
+  fi
+  local memory_webui_val; memory_webui_val="$(cat "$memory_webui_secret")"
 
   umask 077
   cat > "$ENV_FILE" <<EOF
@@ -282,6 +305,14 @@ NATS_IMAGE_TAG=${NATS_IMAGE_TAG:-2.14.2-alpine}
 WEBUI_TAG=${WEBUI_TAG:-v0.12.2}
 SPARKNET_MASTER_PUB=${JOIN_MASTER_PUB:-}
 GOSPARK_REGISTRY_FILE=${JOIN_REGISTRY_PATH:-}
+SPARKNET_QDRANT_URL=${SPARKNET_QDRANT_URL:-http://127.0.0.1:6333}
+SPARKNET_QDRANT_API_KEY=$qdrant_val
+GOSPARK_MEMORY_GATEWAY_TOKEN=$memory_val
+GOSPARK_MEMORY_VAULT_ROOTS=${GOSPARK_MEMORY_VAULT_ROOTS:-/srv/sparknet/peer-node,/srv/sparknet/knowledge}
+SPARKNET_MEMORY_WEBUI_TOKEN=$memory_webui_val
+SPARKNET_MEMORY_GATEWAY_URL=${SPARKNET_MEMORY_GATEWAY_URL:-http://127.0.0.1:4093}
+QDRANT_TAG=${QDRANT_TAG:-v1.20.0}
+SPARKNET_UPLIFT_ENDPOINT=${SPARKNET_UPLIFT_ENDPOINT:-http://10.100.0.1:8091}
 # Reflex is local-only: a local reranker/LLM, or the Master's broker, which
 # answers locally too. There is no egress path and no credential. No new
 # published port.

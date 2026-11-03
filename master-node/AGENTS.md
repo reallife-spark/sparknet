@@ -110,6 +110,10 @@ Three rules govern it:
 
 - `MEMORY.md` — standing state only: plan pointer, durable facts, blockers,
   local-vs-live. Replace, never append.
+- Fleet memory is metadata plus an on-demand `memory-supervise` read-through.
+  The Master keeps no mirror, and its AI never ingests peer memory content.
+  Policy changes and content inspections are signed, scoped and audited on the
+  peer; the user can see the access log.
 - `02_Daily/YYYY-MM-DD.md` — that session's full record (`sessions/` is a shim).
 - Write detail only to today's session file; never back-write history.
 

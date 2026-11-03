@@ -39,7 +39,7 @@ REASON ?=
         env-show parity ledger evidence-capture review-agents keygen keys-check units units-check \
         signer signer-unit reflex-unit peer-intake-unit rfi-responder-unit wg-observer-unit console vault-health vault-heal \
         provenance-verify user-init provenance-append ingest precommit shims-check context-pack context-check governance-check \
-        bundle wiki-preflight wiki-status wiki-lint wiki-query skills-sync skills-check vector-reindex vector-serve file-share-serve nat-status-serve share-ratify-unit share-ratify-serve share-ratify-list share-ratify-approve share-ratify-refuse clean
+        bundle wiki-preflight wiki-status wiki-lint wiki-query skills-sync skills-check vector-reindex vector-serve uplift-intake uplift-intake-unit uplift-intake-check distill distill-doctor distill-trainer-help distill-dataset distill-run distill-status file-share-serve nat-status-serve share-ratify-unit share-ratify-serve share-ratify-list share-ratify-approve share-ratify-refuse clean
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -53,6 +53,7 @@ env-show: ## Print the paths this role resolves (vault, peer node, state dir)
 
 VECTOR_PY ?= $(FABRIC_ROOT)/.venv-vector/bin/python
 VECTOR_STATE ?= $(HOME)/.local/state/sparknet/master-node/vector
+QDRANT_URL ?= http://127.0.0.1:6333
 
 RATIFY_STATE ?= $(HOME)/.local/state/sparknet/master-node/share-ratify/queue.json
 RATIFY_KEYS ?= $(HOME)/.local/state/sparknet/master-node/share-keys
@@ -75,14 +76,47 @@ share-ratify-refuse: ## Refuse one queued share (SHARE_ID=...; signs through the
 	@test -n "$(SHARE_ID)" || { echo "SHARE_ID required" >&2; exit 2; }
 	@$(PY) "$(ROLE_ROOT)/services/sparknet-share-ratify.py" --state "$(RATIFY_STATE)" --signer-socket "$(SIGNER_SOCKET)" --refuse "$(SHARE_ID)"
 
-vector-reindex: ## Rebuild sparknet-fabric and sparknet-shared in the 4223 store
-	@test -x "$(VECTOR_PY)" || { echo "vector-reindex: $(VECTOR_PY) missing (make chroma-dev in a separate venv)"; exit 2; }
-	@$(VECTOR_PY) "$(FABRIC_ROOT)/scripts/sparknet-chroma.py" fabric index --vault "$(FABRIC_ROOT)" --data-dir "$(VECTOR_STATE)/fabric"
-	@$(VECTOR_PY) "$(FABRIC_ROOT)/scripts/sparknet-chroma.py" shared index --vault "$(ROLE_ROOT)" --data-dir "$(VECTOR_STATE)/shared"
+vector-reindex: ## Rebuild sparknet-fabric and sparknet-shared in the 4223 Qdrant store
+	@test -x "$(VECTOR_PY)" || { echo "vector-reindex: $(VECTOR_PY) missing (make vector-dev in a separate venv)"; exit 2; }
+	@SPARKNET_QDRANT_URL="$(QDRANT_URL)" $(VECTOR_PY) "$(FABRIC_ROOT)/scripts/sparknet-vector.py" fabric index --vault "$(FABRIC_ROOT)" --data-dir "$(VECTOR_STATE)/fabric"
+	@SPARKNET_QDRANT_URL="$(QDRANT_URL)" $(VECTOR_PY) "$(FABRIC_ROOT)/scripts/sparknet-vector.py" shared index --vault "$(ROLE_ROOT)" --data-dir "$(VECTOR_STATE)/shared"
 
 vector-serve: ## Run the signed 4223 listener in the foreground (needs VECTOR_PY/key)
 	@test -x "$(VECTOR_PY)" || { echo "vector-serve: $(VECTOR_PY) missing"; exit 2; }
-	@$(VECTOR_PY) "$(ROLE_ROOT)/services/sparknet-vector-serve.py" --fabric-vault "$(FABRIC_ROOT)" --shared-vault "$(ROLE_ROOT)" --state-root "$(VECTOR_STATE)" --registry "$(ROLE_ROOT)/manifests/node-authorizations.json" --bind "$${SPARKNET_VECTOR_BIND:-127.0.0.1}" --port "$${SPARKNET_VECTOR_PORT:-4223}" --trusted-key "$${SPARKNET_VECTOR_TRUSTED_KEY:?set NODE_ID=PATH}"
+	@SPARKNET_QDRANT_URL="$(QDRANT_URL)" $(VECTOR_PY) "$(ROLE_ROOT)/services/sparknet-vector-serve.py" --fabric-vault "$(FABRIC_ROOT)" --shared-vault "$(ROLE_ROOT)" --state-root "$(VECTOR_STATE)" --registry "$(ROLE_ROOT)/manifests/node-authorizations.json" --bind "$${SPARKNET_VECTOR_BIND:-127.0.0.1}" --port "$${SPARKNET_VECTOR_PORT:-4223}" --trusted-key "$${SPARKNET_VECTOR_TRUSTED_KEY:?set NODE_ID=PATH}"
+
+UPLIFT_STATE ?= /srv/sparknet/uplift
+DISTILL_STATE ?= /srv/sparknet/distill
+DISTILL_CONFIG ?= $(ROLE_ROOT)/configs/distill.json
+
+uplift-intake: ## Run the signed 8091 uplift intake in the foreground (no key, no signer)
+	@$(PY) "$(ROLE_ROOT)/services/sparknet-uplift-intake.py" --serve --bind "$${SPARKNET_UPLIFT_BIND:-127.0.0.1}" --port "$${SPARKNET_UPLIFT_PORT:-8091}" --state "$(UPLIFT_STATE)" --registry "$(ROLE_ROOT)/manifests/node-authorizations.json" --trusted-key "$${SPARKNET_UPLIFT_TRUSTED_KEY:?set NODE_ID=PATH}"
+
+uplift-intake-unit: ## Stage the 8091 uplink unit ONLY (never enables it)
+	@install -Dm644 "$(VAULT_ROOT)/systemd/sparknet-uplift-intake.service" "$(UNIT_DIR)/sparknet-uplift-intake.service"
+	@echo "  ✓ staged sparknet-uplift-intake.service into $(UNIT_DIR) — not enabled"
+
+uplift-intake-check: ## Validate the 8091 registry/keyring without listening
+	@$(PY) "$(ROLE_ROOT)/services/sparknet-uplift-intake.py" --check --state "$(UPLIFT_STATE)" --registry "$(ROLE_ROOT)/manifests/node-authorizations.json" --trusted-key "$${SPARKNET_UPLIFT_TRUSTED_KEY:?set NODE_ID=PATH}"
+
+distill-trainer-help: ## Show the LoRA trainer launcher contract
+	@$(ROLE_ROOT)/scripts/sparknet-distill-trainer.sh --help
+
+distill-doctor: ## Check the GPU/trainer prerequisites for a distillation run
+	@$(PY) "$(ROLE_ROOT)/services/sparknet-distill.py" doctor --config "$(DISTILL_CONFIG)" --state "$(DISTILL_STATE)"
+
+distill-dataset: ## Build a same-family distillation dataset from uplifted traces
+	@$(PY) "$(ROLE_ROOT)/services/sparknet-distill.py" dataset --config "$(DISTILL_CONFIG)" --state "$(DISTILL_STATE)" --uplift "$(UPLIFT_STATE)"
+
+distill-status: ## Write the sanitized distillation status snapshot for the WebUI
+	@$(PY) "$(ROLE_ROOT)/services/sparknet-distill-status.py" --config "$(DISTILL_CONFIG)" --state "$(DISTILL_STATE)" --out "$(ROLE_ROOT)/.state/webui/distill-status.json"
+
+distill: ## Show the run scaffold (operator-triggered; no training by default)
+	@$(PY) "$(ROLE_ROOT)/services/sparknet-distill.py" run --config "$(DISTILL_CONFIG)" --state "$(DISTILL_STATE)" --uplift "$(UPLIFT_STATE)"
+
+distill-run: ## Train a configured teacher->student candidate (requires DISTILL_EXECUTE=1)
+	@test "$${DISTILL_EXECUTE:-0}" = "1" || { echo "distill-run: set DISTILL_EXECUTE=1 and SPARKNET_DISTILL_TRAINER"; exit 2; }
+	@$(PY) "$(ROLE_ROOT)/services/sparknet-distill.py" run --execute --sign --config "$(DISTILL_CONFIG)" --state "$(DISTILL_STATE)" --uplift "$(UPLIFT_STATE)"
 
 file-share-serve: ## Run the read-only 4221 file share (needs a trusted peer key)
 	@$(PY) "$(ROLE_ROOT)/services/sparknet-file-share.py" --root "$${SPARKNET_SHARE_ROOT:-/srv/sparknet/share}" --registry "$(ROLE_ROOT)/manifests/node-authorizations.json" --bind "$${SPARKNET_SHARE_BIND:-127.0.0.1}" --port "$${SPARKNET_SHARE_PORT:-4221}" --trusted-key "$${SPARKNET_SHARE_TRUSTED_KEY:?set NODE_ID=PATH}"

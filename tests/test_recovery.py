@@ -37,8 +37,8 @@ def _tree(tmp_path: Path) -> Path:
     (root / "plans" / "MASTER_BUILD_PLAN.md").symlink_to("../PLAN.md")
     (root / ".state" / "keys").mkdir(parents=True)
     (root / ".state" / "keys" / "node.ed25519").write_text("secret\n")
-    (root / ".state" / "chroma").mkdir()
-    (root / ".state" / "chroma" / "huge.sqlite3").write_text("derived\n")
+    (root / ".state" / "qdrant").mkdir()
+    (root / ".state" / "qdrant" / "huge.sqlite3").write_text("derived\n")
     (root / "note-link").symlink_to("01_Inbox/note.md")
     return root
 
@@ -52,7 +52,7 @@ def test_snapshot_manifest_is_private_and_excludes_derived_state(tmp_path: Path)
     data = __import__("json").loads(manifest.read_text())
     assert "00_System/index.md" in data["files"]
     assert ".state/keys/node.ed25519" in data["files"]
-    assert ".state/chroma/huge.sqlite3" not in data["files"]
+    assert ".state/qdrant/huge.sqlite3" not in data["files"]
     assert recovery.verify(archive)["files"] == data["files"]
 
 

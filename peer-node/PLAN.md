@@ -1,7 +1,7 @@
 ---
 title: sparknet peer-node Plan
-updated: 2026-10-31
-current: done
+updated: 2026-11-01
+current: 15
 ---
 
 # sparknet peer-node — Active Plan
@@ -80,6 +80,51 @@ current: done
     context-propagation test and the peer suite are green; `make bundle-verify
     ROLE=peer` passes; `agx64` live legs are `DoD: confirm: user`.
   - **Status: complete and live-verified on agx64 2026-10-31.** Context is in WebUI RAG, per-user KBs, vLLM precontext and OpenCode; `vault.rfi` completed a real request→answer→inbox round trip; telemetry/checkpoint/self-healing timers run; peer suite and bundle verify pass.
+
+## Step 14 — Qdrant node surface, inventory and uplift
+
+- [x] **Step 14** — Replace the node's ChromaDB with a loopback Qdrant server,
+  project users/models/usage into `sparknet-inventory`, and push consented
+  uplift data through the durable outbox.
+  - [x] **14A — AI stack.** `docker-compose.qdrant.yml` declares a pinned,
+    loopback-only Qdrant; Open WebUI uses `VECTOR_DB=qdrant`; the firewall and
+    manifest no longer protect ChromaDB. Local tests pass.
+  - [x] **14B — Inventory.** `services/sparknet-inventory-agent.py` normalises
+    users/models/KBs/usage and never stores prompt text in Qdrant.
+  - [x] **14C — Uplift.** `scripts/sparknet-uplift-push.py` signs inventory,
+    trace, snapshot and KV pushes and spools failures.
+  - [x] **14D — Live.** Migrated agx64 on 2026-11-01: Qdrant `v1.20.0` on
+    loopback, Open WebUI 4 KBs/107 files reindexed, per-KB and per-file
+    retrieval 200, inventory 41 records mirrored on the Master, four collection
+    snapshots uploaded, Chroma stopped and its volume retained for 14 days.
+  - **DoD**: peer suite green; live legs `DoD: confirm: user`.
+
+## Step 15 — Peer typed memory adapters
+
+- [ ] **Step 15** — Serve the per-vault memory plane from the node:
+  - [x] **15A — Service and gateway.** The Go `sparknet-memory` service on
+    loopback `4110`, the Python gateway on `4093`, the setup-generated
+    gateway/local/WebUI tokens, and `make memory-index` for vault pages.
+  - [x] **15B — OpenCode.** `shared/sparknet-memory-mcp.py` is registered in
+    `opencode.json`; it captures turns, injects scoped recall as data, and exposes
+    search/remember/status/forget/project-delegate tools. The plugin route is
+    deliberately absent because OpenCode 1.18.35 hangs on role-local plugins.
+  - [x] **15C — Open WebUI.** `webui/functions/sparknet_memory_filter.py`
+    injects and captures through the gateway; the filter is installed by the
+    workspace helper.
+  - [x] **15D — Console.** The read-only Memory page reads counts, retention and
+    policy through `/api/memory`; it never reads a vault directly. Project
+    lifecycle and bundle commands are operator CLIs, not console writes.
+  - [x] **15E — Projects.** `make project-new|list|run|status|report` and the
+    project agents cover `06_Projects`; a report is signed only after the
+    operator files it.
+  - [x] **15F — Bundles.** Export/validate/stage/import via
+    `make memory-export|memory-bundle-validate|memory-bundle-stage|memory-import`.
+  - **DoD**: `make memory-check`, `make test-role`, `make test-webui-console`,
+    `make lint`, `make format-check`, `make context-check`,
+    `make bundle-verify ROLE=peer`; live OpenCode/WebUI recall and capture are
+    `DoD: confirm: user`.
+  - **Status: local implementation complete 2026-11-02.** Code, tests, contracts and both bundle verifications pass; live node/browser legs are `DoD: confirm: user`.
 
 ## Next
 

@@ -25,18 +25,12 @@ services:
     image: ghcr.io/open-webui/open-webui:${WEBUI_TAG:-v0.12.2}
     container_name: sparknet-admin-webui
     restart: unless-stopped
-    # Bound to the overlay address, never 0.0.0.0.
-    #
-    # The Master is the one role that must not inherit the peer's egress rule
-    # (which pins traffic to 10.100.0.1 and would blackhole the fabric). Overlay-only
-    # *binding* is the opposite move and does not contradict that: this is about
-    # who may reach the page, not what the page may reach.
+    # Open WebUI stays on host loopback; nginx owns the overlay-only 8088
+    # surface. The Master is the one role that must not inherit the peer's
+    # egress rule; overlay-only binding is about who may reach the page, not
+    # what the page may reach.
     ports:
-      # Overlay host port 8088, not 8080: on the Master host an unrelated
-      # container holds 0.0.0.0:8080, so the overlay bind would fail EADDRINUSE.
-      # The container port is unchanged; only the published overlay port moved
-      # (fabric Step 55, 2026-10-19). contracts/ports.json records 8088.
-      - "10.100.0.1:8088:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       # The vault is the only knowledge base. Open WebUI's own vector store would
       # be a second one that no signed entry can revoke, which makes it the quieter
@@ -56,6 +50,29 @@ services:
     # No signer socket, no $SPARKNET_STATE_DIR, no key material. If a future edit
     # adds one, the test that reads ../manifests/admin-surface.json should fail —
     # and if it does not, that test is the defect, not the edit.
+
+  # The same-origin proxy: it owns the overlay-only 8088 bind, injects the
+  # Sparknet launcher into Open WebUI's HTML and routes the read-only console.
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: sparknet-admin-proxy
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      SPARKNET_BIND: "10.100.0.1:8088"
+      SPARKNET_CONSOLE_UPSTREAM: "127.0.0.1:8098"
+      SPARKNET_WEBUI_PORT: "8080"
+    volumes:
+      - ../../../webui/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ../../../webui/console/sparknet-menu.js:/etc/nginx/sparknet-menu.js:ro
+    depends_on:
+      - open-webui
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://10.100.0.1:8088/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # The opencode terminal has no listener of its own: an operator reaches it over
   # the overlay with their own client, and it reads ../opencode.json. It is listed

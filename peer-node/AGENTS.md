@@ -70,11 +70,13 @@ absence of a Master signature locally.
 
 - `MEMORY.md` — **standing state only**, tiny: plan pointer, durable facts,
   blockers, local-vs-live. Replace, never append indefinitely.
+- Typed memory is per-vault and shared by OpenCode, Open WebUI and the console.
+  The Go store holds no key; the Python gateway verifies the session. Capture,
+  retention and forgetting are owner controls; Master inspection is signed.
 - `02_Daily/YYYY-MM-DD.md` — that session's full record (`sessions/` is a shim).
   One file per day; sessions spanning midnight use the start date.
 - Write detail only to today's session file. Never back-write history into
   `MEMORY.md`.
-
 ## Plan Protocol
 
 `PLAN.md` is the single source of truth for multi-step work.
@@ -85,7 +87,6 @@ absence of a Master signature locally.
 - Append one line per transition to `00_System/log.md`.
 - Terminal state is `current: done`. New roadmap work gets a **new** step.
 - A step whose DoD cannot be auto-verified is marked `DoD: confirm: user`.
-
 ## Self-healing
 
 - `make vault-health` is read-only: provenance, shims, index, hot cache, KB
@@ -97,7 +98,6 @@ absence of a Master signature locally.
   pages move only after confirmation.
 - Run it before a large vault operation and after one. Detail:
   `docs/self-healing.md`.
-
 ## Layout
 
 Vault content lives in `00_System/`–`07_Archives/`. Legacy names

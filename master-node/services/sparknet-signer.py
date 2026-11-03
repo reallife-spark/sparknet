@@ -129,6 +129,7 @@ SIGN_OPERATIONS = (
     "sign-share-ratification",
     "record-share-evidence",
     "sign-trust-transition",
+    "sign-distillation-run",
 )
 READ_OPERATIONS = ("capabilities", "public-key", "root-id", "ping")
 OPERATIONS = SIGN_OPERATIONS + READ_OPERATIONS
@@ -555,6 +556,8 @@ class Signer:
             return self._record_share_evidence(op, request)
         if op == "sign-trust-transition":
             return self._sign_trust_transition(op, request)
+        if op == "sign-distillation-run":
+            return self._sign_distillation_run(op, request)
         return self._sign_guard_approval(op, request)
 
     def _sign_registry_entry(self, op: str, request: dict[str, Any]) -> dict[str, Any]:
@@ -886,6 +889,42 @@ class Signer:
             clock=self.clock,
         )
         return {"ok": True, "transition": signed, "ledger_block": block["hash"]}
+
+    def _sign_distillation_run(self, op: str, request: dict[str, Any]) -> dict[str, Any]:
+        """Sign a distillation run record and anchor it in the Master ledger."""
+        run = request.get("run")
+        if not isinstance(run, dict):
+            return self._refuse("sign-distillation-run requires a 'run' object")
+        unsigned = {key: value for key, value in run.items() if key not in {"signature_b64", "signed_at"}}
+        try:
+            self.authz.distillation_run_message(unsigned)
+        except self.authz.AuthzError as exc:
+            return self._refuse(f"distillation run is not canonicalisable: {exc}")
+        signed = self.authz.sign_distillation_run(unsigned, self.key)
+        self.signed_count += 1
+        block = record_event(
+            self.ledger_path,
+            self.node_id,
+            "distillation_run",
+            {
+                "run_id": unsigned["run_id"],
+                "dataset_id": unsigned["dataset_id"],
+                "teacher_model_id": unsigned["teacher_model_id"],
+                "teacher_sha256": unsigned.get("teacher_sha256"),
+                "student_base_model": unsigned["student_base_model"],
+                "student_base_sha256": unsigned.get("student_base_sha256"),
+                "artifact_sha256": unsigned["artifact_sha256"],
+                "signature_b64": signed["signature_b64"],
+                "decided_by": unsigned["decided_by"],
+                "decided_at": unsigned["decided_at"],
+            },
+            self.root_id,
+            authz=self.authz,
+            private_key=self.key,
+            node_pubkey_b64=self.public_key_b64,
+            clock=self.clock,
+        )
+        return {"ok": True, "run": signed, "ledger_block": block["hash"]}
 
     def _record(self, op: str, subject: str, signature_b64: str) -> dict[str, Any]:
         self.signed_count += 1

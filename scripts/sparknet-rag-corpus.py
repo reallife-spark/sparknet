@@ -4,7 +4,7 @@
 Why this exists
 ~~~~~~~~~~~~~~~
 The operator enabled Open WebUI RAG on each node, backed by the node's own
-ChromaDB — but only over the shape of the fabric, never its personal material.
+Qdrant — but only over the shape of the fabric, never its personal material.
 "Ingesting the vault" and "ingesting the vault's structure" are different things,
 and the difference is exactly the page that says who the user is. This script is
 the allow-list that keeps them apart, so the vector store never becomes an

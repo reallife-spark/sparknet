@@ -537,6 +537,10 @@ def test_nothing_in_the_repo_still_says_worker():
             # This file names the old vocabulary on purpose, to search for it.
             if path.resolve() == Path(__file__).resolve():
                 continue
+            # vLLM 0.2.7's package literally contains a `vllm/worker` path;
+            # that is third-party layout, not the pre-split role vocabulary.
+            if path.name == "sparknet-vllm-kv-patch.sh":
+                continue
             try:
                 text = path.read_text()
             except (UnicodeDecodeError, OSError):

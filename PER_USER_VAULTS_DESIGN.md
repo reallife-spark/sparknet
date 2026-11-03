@@ -57,7 +57,7 @@ feature:
 | Surface | Lives on | Created | Controlled by |
 |---|---|---|---|
 | `peer-<user_id>` vault copy | `/srv/sparknet/knowledge/peer-<user_id>/` on the node whose Open WebUI holds the user | on approval (pending → user) | that user (grows it) + node admin (WebUI KB control) |
-| user's KB in Open WebUI | node's own ChromaDB via WebUI | on approval, named `peer-<user_id>` | user (read/use), node admin (admin), Master admin (all nodes, via bridge) |
+| user's KB in Open WebUI | node's own Qdrant server via WebUI | on approval, named `peer-<user_id>` | user (read/use), node admin (admin), Master admin (all nodes, via bridge) |
 | `master-<id>` vault copy | `/srv/sparknet/knowledge/master-<id>/` on an **elected-Master** node | only when elected-Master + admin signed in | the Master's admin |
 
 ## What a `peer-` copy contains

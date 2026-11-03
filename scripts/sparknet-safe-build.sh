@@ -29,8 +29,8 @@
 #   -h, --help        print this text and exit 0
 #
 # Examples:
-#   scripts/sparknet-safe-build.sh -- make chroma-index
-#   scripts/sparknet-safe-build.sh --pip -- .venv/bin/pip install chromadb
+#   scripts/sparknet-safe-build.sh -- make vector-index
+#   scripts/sparknet-safe-build.sh --pip -- .venv/bin/pip install 'qdrant-client[fastembed]'
 set -euo pipefail
 
 JOBS="${SAFE_BUILD_JOBS:-2}"

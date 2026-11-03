@@ -21,7 +21,7 @@ Read `CONTEXT.md` first. It is generated from this charter, `MISSION.md`,
 | Path | Role | State |
 |---|---|---|
 | `contracts/` | both | single source of truth: overlay, capabilities, identity, ports, registry, guard, share, consensus, health, telemetry, RFI, knowledge flow |
-| `shared/` | both | `sparknet-authz.py` and the one shared implementation of provenance, consensus, registry install, RFI install, liveness, notify |
+| `shared/` | both | `sparknet-authz.py` and the one shared implementation of provenance, consensus, registry install, RFI install, liveness, notify, and the memory gateway |
 | `peer-node/` | peer | implemented: guard, anchor, dispatch bridge, AI stack, per-user vaults, self-healing |
 | `master-node/` | master | built: parity loader, ledger, isolated signer, registry, approvals, intake, admin console, responder |
 | `goagx/` | both | AGX Xavier node image surface and standalone distribution |
@@ -58,6 +58,11 @@ per-user KBs/models, the vLLM/MASTERSPIKE precontext and the admin terminal.
   blockers, local-vs-live. Replace, never append.
 - `sessions/YYYY-MM-DD.md` — that session's full record. One file per day;
   sessions spanning midnight use the start date.
+- Typed memory is a per-vault index over the vault, sessions, skills and
+  delegate runs: episodic, semantic, procedural, short-term and shared. It is
+  not a second vault. The Go store (`sparknet-memory`, loopback `4110`) holds no
+  key; the Python gateway (`4093`) verifies the session and narrows to one
+  vault. OpenCode and Open WebUI are adapters over the same store.
 - Read `CONTEXT.md`, `AGENTS.md`, `MISSION.md` and `INTENT.md` at session start,
   then `MEMORY.md` and today's session file. Write detail only to today's file.
   Never back-write history into `MEMORY.md`.
@@ -118,7 +123,11 @@ copying.
 - **Scope.** Fabric knowledge here; role knowledge in that role's vault; user
   knowledge in the user's `peer-<id>` vault/KB.
 - **No secrets.** Never commit or echo keys, tokens or `.env` values; reference
-  the path only.
+  the path only. Uplift traces and raw-KV artifacts are redacted before dataset
+  build; a secret that reaches them is a leak, not training data.
+- **Uplift is not knowledge.** A consented Qdrant snapshot, trace or KV
+  manifest is training/backup data on the Master. It never enters `4223`, a
+  vault, an RFI answer or a user's AI context.
 - **Offensive security is out of scope** for a default session. Route offensive
   work to `red`, defensive to `blue`.
 - Cite sources. A distilled page without provenance is a guess.

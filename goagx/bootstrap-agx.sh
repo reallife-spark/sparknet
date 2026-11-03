@@ -166,6 +166,9 @@ fetch_gospark() {
       || die "cannot fetch $sha from $repo — credentials needed (the repo is private); configure a PAT or deploy key and retry"
     git -C "$GOSPARK_DIR" checkout -q FETCH_HEAD
   fi
+  if [ ! -d "$GOSPARK_DIR/cmd/sparknet-memory" ]; then
+    die "goSpark at ${sha:0:12} has no cmd/sparknet-memory; the pin predates the memory service. Bump GOSPARK_PIN to a revision that contains it, or pass --gospark DIR."
+  fi
 }
 
 build_gospark() {

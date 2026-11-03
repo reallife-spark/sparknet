@@ -50,6 +50,7 @@ def _compose(*args: str, env: dict[str, str] | None = None, timeout: int = 120) 
     docker = _docker()
     assert docker is not None
     full_env = dict(os.environ)
+    full_env.setdefault("SPARKNET_QDRANT_API_KEY", "placeholder")
     full_env.update(env or {})
     return subprocess.run(
         [docker, "compose", "-f", os.fspath(BASE), "-f", os.fspath(CPU), *args],
@@ -80,7 +81,9 @@ def _no_ports_override(path: Path) -> None:
     """Drop every host port publication: this host already uses 8000 and 4222."""
     path.write_text(
         "services:\n"
-        + "".join(f"  {svc}:\n    ports: !reset []\n" for svc in (*SERVICES, "gpu", "control", "kvrouter", "webui")),
+        + "".join(
+            f"  {svc}:\n    ports: !reset []\n" for svc in (*SERVICES, "gpu", "control", "kvrouter", "webui", "qdrant")
+        ),
         encoding="utf-8",
     )
 

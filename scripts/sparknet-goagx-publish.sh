@@ -378,7 +378,7 @@ PY
 
   step "compose resolves"
   if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-    if ( cd "$root" && docker compose -f goagx/sparknet.agx.compose.yml config -q ) >/dev/null 2>&1; then
+    if ( cd "$root" && SPARKNET_QDRANT_API_KEY=verify-placeholder docker compose -f goagx/sparknet.agx.compose.yml config -q ) >/dev/null 2>&1; then
       ok "docker compose config -q"
     else
       bad "docker compose config failed on goagx/sparknet.agx.compose.yml"

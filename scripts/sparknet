@@ -27,6 +27,7 @@ Commands:
   version        print the fabric version (VERSION)
   validate       validate every role
   test           run every suite (make test-all)
+  memory-check   prove the memory gateway, Go store and delegate broker
   contract-test  prove the peer still matches contracts/
   lint           ruff over everything linted
   format-check   ruff format --check on newly added files
@@ -84,6 +85,7 @@ case "$cmd" in
     exec cat "$ROOT/VERSION" ;;
   validate)     no_extra "$@"; run_make validate ;;
   test)         no_extra "$@"; run_make test-all ;;
+  memory-check) no_extra "$@"; run_make memory-check ;;
   contract-test) no_extra "$@"; run_make contract-test ;;
   lint)         no_extra "$@"; run_make lint ;;
   format-check) no_extra "$@"; run_make format-check ;;

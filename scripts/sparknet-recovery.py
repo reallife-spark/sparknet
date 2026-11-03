@@ -35,7 +35,7 @@ from typing import Any
 PHRASE = "I ACCEPT PHASE 9 DESTRUCTIVE RESTORE ON AGX64 AGX32"
 WINDOW_START = datetime(2026, 11, 1, 3, 0, tzinfo=timezone.utc)  # 04:00 CET
 WINDOW_END = datetime(2026, 11, 1, 6, 0, tzinfo=timezone.utc)  # 07:00 CET
-DEFAULT_EXCLUDES = (".state/chroma", ".git", "__pycache__", ".pytest_cache", ".ruff_cache")
+DEFAULT_EXCLUDES = (".state/qdrant", ".state/chroma", ".git", "__pycache__", ".pytest_cache", ".ruff_cache")
 
 
 def _utcnow() -> datetime:

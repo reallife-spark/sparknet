@@ -22,7 +22,7 @@ def _load(name: str, relative: str):
     return module
 
 
-chroma = _load("test_reflex_chroma", "scripts/sparknet-chroma.py")
+vector = _load("test_reflex_vector", "scripts/sparknet-vector.py")
 eval_mod = _load("test_reflex_eval", "scripts/sparknet-reflex-eval.py")
 
 CANDIDATES = [
@@ -34,7 +34,7 @@ CANDIDATES = [
 def test_golden_is_fabric_only_and_every_path_is_indexed():
     golden = eval_mod.load_golden(eval_mod.GOLDEN)
     assert golden["scope"] == "fabric"
-    indexed = {doc["path"] for doc in chroma.plan_index("fabric", REPO_ROOT)}
+    indexed = {doc["path"] for doc in vector.plan_index("fabric", REPO_ROOT)}
     for item in golden["queries"]:
         for path in item["expected"]:
             assert path in indexed, f"{path!r} is not in the fabric corpus"
@@ -60,15 +60,15 @@ def test_percentile_is_nearest_rank():
 
 
 def test_lexical_relevance_is_query_coverage():
-    assert chroma.lexical_relevance("guard approval envelope", "guard approval envelope") == 1.0
-    assert chroma.lexical_relevance("guard approval envelope", "guard protocol") == pytest.approx(1 / 3)
-    assert chroma.lexical_relevance("the and of", "anything") == 0.0
-    assert chroma.lexical_relevance("", "anything") == 0.0
+    assert vector.lexical_relevance("guard approval envelope", "guard approval envelope") == 1.0
+    assert vector.lexical_relevance("guard approval envelope", "guard protocol") == pytest.approx(1 / 3)
+    assert vector.lexical_relevance("the and of", "anything") == 0.0
+    assert vector.lexical_relevance("", "anything") == 0.0
 
 
 def test_rules_reranker_orders_by_lexical_signal(monkeypatch):
     monkeypatch.delenv("SPARKNET_RERANK_URL", raising=False)
-    ordered, abstained, backend, latency_ms = chroma.rerank_candidates("guard approval envelope", CANDIDATES)
+    ordered, abstained, backend, latency_ms = vector.rerank_candidates("guard approval envelope", CANDIDATES)
     assert [candidate["path"] for candidate in ordered] == ["a.md", "b.md"]
     assert abstained is False
     assert backend == "rules"
@@ -77,15 +77,15 @@ def test_rules_reranker_orders_by_lexical_signal(monkeypatch):
 
 def test_rules_reranker_abstains_without_signal(monkeypatch):
     monkeypatch.delenv("SPARKNET_RERANK_URL", raising=False)
-    ordered, abstained, backend, _ = chroma.rerank_candidates("zzzz qqqq", CANDIDATES)
+    ordered, abstained, backend, _ = vector.rerank_candidates("zzzz qqqq", CANDIDATES)
     assert abstained is True
     assert backend == "rules"
     assert [candidate["path"] for candidate in ordered] == ["a.md", "b.md"]
 
 
 def test_http_reranker_wins_when_it_answers(monkeypatch):
-    monkeypatch.setattr(chroma, "http_rerank_scores", lambda _query, _documents: [0.0, 1.0])
-    ordered, abstained, backend, _ = chroma.rerank_candidates("guard approval envelope", CANDIDATES)
+    monkeypatch.setattr(vector, "http_rerank_scores", lambda _query, _documents: [0.0, 1.0])
+    ordered, abstained, backend, _ = vector.rerank_candidates("guard approval envelope", CANDIDATES)
     assert [candidate["path"] for candidate in ordered] == ["b.md", "a.md"]
     assert abstained is False
     assert backend == "http-rerank"
@@ -93,47 +93,47 @@ def test_http_reranker_wins_when_it_answers(monkeypatch):
 
 def test_http_reranker_is_opt_in_and_fails_open(monkeypatch):
     monkeypatch.delenv("SPARKNET_RERANK_URL", raising=False)
-    assert chroma.http_rerank_scores("guard", ["document"]) is None
+    assert vector.http_rerank_scores("guard", ["document"]) is None
     monkeypatch.setenv("SPARKNET_RERANK_URL", "not-a-url")
-    assert chroma.http_rerank_scores("guard", ["document"]) is None
+    assert vector.http_rerank_scores("guard", ["document"]) is None
 
 
 def test_cache_key_changes_with_query_and_candidates():
-    first = chroma._cache_key("guard", CANDIDATES)
-    assert first == chroma._cache_key("guard", CANDIDATES)
-    assert first != chroma._cache_key("approval", CANDIDATES)
-    assert first != chroma._cache_key("guard", CANDIDATES[:1])
+    first = vector._cache_key("guard", CANDIDATES)
+    assert first == vector._cache_key("guard", CANDIDATES)
+    assert first != vector._cache_key("approval", CANDIDATES)
+    assert first != vector._cache_key("guard", CANDIDATES[:1])
 
 
 def test_cache_hits_only_for_the_same_query(tmp_path, monkeypatch):
     monkeypatch.delenv("SPARKNET_RERANK_URL", raising=False)
-    data_dir = tmp_path / "chroma"
-    first = chroma.cached_rerank("guard approval envelope", CANDIDATES, data_dir)
+    data_dir = tmp_path / "qdrant"
+    first = vector.cached_rerank("guard approval envelope", CANDIDATES, data_dir)
     assert first[4] is False
-    second = chroma.cached_rerank("guard approval envelope", CANDIDATES, data_dir)
+    second = vector.cached_rerank("guard approval envelope", CANDIDATES, data_dir)
     assert second[4] is True
     assert second[3] == 0.0
     assert [candidate["path"] for candidate in second[0]] == [candidate["path"] for candidate in first[0]]
-    third = chroma.cached_rerank("different query", CANDIDATES, data_dir)
+    third = vector.cached_rerank("different query", CANDIDATES, data_dir)
     assert third[4] is False
 
 
 def test_cache_can_be_bypassed(tmp_path, monkeypatch):
     monkeypatch.delenv("SPARKNET_RERANK_URL", raising=False)
-    data_dir = tmp_path / "chroma"
-    chroma.cached_rerank("guard approval envelope", CANDIDATES, data_dir)
-    bypass = chroma.cached_rerank("guard approval envelope", CANDIDATES, data_dir, use_cache=False)
+    data_dir = tmp_path / "qdrant"
+    vector.cached_rerank("guard approval envelope", CANDIDATES, data_dir)
+    bypass = vector.cached_rerank("guard approval envelope", CANDIDATES, data_dir, use_cache=False)
     assert bypass[4] is False
 
 
 def test_order_overlap_is_jaccard():
-    assert chroma.order_overlap([], []) == 1.0
-    assert chroma.order_overlap(["a"], []) == 0.0
-    assert chroma.order_overlap(["a", "b"], ["b", "c"]) == pytest.approx(1 / 3)
+    assert vector.order_overlap([], []) == 1.0
+    assert vector.order_overlap(["a"], []) == 0.0
+    assert vector.order_overlap(["a", "b"], ["b", "c"]) == pytest.approx(1 / 3)
 
 
 class _FakeChroma:
-    """The tiny surface ``evaluate`` needs, without chromadb."""
+    """The tiny surface ``evaluate`` needs, without Qdrant."""
 
     def open_checked(self, *_args, **_kwargs):
         return SimpleNamespace(name="sparknet-fabric")
@@ -145,7 +145,7 @@ class _FakeChroma:
         return [candidates[1], candidates[0]], False, "rules", 2.0
 
     def order_overlap(self, left, right):
-        return chroma.order_overlap(left, right)
+        return vector.order_overlap(left, right)
 
 
 class _AbstainingChroma(_FakeChroma):
@@ -337,18 +337,18 @@ def test_load_golden_rejects_malformed_sets(tmp_path):
 
 
 def _query(monkeypatch, capsys, reflex: str) -> str:
-    monkeypatch.setattr(chroma, "open_checked", lambda *_args, **_kwargs: SimpleNamespace(name="sparknet-fabric"))
+    monkeypatch.setattr(vector, "open_checked", lambda *_args, **_kwargs: SimpleNamespace(name="sparknet-fabric"))
     monkeypatch.setattr(
-        chroma,
+        vector,
         "query_candidates",
         lambda *_args, **_kwargs: [dict(candidate) for candidate in CANDIDATES],
     )
     monkeypatch.setattr(
-        chroma,
+        vector,
         "cached_rerank",
         lambda _query, candidates, _data_dir, **_kwargs: ([candidates[1], candidates[0]], False, "rules", 1.0, False),
     )
-    assert chroma.cmd_query("fabric", REPO_ROOT, REPO_ROOT, "guard", 2, reflex=reflex) == 0
+    assert vector.cmd_query("fabric", REPO_ROOT, REPO_ROOT, "guard", 2, reflex=reflex) == 0
     return capsys.readouterr().out
 
 

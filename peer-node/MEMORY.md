@@ -4,14 +4,19 @@
 > The plan and its cursor live in `PLAN.md` — this file points at it.
 > History belongs in `02_Daily/YYYY-MM-DD.md` and `00_System/log.md`.
 
-Updated: 2026-10-31
+Updated: 2026-11-02
 
 ## Plan cursor
-
 - `PLAN.md` — read its `current:` field. Do not mirror step history here.
 
 ## Durable facts
-
+- **Typed memory (2026-11-02):** per-vault memory is served by Go
+  `sparknet-memory` (`4110`) through the Python gateway (`4093`); OpenCode and
+  Open WebUI share one store. The service holds no key.
+- Qdrant is the node vector store (loopback 6333/6334); Open WebUI uses
+  `VECTOR_DB=qdrant`. The inventory agent mirrors users/models/KBs/usage into
+  `sparknet-inventory` without prompt text; the uplift pusher signs 8091
+  uploads and spools failures.
 - **Current deployment**: `agx64` is the peer (`sparknet-node-0001`,
   `wg1 10.100.0.2/32`) and the fabric's local inference path. `agx32` is the
   elected Master (`sparknet-node-0002`, `10.100.0.1`). `agx32`'s text vLLM is
@@ -27,7 +32,7 @@ Updated: 2026-10-31
 - The shared implementations are read by path: `../contracts/`,
   `../shared/sparknet-authz.py`, `../shared/sparknet-provenance.py`.
 - The AI stack is the node's own: Open WebUI on `8181`, own Ollama, own
-  ChromaDB. `plan`/`build` are agent sessions; the local model is chat.
+  Qdrant. `plan`/`build` are agent sessions; the local model is chat.
 - The retired cluster2 pair is **historical proof**, not the current pair. Do
   not use its addresses or its live claims as current state.
 - Live nodes run Python 3.8.10 (Ubuntu 20.04): deployed code carries the
@@ -43,15 +48,11 @@ Updated: 2026-10-31
 - **User key was re-keyed on 2026-10-31** after a deployment mishap deleted
   `.state/keys`; owner `U-27689` was preserved and the 9 tracked notes were
   re-signed. WG and node keys were recovered; record this in provenance history.
-
 ## Blockers
-
 - The 4201/4202 listener and peer-local vector index are live (2026-10-31);
   the Master's 4220/4221/4222/4223 are live and read-only. The 4203 queue and
   the time-boxed stanza remain unbound.
-
 ## Local vs live
-
 - This development host has no overlay and no GPU. `make test-all`, `lint`,
   `validate` and `bundle-verify` are provable here; WireGuard, iptables,
   `chattr +i`, systemd, the live signer and the browser surface are not.

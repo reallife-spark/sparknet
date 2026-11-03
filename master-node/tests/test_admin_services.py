@@ -53,7 +53,7 @@ def _registry(tmp_path: Path, authz, capabilities: list[str]) -> Path:
         "overlay_ipv4": "10.100.0.2/32",
         "requested_capabilities": capabilities,
     }
-    entry = authz.sign_authorization(identity, master, capabilities, ttl_days=1, now=NOW)
+    entry = authz.sign_authorization(identity, master, capabilities, ttl_days=3650, now=NOW)
     path = tmp_path / "registry.json"
     path.write_text(
         json.dumps(

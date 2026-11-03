@@ -21,8 +21,8 @@ wins if the two ever disagree.
 
 - **In scope**: the cross-role contract (`contracts/`), the one signed
   authorization implementation (`shared/`), both role implementations, their
-  vaults, deployment bundles, verification gates, and the knowledge needed to
-  change any of them without breaking the other role.
+  vaults, deployment bundles, verification gates, the Qdrant vector store, and
+  the consented uplift + same-family distillation pipeline.
 - **Out of scope**: runtime services owned by one role, domain knowledge that
   belongs in another vault, and secrets. Keys live in a node's state directory,
   never in a vault and never in git.

@@ -1,0 +1,44 @@
+map $http_upgrade $connection_upgrade {
+	default upgrade;
+	'' close;
+}
+
+server {
+	listen ${SPARKNET_BIND};
+	server_name _;
+	client_max_body_size 100m;
+
+	# The Sparknet launcher is injected into the Open WebUI index below.
+	location = /sparknet-menu.js {
+		alias /etc/nginx/sparknet-menu.js;
+		add_header Cache-Control "no-store";
+	}
+
+	# The console is a separate read-only app under the same origin, so the
+	# browser's Open WebUI token and localStorage stay available to it.
+	location /sparknet-console/ {
+		proxy_pass http://${SPARKNET_CONSOLE_UPSTREAM}/;
+		proxy_http_version 1.1;
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+	}
+
+	# Open WebUI. Keep the upstream uncompressed so sub_filter can inject the
+	# launcher; the WebSocket upgrade is required by socket.io.
+	location / {
+		proxy_pass http://127.0.0.1:${SPARKNET_WEBUI_PORT};
+		proxy_http_version 1.1;
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection $connection_upgrade;
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header Accept-Encoding "";
+		proxy_read_timeout 3600s;
+		proxy_send_timeout 3600s;
+		sub_filter_types text/html;
+		sub_filter '</body>' '<script src="/sparknet-menu.js" defer></script></body>';
+		sub_filter_once on;
+	}
+}

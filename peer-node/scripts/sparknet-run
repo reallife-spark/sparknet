@@ -5,5 +5,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/sparknet-env.sh"
 
+# The role's deploy-time .env carries node identity, the Qdrant key and the
+# uplift endpoint. Source it after the path defaults so a service started by
+# systemd sees the same values an operator does.
+if [ -f "$SPARKNET_VAULT_ROOT/.env" ]; then
+  set -a
+  . "$SPARKNET_VAULT_ROOT/.env"
+  set +a
+fi
+
 # Run with absolute paths, clean env where appropriate
 exec "$@"

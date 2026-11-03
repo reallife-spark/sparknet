@@ -283,6 +283,13 @@ furthest from. `contracts/ports.json` lists `4223 vector-embed` as
 `master-node/plans/MASTER_ADMIN_PLAN.md` — a 59-line spec that scopes the four
 infrastructure-administration services and builds none of them.
 
+> **Superseded 2026-11-01 by operator decision.** Qdrant was adopted as the
+> vector store, replacing ChromaDB on every node and on the Master. The
+> rejection below is kept as the v1 reasoning, not as the current rule. The
+> migration, uplift and distillation rules are in `contracts/vector-store.md`;
+> the numeric upgrade trigger no longer gates the choice. This note is the
+> record of the override, not a silent rewrite of the earlier analysis.
+
 ### F0 — the three industry patterns, weighed against this fleet
 
 Sharing a vector store across AI workers has three established shapes. All three
@@ -338,6 +345,10 @@ Rejected: binding the `chromadb` server directly on 4223. It has no registry
 check and no capability gate, and its authentication model is a static API key —
 the wrong shape entirely for a fabric whose authority comes from key possession
 and a signed registry.
+
+> **Superseded 2026-11-01:** the trigger was not met; the operator chose
+> Qdrant for the uplift/distillation work. The table stays as the historical
+> threshold that would have re-opened the question on its own.
 
 **The upgrade trigger, numeric and checkable.** Milvus or Qdrant is re-opened
 when *any* of these holds, and not before:
@@ -616,7 +627,7 @@ them. The order is the dependency chain, not the section order above.
 
 | Option | Verdict | Reason |
 |---|---|---|
-| Milvus or Qdrant as the v1 store | **rejected for v1** | 242 chunks in the allow-listed corpus (1,699 under the old deny-list). The infrastructure dwarfs the data. Designated as the upgrade path with the numeric trigger in F2 rather than dismissed. |
+| Milvus or Qdrant as the v1 store | **rejected for v1; Qdrant adopted 2026-11-01 by operator decision** | The infrastructure argument was about 242 chunks. The uplift and distillation work changed the requirement: the operator chose Qdrant despite the trigger not being met, and `contracts/vector-store.md` records the new rule. |
 | Sharding + replication + etcd for availability | **rejected** | Two hosts, replication factor two, tolerates no failure. And a second consensus domain alongside `sparknet-consensus.py` creates two membership truths. |
 | pgvector | **rejected** | Buys a new daemon and a backup story to save a process the tree does not have. |
 | Bind the `chromadb` server on 4223 | **rejected** | No registry check, no capability gate, API-key auth — the wrong authority model for this fabric. |

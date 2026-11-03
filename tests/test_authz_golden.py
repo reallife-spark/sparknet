@@ -74,8 +74,9 @@ GOLDEN_ADMIN_REQUEST = {
 GOLDEN_ADMIN_REQUEST_MESSAGE = (
     b'{"action":"set_user_role","chat_id":null,"conversation_id":null,'
     b'"expires_at":1760000600,"issued_at":1760000000,"kb_id":null,'
-    b'"master_node_id":"master-fixture-01","nonce":"nonce-0001",'
-    b'"request_id":"admin-req-0001","role":"user",'
+    b'"master_node_id":"master-fixture-01","memory_ids":null,"memory_query":null,'
+    b'"memory_types":null,"nonce":"nonce-0001","policy":null,"project_id":null,'
+    b'"reason":null,"request_id":"admin-req-0001","role":"user",'
     b'"target_fingerprint":"140e0dc554e18b883922bd5164f576eee0c1d6d08ebf5f7d3c052948257c36c7",'
     b'"target_node_id":"peer-fixture-01","user_email":"ana@example.test",'
     b'"user_id":"user-07"}'

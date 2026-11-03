@@ -22,6 +22,13 @@ VAULT_ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 VENV_PY := $(VAULT_ROOT)/.venv/bin/python
 PY := $(if $(wildcard $(VENV_PY)),$(VENV_PY),python3)
 ROLE ?= peer
+PROJECT ?=
+TASK ?=
+RUN ?=
+TITLE ?=
+OUT ?=
+BUNDLE ?=
+INBOX ?=
 
 # format-check is whole-tree since Step 49: the fabric is pinned to one ruff
 # and the sweep removed the pre-existing differences, so `ruff format --check .`
@@ -35,8 +42,9 @@ SCOPE ?= fabric
         container-test \
         render render-check sbom sbom-check nv-search drift-check context-pack context-check governance-check \
         goagx-publish goagx-drift-check \
-        devtools chroma-dev chroma-init chroma-inspect \
-        chroma-index chroma-stamp chroma-query reflex-eval reflex-live-check reflex-live-query \
+        devtools webui-console model-catalog-check model-pull model-verify model-bench model-runtime-status model-runtime-start model-runtime-stop model-runtime-reap \
+        vector-dev vector-init vector-inspect \
+        vector-index vector-stamp vector-query vector-parity kv-export reflex-eval reflex-live-check reflex-live-query \
         reflex-plan-eval verify-plans env-init wiki-sync wiki-verify \
         wiki-preflight bundle bundle-verify status-plan clean dist \
         role-skills role-skills-check keys-check shims-check hooks
@@ -68,6 +76,7 @@ layout: ## Show the repository layout
 	  "├── peer-node/           the working node role        [IMPLEMENTED]" \
 	  "├── master-node/         the elected signing role    [BUILT]" \
 	  "├── scripts/             fabric-level tooling (incl. the sparknet CLI)" \
+	  "├── webui/               read-only Sparknet console, Caddyfile and Open WebUI patch" \
 	  "├── tests/               fabric + vendored-skill tests" \
 	  "├── sbom/                generated CycloneDX SBOM" \
 	  "└── .opencode/skills/    vendored wiki suite (33 skills: 32 vendored + 1 local)"
@@ -91,6 +100,9 @@ test-all: ## Run every suite in the repository
 	@echo "=== contract ==="
 	@$(PY) -m pytest tests/test_contracts.py -q
 	@echo
+	@echo "=== memory ==="
+	@$(MAKE) --no-print-directory memory-check
+	@echo
 	@echo "=== fabric + vendored wiki skills ==="
 	@$(PY) -m pytest tests/ -q
 	@echo
@@ -105,6 +117,44 @@ test-peer: ## Run only the peer suite
 
 test-master: ## Run only the master's parity + spec suite
 	@$(MAKE) --no-print-directory -C master-node test
+
+memory-check: ## Prove the memory gateway, Go store, delegate broker and project lifecycle
+	@$(PY) -m pytest tests/test_memory_gateway.py tests/test_memory_mcp.py tests/test_memory_bundle.py tests/test_memory_index.py tests/test_project_script.py -q
+	@if [ -d gospark ]; then \
+		$(MAKE) --no-print-directory -C gospark test ./internal/memory ./internal/delegates ./cmd/sparknet-memory; \
+	else \
+		echo "memory-check: gospark checkout absent — gateway contract only"; \
+	fi
+
+project-new: ## Create a signed project: PROJECT=slug ROLE=peer|master TITLE="..."
+	@$(PY) scripts/sparknet-project.py --vault "$(VAULT_ROOT)/$(ROLE)-node" new "$(PROJECT)" --title "$(TITLE)"
+
+project-list: ## List projects: ROLE=peer|master
+	@$(PY) scripts/sparknet-project.py --vault "$(VAULT_ROOT)/$(ROLE)-node" list
+
+project-run: ## Run a project delegate: PROJECT=slug TASK="..."
+	@$(PY) scripts/sparknet-project.py --vault "$(VAULT_ROOT)/$(ROLE)-node" run "$(PROJECT)" --task "$(TASK)"
+
+project-status: ## Show project runs: PROJECT=slug
+	@$(PY) scripts/sparknet-project.py --vault "$(VAULT_ROOT)/$(ROLE)-node" status "$(PROJECT)"
+
+project-report: ## File a signed report: PROJECT=slug RUN=<run-id> TITLE="..."
+	@$(PY) scripts/sparknet-project.py --vault "$(VAULT_ROOT)/$(ROLE)-node" report "$(PROJECT)" --run-id "$(RUN)" --title "$(TITLE)"
+
+memory-index: ## Index vault knowledge pages into semantic memory: ROLE=peer
+	@$(PY) scripts/sparknet-memory-index.py --vault "$(VAULT_ROOT)/$(ROLE)-node"
+
+memory-export: ## Export a vault memory bundle: ROLE=peer OUT=path
+	@$(PY) scripts/sparknet-memory-bundle.py export --vault "$(VAULT_ROOT)/$(ROLE)-node" --out "$(OUT)"
+
+memory-bundle-validate: ## Validate a memory bundle: BUNDLE=path
+	@$(PY) scripts/sparknet-memory-bundle.py validate "$(BUNDLE)"
+
+memory-bundle-stage: ## Stage a bundle for share review: BUNDLE=path INBOX=dir
+	@$(PY) scripts/sparknet-memory-bundle.py stage --bundle "$(BUNDLE)" --inbox "$(INBOX)"
+
+memory-import: ## Import an accepted bundle: ROLE=peer BUNDLE=path
+	@$(PY) scripts/sparknet-memory-bundle.py import --vault "$(VAULT_ROOT)/$(ROLE)-node" --bundle "$(BUNDLE)"
 
 # Opt-in, minutes-long, hardware-free: run the election arc and the CPU-only node
 # graph inside the built node image. Not part of `make ci`; skips cleanly when
@@ -227,6 +277,39 @@ sbom-check: ## Fail if the SBOM is stale vs VERSION, requirements.txt or the ski
 # own container or model. `q` is a substring of a model id; no `q` prints the
 # browser surfaces instead. Endpoints + provenance:
 # references/nvidia-build-catalog.md.
+# --- model store and on-demand runtimes ---------------------------------------
+
+MODEL_NODE ?= agx64
+MODEL_ROLE ?= peer
+PROFILE ?= teacher
+
+model-catalog-check: ## Validate the model catalog and role placement
+	@$(PY) scripts/sparknet-model-pull.py --check
+
+model-pull: ## Pull eligible models for MODEL_NODE (optional MODEL=id)
+	@$(PY) scripts/sparknet-model-pull.py --node "$(MODEL_NODE)" $(if $(MODEL),--model "$(MODEL)",)
+
+model-verify: ## Verify the pinned model manifests for MODEL_NODE
+	@$(PY) scripts/sparknet-model-pull.py --node "$(MODEL_NODE)" --verify
+
+model-bench: ## Benchmark MODEL_ROLE candidates (BENCH_ARGS="--dry-run" or --candidate <id>)
+	@$(PY) scripts/sparknet-model-bench.py --role "$(MODEL_ROLE)" $(BENCH_ARGS)
+
+model-runtime-status: ## Show model runtime leases (MODEL_ROLE=peer|master)
+	@$(PY) scripts/sparknet-model-runtime.py status --role "$(MODEL_ROLE)" $(if $(PROBE),--probe,)
+
+model-runtime-start: ## Start a model runtime lease (PROFILE=teacher|student; MODEL_ROLE=peer|master)
+	@$(PY) scripts/sparknet-model-runtime.py start "$(PROFILE)" --role "$(MODEL_ROLE)" $(if $(REPLACE),--replace,)
+
+model-runtime-stop: ## Stop a model runtime lease (PROFILE=teacher|student; MODEL_ROLE=peer|master)
+	@$(PY) scripts/sparknet-model-runtime.py stop "$(PROFILE)" --role "$(MODEL_ROLE)"
+
+model-runtime-reap: ## Stop expired model leases once (MODEL_ROLE=peer|master)
+	@$(PY) scripts/sparknet-model-runtime.py reap --role "$(MODEL_ROLE)" --interval 0
+
+webui-console: ## Run the read-only WebUI console (MODEL_ROLE=peer|master)
+	@$(PY) scripts/sparknet-console.py --role "$(MODEL_ROLE)"
+
 nv-search: ## Look in NVIDIA's catalog first (q="llama"; details: scripts/sparknet-nv-search.sh --help)
 	@if [ -n "$(q)" ]; then \
 		scripts/sparknet-nv-search.sh models "$(q)"; \
@@ -284,30 +367,44 @@ devtools: ## Create .venv with cryptography, pytest and ruff (opt-in)
 	@"$(VENV_PY)" -m pytest --version && "$(VENV_PY)" -m ruff --version
 	@echo "Dev tools ready."
 
-# --- optional local Chroma index (scripts/sparknet-chroma.py) ------------------
+# --- optional local Qdrant index (scripts/sparknet-vector.py) ------------------
 
-CHROMA_SCOPE ?= peer
+VECTOR_SCOPE ?= $(if $(CHROMA_SCOPE),$(CHROMA_SCOPE),peer)
 
-chroma-dev: ## Install the OPTIONAL chromadb package (sparknet[chroma]); allow-list untouched
+vector-dev: ## Install the OPTIONAL Qdrant client + FastEmbed; runtime allow-list untouched
 	@if [ ! -x "$(VENV_PY)" ]; then python3 -m venv "$(VAULT_ROOT)/.venv"; fi
 	@"$(VENV_PY)" -m pip install --quiet --upgrade pip
-	@./scripts/sparknet-safe-build.sh --pip -- "$(VENV_PY)" -m pip install 'chromadb>=0.5,<1'
-	@echo "chromadb ready. Run: make chroma-init / chroma-index / chroma-query CHROMA_SCOPE=fabric"
+	@./scripts/sparknet-safe-build.sh --pip -- "$(VENV_PY)" -m pip install 'qdrant-client[fastembed]>=1.12,<2'
+	@echo "qdrant-client ready. Run: make vector-init / vector-index / vector-query VECTOR_SCOPE=fabric"
 
-chroma-init: ## Create the CHROMA_SCOPE collection (peer|master|fabric) in .state/chroma/
-	@$(PY) scripts/sparknet-chroma.py "$(CHROMA_SCOPE)" init
+vector-init: ## Create the VECTOR_SCOPE collection (peer|master|fabric|shared)
+	@$(PY) scripts/sparknet-vector.py "$(VECTOR_SCOPE)" init
 
-chroma-inspect: ## Show what chroma-index WOULD index, without needing chromadb
-	@$(PY) scripts/sparknet-chroma.py "$(CHROMA_SCOPE)" inspect
+vector-inspect: ## Show what vector-index WOULD index, without needing Qdrant
+	@$(PY) scripts/sparknet-vector.py "$(VECTOR_SCOPE)" inspect
 
-chroma-index: ## Build/upsert the CHROMA_SCOPE index (embedder all-MiniLM-L6-v2; reindex on ANY change)
-	@$(PY) scripts/sparknet-chroma.py "$(CHROMA_SCOPE)" index
+vector-index: ## Build/upsert the VECTOR_SCOPE index (all-MiniLM-L6-v2 by default)
+	@$(PY) scripts/sparknet-vector.py "$(VECTOR_SCOPE)" index
 
-chroma-stamp: ## Compare the CHROMA_SCOPE index's stamp with this build (exit 3 = mismatch)
-	@$(PY) scripts/sparknet-chroma.py "$(CHROMA_SCOPE)" stamp
+vector-stamp: ## Compare the VECTOR_SCOPE index stamp with this build (exit 3 = mismatch)
+	@$(PY) scripts/sparknet-vector.py "$(VECTOR_SCOPE)" stamp
 
-chroma-query: ## Search the CHROMA_SCOPE index: make chroma-query CHROMA_SCOPE=fabric QUERY="..."
-	@$(PY) scripts/sparknet-chroma.py "$(CHROMA_SCOPE)" query "$(QUERY)"
+vector-query: ## Search the VECTOR_SCOPE index: make vector-query VECTOR_SCOPE=fabric QUERY="..."
+	@$(PY) scripts/sparknet-vector.py "$(VECTOR_SCOPE)" query "$(QUERY)"
+
+vector-parity: ## Run the Qdrant function-parity suites (skips if the optional package is absent)
+	@$(PY) -m pytest tests/test_vector.py tests/test_vector_corpus.py tests/test_reflex_rag.py tests/test_kv_export.py -q
+
+KV_MODEL ?=
+kv-export: ## Package a safetensors KV export: make kv-export KV_FILE=... KV_MODEL=...
+	@test -n "$(KV_FILE)" || { echo "KV_FILE required" >&2; exit 2; }
+	@test -n "$(KV_MODEL)" || { echo "KV_MODEL required" >&2; exit 2; }
+	@$(PY) scripts/sparknet-kv-export.py --from-file "$(KV_FILE)" --model "$(KV_MODEL)" --out "$${KV_OUT:-.state/kv-spool}"
+
+# Deprecated aliases retained for one migration window.
+chroma-dev chroma-init chroma-inspect chroma-index chroma-stamp chroma-query:
+	@echo "sparknet: the Chroma targets are deprecated; use make vector-* (Qdrant is the store)" >&2
+	@$(MAKE) --no-print-directory $(patsubst chroma-%,vector-%,$@) VECTOR_SCOPE="$(VECTOR_SCOPE)"
 
 REFLEX_SCOPE ?= fabric
 REFLEX_MODE ?= shadow

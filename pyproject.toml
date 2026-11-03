@@ -22,15 +22,13 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.6",
 ]
-# Opt-in via `make chroma-dev`. The fabric's runtime allow-list stays
-# `cryptography` only — chromadb backs the OPTIONAL local index in
-# scripts/sparknet-chroma.py and must never leak into `dependencies`.
-# The pin is bounded ABOVE on purpose: the index is built with a named
-# embedder (all-MiniLM-L6-v2) and a major upgrade could change the model
-# under a live index, which would make every distance meaningless while
-# looking healthy. A new major is a reindex, not a surprise.
-chroma = [
-    "chromadb>=0.5,<1",
+# Opt-in via `make vector-dev`. The fabric's runtime allow-list stays
+# `cryptography` only — the Qdrant client and FastEmbed back the OPTIONAL
+# local/4223 index in scripts/sparknet-vector.py and must never leak into
+# `dependencies`. The pin is bounded ABOVE: a new major is a reindex, not a
+# surprise that changes the client contract under a live collection.
+vector = [
+    "qdrant-client[fastembed]>=1.12,<2",
 ]
 
 [tool.pytest.ini_options]

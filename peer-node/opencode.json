@@ -27,5 +27,17 @@
       "*master-node/.state/keys*": "deny",
       "*signer.sock*": "deny"
     }
+  },
+  "mcp": {
+    "sparknet-memory": {
+      "type": "local",
+      "command": [
+        "python3",
+        "../shared/sparknet-memory-mcp.py",
+        "--vault",
+        "."
+      ],
+      "enabled": true
+    }
   }
 }

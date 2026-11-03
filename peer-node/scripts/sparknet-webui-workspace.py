@@ -245,6 +245,25 @@ def bridge_connection(grant_token: str, url: str = DEFAULT_BRIDGE_URL, spec_path
     }
 
 
+def cmd_functions_import(webui: str, token: str, function_file: Path) -> int:
+    """Install the memory filter as an Open WebUI Filter Function."""
+    if not function_file.is_file():
+        raise Failure(f"filter file missing: {function_file}")
+    content = function_file.read_text(encoding="utf-8")
+    payload = {
+        "id": "sparknet-memory",
+        "name": "Sparknet Memory",
+        "type": "filter",
+        "content": content,
+        "meta": {"description": "Per-vault Sparknet memory recall and turn capture", "manifest": {}},
+    }
+    status, response = _http_json(webui, "/api/v1/functions/create", "POST", token, payload)
+    if status not in (200, 201):
+        raise Failure(f"function import failed: HTTP {status}: {response}")
+    log("memory filter installed")
+    return 0
+
+
 def cmd_tools_register(webui: str, token: str, grant_file: Path, url: str, spec_path: str) -> int:
     grant_file = grant_file.expanduser()
     if not grant_file.is_file():
@@ -538,6 +557,13 @@ def _parser() -> argparse.ArgumentParser:
     tools.add_argument("--url", default=os.environ.get("SPARKNET_BRIDGE_URL") or DEFAULT_BRIDGE_URL)
     tools.add_argument("--spec-path", default=DEFAULT_SPEC_PATH)
 
+    fi = sub.add_parser("functions-import", help="install the memory filter into Workspace > Functions")
+    fi.add_argument(
+        "--filter-file",
+        type=Path,
+        default=Path(__file__).resolve().parent.parent.parent / "shared" / "sparknet-memory-filter.py",
+    )
+
     rs = sub.add_parser("rebuild-structure", help="rebuild the KB as a mirror of the role vault")
     rs.add_argument(
         "--vault-root",
@@ -565,6 +591,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_skills_import(args.webui, token, args.skills_dir)
     if args.command == "tools-register":
         return cmd_tools_register(args.webui, token, args.bridge_grant_file, args.url, args.spec_path)
+    if args.command == "functions-import":
+        return cmd_functions_import(args.webui, token, args.filter_file)
     if args.command == "rebuild-structure":
         return cmd_rebuild_structure(args.webui, token, args.vault_root, args.kb_name)
     if args.command == "default-model":

@@ -48,6 +48,7 @@ import os
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -120,7 +121,16 @@ ADMIN_ENTITY_FIELDS: dict[str, tuple[str, ...]] = {
     "list_knowledge": (),
     "get_user_chats": ("user_id",),
     "list_events": (),
+    "memory_status": (),
+    "memory_policy_set": ("policy",),
+    "memory_read": (),
+    "memory_purge": ("memory_ids",),
 }
+
+#: Memory actions are executed against the node's own memory gateway, not its
+#: Open WebUI. They require the peer-held `memory-supervise` capability in
+#: addition to the ordinary admin-supervise check.
+ADMIN_MEMORY_ACTIONS = frozenset({"memory_status", "memory_policy_set", "memory_read", "memory_purge"})
 
 #: Admin actions answered from a node-local file rather than a WebUI call. The
 #: event feed is the node's own auth-event spool (the 0600 JSONL the admin agent
@@ -1400,6 +1410,15 @@ class Bridge:
         if action in ADMIN_LOCAL_ACTIONS:
             return 200, self._read_admin_events()
 
+        if action in ADMIN_MEMORY_ACTIONS:
+            if "memory-supervise" not in decision.capabilities:
+                raise _HttpRequestError(
+                    403,
+                    "capability_missing",
+                    f"memory-supervise not granted to this node (have: {', '.join(decision.capabilities) or 'none'})",
+                )
+            return self._memory_gateway(action, unsigned)
+
         method_exec, url = self._build_admin_url(action, unsigned)
         webui_body: dict[str, Any] | None = None
         if action == "approve_user":
@@ -1418,6 +1437,88 @@ class Bridge:
                 "detail": result,
             }
         return 200, {"ok": True, "action": action, "webui_status": webui_status, "result": result}
+
+    def _memory_gateway(self, action: str, request: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+        """Forward one signed memory action to the local Python gateway.
+
+        The bridge does not implement memory storage, scoring or retention. It
+        verifies the Master's signature and the registry capability, then hands
+        the already-scoped request to the one gateway that owns that boundary.
+        """
+        token_path = _state_dir(self.vault_root) / "memory.local.token"
+        try:
+            token = token_path.read_text(encoding="utf-8").strip()
+        except OSError:
+            return 503, {"ok": False, "action": action, "reason": "memory-token-missing"}
+        if len(token) < 16:
+            return 503, {"ok": False, "action": action, "reason": "memory-token-invalid"}
+        missing = [field for field in ADMIN_ENTITY_FIELDS[action] if not request.get(field)]
+        if missing:
+            return 400, {"ok": False, "action": action, "reason": "missing-field", "detail": ", ".join(missing)}
+        user_id = str(request.get("user_id") or "").strip()
+        vault = self.vault_root
+        if user_id:
+            safe = "".join(char for char in user_id if char.isalnum() or char in "-_")[:64] or "user"
+            candidate = Path("/srv/sparknet/knowledge") / f"peer-{safe}"
+            if not candidate.is_dir():
+                return 403, {"ok": False, "action": action, "reason": "no-user-vault", "user_id": user_id}
+            vault = candidate
+        base = os.environ.get("SPARKNET_MEMORY_GATEWAY_URL", "http://127.0.0.1:4093").rstrip("/")
+        headers = {
+            "Accept": "application/json",
+            "X-Sparknet-Local-Token": token,
+            "X-Sparknet-Vault-Path": str(vault),
+        }
+        if user_id:
+            headers["X-Sparknet-User"] = user_id
+        method = "GET"
+        path = "/v1/memory/status"
+        body: dict[str, Any] | None = None
+        if action == "memory_status":
+            path += "?" + urllib.parse.urlencode({"vault_path": str(vault)})
+        elif action == "memory_read":
+            method = "POST"
+            path = "/v1/memory/inspect"
+            body = {
+                "vault_path": str(vault),
+                "query": str(request.get("memory_query") or ""),
+                "memory_types": request.get("memory_types") or [],
+                "scope": {"user_id": user_id} if user_id else {},
+                "top_k": 20,
+            }
+        elif action == "memory_policy_set":
+            method = "POST"
+            path = "/v1/memory/policy"
+            body = {"vault_path": str(vault), "policy": request.get("policy") or {}}
+        elif action == "memory_purge":
+            method = "POST"
+            path = "/v1/memory/forget"
+            body = {
+                "vault_path": str(vault),
+                "ids": request.get("memory_ids") or [],
+                "mode": "delete",
+                "reason": str(request.get("reason") or "Master memory purge"),
+            }
+        data = json.dumps(body).encode("utf-8") if body is not None else None
+        req = urllib.request.Request(base + path, data=data, method=method)
+        for key, value in headers.items():
+            req.add_header(key, value)
+        if data is not None:
+            req.add_header("Content-Type", "application/json")
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        try:
+            with opener.open(req, timeout=30) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+                return response.status, payload
+        except urllib.error.HTTPError as exc:
+            raw = exc.read()
+            try:
+                payload = json.loads(raw.decode("utf-8"))
+            except Exception:
+                payload = {"ok": False, "action": action, "reason": "memory-gateway-error"}
+            return exc.code, payload
+        except (OSError, urllib.error.URLError) as exc:
+            return 503, {"ok": False, "action": action, "reason": "memory-unavailable", "detail": str(exc)}
 
     # -- reflex ---------------------------------------------------------------
 

@@ -58,6 +58,8 @@ Subcommands:
   nats        run the NATS/JetStream bus
   ingest      crawl the vault and refresh the RAG index (one-shot)
   backup      run the signed vault-snapshot daemon
+  memory      run the per-vault typed memory service (loopback 4110)
+  memory-gateway  run the authority gateway in front of memory (loopback 4093)
   opencode    run the node's opencode server over the vault
   llama-embed  embeddings over the baked GGUF (LLAMA_EMBED_* env)
   llama-rerank reranking over the baked GGUF (LLAMA_RERANK_* env)
@@ -354,6 +356,47 @@ cmd_backup() {
   exec sparknet-backup "${args[@]}"
 }
 
+# The per-vault typed memory service. It stores records and delegate runs; it
+# holds no key and trusts only the gateway token. The token is generated once
+# into the host state dir when the setup script has not already written it.
+cmd_memory_gateway() {
+  ensure_state; ensure_env
+  local role="${SPARKNET_ROLE:-peer}"
+  local webui="${SPARKNET_WEBUI_URL:-http://127.0.0.1:8180}"
+  [ "$role" = master ] && webui="${SPARKNET_WEBUI_URL:-http://127.0.0.1:8080}"
+  local args=(--role "$role" --bind "${SPARKNET_MEMORY_GATEWAY_BIND:-127.0.0.1:4093}"
+    --vault-root "$NODE_DIR" --vault-root /srv/sparknet/knowledge
+    --user-vault-root /srv/sparknet/knowledge --webui-url "$webui")
+  log "memory-gateway $role on ${SPARKNET_MEMORY_GATEWAY_BIND:-127.0.0.1:4093} -> ${SPARKNET_MEMORY_URL:-http://127.0.0.1:4110}"
+  exec "$FABRIC/shared/sparknet-memory-gateway.py" "${args[@]}"
+}
+
+cmd_memory() {
+  ensure_state; ensure_env
+  local token="${GOSPARK_MEMORY_GATEWAY_TOKEN:-}"
+  local token_file="$STATE_DIR/memory.gateway.token"
+  if [ -z "$token" ] && [ -s "$token_file" ]; then
+    token="$(cat "$token_file")"
+  fi
+  if [ -z "$token" ]; then
+    token="$(head -c 32 /dev/urandom | base64 | tr -d '\n')"
+    printf '%s' "$token" > "$token_file"
+    chmod 600 "$token_file"
+  fi
+  export GOSPARK_MEMORY_GATEWAY_TOKEN="$token"
+  local roots="${GOSPARK_MEMORY_VAULT_ROOTS:-$NODE_DIR,/srv/sparknet/knowledge}"
+  local args=(-listen "${GOSPARK_MEMORY_LISTEN:-127.0.0.1:4110}" -state "${GOSPARK_MEMORY_STATE:-$STATE_DIR/memory}" -node-id "$(node_id)")
+  local root
+  IFS=',' read -r -a root_list <<< "$roots"
+  for root in "${root_list[@]}"; do
+    [ -n "$root" ] && args+=(-vault-root "$root")
+  done
+  mkdir -p "$STATE_DIR/memory"
+  chmod 700 "$STATE_DIR/memory" 2>/dev/null || true
+  log "memory $(node_id) on ${GOSPARK_MEMORY_LISTEN:-127.0.0.1:4110} roots=$roots"
+  exec sparknet-memory "${args[@]}"
+}
+
 cmd_opencode() {
   ensure_state; ensure_env
   log "opencode serve over $(node_id)"
@@ -464,6 +507,8 @@ case "${1:-help}" in
   nats)         shift; cmd_nats "$@" ;;
   ingest)       shift; cmd_ingest "$@" ;;
   backup)       shift; cmd_backup "$@" ;;
+  memory)       shift; cmd_memory "$@" ;;
+  memory-gateway) shift; cmd_memory_gateway "$@" ;;
   opencode)     shift; cmd_opencode "$@" ;;
   llama-embed)  shift; cmd_llama_embed "$@" ;;
   llama-rerank) shift; cmd_llama_rerank "$@" ;;

@@ -34,7 +34,7 @@
 #
 # Profiles — identical surface to spark.compose.yml:
 #
-#   default         nats vllm compute agent gpu      (text LLM + telemetry)
+#   default         nats vllm compute agent memory gpu (text LLM, memory + telemetry)
 #   --profile kv    + kvrouter                        (KV-residency index)
 #   --profile control + control                       (this node holds the Master key)
 #   --profile webui + webui                           (Open WebUI on :3000)
@@ -265,6 +265,72 @@ services:
       retries: 5
       start_period: 20s
 
+  # The node's typed memory service. Loopback only: the Python gateway is the
+  # single authority front door, and the Go service trusts only that gateway's
+  # token. It holds no key, signs nothing and writes no vault page.
+  memory:
+    <<: [*agx-node]
+    container_name: sparknet-memory
+    command: ["memory"]
+    environment:
+      <<: *agx-env
+      GOSPARK_MEMORY_LISTEN: 127.0.0.1:4110
+      GOSPARK_MEMORY_STATE: /srv/sparknet/peer-node/.state/memory
+      GOSPARK_MEMORY_NODE_ID: ${SPARKNET_NODE_ID:-spark-01}
+      GOSPARK_MEMORY_GATEWAY_TOKEN: ${GOSPARK_MEMORY_GATEWAY_TOKEN:-}
+      GOSPARK_MEMORY_VAULT_ROOTS: ${GOSPARK_MEMORY_VAULT_ROOTS:-/srv/sparknet/peer-node,/srv/sparknet/knowledge}
+      GOSPARK_MEMORY_OPENCODE_CMD: ${GOSPARK_MEMORY_OPENCODE_CMD:-}
+      GOSPARK_MEMORY_QDRANT_URL: ${GOSPARK_MEMORY_QDRANT_URL:-http://127.0.0.1:6333}
+      GOSPARK_MEMORY_QDRANT_API_KEY: ${SPARKNET_QDRANT_API_KEY:-}
+      GOSPARK_MEMORY_QDRANT_COLLECTION: ${GOSPARK_MEMORY_QDRANT_COLLECTION:-sparknet-memory}
+      GOSPARK_MEMORY_EMBED_ENDPOINT: ${GOSPARK_MEMORY_EMBED_ENDPOINT:-}
+      GOSPARK_MEMORY_EMBED_MODEL: ${GOSPARK_MEMORY_EMBED_MODEL:-}
+    volumes:
+      - *state-volume
+      - type: bind
+        source: ${SPARKNET_KNOWLEDGE_HOST:-/srv/sparknet/knowledge}
+        target: /srv/sparknet/knowledge
+        read_only: true
+    ports:
+      - "${SPARKNET_BIND_LOCAL:-127.0.0.1}:4110:4110"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:4110/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # The authority front door for the memory service. It is a host-network
+  # process so it can reach Open WebUI on loopback and the Go store on 4110;
+  # it never touches a vault or a key.
+  memory-gateway:
+    <<: [*agx-node]
+    container_name: sparknet-memory-gateway
+    command: ["memory-gateway"]
+    network_mode: host
+    depends_on:
+      memory:
+        condition: service_started
+    environment:
+      <<: *agx-env
+      SPARKNET_MEMORY_GATEWAY_BIND: 127.0.0.1:4093
+      SPARKNET_MEMORY_URL: http://127.0.0.1:4110
+      SPARKNET_USER_VAULT_ROOT: /srv/sparknet/knowledge
+      SPARKNET_WEBUI_URL: ${SPARKNET_WEBUI_URL:-http://127.0.0.1:8180}
+      GOSPARK_MEMORY_GATEWAY_TOKEN: ${GOSPARK_MEMORY_GATEWAY_TOKEN:-}
+    volumes:
+      - *state-volume
+      - type: bind
+        source: ${SPARKNET_KNOWLEDGE_HOST:-/srv/sparknet/knowledge}
+        target: /srv/sparknet/knowledge
+        read_only: true
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:4093/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   # The control plane. Only on the node that holds the Master signing key.
   control:
     <<: [*agx-node]
@@ -324,6 +390,27 @@ services:
         target: /app/backend/data
     ports:
       - "${SPARKNET_BIND_API:-0.0.0.0}:3000:8080"
+    restart: unless-stopped
+
+  # Qdrant, the node's vector store. Loopback only; the fabric-facing surface
+  # remains the Master's signed 4223 listener.
+  qdrant:
+    image: qdrant/qdrant:${QDRANT_TAG:-v1.20.0}
+    profiles: ["vector"]
+    container_name: sparknet-qdrant
+    environment:
+      QDRANT__SERVICE__API_KEY: ${SPARKNET_QDRANT_API_KEY:?set at deploy time; do not commit}
+      QDRANT__SERVICE__ENABLE_TLS: "false"
+      QDRANT__TELEMETRY_DISABLED: "true"
+    volumes:
+      - type: bind
+        source: ${SPARKNET_STATE_HOST:-../peer-node/.state}/qdrant
+        target: /qdrant/storage
+    ports:
+      - "${SPARKNET_BIND_LOCAL:-127.0.0.1}:6333:6333"
+      - "${SPARKNET_BIND_LOCAL:-127.0.0.1}:6334:6334"
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
   # --- knowledge profiles (opt-in) -------------------------------------------

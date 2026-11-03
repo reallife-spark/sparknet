@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sparknet Console</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">◈</span>
+        <div>
+          <h1 id="title">Sparknet Console</h1>
+          <p id="subtitle" class="muted">read-only node and mesh state</p>
+        </div>
+      </div>
+      <div class="nav-wrap">
+        <nav id="tabs" class="tabs" aria-label="Sparknet sections">
+          <a href="#mesh" data-tab="mesh">Mesh</a>
+          <a href="#vectors" data-tab="vectors">Vectors</a>
+          <a href="#memory" data-tab="memory">Memory</a>
+          <a href="#projects" data-tab="projects">Projects</a>
+          <a href="#learning" data-tab="learning">Learning</a>
+        </nav>
+        <a class="back" href="/">Open WebUI</a>
+      </div>
+    </header>
+
+    <main>
+      <section id="mesh" class="panel">
+        <div class="section-head">
+          <h2>Mesh</h2>
+          <span class="pill" id="mesh-node">—</span>
+        </div>
+        <div id="mesh-cards" class="card-grid"></div>
+        <div class="two-col">
+          <article class="card">
+            <h3>Registry</h3>
+            <div id="registry-table" class="table-wrap"></div>
+          </article>
+          <article class="card">
+            <h3>Recent evidence</h3>
+            <div id="evidence-list" class="list"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="vectors" class="panel" hidden>
+        <div class="section-head">
+          <h2>Vectors</h2>
+          <span class="pill" id="qdrant-status">Qdrant —</span>
+        </div>
+        <div id="qdrant-cards" class="card-grid"></div>
+        <div class="two-col">
+          <article class="card">
+            <h3>Collections</h3>
+            <div id="collections" class="list"></div>
+          </article>
+          <article class="card">
+            <h3>3D data cloud <span class="pill small">pilot projection</span></h3>
+            <p class="muted" id="map-note">Select a collection.</p>
+            <div class="map-wrap">
+              <canvas id="map" width="900" height="560" aria-label="3D vector data cloud"></canvas>
+              <div id="map-tooltip" class="tooltip" hidden></div>
+            </div>
+            <div class="legend" id="map-legend"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="memory" class="panel" hidden>
+        <div class="section-head">
+          <h2>Memory</h2>
+          <span class="pill" id="memory-vault">—</span>
+        </div>
+        <div id="memory-cards" class="card-grid"></div>
+        <div class="two-col">
+          <article class="card">
+            <h3>Types and retention</h3>
+            <div id="memory-types" class="list"></div>
+            <h3>Fleet metadata</h3>
+            <div id="memory-fleet" class="table-wrap"></div>
+          </article>
+          <article class="card">
+            <h3>Local policy</h3>
+            <p class="muted">Read-only here. Capture, retention and forget are controlled from the owner's memory surface.</p>
+            <pre id="memory-policy" class="muted"></pre>
+          </article>
+        </div>
+      </section>
+
+      <section id="projects" class="panel" hidden>
+        <div class="section-head">
+          <h2>Projects</h2>
+          <span class="pill" id="projects-count">—</span>
+        </div>
+        <div id="project-cards" class="card-grid"></div>
+        <div class="two-col">
+          <article class="card">
+            <h3>Projects in this vault</h3>
+            <div id="project-list" class="list"></div>
+          </article>
+          <article class="card">
+            <h3>Recent delegate runs</h3>
+            <div id="delegate-runs" class="list"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="learning" class="panel" hidden>
+        <div class="section-head">
+          <h2>Learning</h2>
+          <span class="pill" id="learning-node">Master only</span>
+        </div>
+        <div id="learning-cards" class="card-grid"></div>
+        <div class="two-col">
+          <article class="card">
+            <h3>Distillation runs</h3>
+            <div id="runs" class="list"></div>
+          </article>
+          <article class="card">
+            <h3>Teacher / student candidates</h3>
+            <div id="learning-models" class="list"></div>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Read-only. Authority stays with the signed registry and the isolated signer.</span>
+      <span id="error" class="error" role="status"></span>
+    </footer>
+    <script src="app.js"></script>
+  </body>
+</html>

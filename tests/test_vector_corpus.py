@@ -1,4 +1,4 @@
-"""The `fabric` scope of the optional Chroma index (`scripts/sparknet-chroma.py`).
+"""The `fabric` scope of the optional Qdrant index (`scripts/sparknet-vector.py`).
 
 The `fabric` collection is the one the 4223 vector store would serve to every
 node in the cluster. It therefore holds the *structural* fabric and nothing
@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = REPO_ROOT / "scripts" / "sparknet-chroma.py"
+SCRIPT = REPO_ROOT / "scripts" / "sparknet-vector.py"
 POLICY_SCRIPT = REPO_ROOT / "scripts" / "sparknet-rag-corpus.py"
 
 
@@ -36,7 +36,7 @@ def _load(name: str, path: Path):
     return mod
 
 
-chroma = _load("sparknet_chroma", SCRIPT)
+vector = _load("sparknet_vector_corpus", SCRIPT)
 policy = _load("sparknet_rag_corpus_policy", POLICY_SCRIPT)
 
 
@@ -47,7 +47,7 @@ def _write(root: Path, rel: str | Path, text: str = "x") -> None:
 
 
 def _fabric_paths(vault: Path) -> set[str]:
-    return {str(d["path"]) for d in chroma.plan_index("fabric", vault)}
+    return {str(d["path"]) for d in vector.plan_index("fabric", vault)}
 
 
 # --- the policy is shared, not copied -----------------------------------------
@@ -55,7 +55,7 @@ def _fabric_paths(vault: Path) -> set[str]:
 
 def test_the_index_loads_the_corpus_policy_by_path() -> None:
     """One allow-list, one answer to 'what is safe to serve'."""
-    loaded = chroma._policy()
+    loaded = vector._policy()
     assert Path(loaded.__file__).resolve() == POLICY_SCRIPT.resolve(), (
         "the index must load the shared policy file, not a copy of it"
     )
@@ -147,5 +147,5 @@ def test_a_role_scope_still_indexes_its_own_vault_whole(tmp_path: Path) -> None:
     vault = tmp_path / "peer-node"
     _write(vault, "05_Knowledge/concepts/private.md")
     _write(vault, "00_System/user.md")
-    paths = {str(d["path"]) for d in chroma.plan_index("peer", vault)}
+    paths = {str(d["path"]) for d in vector.plan_index("peer", vault)}
     assert paths == {"05_Knowledge/concepts/private.md", "00_System/user.md"}

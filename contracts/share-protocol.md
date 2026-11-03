@@ -187,6 +187,24 @@ configuration, so a node cannot opt out of review by setting a flag.
 - **A third node joining mid-share** re-evaluates that share rather than
   grandfathering it. The share ends and may be re-offered under the new mode.
 
+## Memory bundles ride the existing share types
+
+A `session-handoff` or `kb-share` payload may carry a bounded
+`sparknet-memory-bundle/1` document alongside its pages. It is a payload profile,
+not a new share type: `capabilities.share_types` stays closed and the four clocks
+are unchanged.
+
+- The sender includes only episodic summaries, shared blackboard entries and
+  project notes the user explicitly selected. Short-term/cache, secrets, another
+  user's records and authority data are excluded.
+- The receiver stages the bundle under `01_Inbox/share-<id>/`. It is not ingested
+  into memory until the inbox item is accepted; an unaccepted bundle is data in
+  staging, not knowledge.
+- Import deduplicates by content hash and reports differing records as conflicts.
+  A conflict is held for a human; nothing is overwritten.
+- A memory bundle never widens scope. The receiver's vault, user and project
+  filters are applied before import, and a record outside them is refused.
+
 ## Reconciliation
 
 On `kb-share`, arrival merges by additions and conflicts, never by silent

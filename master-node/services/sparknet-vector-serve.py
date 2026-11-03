@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The 4223 vector store listener: signed, allow-listed retrieval only.
 
-The index itself is derived state built by ``scripts/sparknet-chroma.py``. This
+The index itself is derived state built by ``scripts/sparknet-vector.py``. This
 service adds no second chunker, embedder or corpus rule: it loads that script by
 path, opens the stamped collection and answers a signed query. Two collections
 are served:
@@ -10,7 +10,7 @@ are served:
 - ``sparknet-shared`` — markdown payloads an accepted share staged under
   ``01_Inbox/share-*`` (privacy model A: explicit share only).
 
-A query is refused with 503 when chromadb is absent, the index is missing, or
+A query is refused with 503 when qdrant-client is absent, the index is missing, or
 the collection stamp does not match. It never returns an empty result set to
 hide a broken index. The service holds no key and cannot reach the signer.
 """
@@ -67,10 +67,10 @@ def _load_http() -> Any:
     return _load("sparknet_http_vector", _shared_dir() / "sparknet-http.py")
 
 
-def _load_chroma() -> Any:
-    explicit = os.environ.get("SPARKNET_CHROMA_SCRIPT", "").strip()
-    path = Path(explicit) if explicit else FABRIC_ROOT / "scripts" / "sparknet-chroma.py"
-    return _load("sparknet_chroma_vector", path)
+def _load_vector() -> Any:
+    explicit = os.environ.get("SPARKNET_VECTOR_SCRIPT", "").strip()
+    path = Path(explicit) if explicit else FABRIC_ROOT / "scripts" / "sparknet-vector.py"
+    return _load("sparknet_vector_service", path)
 
 
 class VectorError(Exception):
@@ -91,7 +91,7 @@ class VectorStore:
         registry_path: Path,
         trusted_keys: dict[str, Any],
         authz: Any,
-        chroma: Any | None = None,
+        vector: Any | None = None,
     ):
         self.fabric_vault = Path(fabric_vault)
         self.shared_vault = Path(shared_vault)
@@ -99,7 +99,7 @@ class VectorStore:
         self.registry_path = Path(registry_path)
         self.trusted_keys = dict(trusted_keys)
         self.authz = authz
-        self.chroma = chroma or _load_chroma()
+        self.vector = vector or _load_vector()
 
     def _collection(self, name: str):
         if name not in ("fabric", "shared"):
@@ -107,9 +107,9 @@ class VectorStore:
         vault = self.fabric_vault if name == "fabric" else self.shared_vault
         data = self.state_root / name
         try:
-            return self.chroma.open_checked(name, vault, data)
+            return self.vector.open_checked(name, vault, data)
         except SystemExit as exc:
-            raise VectorError(503, "index-unavailable", "index missing, stale or chromadb absent") from exc
+            raise VectorError(503, "index-unavailable", "index missing, stale or qdrant-client absent") from exc
         except Exception as exc:
             raise VectorError(503, "index-unavailable", str(exc)) from exc
 
@@ -121,7 +121,7 @@ class VectorStore:
         opened = self._collection(collection)
         data = self.state_root / collection
         try:
-            candidates = self.chroma.query_candidates(collection, data, opened, query, top_k)
+            candidates = self.vector.query_candidates(collection, data, opened, query, top_k)
         except SystemExit as exc:
             raise VectorError(503, "index-unavailable", "query refused by the index stamp") from exc
         return [
@@ -137,13 +137,16 @@ class VectorStore:
     def document(self, collection: str, doc_id: str) -> str:
         opened = self._collection(collection)
         try:
-            result = opened.get(ids=[doc_id], include=["documents"])
+            rows = opened.get([doc_id])
         except Exception as exc:
             raise VectorError(404, "unknown-doc", str(exc)) from exc
-        documents = result.get("documents") or []
-        if not documents:
+        if not rows:
             raise VectorError(404, "unknown-doc", doc_id)
-        return str(documents[0])
+        row = rows[0] if isinstance(rows[0], dict) else {}
+        document = row.get("document")
+        if not document:
+            raise VectorError(404, "unknown-doc", doc_id)
+        return str(document)
 
     def _master_key(self) -> Any:
         registry = self._registry()
@@ -190,7 +193,7 @@ class VectorStore:
         vault = self.fabric_vault if collection == "fabric" else self.shared_vault
         data = self.state_root / collection
         try:
-            self.chroma.cmd_index(collection, vault, data)
+            self.vector.cmd_index(collection, vault, data)
         except SystemExit as exc:
             raise VectorError(503, "reindex-failed", "index build refused") from exc
 

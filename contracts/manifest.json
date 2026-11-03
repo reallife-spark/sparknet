@@ -5,7 +5,13 @@
       "contract": "capabilities",
       "file": "capabilities.json",
       "schema_version": "1.0",
-      "sha256": "65b92d0185edc4f8661c196f7fc2d0ed705675e5a3d01bd330ff64226b8bdcd7"
+      "sha256": "e3ff2d9ab5e6807bbe6d6c7638a3107f4b0ab607538fc29677012f0db2ae93cd"
+    },
+    {
+      "contract": "distillation-schema",
+      "file": "distillation-schema.json",
+      "schema_version": 1,
+      "sha256": "aa98192c92b802f8791eada79ef521d36c299b5b2fb0439e5484b30d4b5824b5"
     },
     {
       "contract": "guard-approval",
@@ -20,6 +26,24 @@
       "sha256": "bf4c51af6b13d8ab736aa9867d43ecfffd4de083bbb6c0380196fa76f634ae2e"
     },
     {
+      "contract": "inventory-schema",
+      "file": "inventory-schema.json",
+      "schema_version": 1,
+      "sha256": "992e96bac463ccedc0363e593fb43a4a41cbaf368826b558734dd5c0888b3c72"
+    },
+    {
+      "contract": "memory-schema",
+      "file": "memory-schema.json",
+      "schema_version": 1,
+      "sha256": "a7bc9efdb40cb8980697ede47a2e98722b58cccf011dcca13ebdf6df3ca1cc90"
+    },
+    {
+      "contract": "model-catalog",
+      "file": "model-catalog.json",
+      "schema_version": "1.0",
+      "sha256": "07b47dc4c1ab39de703976cc33eee07c368af9f3c6a4e4004eec4a05d0409f01"
+    },
+    {
       "contract": "overlay",
       "file": "overlay.json",
       "schema_version": "1.0",
@@ -29,7 +53,7 @@
       "contract": "ports",
       "file": "ports.json",
       "schema_version": "2.0",
-      "sha256": "09ee7ce484abee29a6903cdb7c77b220638356868660a54c3d8299bf1f296ee9"
+      "sha256": "1ddae1a48f7d22bceaa363c908a23914a12ce0c6726605290bdac9bd9b4ce492"
     },
     {
       "contract": "proposal-schema",
@@ -65,13 +89,19 @@
       "contract": "telemetry-schema",
       "file": "telemetry-schema.json",
       "schema_version": "1.0",
-      "sha256": "04b9a289b8469b23075e4ece9f167302fd5db8a3ca34c6ac2fc6a26de647b5af"
+      "sha256": "29ea64c67e8877baadedcf6eaea5bad2af8ca704d5b05edd8a6303673dde83d6"
     },
     {
       "contract": "tracking-schema",
       "file": "tracking-schema.json",
       "schema_version": 1,
       "sha256": "400a834928bfb40450661121e1fe3a134c92903f775d9399aab0684aa9068d07"
+    },
+    {
+      "contract": "uplift-schema",
+      "file": "uplift-schema.json",
+      "schema_version": 1,
+      "sha256": "a116b67fded476e3732b854c75b6a3c92fe934bc0c1457bbf4aad92c6bf6be04"
     }
   ],
   "do_not_edit": true,
@@ -83,6 +113,8 @@
     "cluster-vote",
     "cross-department-share",
     "guard-apply",
+    "memory-supervise",
+    "model-uplift",
     "p2p-sync",
     "push-receive",
     "telemetry"
@@ -94,6 +126,13 @@
       "implementation_state": "implemented",
       "runtime": "not-listening",
       "service": "node-webui"
+    },
+    "4110": {
+      "bound_by": "node",
+      "host_published": true,
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "sparknet-memory"
     },
     "4200": {
       "bound_by": "node",
@@ -108,6 +147,20 @@
       "implementation_state": "implemented",
       "runtime": "not-listening",
       "service": "node-nats"
+    },
+    "6333": {
+      "bound_by": "node",
+      "host_published": true,
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "qdrant"
+    },
+    "6334": {
+      "bound_by": "node",
+      "host_published": true,
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "qdrant"
     },
     "8000": {
       "bound_by": "node",
@@ -296,6 +349,12 @@
       "implementation_state": "implemented",
       "runtime": "not-verifiable-here",
       "service": "master-peer-intake"
+    },
+    "8091": {
+      "bound_by": "master",
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "uplift-intake"
     },
     "9090": {
       "bound_by": "peer",

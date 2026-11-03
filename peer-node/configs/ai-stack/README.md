@@ -9,9 +9,9 @@ survives a redeploy.
 
 | File | Holds |
 |---|---|
-| `docker-compose.yml` | `open-webui` (the node's own chat surface) on the **host network** (`network_mode: host`), pointed at this node's infra Ollama (`http://127.0.0.1:11434`) and its infra ChromaDB (`http://127.0.0.1:18000`), and reaching the node's loopback-only dispatch bridge at `http://127.0.0.1:4096/v1`. Answers on `0.0.0.0:8181` (`PORT`) behind the `SPARKNET-FW` host firewall. |
+| `docker-compose.yml` | `open-webui` (the node's own chat surface) on the **host network** (`network_mode: host`), pointed at this node's infra Ollama (`http://127.0.0.1:11434`) and its own Qdrant server (`http://127.0.0.1:6333`, loopback only), and reaching the node's loopback-only dispatch bridge at `http://127.0.0.1:4096/v1`. Answers on `0.0.0.0:8181` (`PORT`) behind the `SPARKNET-FW` host firewall. |
 | `../manifests/ai-stack.json` | the bound claims (published-but-firewalled, own-server-only, structure-only RAG, no authority) that `../tests/test_node_ai_stack.py` asserts against the compose file. |
-| `../tests/test_node_ai_stack.py` | wiring assertions: the one published port, Open WebUI on its own Ollama, structure-scoped Chroma RAG, the Step 5 bridge surface, no GPU declared, no key/signer/state-dir mount. |
+| `../tests/test_node_ai_stack.py` | wiring assertions: the one published port, Open WebUI on its own Ollama, structure-scoped Qdrant RAG, the Step 5 bridge surface, no GPU declared, no key/signer/state-dir mount. |
 
 ## The rules this file exists to enforce
 
@@ -51,3 +51,5 @@ Validate the compose without pulling anything:
 make -C ../../.. ai-stack-config   # or, from the peer role root:
 make ai-stack-config
 ```
+
+Qdrant is deployed from `docker-compose.qdrant.yml`; generate `SPARKNET_QDRANT_API_KEY` under the node state dir at 0600 and export it for compose. The API key is never committed.

@@ -12,8 +12,9 @@ Xavier. The platform selection is a setup-script flag.
 | File | Role |
 |---|---|
 | `sparknet.agx.docker` | the AGX node image (remake of `spark.docker`) |
-| `sparknet.agx.compose.yml` | same 14 services / profiles / ports as `spark.compose.yml`, AGX defaults |
+| `sparknet.agx.compose.yml` | same 15 services / profiles / ports as `spark.compose.yml`, AGX defaults |
 | `sparknet-audio-shim.py` | OpenAI `/v1/audio/transcriptions` over whisper.cpp |
+| memory service | `spark-entrypoint memory` runs goSpark's per-vault typed memory and delegate service on loopback `4110`; it is the one memory plane for OpenCode and Open WebUI |
 | `bootstrap-agx.sh` | device-side entry: preflight, goSpark at the pin, hand over to the setup script |
 | `GOSPARK_PIN` | the one goSpark revision this distribution builds against |
 | `publish-templates/` | README + workflow templates for the standalone repo |
