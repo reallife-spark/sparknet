@@ -8,11 +8,12 @@ ROLE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 IDENTITY=""
 CAPS="telemetry,guard-read"
+NODE_PUBKEY=""
 OUT=""
 
 usage() {
   cat <<'USAGE'
-usage: sparknet-registry-sign.sh --identity <identity.json> [--capabilities c1,c2] [--out <entry.json>]
+usage: sparknet-registry-sign.sh --identity <identity.json> [--capabilities c1,c2] [--node-pubkey <file-or-b64>] [--out <entry.json>]
 
 Signs the identity file with the Master's operational key (from $SPARKNET_STATE_DIR/keys/operational.ed25519)
 and writes a registry entry JSON to stdout or --out.
@@ -23,6 +24,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --identity) IDENTITY="$2"; shift 2 ;;
     --capabilities) CAPS="$2"; shift 2 ;;
+    --node-pubkey) NODE_PUBKEY="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown arg: $1" >&2; usage; exit 1 ;;
@@ -62,11 +64,12 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 identity = json.loads(Path('${IDENTITY}').read_text())
+node_pubkey = (Path('${NODE_PUBKEY}').read_text().strip() if '${NODE_PUBKEY}' and Path('${NODE_PUBKEY}').is_file() else ('${NODE_PUBKEY}' or None)) or identity.get('node_pubkey_b64')
 priv_b64 = Path('${OP_PRIV}').read_text().strip()
 priv = authz.private_key_from_b64(priv_b64)
 cap = json.loads('${cap_list}')
 now = datetime.now(timezone.utc)
-entry = authz.sign_authorization(identity, priv, cap, ttl_days=365, now=now)
+entry = authz.sign_authorization(identity, priv, cap, ttl_days=365, now=now, node_pubkey_b64=node_pubkey)
 print(json.dumps(entry, indent=2, sort_keys=False))
 PYEOF
 "$PY" "$tmp.py" > "$tmp.out"

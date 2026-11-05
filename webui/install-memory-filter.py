@@ -29,7 +29,7 @@ ROOT = HERE.parent
 FUNCTION = HERE / "functions" / "sparknet_memory_filter.py"
 if not FUNCTION.is_file():
     FUNCTION = HERE.parent / "shared" / "sparknet-memory-filter.py"
-FUNCTION_ID = "sparknet-memory"
+FUNCTION_ID = "sparknet_memory"
 
 
 def _load_provisioner() -> Any:
@@ -73,6 +73,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--webui", default="http://127.0.0.1:8181")
     parser.add_argument("--email", required=True)
     parser.add_argument("--password-file", required=True)
+    parser.add_argument(
+        "--webui-token-file", default=None, help="memory WebUI service token; stored in the filter valves"
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
@@ -94,7 +97,27 @@ def main(argv: list[str] | None = None) -> int:
     if status not in (200, 201):
         print(f"install-memory-filter: refused: HTTP {status}: {body}", file=sys.stderr)
         return 2
-    print(json.dumps({"ok": True, "id": FUNCTION_ID, "response": body}, indent=2))
+    valves = None
+    if args.webui_token_file:
+        webui_token = Path(args.webui_token_file).read_text(encoding="utf-8").strip()
+        status, valves = _request(
+            args.webui,
+            f"/api/v1/functions/id/{FUNCTION_ID}/valves/update",
+            "POST",
+            token,
+            {"webui_token": webui_token},
+        )
+        if status not in (200, 201):
+            print(f"install-memory-filter: valves update refused: HTTP {status}: {valves}", file=sys.stderr)
+            return 2
+    # Never echo a valve value: the WebUI service token is a secret even though
+    # it is node-local. The installer only reports that the update happened.
+    print(
+        json.dumps(
+            {"ok": True, "id": FUNCTION_ID, "response": body, "valves": "updated" if valves else None},
+            indent=2,
+        )
+    )
     return 0
 
 

@@ -1,7 +1,7 @@
 ---
 title: sparknet model store and runtime leases
 role: both
-updated: 2026-11-01
+updated: 2026-11-04
 ---
 
 # Model store and runtime leases
@@ -114,6 +114,37 @@ Stopping a container frees unified memory and GPU access. It does not free the
 model files. Disk is managed by catalog removal, dangling-image pruning and
 builder-cache pruning; Qdrant volumes and pinned rollback images are never
 pruned by this contract.
+
+## Update, promotion and rollback
+
+Weights are updated from a pinned manifest, never by editing a running model in
+place. The per-node state lives at
+`/mnt/ai/models/state/<node>.json` (or the configured store root) at `0600`:
+
+- `active` — the manifest currently served;
+- `previous` — the last active manifest kept for rollback;
+- `candidate` — a verified manifest awaiting a benchmark and operator decision.
+
+The operator flow is:
+
+1. `scripts/sparknet-model-pull.py` pulls and verifies the new revision; the
+   resolved commit and every file hash are recorded.
+2. `scripts/sparknet-model-update.py set-candidate` records the verified
+   manifest without serving it.
+3. `scripts/sparknet-model-bench.py` runs the fixed suite against the candidate.
+4. `scripts/sparknet-model-update.py promote` refuses unless the candidate is
+   the named model, the benchmark has no error and its quality pass rate is at
+   least the configured floor (0.8 by default). Promotion swaps `active` and
+   `previous`; it does not delete the previous weights.
+5. `scripts/sparknet-model-update.py rollback` swaps the two back and is the
+   only rollback path.
+6. A serving alias (`sparknet-teacher:active`, `sparknet-student:active`) is
+   updated only after promotion, so Open WebUI clients keep a stable model id.
+
+An operator is named on every promotion and rollback. The benchmark result is
+retained beside the state file. A missing manifest, unpinned manifest, hash
+drift, failed benchmark, low quality or missing operator refuses the action.
+No model or delegate may call these commands.
 
 ## Failure semantics
 

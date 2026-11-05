@@ -2,22 +2,26 @@
 
 Both roles implement this conversation. The peer side landed in
 `peer-node/PLAN.md` Steps 6 and 8, the Master side in
-`master-node/PLAN.md` Steps 10–12, so the offer lifecycle, the
-four clocks, the trust levels and the reconciliation rules are built and tested —
-against in-process node pairs with injected clocks, on a host that has no
-overlay.
+`master-node/PLAN.md` Steps 10–12. The offer lifecycle, the four clocks, the
+trust levels and the reconciliation rules are built and tested — against
+in-process node pairs with injected clocks, on a host that has no overlay.
+Step 11/12 evidence and review are live-verified on agx32 (2026-11-04); Step 10
+is closed by operator scope decision for the two-node posture.
 
 The 4201/4202 transport is live on the two-node pair as of 2026-10-31:
 `sparknet-node-0001` (agx64) and `sparknet-node-0002` (agx32) exchanged a real
 `kb-share` and `session-handoff`, staged payloads under
 `01_Inbox/share-<id>/`, and closed both shares. `peer-node/manifests/share-regime.json`
 records that state. The 4203 queue (`master-node/services/sparknet-share-ratify.py`)
-is built and rehearsed on loopback, but its live service is not deployed on the
-two-node pair; a three-node live fleet, stanza application, the host-firewall exception and
-the Master-hosted evidence repo remain `DoD: confirm: user`. The deployed fleet
-uses iptables, not nftables: the in-process renderer still emits a spec-only
+is built and rehearsed on loopback. On 2026-11-04 the operator closed Step 10 by
+scope: the current pair is `peer_pair`, where governance is symmetric and no
+Master ratification is required, so 4203 stays staged, disabled and inactive for
+a future third node. The three-node ratification service is therefore **not deployed**, and a
+three-node live fleet, stanza application and the host-firewall exception remain future work. The deployed fleet uses iptables,
+not nftables: the in-process renderer still emits a spec-only
 `nftables_exception` and must be translated to `SPARKNET-FW-*`/iptables before
-the time-boxed stanza is applied. `contracts/ports.json` keeps `runtime`
+the time-boxed stanza is applied. The Master-hosted evidence repository is live
+on agx32 with one validated `share.transfer` event (2026-11-04). `contracts/ports.json` keeps `runtime`
 `not-listening` because that axis describes the development host; its `status`
 records the dated live pair. The 4203 listener queues a verified request; it
 never signs. Only an explicit human `--approve`/`--refuse` reaches the

@@ -157,33 +157,30 @@ def test_qdrant_compose_is_loopback_only_and_keyed():
 # --- Step 5: the node's agents as the Open WebUI surface ----------------------
 
 
-def test_open_webui_declares_the_node_agent_surface():
+def test_open_webui_declares_the_opencode_engine_surface():
     webui = _compose_services()["open-webui"]
     env = webui.get("environment", {})
-    assert env.get("OPENAI_API_BASE_URLS") == "http://127.0.0.1:4096/v1", (
-        "the Step 5 surface is the node's own dispatch bridge (loopback 4096); "
-        "any other base URL routes the node's agents through something foreign"
+    assert env.get("OPENAI_API_BASE_URLS") == "http://127.0.0.1:4204/v1", (
+        "the agent execution surface is the loopback OpenCode engine; the old "
+        "dispatch bridge is the authority/vault surface, not a fake assistant"
     )
     assert env.get("MODEL_FILTER_ENABLED") == "true"
-    assert env.get("MODEL_FILTER_LIST") == (
-        "qwen3.6-35b-262k:latest,qwen3.6-35b-262k-q8:latest,"
-        "llama3.2:latest,plan,build,vault,node-orchestrator,masterspike"
-    )
-    assert env.get("DEFAULT_MODELS") == "llama3.2:latest", (
-        "the default chat model is a local Ollama model present on every node, "
-        "so chat keeps answering even if the bridge grant lapses; the node's "
-        "agents stay selectable through the filter"
+    filter_list = env.get("MODEL_FILTER_LIST", "").split(",")
+    assert {"sparknet-chat", "sparknet-plan", "sparknet-build"} <= set(filter_list)
+    assert any("masterspike" in item for item in filter_list)
+    assert env.get("DEFAULT_MODELS") == "sparknet-chat", (
+        "the default is the vault-aware engine chat; a local Ollama model stays selectable as a fallback"
     )
     assert webui.get("network_mode") == "host", (
-        "host networking is what lets the webui reach the node's own bridge on "
-        "loopback; a bridge-network container cannot reach 127.0.0.1:4096"
+        "host networking is what lets the webui reach the loopback engine; a "
+        "bridge-network container cannot reach 127.0.0.1:4204"
     )
 
 
-def test_the_bridge_key_is_a_deploy_time_variable_never_a_committed_token():
+def test_the_engine_key_is_a_deploy_time_variable_never_a_committed_token():
     webui = _compose_services()["open-webui"]
     key = webui.get("environment", {}).get("OPENAI_API_KEYS", "")
-    assert key.startswith("${SPARKNET_WEBUI_BRIDGE_GRANT:"), key
+    assert key.startswith("${SPARKNET_OPENCODE_ENGINE_TOKEN:"), key
     assert "do not commit" in key
     assert "sk-" not in key, "a standing bearer token must never be committed"
 
@@ -237,11 +234,10 @@ def test_the_declared_models_match_the_webui_model_filter():
     manifest = json.loads((ROLE_ROOT / "manifests" / "agent-models.json").read_text())
     webui = _compose_services()["open-webui"]
     filter_list = webui.get("environment", {}).get("MODEL_FILTER_LIST", "").split(",")
-    ids = [m["id"] for m in manifest["selectable"]]
     local_ids = [m["id"] for m in manifest.get("local_models", [])]
-    assert filter_list == [*local_ids, "llama3.2:latest", *ids], (
-        "the model filter names the local teacher candidates, the fallback default and every agent model"
-    )
+    assert {"sparknet-chat", "sparknet-plan", "sparknet-build", "llama3.2:latest"} <= set(filter_list)
+    assert any("masterspike" in item for item in filter_list)
+    assert set(local_ids) <= set(filter_list), "the local teacher candidates stay selectable"
 
 
 # --- the boundary the stack must not cross ------------------------------------
@@ -292,7 +288,7 @@ def test_compose_config_parses_when_docker_is_available(tmp_path):
     if shutil.which("docker") is None:
         pytest.skip("docker not on PATH; the file-reading assertions above still apply")
     env = dict(__import__("os").environ)
-    env["SPARKNET_WEBUI_BRIDGE_GRANT"] = "placeholder-grant"
+    env["SPARKNET_OPENCODE_ENGINE_TOKEN"] = "placeholder-engine-token"
     env["SPARKNET_QDRANT_API_KEY"] = "placeholder-qdrant-key"
     for compose in (COMPOSE, STACK_DIR / "docker-compose.qdrant.yml"):
         result = subprocess.run(

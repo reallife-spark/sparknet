@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Read-only Sparknet WebUI console.
 
-Serves the Mesh, Vectors and (Master-only) Learning pages behind the Open WebUI
-origin. It is a view over existing state: it does not sign, grant, train or
-write. The browser never receives the console token or the Qdrant API key; the
+Serves the Mesh, Vectors and Learning pages behind the Open WebUI
+origin. On a peer, Learning is a signed read-only fetch of the Master's
+sanitized snapshot over 4221. It is a view over existing state: it does not
+sign, grant, train or write. The browser never receives the console token or the Qdrant API key; the
 same-origin proxy injects the token header.
 
 Usage::
@@ -15,9 +16,11 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import base64
 import fnmatch
 import hashlib
 import hmac
+import importlib.util
 import json
 import os
 import sys
@@ -305,13 +308,12 @@ def api_projects(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
     if token_path and token_path.is_file():
         try:
             token = token_path.read_text(encoding="utf-8").strip()
-            query = urllib.parse.urlencode({"vault_path": str(role_root), "limit": 50})
+            query = urllib.parse.urlencode({"limit": 50})
             request = urllib.request.Request(
                 str(settings.get("gateway_url") or "http://127.0.0.1:4093").rstrip("/") + "/v1/delegates/runs?" + query
             )
             request.add_header("Accept", "application/json")
             request.add_header("X-Sparknet-Local-Token", token)
-            request.add_header("X-Sparknet-Vault-Path", str(role_root))
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
             with opener.open(request, timeout=10) as response:
                 payload = json.loads(response.read().decode("utf-8"))
@@ -338,11 +340,12 @@ def api_memory(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
         token = token_path.read_text(encoding="utf-8").strip()
     except OSError as exc:
         return {"ok": False, "configured": True, "error": str(exc)}
-    query = urllib.parse.urlencode({"vault_path": str(vault)})
-    request = urllib.request.Request(base.rstrip("/") + "/v1/memory/status?" + query)
+    # The local token is scoped by the gateway to its role vault. Sending the
+    # host-side role path would be rejected when memory runs in a container whose
+    # vault is mounted at /srv/sparknet/<role>-node.
+    request = urllib.request.Request(base.rstrip("/") + "/v1/memory/status")
     request.add_header("Accept", "application/json")
     request.add_header("X-Sparknet-Local-Token", token)
-    request.add_header("X-Sparknet-Vault-Path", str(vault))
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
         with opener.open(request, timeout=10) as response:
@@ -457,7 +460,81 @@ def api_map(config: dict[str, Any], role_root: Path, collection: str | None) -> 
     }
 
 
+_LEARNING_CACHE: tuple[float, dict[str, Any]] | None = None
+
+
+def _load_shared_module(filename: str, name: str) -> Any:
+    path = ROOT / "shared" / filename
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise ConsoleError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _node_private_key(role_root: Path) -> Any:
+    raw_state = os.environ.get("SPARKNET_STATE_DIR", "").strip()
+    if raw_state:
+        state = Path(raw_state).expanduser()
+        if not state.is_absolute():
+            state = role_root / state
+    else:
+        state = role_root / ".state"
+    path = state / "keys" / "ed25519-node.key.b64"
+    if not path.is_file():
+        raise ConsoleError(f"node key is missing: {path}")
+    authz = _load_shared_module("sparknet-authz.py", "sparknet_console_authz")
+    try:
+        return authz.load_private_key(path)
+    except Exception as exc:
+        raise ConsoleError(f"cannot load node key: {exc}") from exc
+
+
+def _master_learning(config: dict[str, Any], role_root: Path) -> tuple[int, dict[str, Any]]:
+    """Fetch the sanitized Master Learning snapshot over signed 4221.
+
+    The peer console signs with its own node key; the Master file share trusts
+    that key, requires p2p-sync, and has no write route. The response is
+    verified against its SHA-256 before it is parsed.
+    """
+    global _LEARNING_CACHE
+    now = time.monotonic()
+    if _LEARNING_CACHE and now - _LEARNING_CACHE[0] < 30:
+        return 200, _LEARNING_CACHE[1]
+    settings = config.get("learning") or {}
+    base = str(settings.get("master_file_share_url") or "http://10.100.0.1:4221").rstrip("/")
+    path = str(settings.get("status_path") or "/v1/file/learning/status.json")
+    try:
+        http = _load_shared_module("sparknet-http.py", "sparknet_console_http")
+        status, payload = http.post_json(base, "GET", path, {}, _node_private_key(role_root), timeout=10)
+    except Exception as exc:
+        return 502, {"ok": False, "error": f"Master Learning link unavailable: {exc}"}
+    if status != 200 or not payload.get("ok"):
+        return 502, {
+            "ok": False,
+            "error": f"Master Learning link refused: HTTP {status}: {payload.get('reason') or payload.get('error')}",
+        }
+    try:
+        raw = base64.b64decode(str(payload.get("content_b64") or ""), validate=True)
+        if hashlib.sha256(raw).hexdigest() != str(payload.get("sha256") or ""):
+            return 502, {"ok": False, "error": "Master Learning snapshot digest mismatch"}
+        snapshot = json.loads(raw.decode("utf-8"))
+    except Exception as exc:
+        return 502, {"ok": False, "error": f"Master Learning snapshot invalid: {exc}"}
+    if not isinstance(snapshot, dict):
+        return 502, {"ok": False, "error": "Master Learning snapshot is not an object"}
+    result = {**snapshot, "ok": True, "read_only": True, "source": "master:4221"}
+    _LEARNING_CACHE = (now, result)
+    return 200, result
+
+
 def api_learning(config: dict[str, Any], role_root: Path) -> tuple[int, dict[str, Any]]:
+    if config.get("role") == "peer":
+        return _master_learning(config, role_root)
     if config.get("role") != "master" or not isinstance(config.get("distill"), dict):
         return 403, {"ok": False, "error": "Learning is Master-only"}
     distill = config["distill"]
@@ -556,7 +633,9 @@ class Handler(BaseHTTPRequestHandler):
             with opener.open(request, timeout=5) as response:
                 data = json.loads(response.read().decode("utf-8"))
             role = str((data or {}).get("role") or "")
-            allowed = role == "admin" or (self.config.get("role") == "peer" and role == "user")
+            # The console is read-only. Authenticated users may see it on both
+            # roles; the Master's Learning snapshot is sanitized and read-only.
+            allowed = role in ("admin", "user")
         except Exception:
             allowed = False
         self.auth_cache[token] = (now, "allow" if allowed else "deny")

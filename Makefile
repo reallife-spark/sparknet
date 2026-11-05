@@ -42,7 +42,7 @@ SCOPE ?= fabric
         container-test \
         render render-check sbom sbom-check nv-search drift-check context-pack context-check governance-check \
         goagx-publish goagx-drift-check \
-        devtools webui-console model-catalog-check model-pull model-verify model-bench model-runtime-status model-runtime-start model-runtime-stop model-runtime-reap \
+        devtools webui-console model-catalog-check model-pull model-verify model-bench model-runtime-status model-runtime-start model-runtime-stop model-runtime-reap model-survey model-update-status model-set-candidate model-promote model-rollback \
         vector-dev vector-init vector-inspect \
         vector-index vector-stamp vector-query vector-parity kv-export reflex-eval reflex-live-check reflex-live-query \
         reflex-plan-eval verify-plans env-init wiki-sync wiki-verify \
@@ -303,6 +303,24 @@ model-runtime-start: ## Start a model runtime lease (PROFILE=teacher|student; MO
 
 model-runtime-stop: ## Stop a model runtime lease (PROFILE=teacher|student; MODEL_ROLE=peer|master)
 	@$(PY) scripts/sparknet-model-runtime.py stop "$(PROFILE)" --role "$(MODEL_ROLE)"
+
+model-survey: ## Inventory/plan/run the open-weight model survey (SURVEY_CMD=inventory|plan|run, SURVEY_NODE=agx64|agx32)
+	@$(PY) scripts/sparknet-model-survey.py "$(or $(SURVEY_CMD),inventory)" --node "$(or $(SURVEY_NODE),agx32)" $(if $(SURVEY_INCLUDE_UNTRACKED),--include-untracked) $(if $(SURVEY_DRY_RUN),--dry-run) $(if $(SURVEY_MODEL),--model "$(SURVEY_MODEL)") $(if $(SURVEY_OUT),--out "$(SURVEY_OUT)")
+
+model-update-status: ## Show the active/candidate/previous model state (MODEL_NODE=agx64|agx32)
+	@$(PY) scripts/sparknet-model-update.py status --node "$(or $(MODEL_NODE),agx32)" $(if $(MODEL_STORE),--store "$(MODEL_STORE)")
+
+model-set-candidate: ## Record a verified manifest as a candidate (MODEL_NODE, MODEL, MANIFEST)
+	@test -n "$(MODEL)" -a -n "$(MANIFEST)" || { echo "MODEL and MANIFEST required" >&2; exit 2; }
+	@$(PY) scripts/sparknet-model-update.py set-candidate --node "$(or $(MODEL_NODE),agx32)" --model "$(MODEL)" --manifest "$(MANIFEST)" $(if $(MODEL_STORE),--store "$(MODEL_STORE)")
+
+model-promote: ## Promote a candidate after a passing benchmark (MODEL_NODE, MODEL, BENCH, OPERATOR)
+	@test -n "$(MODEL)" -a -n "$(BENCH)" -a -n "$(OPERATOR)" || { echo "MODEL, BENCH and OPERATOR required" >&2; exit 2; }
+	@$(PY) scripts/sparknet-model-update.py promote --node "$(or $(MODEL_NODE),agx32)" --model "$(MODEL)" --bench "$(BENCH)" --operator "$(OPERATOR)" $(if $(MODEL_STORE),--store "$(MODEL_STORE)")
+
+model-rollback: ## Roll back to the previous model (MODEL_NODE, OPERATOR)
+	@test -n "$(OPERATOR)" || { echo "OPERATOR required" >&2; exit 2; }
+	@$(PY) scripts/sparknet-model-update.py rollback --node "$(or $(MODEL_NODE),agx32)" --operator "$(OPERATOR)" $(if $(MODEL_STORE),--store "$(MODEL_STORE)")
 
 model-runtime-reap: ## Stop expired model leases once (MODEL_ROLE=peer|master)
 	@$(PY) scripts/sparknet-model-runtime.py reap --role "$(MODEL_ROLE)" --interval 0

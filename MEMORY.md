@@ -1,13 +1,11 @@
 # sparknet — Session Memory
-
 > Standing state only. Read at session start; **replace, never append**.
 > History belongs in `log.md` and `sessions/YYYY-MM-DD.md`; pre-2026-10-31
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
-
-Updated: 2026-11-02
-
+Updated: 2026-11-05
 ## Plan cursor
-- `PLAN.md` — read its `current:` field; role plans own role work.
+- `PLAN.md` — `current: 87` (WebUI/OpenCode engine step complete; 84G browser click and Master 9G window remain user-confirmed).
+- Open live legs (2026-11-05): 84G browser click; Master 9G 02:00–05:00 window; Step 86 full survey/promotion drill; 87 browser click-through.
 ## Live fabric
 - **`agx64` = peer = `sparknet-node-0001`** (`10.100.0.2/32`); **`agx32` =
   master = `sparknet-node-0002`** (`10.100.0.1/32`). Trust root `fa6f4fa5…`;
@@ -27,12 +25,10 @@ Updated: 2026-11-02
   (22.2 tok/s, 21.2 GiB, 100%); agx32 Qwen3.5-9B Q8 (11.3 tok/s, 8.1 GiB,
   100%); 27B Q4 imported but slower (4.75 tok/s). vLLM/aux stopped because
   Q4_K_M + vLLM does not fit; Qwen3.8-Flash-Next blocked on qwen4exp.
-- **WebUI console live 2026-11-01:** nginx fronts Open WebUI on agx64:8181 and
-  agx32:10.100.0.1:8088, injects the Sparknet launcher and proxies
-  `/sparknet-console/` to loopback 8099/8098; Mesh/Qdrant/3D pilot APIs 200.
-  User units `sparknet-console@peer|master` persist it; the Master's
-  `sparknet-distill-status.timer` writes a sanitized 5-run snapshot; browser
-  confirmation remains 84G.
+- **WebUI/OpenCode live 2026-11-05:** both nodes run Open WebUI `v0.13.0`; the peer has 16 bilingual prompts, 4 user-scoped tools, 2 active/global functions and per-user models on `sparknet-chat`; the loopback OpenCode `1.19.5` engine (`4204`) runs one vault-only sandbox per user; Master is admin-only with the same engine over `master-admin`. The old cluster2 Master WebUI was retired and Jennifer's chat migrated to the peer. Browser click-through remains.
+- **Memory/evidence live 2026-11-04:** memory `4110`/gateway `4093` on agx64;
+  Master `memory_status`/`memory-read` 200; registry sequence 8; one
+  `share.transfer` and two signed trust transitions recorded.
 ## Durable facts
 - **Memory plane (2026-11-02):** per-vault typed memory runs in Go
   (`sparknet-memory`, `4110`) behind the Python gateway (`4093`); OpenCode and
@@ -53,6 +49,9 @@ Updated: 2026-11-02
 ## Command gotchas
 - `make ci`/`make test-all` are authoritative; a full run needs >120 s.
   Rebuild before `bundle-verify`; run `wiki-preflight` before the wiki suite.
+- A long-running service loads `shared/sparknet-authz.py` once at start. After a
+  capability is added, restart the consumer or a valid registry entry is refused
+  as `unknown_capability`. The agx64 bridge was restarted 2026-11-03 for this.
 ## Local vs live
 This development host has no GPU and no overlay. Code, tests, contracts, the
 ledger and bundles are verifiable here; WireGuard, iptables, `chattr +i`,

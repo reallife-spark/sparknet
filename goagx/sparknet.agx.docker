@@ -55,7 +55,7 @@ ARG L4T_BASE=nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3
 # Every ARG below is overridable with --build-arg; the defaults are the
 # researched combination (goagx/README.md records what was checked and what
 # the alternatives were).
-ARG OPENCODE_VERSION=1.18.35
+ARG OPENCODE_VERSION=1.19.5
 ARG NATS_VERSION=2.14.2
 
 # Aux engines: llama.cpp's current release versioning, whisper.cpp's

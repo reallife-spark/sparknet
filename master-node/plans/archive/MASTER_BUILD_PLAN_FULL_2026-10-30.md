@@ -18,6 +18,10 @@ current: 10
 > cursor sits at Step 10. Step 7 (8090) was **re-scoped and closed by fabric Step 69C** — the
 > instant-push purpose was superseded by Step 6's 9090 push, and 8090 is now the
 > peer→Master intake listener; see Step 7's status.
+>
+> **Status correction 2026-11-03:** Step 9 was reopened — 9A–9D exist but 9E–9G
+> do not, so this archive no longer treats Steps 1–9 as closed. The active
+> `../PLAN.md` is canonical and its cursor is 9.
 
 ## Status Legend
 
@@ -395,7 +399,10 @@ containment and scheduling.
 
 ## Step 9 — Nocturnal batch scheduler
 
-- [x] **Step 9** — Idle detection and the time-boxed nocturnal batch scheduler.
+- [ ] **Step 9** — Idle detection and the time-boxed nocturnal batch scheduler.
+      **Status corrected 2026-11-03: open.** The former `[x]` was premature:
+      9A–9C are implemented, 9D's task ingress exists, but 9E–9G are not built.
+      The active plan now carries the reopened step.
       - **DoD**: (1) idle detection on every node covers interactive SSH
         sessions, WireGuard byte deltas and GPU activity (`nvidia-smi` where
         available, `tegrastats` on the deployed AGX fleet), and treats a missing,

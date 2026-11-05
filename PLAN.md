@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
-updated: 2026-11-01
-current: 85
+updated: 2026-11-05
+current: 87
 ---
 
 # sparknet — Active Plan
@@ -328,17 +328,32 @@ current: 85
     write a sanitized `0644` snapshot of 5 runs; Learning now reads it without
     touching `/srv/sparknet/distill`. The optional source-level sidebar image is
     deferred; the live launcher is nginx-injected.
+  - [x] **84H — Sparknet sidebar group.** Both Open WebUI instances inject a
+    separate **SPARKNET** group directly below Notes/Workspace: peer shows Mesh,
+    Vectors and Learning; Master shows Mesh, Vectors and Learning for all
+    authenticated users. The peer Learning page fetches the Master's sanitized
+    snapshot over signed 4221; it never stores a mirror.
+  - [x] **84I — 3D zoom.** Added explicit `+`/`−`/Reset controls, a zoom
+    percentage, wheel handling on the canvas and map wrapper, and keyboard
+    controls. Verified with headless Chromium: 100% → 112% on click, → 151% on
+    wheel, → 100% on reset.
   - [ ] **84G — Browser confirmation.** Click Mesh, Vectors and Learning from a
-    signed-in peer and Master browser session; confirm the peer hides Learning,
-    the 3D cloud rotates/zooms, and the Master Learning runs render.
-    **DoD: confirm: user.**
+    signed-in peer and Master browser session; confirm the sidebar group, the
+    peer read-only Learning view, the 3D cloud rotation/zoom, and the Master
+    Learning runs render. **DoD: confirm: user.**
   - **DoD**: local gates green; live peer owner sees Mesh/Vectors, Master admin
     sees Mesh/Vectors/Learning; read-only vector exploration and the 3D pilot;
     Qdrant/training exclusions hold; live clicks are `DoD: confirm: user`.
+  - **Status 2026-11-04:** the native SPARKNET sidebar group is live on both
+    Open WebUI instances; peer shows Mesh/Vectors/Learning and the Master shows
+    the same for authenticated users. Peer Learning is a signed 4221 read-only
+    fetch of the Master snapshot (`source master:4221`). Zoom controls and
+    wheel/keyboard behavior are live and browser-tested. Only 84G's final
+    signed-in visual confirmation remains `DoD: confirm: user`.
 
 ## Step 85 — Per-vault typed memory and local delegates
 
-- [ ] **Step 85** — Add the typed memory plane and the local delegate broker
+- [x] **Step 85** — Add the typed memory plane and the local delegate broker
   without creating a second vault or a second authority path:
   - [x] **85A — Contract.** `contracts/memory-schema.json`, the
     `memory-supervise` capability, the `4110` node port, the knowledge-flow
@@ -368,7 +383,79 @@ current: 85
     `make test-all`, `make bundle-verify ROLE=peer|master`; live node starts,
     browser memory page and a live Master `memory_status` are
     `DoD: confirm: user`.
-  - **Status: local implementation complete 2026-11-02.** Code, tests, contracts and both bundle verifications pass; live node/browser legs are `DoD: confirm: user`.
+  - **Status: complete 2026-11-04.** The memory sidecar is live on agx64 (`4110` store, `4093` gateway), tokens are 0600, the peer console `/api/memory` returns 200, OpenCode MCP search/remember round-trips, the Open WebUI filter is installed/active/global and its gateway path was exercised with the WebUI service token, and the Master `memory_status`/`memory-read` path returned live records through the signed admin request. The cursor stays at 84 until 84G is confirmed.
+
+## Step 86 — Open-weight model survey and weight-update path
+
+- [ ] **Step 86** — Inventory the catalog and live Ollama models, benchmark the
+  runnable open-weight candidates, and provide a verified promote/rollback path.
+  - [x] **86A — Survey tool.** `scripts/sparknet-model-survey.py` inventories
+    the catalog, pinned manifests and live Ollama tags; `plan` marks
+    eligible/benchmark/embedding/skip rows with `memory_fit`,
+    `runtime_unsupported` and `not_imported` reasons.
+  - [x] **86B — Update tool.** `scripts/sparknet-model-update.py` tracks
+    active/candidate/previous manifests, verifies the pinned manifest, refuses a
+    promotion below 0.8 quality or without an operator, and supports rollback.
+    `make model-survey|model-update-status|model-set-candidate|model-promote|model-rollback`
+    are wired.
+  - [ ] **86C — Full live survey.** Run every runnable model in the agx64 and
+    agx32 matrices. The inventory/plan is live: 30 agx64 tags and 19 agx32
+    tags; the 9B student (10.9 tok/s, 8.06 GiB, 100%) and Qwen3 embedding
+    (4096-dim, 56.6 s) were sampled. The full matrix needs an operator window.
+  - [ ] **86D — Live promotion drill.** Pull a new candidate, benchmark it,
+    promote it and roll back while the aliases and runtime remain healthy.
+  - **DoD**: the full survey report is recorded; a candidate passes the
+    benchmark gate, is promoted, and rolls back cleanly; no weights enter a
+    vault, bundle or 4223.
+  - **Status 2026-11-04:** tools implemented and locally tested; live
+    inventory/plan and two benchmark probes done. Full survey and promotion
+    drill remain `DoD: confirm: user`.
+
+## Step 87 — Open WebUI front end on the OpenCode engine
+
+- [x] **Step 87** — Make Open WebUI the customer-facing front end and OpenCode
+  the execution engine, keep the fabric's authority boundary, and update both
+  live nodes to the current surfaces.
+  - [x] **87A — Live audit and safety.** Backed up both WebUI volumes, both user
+    vaults and both role state trees on 2026-11-05; captured the old Master's
+    disposable admin, the stale cluster2 user surface and the peer's prompt/tool/
+    function/model gaps.
+  - [x] **87B — Users.** The peer keeps every human user; the Master admin
+    surface was recreated with exactly one `admin@sparknet.local` account and
+    signup off. The old cluster2 Master WebUI on `8181` was retired after its
+    one user chat was exported and imported into the peer account; its volume is
+    archived and removed.
+  - [x] **87C — OpenCode engine and sandbox.** `peer-node/services/
+    sparknet-opencode-engine.py` is the OpenAI-compatible adapter on loopback
+    `4204`; it starts one OpenCode 1.19.5 sandbox per user, mounts only
+    `peer-<user_id>`, uses an internal Docker network with a host model proxy,
+    and runs with a read-only root FS, dropped capabilities and no key/state/
+    ledger mount. `make -C peer-node opencode-runtime` builds the pinned image;
+    `sparknet-opencode-engine@peer|master` runs it.
+  - [x] **87D — Workspace baseline.** Open WebUI `v0.13.0` on both nodes; 16
+    bilingual prompts, four user-scoped tools, the memory filter and the capture
+    action are active; per-user models are based on `sparknet-chat` with the
+    personal and structure KBs; the structure KB is rebuilt from the RAG
+    allow-list; the static bridge grant tool server was removed.
+  - [x] **87E — Master engine.** The Master admin surface uses the same engine
+    with `--single-vault /srv/sparknet/knowledge/master-admin`; the role vault
+    (keys, ledger, registry) is never mounted. A live admin chat returned
+    `webui-master-ok` on agx32.
+  - [x] **87F — Gates.** `make lint`, `format-check`, `shellcheck`, `validate`,
+    `contract-test`, `render-check`, `sbom-check`, `make test-all` (592 peer +
+    fabric + master) and `make ci CI_QUICK=1` are green. Live peer chat returned
+    `engine-ok`; live build-in-sandbox wrote a test note; the vault tool lists
+    only the signed-in user's vault and excludes `secrets-index.json`.
+  - **DoD:** every gate green; live peer and Master engine round trips dated
+    2026-11-05; no user account on the Master; no static grant in WebUI; no
+    cross-user sandbox path. Browser click-through of the peer sidebar and the
+    Master admin surface is `DoD: confirm: user`.
+  - **Status: complete and live-verified on agx64/agx32 2026-11-05.** The
+    Qwen3/Nomic Ollama embeddings measured ~20 s per request with the text model
+    resident, so the existing CPU MiniLM index was kept; the engine's own vault
+    tools make RAG secondary. Open WebUI and OpenCode pins are updated in the
+    committed configs; the running node image was not rebuilt (the sandbox
+    runtime and engine are 1.19.5).
 
 ## Standing verification rules
 

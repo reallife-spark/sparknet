@@ -87,6 +87,7 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/webui-surface.md` | peer/master WebUI menus, read-only console scope and the 3D data-cloud surface |
 | `contracts/knowledge-flow.md` | the map of every Master→peer, peer→Master and peer↔peer channel: payload, authentication, refusals, and the rule that authority and knowledge never share a channel |
 | `contracts/memory-schema.json` | per-vault typed memory, retention, the Go store/Python gateway boundary, delegate runs and the memory-bundle payload profile |
+| `contracts/nocturnal-artifact-schema.json` | signed nocturnal result/manifest artefacts, coverage and local inbox commitment |
 | `contracts/deployment-runbook.md` | phased deployment guide (live on agx64+agx32) |
 | `contracts/phase9-recovery-runbook.md` | approved destructive recovery: snapshot, restore proof, verification and rollback |
 | `contracts/admin-federation-runbook.md` | Phase 5 live deploy of cross-node admin federation |

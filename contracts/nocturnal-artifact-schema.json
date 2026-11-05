@@ -1,0 +1,106 @@
+{
+  "contract": "nocturnal-artifact-schema",
+  "schema_version": "1.0",
+  "description": "Signed artefacts written under a node's 01_Inbox/nocturnal/<lease_id>/<job_id>/ directory: one partial result per executed subtask and one manifest per participant. They are evidence, never knowledge, and are never promoted automatically.",
+  "non_goals": [
+    "This contract does not grant authority.",
+    "It does not define cluster-job dispatch or placement; those are in CLUSTER_JOB_REALIZATION_DESIGN.md and the cluster-job envelope.",
+    "It does not make an artefact a vault page; the existing inbox review path is the only route to knowledge."
+  ],
+  "result": {
+    "schema_version": "sparknet-nocturnal-result/1",
+    "fields": [
+      "schema_version",
+      "lease_id",
+      "job_id",
+      "subtask_id",
+      "participant_node_id",
+      "instruction_sha256",
+      "output_sha256",
+      "model",
+      "started_at",
+      "ended_at",
+      "coverage",
+      "signature_b64"
+    ],
+    "signed_fields": [
+      "schema_version",
+      "lease_id",
+      "job_id",
+      "subtask_id",
+      "participant_node_id",
+      "instruction_sha256",
+      "output_sha256",
+      "model",
+      "started_at",
+      "ended_at",
+      "coverage"
+    ],
+    "coverage": {
+      "type": "object",
+      "required": [
+        "answered",
+        "missing"
+      ],
+      "fields": {
+        "answered": "sorted list of subtask ids that produced a verified result",
+        "missing": "sorted list of subtask ids that did not answer; no padding, never silently empty"
+      }
+    },
+    "output": "The full output text travels beside the signed projection as `output`; `output_sha256` binds it. A verifier rejects a result whose output hash does not match.",
+    "signature": "The participant's Ed25519 node identity key over canonical JSON of signed_fields. The Master resolves that key from the signed registry entry's node_pubkey_b64, never from an inline key."
+  },
+  "manifest": {
+    "schema_version": "sparknet-nocturnal-manifest/1",
+    "fields": [
+      "schema_version",
+      "lease_id",
+      "job_id",
+      "participant_node_id",
+      "subtasks",
+      "model",
+      "corpus_digest",
+      "started_at",
+      "ended_at",
+      "coverage",
+      "created_at",
+      "signature_b64"
+    ],
+    "signed_fields": [
+      "schema_version",
+      "lease_id",
+      "job_id",
+      "participant_node_id",
+      "subtasks",
+      "model",
+      "corpus_digest",
+      "started_at",
+      "ended_at",
+      "coverage",
+      "created_at"
+    ],
+    "subtasks": {
+      "type": "array",
+      "items": {
+        "subtask_id": "string",
+        "result_sha256": "hex sha256 of the signed partial result file",
+        "answered": "boolean"
+      },
+      "order": "sorted by subtask_id",
+      "rule": "A subtask appears exactly once. `answered: false` is allowed only when the same id appears in coverage.missing."
+    },
+    "coverage": "Same shape and rule as the result coverage. The manifest's missing set is the union of the participant's unanswered subtasks and any dispatched subtask with no verified result.",
+    "signature": "The participant's Ed25519 node identity key over canonical JSON of signed_fields."
+  },
+  "directory": {
+    "path": "01_Inbox/nocturnal/<lease_id>/<job_id>/",
+    "files": [
+      "manifest.json",
+      "result-<subtask_id>.json"
+    ],
+    "atomic_write": "Write the result file, fsync it, then write the manifest. A manifest may only name result files that are present and whose hashes match.",
+    "commit": "Commit only this directory in the node's local artifact repository, with a message naming the lease. Never push, never rewrite history, never touch a protected path."
+  },
+  "inbox_rule": "Artefacts stay in 01_Inbox/nocturnal/ until the existing inbox review path accepts them. Nothing in this contract promotes, indexes, or serves an artefact as knowledge.",
+  "secret_rule": "No keys, tokens, .env contents, or unredacted personal pages are eligible inputs or outputs. The existing vault allow-list and guard rules still apply."
+}

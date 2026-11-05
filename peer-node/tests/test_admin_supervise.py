@@ -674,8 +674,8 @@ def test_memory_status_forwards_to_the_local_gateway(server, ctx, master_key, gr
         assert payload["records"] == 3
         call = _MemoryGateway.calls[-1]
         assert call["token"] == "local-memory-token-1234567890"
-        assert call["vault"] == str(ctx["vault"])
-        assert "vault_path=" in call["path"]
+        assert call["vault"] is None, "the gateway defaults to the role vault; no host path is sent"
+        assert "vault_path=" not in call["path"]
     finally:
         gateway.shutdown()
         gateway.server_close()

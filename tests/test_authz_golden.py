@@ -52,7 +52,8 @@ GOLDEN_AUTHORIZATION_MESSAGE = (
     b'"identity":{"node_id":"peer-fixture-01","overlay_ipv4":"10.77.0.11/32",'
     b'"requested_capabilities":["dispatch-bridge","guard-verify"],"role":"peer",'
     b'"wireguard_public_key_b64":"ZmFrZS13Z2lwdW5pY21hcHViaWMta2V5LWZvci10ZXN0cw=="},'
-    b'"issued_at":1760000000,"overlay_ipv4":"10.77.0.11","revoked":false}'
+    b'"issued_at":1760000000,"node_pubkey_b64":null,'
+    b'"overlay_ipv4":"10.77.0.11","revoked":false}'
 )
 
 GOLDEN_ADMIN_REQUEST = {

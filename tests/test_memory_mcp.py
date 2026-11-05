@@ -99,7 +99,7 @@ def test_tool_call_forwards_scoped_vault_and_token(tmp_path: Path):
         call = _Gateway.calls[-1]
         assert call["path"] == "/v1/memory/query"
         assert call["token"] == "token-1234567890"
-        assert call["vault"] == str(tmp_path)
+        assert call["vault"] is None, "the local token is scoped by the gateway; no host path is sent"
         assert call["body"]["scope"]["user_id"] == "U-1"
     finally:
         server.shutdown()

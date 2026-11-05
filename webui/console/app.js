@@ -12,6 +12,10 @@ const state = {
   collection: null,
 };
 
+const ZOOM_MIN = 0.35;
+const ZOOM_MAX = 4;
+const ZOOM_STEP = 1.12;
+
 const $ = (id) => document.getElementById(id);
 
 function el(tag, attrs = {}, children = []) {
@@ -350,53 +354,151 @@ function drawMap() {
   }
 }
 
+function updateZoomLabel() {
+  const label = $("zoom-level");
+  if (label) label.textContent = `${Math.round(state.zoom * 100)}%`;
+}
+
+function setZoom(value) {
+  state.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, value));
+  updateZoomLabel();
+  drawMap();
+}
+
+function zoomBy(factor) {
+  setZoom(state.zoom * factor);
+}
+
 function setupCanvas() {
   const canvas = $("map");
   const tooltip = $("map-tooltip");
+  const wrap = canvas.closest(".map-wrap") || canvas;
+  const pointers = new Map();
+  let pinchDistance = null;
+
+  function localPoint(event) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (event.clientX - rect.left) * (canvas.width / rect.width),
+      y: (event.clientY - rect.top) * (canvas.height / rect.height),
+    };
+  }
+
+  function distance(a, b) {
+    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  }
+
+  function handleWheel(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    const delta = event.deltaY || event.deltaX || 0;
+    if (!delta) return;
+    setZoom(state.zoom * Math.exp(-delta * 0.0015));
+  }
+
   canvas.addEventListener("pointerdown", (event) => {
-    state.dragging = true; state.lastX = event.clientX; state.lastY = event.clientY;
+    canvas.focus({ preventScroll: true });
+    pointers.set(event.pointerId, event);
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      pinchDistance = distance(a, b);
+      state.dragging = false;
+      return;
+    }
+    state.dragging = true;
+    state.lastX = event.clientX;
+    state.lastY = event.clientY;
     canvas.setPointerCapture(event.pointerId);
   });
+
   canvas.addEventListener("pointermove", (event) => {
+    if (pointers.has(event.pointerId)) pointers.set(event.pointerId, event);
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      const next = distance(a, b);
+      if (pinchDistance && next > 0) {
+        setZoom(state.zoom * (next / pinchDistance));
+        pinchDistance = next;
+      }
+      return;
+    }
     if (state.dragging) {
       state.yaw += (event.clientX - state.lastX) * 0.008;
       state.pitch += (event.clientY - state.lastY) * 0.008;
-      state.lastX = event.clientX; state.lastY = event.clientY;
+      state.lastX = event.clientX;
+      state.lastY = event.clientY;
       drawMap();
       return;
     }
-    const rect = canvas.getBoundingClientRect();
-    const x = (event.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (event.clientY - rect.top) * (canvas.height / rect.height);
-    let best = null, bestDistance = 100;
+    const { x, y } = localPoint(event);
+    let best = null;
+    let bestDistance = 100;
     for (const point of state.points) {
       const p = rotate(point);
       const depth = 3.2 + p.z;
       if (depth <= 0.2) continue;
-      const scale = 260 * state.zoom / depth;
-      const px = canvas.width / 2 + p.x * scale, py = canvas.height / 2 + p.y * scale;
-      const distance = (px - x) ** 2 + (py - y) ** 2;
-      if (distance < bestDistance) { bestDistance = distance; best = point; }
+      const scale = (260 * state.zoom) / depth;
+      const px = canvas.width / 2 + p.x * scale;
+      const py = canvas.height / 2 + p.y * scale;
+      const d = (px - x) ** 2 + (py - y) ** 2;
+      if (d < bestDistance) {
+        bestDistance = d;
+        best = point;
+      }
     }
     state.hover = best;
     if (best) {
       tooltip.hidden = false;
       tooltip.textContent = `${best.label} · ${best.role} · ${best.node}${best.run_id ? " · " + best.run_id : ""}`;
-      tooltip.style.left = `${event.clientX - rect.left + 12}px`;
-      tooltip.style.top = `${event.clientY - rect.top + 12}px`;
+      tooltip.style.left = `${event.clientX - canvas.getBoundingClientRect().left + 12}px`;
+      tooltip.style.top = `${event.clientY - canvas.getBoundingClientRect().top + 12}px`;
     } else {
       tooltip.hidden = true;
     }
   });
-  canvas.addEventListener("pointerup", () => { state.dragging = false; });
-  canvas.addEventListener("pointerleave", () => { state.dragging = false; tooltip.hidden = true; });
-  canvas.addEventListener("wheel", (event) => {
-    event.preventDefault();
-    state.zoom = Math.max(0.35, Math.min(4, state.zoom * (event.deltaY < 0 ? 1.12 : 0.89)));
-    drawMap();
-  }, { passive: false });
+
+  function endPointer(event) {
+    pointers.delete(event.pointerId);
+    if (pointers.size < 2) pinchDistance = null;
+    state.dragging = false;
+  }
+
+  canvas.addEventListener("pointerup", endPointer);
+  canvas.addEventListener("pointercancel", endPointer);
+  canvas.addEventListener("pointerleave", (event) => {
+    if (event.buttons === 0) {
+      pointers.delete(event.pointerId);
+      pinchDistance = null;
+    }
+    state.dragging = false;
+    tooltip.hidden = true;
+  });
+  canvas.addEventListener("wheel", handleWheel, { passive: false });
+  wrap.addEventListener("wheel", handleWheel, { passive: false });
+  canvas.addEventListener("dblclick", () => setZoom(1));
+  canvas.addEventListener("keydown", (event) => {
+    if (event.key === "+" || event.key === "=") {
+      event.preventDefault();
+      zoomBy(ZOOM_STEP);
+    } else if (event.key === "-" || event.key === "_") {
+      event.preventDefault();
+      zoomBy(1 / ZOOM_STEP);
+    } else if (event.key === "0") {
+      event.preventDefault();
+      setZoom(1);
+    }
+  });
+
+  const zoomIn = $("zoom-in");
+  const zoomOut = $("zoom-out");
+  const zoomReset = $("zoom-reset");
+  if (zoomIn) zoomIn.addEventListener("click", () => zoomBy(ZOOM_STEP));
+  if (zoomOut) zoomOut.addEventListener("click", () => zoomBy(1 / ZOOM_STEP));
+  if (zoomReset) zoomReset.addEventListener("click", () => setZoom(1));
+  updateZoomLabel();
+
   setInterval(() => {
-    if (!state.auto || state.dragging || !state.points.length) return;
+    if (!state.auto || state.dragging || pointers.size || !state.points.length) return;
     state.yaw += 0.0035;
     drawMap();
   }, 60);
@@ -442,8 +544,8 @@ async function init() {
     $("title").textContent = state.surface.title || "Sparknet Console";
     $("subtitle").textContent = `${state.surface.node || ""} · read-only ${state.surface.role || ""} surface`;
     initTabs();
-    setupCanvas();
   } catch (error) { showError(error.message); }
 }
 
+setupCanvas();
 init();

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A small MCP server for the per-vault memory gateway.
 
-OpenCode 1.18.35 hangs when a role worktree auto-discovers a plugin, so the
+The pinned OpenCode hangs when a role worktree auto-discovers a plugin, so the
 OpenCode adapter is an MCP server instead. It speaks JSON-RPC 2.0 over stdio and
 calls the local Python gateway; it never reads a vault or the Go store directly.
 
@@ -52,7 +52,9 @@ class MemoryMCP:
         request = urllib.request.Request(self.gateway + path, data=data, method=method)
         request.add_header("Accept", "application/json")
         request.add_header("X-Sparknet-Local-Token", self.token)
-        request.add_header("X-Sparknet-Vault-Path", str(self.vault))
+        # The local token is already scoped by the gateway to its role vault.
+        # A host-side path would be rejected when the gateway runs in a
+        # container whose vault is mounted at /srv/sparknet/<role>-node.
         request.add_header("X-Sparknet-User", self.user)
         if data is not None:
             request.add_header("Content-Type", "application/json")

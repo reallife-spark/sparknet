@@ -35,7 +35,7 @@ BUNDLE_SCRIPT = REPO_ROOT / "scripts" / "sparknet-bundle.sh"
 # The agents this repository is supposed to provide. Kept explicit rather than
 # derived from the directory, so that deleting the whole directory fails loudly
 # instead of quietly shrinking the set to zero.
-EXPECTED_AGENTS = {"vault", "sparknet-node"}
+EXPECTED_AGENTS = {"vault", "sparknet-node", "build"}
 
 # opencode's own agent-name rule, and the modes it will surface.
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -83,6 +83,16 @@ def test_documented_agents_are_present():
     present = {p.stem for p in AGENTS_DIR.glob("*.md")}
     missing = EXPECTED_AGENTS - present
     assert not missing, f"missing agent file(s): {sorted(missing)} in {AGENTS_DIR}"
+
+
+def test_build_is_the_primary_mode_not_lead():
+    """The operator-facing Build mode must not be shadowed by an accidental Lead."""
+    assert not (AGENTS_DIR / "lead.md").exists(), (
+        "lead.md is still present; opencode will surface a second primary mode and "
+        "the Build mode can appear renamed to Lead"
+    )
+    fields = frontmatter(AGENTS_DIR / "build.md")
+    assert fields.get("mode") == "primary", f"build.md must be a primary mode, found {fields.get('mode')!r}"
 
 
 @pytest.mark.parametrize("path", sorted(AGENTS_DIR.glob("*.md")), ids=lambda p: p.stem)

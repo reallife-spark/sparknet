@@ -22,9 +22,11 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hmac
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -43,6 +45,34 @@ SCHEMA = "sparknet-memory-gateway/1"
 DEFAULT_MEMORY_URL = "http://127.0.0.1:4110"
 DEFAULT_LISTEN = "127.0.0.1:4093"
 MAX_BODY = 4 << 20
+MAX_VAULT_FILE = 1 << 20
+VAULT_SUFFIXES = {".md", ".markdown", ".txt", ".yaml", ".yml"}
+VAULT_SKIP_PARTS = {
+    ".git",
+    ".state",
+    ".cache",
+    "__pycache__",
+    ".opencode",
+    ".pytest_cache",
+    ".ruff_cache",
+    "keys",
+    "blockchain",
+    "manifests",
+}
+VAULT_SKIP_NAMES = {"secrets-index.json", "user-env-manifest.json", "MEMORY.md", ".env"}
+VAULT_CAPTURE_PREFIXES = ("01_Inbox", "_raw", "04_Evergreen", "05_Knowledge", "06_Projects")
+RFI_ALLOWED_SCOPE = {
+    "contracts",
+    "docs",
+    "04_Evergreen",
+    "05_Knowledge",
+    "06_Projects",
+    "AGENTS.md",
+    "CONTEXT.md",
+    "INTENT.md",
+    "MISSION.md",
+    "README.md",
+}
 MUTATING = {
     "/v1/memory/remember",
     "/v1/memory/forget",
@@ -267,6 +297,201 @@ class Gateway:
         constraints = {"vault_path": vault_path, "scope": {"user_id": user_id}}
         return "webui", user_id, vault_path, constraints
 
+    # -- user vault tools --------------------------------------------------
+
+    @staticmethod
+    def _slug(value: str) -> str:
+        slug = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip()).strip("-._")
+        return slug[:80] or "note"
+
+    def _vault_candidate(self, vault_path: str, rel: str) -> Path:
+        root = Path(vault_path).expanduser().resolve()
+        cleaned = (rel or "").replace("\\", "/").strip().lstrip("/")
+        if not cleaned:
+            return root
+        candidate = (root / cleaned).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            raise GatewayError(403, "vault-forbidden", "path escapes the user vault") from None
+        rel_parts = candidate.relative_to(root).parts
+        if any(part in VAULT_SKIP_PARTS for part in rel_parts):
+            raise GatewayError(403, "vault-forbidden", "path names runtime state")
+        if candidate.name in VAULT_SKIP_NAMES:
+            raise GatewayError(403, "vault-forbidden", "path names a secret index")
+        return candidate
+
+    def _vault_files(self, vault_path: str) -> list[Path]:
+        root = Path(vault_path)
+        files = []
+        for path in root.rglob("*"):
+            if not path.is_file() or path.is_symlink():
+                continue
+            rel = path.relative_to(root)
+            if any(part in VAULT_SKIP_PARTS for part in rel.parts):
+                continue
+            if path.suffix.lower() not in VAULT_SUFFIXES:
+                continue
+            files.append(path)
+        return sorted(files)
+
+    def vault_list(self, vault_path: str, prefix: str = "", limit: int = 500) -> dict[str, Any]:
+        base = self._vault_candidate(vault_path, prefix)
+        rows = []
+        if base.is_dir():
+            for path in sorted(base.rglob("*")):
+                if not path.is_file() or path.is_symlink():
+                    continue
+                rel = path.relative_to(Path(vault_path).resolve()).as_posix()
+                if any(part in VAULT_SKIP_PARTS for part in Path(rel).parts):
+                    continue
+                if path.suffix.lower() not in VAULT_SUFFIXES:
+                    continue
+                rows.append(rel)
+                if len(rows) >= max(1, min(int(limit), 2000)):
+                    break
+        elif base.is_file():
+            rows = [base.relative_to(Path(vault_path).resolve()).as_posix()]
+        return {"ok": True, "vault": Path(vault_path).name, "paths": rows}
+
+    def vault_read(self, vault_path: str, rel: str) -> dict[str, Any]:
+        path = self._vault_candidate(vault_path, rel)
+        if not path.is_file() or path.is_symlink():
+            raise GatewayError(404, "not-found", "vault page not found")
+        size = path.stat().st_size
+        if size > MAX_VAULT_FILE:
+            raise GatewayError(413, "too-large", "vault page exceeds the read limit")
+        return {
+            "ok": True,
+            "path": path.relative_to(Path(vault_path).resolve()).as_posix(),
+            "content": path.read_text(encoding="utf-8", errors="replace"),
+            "bytes": size,
+        }
+
+    def vault_search(self, vault_path: str, query: str, top_k: int = 8) -> dict[str, Any]:
+        terms = [term.lower() for term in re.split(r"\s+", query.strip()) if len(term) > 1][:8]
+        if not terms:
+            raise GatewayError(400, "malformed", "query must contain at least one word")
+        scored = []
+        root = Path(vault_path).resolve()
+        for path in self._vault_files(vault_path):
+            try:
+                if path.stat().st_size > MAX_VAULT_FILE:
+                    continue
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            lowered = text.lower()
+            score = sum(lowered.count(term) for term in terms)
+            if score <= 0:
+                continue
+            first = min((lowered.find(term) for term in terms if lowered.find(term) >= 0), default=0)
+            snippet = text[max(0, first - 180) : first + 420].replace("\n", " ").strip()
+            scored.append(
+                {
+                    "path": path.relative_to(root).as_posix(),
+                    "score": score,
+                    "snippet": snippet,
+                }
+            )
+        scored.sort(key=lambda row: (-row["score"], row["path"]))
+        return {"ok": True, "query": query, "hits": scored[: max(1, min(int(top_k), 20))]}
+
+    def vault_capture(self, vault_path: str, body: dict[str, Any]) -> dict[str, Any]:
+        title = str(body.get("title") or "").strip()
+        text = str(body.get("body") or "").strip()
+        if not title or not text:
+            raise GatewayError(400, "malformed", "title and body are required")
+        target = str(body.get("target") or "").strip()
+        if not target:
+            stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            target = f"01_Inbox/{stamp}-{self._slug(title)}.md"
+        if not target.endswith(".md"):
+            target += ".md"
+        target_parts = Path(target).parts
+        if not target_parts or target_parts[0] not in VAULT_CAPTURE_PREFIXES:
+            raise GatewayError(
+                403,
+                "vault-forbidden",
+                "capture target must be under 01_Inbox/, _raw/, 04_Evergreen/, 05_Knowledge/ or 06_Projects/",
+            )
+        path = self._vault_candidate(vault_path, target)
+        if not str(path).startswith(str(Path(vault_path).resolve())):
+            raise GatewayError(403, "vault-forbidden", "target escapes the user vault")
+        if path.exists():
+            stem = path.with_suffix("")
+            for index in range(2, 100):
+                candidate = Path(f"{stem}-{index}.md")
+                if not candidate.exists():
+                    path = candidate
+                    break
+            else:
+                raise GatewayError(409, "exists", "target already exists")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        created = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        front = (
+            "---\n"
+            f"title: {json.dumps(title, ensure_ascii=False)}\n"
+            f"created: {created}\n"
+            "source: open-webui\nsigned: false\n---\n\n"
+        )
+        path.write_text(front + text.rstrip() + "\n", encoding="utf-8")
+        with contextlib.suppress(OSError):
+            os.chmod(path, 0o640)
+        return {
+            "ok": True,
+            "path": path.relative_to(Path(vault_path).resolve()).as_posix(),
+            "title": title,
+            "signed": False,
+        }
+
+    def rfi(self, question: str, scope: list[str]) -> dict[str, Any]:
+        question = question.strip()
+        if not question:
+            raise GatewayError(400, "malformed", "question is required")
+        scopes = [str(item).strip() for item in scope if str(item).strip()]
+        if not scopes or len(scopes) > 8:
+            raise GatewayError(400, "malformed", "scope must name 1-8 categories")
+        bad = [item for item in scopes if item not in RFI_ALLOWED_SCOPE and not item.startswith("contracts/")]
+        if bad:
+            raise GatewayError(
+                403, "scope-refused", "scope names a category the node may not request: {}".format(", ".join(bad))
+            )
+        client_path = Path(self._role_vault()) / "services" / "sparknet-rfi-client.py"
+        if not client_path.is_file():
+            raise GatewayError(503, "rfi-unavailable", "RFI client is not installed on this node")
+        import subprocess
+
+        try:
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(client_path),
+                    "--vault-root",
+                    self._role_vault(),
+                    "--question",
+                    question,
+                    "--scope",
+                    ",".join(scopes),
+                    "--json",
+                ],
+                capture_output=True,
+                timeout=30,
+                check=False,
+            )
+        except Exception as exc:
+            raise GatewayError(503, "rfi-unavailable", str(exc)) from exc
+        if completed.returncode != 0:
+            detail = (
+                completed.stderr.decode("utf-8", "replace").strip()
+                or completed.stdout.decode("utf-8", "replace").strip()
+            )
+            raise GatewayError(503, "rfi-unavailable", detail or "RFI client failed")
+        try:
+            return json.loads(completed.stdout.decode("utf-8"))
+        except Exception as exc:
+            raise GatewayError(503, "rfi-unavailable", f"RFI client returned malformed JSON: {exc}") from exc
+
     # -- forwarding --------------------------------------------------------
 
     def forward(self, method: str, path: str, body: dict[str, Any] | None, query: str = "") -> tuple[int, Any]:
@@ -323,10 +548,59 @@ class Gateway:
             raise GatewayError(404, "not-found", "unknown gateway route")
         kind, actor_id, vault_path, constraints = self.actor(headers, body)
         merged = dict(body)
+        if method == "GET" and query:
+            merged.update({key: values[0] for key, values in urllib.parse.parse_qs(query).items() if values})
         merged.update(constraints)
         if isinstance(merged.get("scope"), dict) and isinstance(constraints.get("scope"), dict):
             merged["scope"] = {**constraints["scope"], **merged["scope"]}
             merged["scope"]["user_id"] = constraints["scope"]["user_id"]
+        if path.startswith("/v1/vault/"):
+            if path == "/v1/vault/list":
+                payload = self.vault_list(
+                    vault_path,
+                    prefix=str(merged.get("prefix") or ""),
+                    limit=int(merged.get("limit") or 500),
+                )
+                self.audit(kind, actor_id, "vault.list", vault_path, {"prefix": merged.get("prefix")})
+                return 200, payload
+            if path == "/v1/vault/read":
+                payload = self.vault_read(vault_path, str(merged.get("path") or ""))
+                self.audit(kind, actor_id, "vault.read", vault_path, {"path": payload.get("path")})
+                return 200, payload
+            if path == "/v1/vault/search":
+                payload = self.vault_search(
+                    vault_path,
+                    str(merged.get("query") or ""),
+                    int(merged.get("top_k") or 8),
+                )
+                self.audit(kind, actor_id, "vault.search", vault_path, {"query": merged.get("query")})
+                return 200, payload
+            if path == "/v1/vault/capture":
+                payload = self.vault_capture(vault_path, merged)
+                self.audit(kind, actor_id, "vault.capture", vault_path, {"path": payload.get("path")})
+                return 200, payload
+            raise GatewayError(404, "not-found", "unknown vault route")
+        if path == "/v1/rfi":
+            payload = self.rfi(str(merged.get("question") or ""), list(merged.get("scope") or []))
+            self.audit(
+                kind,
+                actor_id,
+                "rfi.request",
+                vault_path,
+                {"scope": merged.get("scope"), "request": payload.get("request", {}).get("request_id")},
+            )
+            return 200, payload
+        if path == "/v1/memory/remember":
+            # The Go remember envelope is {vault_path, record}; the scope belongs
+            # inside the record. A top-level scope is an unknown field there.
+            record = merged.get("record")
+            extra_scope = merged.pop("scope", None)
+            if isinstance(record, dict):
+                record_scope = record.get("scope") if isinstance(record.get("scope"), dict) else {}
+                if isinstance(extra_scope, dict):
+                    record_scope = {**extra_scope, **record_scope}
+                    record_scope["user_id"] = extra_scope.get("user_id") or record_scope.get("user_id")
+                record["scope"] = record_scope
         if path.startswith("/v1/delegates/"):
             if isinstance(merged.get("plan"), dict):
                 merged["plan"].setdefault("user_id", actor_id)

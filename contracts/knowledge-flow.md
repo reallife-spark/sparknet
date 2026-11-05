@@ -28,8 +28,10 @@ authoritative fabric corpus. Neither property is allowed to leak into the other.
 | Admin request | Master → peer | `POST /admin/<action>` on the bridge, `4096` | Master signature + `admin-supervise` in the peer's registry | User, role, KB and chat administration | Vault content, knowledge answers, a signature | Implemented; current pair `DoD: confirm: user` |
 | Share / proposal | peer ↔ peer | `4201` share intake, `4202` session transfer | Both nodes verify the share grant; Master ratifies at `n ≥ 3` | A bounded read or copy, or a proposal bundle | Authority, a protected-file write, a registry edit | Implemented; live pair 2026-10-31 |
 | Shared file share | Master → peer | `4221` file-share | Overlay + signed request + `p2p-sync` | Shared fabric artifacts | Personal pages, keys, live state | Implemented; live pair 2026-10-31 |
+| Learning status | Master → peer | `4221` file-share, `learning/status.json` | Overlay + signed request + `p2p-sync` | Sanitized distillation run status: ids, states, metrics, digests, model names | Weights, datasets, traces, prompts, personal pages, authority | Implemented; peer link live 2026-11-04 |
 | Shared vector DB | Master → peer | `4223` vector-embed | Overlay + signed request + `cluster-dispatch`/`cluster-serve` | Top-K from the Qdrant `sparknet-fabric` or explicitly shared `sparknet-shared` collections | Personal pages, uplift/training collections, a caller-supplied vector, authority | Implemented; live pair 2026-10-31; Qdrant re-verification `DoD: confirm: user` |
 | Local vault / KB | node-local | Filesystem, Open WebUI KB, Qdrant | User key for signed notes; grant for agent writes | The user's own knowledge | Authority, another user's private KB | Implemented; Qdrant migration is the vector-store step |
+| Local agent engine | node-local | OpenCode engine (loopback `4204`) → one sandbox per user | WebUI session token + forwarded user id; the engine derives `peer-<user_id>` and mounts only that vault | The user's own vault pages while answering, and tool actions inside that sandbox | Another user's vault, the role vault, keys/ledger/registry, authority, a shared corpus | Implemented; live on agx64/agx32 2026-11-05 |
 | Local memory index | node-local | `sparknet-memory` (Go, loopback `4110`) behind the Python gateway (`4093`) | Signed session grant, Open WebUI session, or the `0600` local token; the gateway narrows to one vault | Typed records, summaries, procedural traces and delegate runs derived from sources the node may already read | Authority, a second corpus, another user's vault, or a record the grant's scope excludes | Implemented; live node start `DoD: confirm: user` |
 | Memory bundle | peer ↔ peer | The existing `session-handoff` / `kb-share` payload on `4201`/`4202`, staged under `01_Inbox/share-<id>/` | Share grant + acceptance; no new share type | Episodic summaries, shared blackboard entries, and project notes the user selected | Short-term/cache, secrets, another user's records, authority | Payload profile implemented; live share `DoD: confirm: user` |
 | Master memory inspection | Master → peer | Existing signed `/admin/*` request on the bridge | Master signature + the peer-held `memory-supervise` capability | On-demand, scoped memory content and policy execution | A permanent mirror, a Master answer corpus, authority, or an unscoped bulk read | Implemented code; live pair `DoD: confirm: user` |
@@ -74,13 +76,19 @@ authoritative fabric corpus. Neither property is allowed to leak into the other.
 12. **One memory plane per vault.** OpenCode, Open WebUI and the console are
     adapters over the same store. A surface-local memory is a second answer to
     "what does this vault remember" and is refused.
+13. **The agent engine is an execution surface, not a channel.** The OpenCode
+    engine answers the signed-in user from that user's own vault. It cannot read
+    another user's vault, the role vault, the ledger or a key, and its output is
+    not a fabric answer, a registry entry or an authority grant. A build tool
+    executes only inside its per-user sandbox.
 
 ## What a user's AI may answer from
 
 Allowed:
 
 - the node's own vault, within the session's grant scope;
-- the user's `peer-<user_id>` vault and KB;
+- the user's `peer-<user_id>` vault and KB, including the OpenCode engine's
+  read-only view of that same vault;
 - the structure-only RAG corpus (contracts, charters, design docs, `CONTEXT.md`);
 - a Master-signed RFI answer after it is installed and accepted;
 - a share the node has accepted, after reconciliation.

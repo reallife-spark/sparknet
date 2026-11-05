@@ -22,26 +22,46 @@ name: sparknet-admin-surface
 
 services:
   open-webui:
-    image: ghcr.io/open-webui/open-webui:${WEBUI_TAG:-v0.12.2}
+    image: ghcr.io/open-webui/open-webui:${WEBUI_TAG:-v0.13.0}
     container_name: sparknet-admin-webui
     restart: unless-stopped
     # Open WebUI stays on host loopback; nginx owns the overlay-only 8088
     # surface. The Master is the one role that must not inherit the peer's
     # egress rule; overlay-only binding is about who may reach the page, not
     # what the page may reach.
-    ports:
-      - "127.0.0.1:8080:8080"
+    # Host networking lets the admin page reach the Master's own loopback
+    # Ollama and the loopback OpenCode engine. The nginx sidecar owns the only
+    # published overlay address (10.100.0.1:8088).
+    network_mode: host
     environment:
+      HOST: "127.0.0.1"
+      PORT: "8080"
       # The vault is the only knowledge base. Open WebUI's own vector store would
       # be a second one that no signed entry can revoke, which makes it the quieter
       # way to lose control of what the fabric knows.
       RAG_INGESTION_ENABLED: "false"
       WEBUI_AUTH: "true"
-      # The admin surface is multi-user. This is precisely why the signing key is
-      # not here and never will be.
+      # The admin surface is admin-only by policy: the human administrator is the
+      # only account. Every other user lives on the peer and is reached through
+      # the peer's signed admin channel.
       ENABLE_SIGNUP: "false"
-      # No model is named. Which model serves this surface is an unmade decision,
-      # and MASTERSPIKE-manifest.json deliberately does not pretend otherwise.
+      DEFAULT_USER_ROLE: "pending"
+      WEBUI_ADMIN_EMAIL: "${SPARKNET_WEBUI_ADMIN_EMAIL:-admin@sparknet.local}"
+      WEBUI_ADMIN_PASSWORD: "${SPARKNET_WEBUI_ADMIN_PASSWORD:?set at deploy time; do not commit the admin password}"
+      WEBUI_ADMIN_NAME: "${SPARKNET_WEBUI_ADMIN_NAME:-Sparknet Admin}"
+      WEBUI_SECRET_KEY: "${WEBUI_SECRET_KEY:?set at deploy time; do not commit the secret}"
+      WEBUI_NAME: "Sparknet Master"
+      WEBUI_URL: "${SPARKNET_WEBUI_PUBLIC_URL:-http://10.100.0.1:8088}"
+      OLLAMA_BASE_URL: "http://127.0.0.1:11434"
+      OPENAI_API_BASE_URLS: "http://127.0.0.1:4204/v1"
+      OPENAI_API_KEYS: "${SPARKNET_OPENCODE_ENGINE_TOKEN:?set at deploy time; do not commit the engine token}"
+      DEFAULT_MODELS: "sparknet-chat"
+      MODEL_FILTER_ENABLED: "true"
+      MODEL_FILTER_LIST: "sparknet-chat,sparknet-plan,qwen3.5-9b-q8:latest,llama3.2:latest"
+      ENABLE_MEMORIES: "false"
+      ENABLE_WEB_SEARCH: "false"
+      ENABLE_CODE_INTERPRETER: "false"
+      ENABLE_IMAGE_GENERATION: "false"
     volumes:
       - open-webui-data:/app/backend/data
       # Read-only. The surface reads the vault; it does not get to rewrite the

@@ -25,7 +25,8 @@ PY := $(if $(wildcard $(VENV_PY)),$(VENV_PY),$(if $(wildcard $(FABRIC_VENV_PY)),
         peer-manifest containment wiki-preflight wiki-status wiki-lint wiki-capture skills-sync skills-check clean \
         provenance-verify user-init provenance-append ingest accept-inbox review-inbox precommit shims-check keys-check context-pack context-check governance-check \
         ai-stack-config admin-agent-help container-build container-load container-config container-preflight container-up \
-        container-health container-down model-generate model-verify model-build model-serve rfi-request vault-health vault-heal
+        container-health container-down model-generate model-verify model-build model-serve rfi-request vault-health vault-heal \
+        opencode-runtime opencode-runtime-clean
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -314,6 +315,16 @@ CONTAINER_PLATFORMS ?= linux/arm64,linux/amd64
 CONTAINER_BUILD_NET ?= --network=host
 # The local store cannot --load a manifest list; this maps uname to buildx.
 HOST_ARCH := $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
+
+OPENCODE_RUNTIME_VERSION ?= 1.19.5
+OPENCODE_RUNTIME_BASE ?= sparknet-spark-node:dev
+OPENCODE_RUNTIME_DIR := $(VAULT_ROOT)/configs/opencode-runtime
+
+opencode-runtime: ## Build the per-user OpenCode sandbox image (pinned, no CUDA)
+	@set -e; arch="$$(uname -m)"; case "$$arch" in 	  aarch64|arm64) asset=arm64 ;; 	  x86_64|amd64) asset=amd64 ;; 	  *) echo "unsupported host arch: $$arch" >&2; exit 1 ;; 	esac; 	tarball="$(OPENCODE_RUNTIME_DIR)/opencode-linux-$$asset.tar.gz"; 	if [ ! -s "$$tarball" ]; then 	  echo "downloading opencode $(OPENCODE_RUNTIME_VERSION) ($$asset)"; 	  curl -fsSL "https://github.com/anomalyco/opencode/releases/download/v$(OPENCODE_RUNTIME_VERSION)/opencode-linux-$$asset.tar.gz" -o "$$tarball"; 	fi; 	docker build 	  --build-arg BASE_IMAGE="$(OPENCODE_RUNTIME_BASE)" 	  --build-arg OPENCODE_VERSION="$(OPENCODE_RUNTIME_VERSION)" 	  -t "sparknet-opencode-runtime:$(OPENCODE_RUNTIME_VERSION)" 	  "$(OPENCODE_RUNTIME_DIR)"; 	docker run --rm --entrypoint opencode "sparknet-opencode-runtime:$(OPENCODE_RUNTIME_VERSION)" --version
+
+opencode-runtime-clean: ## Remove the downloaded sandbox runtime tarball
+	@rm -f "$(OPENCODE_RUNTIME_DIR)"/opencode-linux-*.tar.gz
 
 container-build: ## make dist, stage the bundle, buildx both architectures (registry-ready)
 	@$(MAKE) --no-print-directory dist $(if $(FROM_GIT),FROM_GIT=$(FROM_GIT),)

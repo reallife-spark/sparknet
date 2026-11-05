@@ -1,0 +1,105 @@
+# sparknet.memory.compose.yml — the node's typed-memory sidecar.
+#
+# The full node image already contains the memory service, but updating that
+# image on a live AGX host means rebuilding the vLLM stack. This compose file
+# deploys only the small memory pair against the already-built node image and a
+# host-built static `sparknet-memory` binary.
+#
+# Bring-up (peer, from the fabric or a standalone bundle):
+#
+#   export GOSPARK_MEMORY_GATEWAY_TOKEN="$(cat peer-node/.state/memory.gateway.token)"
+#   docker compose -f goagx/sparknet.memory.compose.yml up -d
+#
+# The service is loopback-only: 4110 is the Go store, 4093 is the Python
+# authority gateway. The gateway is the only front door; the Go store trusts
+# only the gateway token.
+
+name: sparknet-memory
+
+x-memory-state: &memory-state
+  type: bind
+  source: ${SPARKNET_STATE_HOST:-../peer-node/.state}
+  target: /srv/sparknet/peer-node/.state
+
+services:
+  memory:
+    image: ${SPARKNET_IMAGE:-sparknet-agx-node:dev}
+    container_name: sparknet-memory
+    network_mode: host
+    entrypoint: ["/usr/local/bin/sparknet-memory"]
+    command:
+      - "-listen"
+      - "127.0.0.1:4110"
+      - "-state"
+      - "/srv/sparknet/peer-node/.state/memory"
+      - "-node-id"
+      - "${SPARKNET_NODE_ID:-sparknet-node-0001}"
+      - "-vault-root"
+      - "/srv/sparknet/peer-node"
+      - "-vault-root"
+      - "/srv/sparknet/knowledge"
+    environment:
+      GOSPARK_MEMORY_GATEWAY_TOKEN: ${GOSPARK_MEMORY_GATEWAY_TOKEN:?set GOSPARK_MEMORY_GATEWAY_TOKEN from the state dir}
+      GOSPARK_MEMORY_QDRANT_URL: ${GOSPARK_MEMORY_QDRANT_URL:-http://127.0.0.1:6333}
+      GOSPARK_MEMORY_QDRANT_API_KEY: ${SPARKNET_QDRANT_API_KEY:-}
+      GOSPARK_MEMORY_QDRANT_COLLECTION: ${GOSPARK_MEMORY_QDRANT_COLLECTION:-sparknet-memory}
+      GOSPARK_MEMORY_EMBED_ENDPOINT: ${GOSPARK_MEMORY_EMBED_ENDPOINT:-}
+      GOSPARK_MEMORY_EMBED_MODEL: ${GOSPARK_MEMORY_EMBED_MODEL:-}
+    volumes:
+      - *memory-state
+      - type: bind
+        source: ${SPARKNET_MEMORY_BIN:-../gospark/bin/sparknet-memory}
+        target: /usr/local/bin/sparknet-memory
+        read_only: true
+      - type: bind
+        source: ${SPARKNET_MEMORY_VAULT_HOST:-../peer-node}
+        target: /srv/sparknet/peer-node
+        read_only: true
+      - type: bind
+        source: ${SPARKNET_KNOWLEDGE_HOST:-/srv/sparknet/knowledge}
+        target: /srv/sparknet/knowledge
+        read_only: true
+    restart: unless-stopped
+
+  memory-gateway:
+    image: ${SPARKNET_IMAGE:-sparknet-agx-node:dev}
+    container_name: sparknet-memory-gateway
+    network_mode: host
+    entrypoint: ["/opt/sparknet/venv/bin/python", "/opt/sparknet/shared/sparknet-memory-gateway.py"]
+    command:
+      - "--role"
+      - "${SPARKNET_ROLE:-peer}"
+      - "--bind"
+      - "127.0.0.1:4093"
+      - "--vault-root"
+      - "/srv/sparknet/peer-node"
+      - "--vault-root"
+      - "/srv/sparknet/knowledge"
+      - "--user-vault-root"
+      - "/srv/sparknet/knowledge"
+      - "--webui-url"
+      - "${SPARKNET_WEBUI_URL:-http://127.0.0.1:8181}"
+    environment:
+      SPARKNET_STATE_DIR: /srv/sparknet/peer-node/.state
+      SPARKNET_MEMORY_URL: http://127.0.0.1:4110
+      SPARKNET_WEBUI_URL: ${SPARKNET_WEBUI_URL:-http://127.0.0.1:8181}
+      SPARKNET_USER_VAULT_ROOT: /srv/sparknet/knowledge
+      SPARKNET_MEMORY_WEBUI_TOKEN: ${SPARKNET_MEMORY_WEBUI_TOKEN:?set SPARKNET_MEMORY_WEBUI_TOKEN from the state dir}
+    volumes:
+      - *memory-state
+      - type: bind
+        source: ${SPARKNET_SHARED_HOST:-../shared}
+        target: /opt/sparknet/shared
+        read_only: true
+      - type: bind
+        source: ${SPARKNET_MEMORY_VAULT_HOST:-../peer-node}
+        target: /srv/sparknet/peer-node
+        read_only: true
+      - type: bind
+        source: ${SPARKNET_KNOWLEDGE_HOST:-/srv/sparknet/knowledge}
+        target: /srv/sparknet/knowledge
+        read_only: true
+    depends_on:
+      memory:
+        condition: service_started
+    restart: unless-stopped

@@ -1,7 +1,7 @@
 ---
 title: sparknet peer-node Plan
-updated: 2026-11-01
-current: 15
+updated: 2026-11-05
+current: 16
 ---
 
 # sparknet peer-node — Active Plan
@@ -17,7 +17,7 @@ current: 15
 - `[x]` complete — DoD verified
 - **DoD** — the check that proves the step is done; `DoD: confirm: user` when a
   human must confirm
-- `current: N` — step being worked; `current: done` — terminal
+- `current: N` — step being worked; `current: 16` — terminal
 
 ## Closed steps
 
@@ -101,7 +101,7 @@ current: 15
 
 ## Step 15 — Peer typed memory adapters
 
-- [ ] **Step 15** — Serve the per-vault memory plane from the node:
+- [x] **Step 15** — Serve the per-vault memory plane from the node:
   - [x] **15A — Service and gateway.** The Go `sparknet-memory` service on
     loopback `4110`, the Python gateway on `4093`, the setup-generated
     gateway/local/WebUI tokens, and `make memory-index` for vault pages.
@@ -124,7 +124,22 @@ current: 15
     `make lint`, `make format-check`, `make context-check`,
     `make bundle-verify ROLE=peer`; live OpenCode/WebUI recall and capture are
     `DoD: confirm: user`.
-  - **Status: local implementation complete 2026-11-02.** Code, tests, contracts and both bundle verifications pass; live node/browser legs are `DoD: confirm: user`.
+  - **Status: complete 2026-11-04.** The memory sidecar is live on agx64 (`4110` store, `4093` gateway); the peer console `/api/memory` returns 200; OpenCode MCP `memory_remember`/`memory_search` round-trips; the Open WebUI filter is installed, active and global, and the WebUI token path stores and retrieves a user-vault record.
+
+## Step 16 — OpenCode engine and Open WebUI v0.13.0
+
+- [x] **Step 16** — Replace the bridge-as-model ack surface with the OpenCode
+  engine and the workspace baseline.
+  - [x] `services/sparknet-opencode-engine.py`, `configs/opencode-runtime/`,
+    `configs/opencode-engine/`, `systemd/sparknet-opencode-engine@.service`;
+    one sandbox per `peer-<user_id>`, no key/state/role-vault mount.
+  - [x] `scripts/sparknet-webui-workspace.py apply`: settings, prompts, tools,
+    functions, per-user model migration, structure-only KB, reindex.
+  - [x] Live on agx64: Open WebUI `v0.13.0`, 16 prompts, 4 tools, 2 functions,
+    three per-user models on `sparknet-chat`; chat returns `engine-ok`; build
+    writes inside the sandbox only.
+  - **DoD**: peer suite, contract-test, lint/format/shellcheck/render/sbom and
+    `make ci CI_QUICK=1` green; browser click-through `DoD: confirm: user`.
 
 ## Next
 

@@ -1,7 +1,7 @@
 ---
 title: sparknet master-node Plan
-updated: 2026-11-01
-current: 24
+updated: 2026-11-05
+current: 9
 ---
 
 # sparknet master-node — Active Plan
@@ -16,6 +16,7 @@ current: 24
 
 - `[ ]` not started / in progress
 - `[x]` complete — DoD verified
+- `[~]` closed by operator scope decision — explicitly not DoD-verified
 - **DoD** — the check that proves the step is done; `DoD: confirm: user` when a
   human must confirm
 - `current: N` — step being worked; `current: done` — terminal
@@ -24,46 +25,80 @@ current: 24
 
 | Step | Scope | Evidence |
 |---|---|---|
-| 1–9 | key/registry, schema, CLI, overlay, approvals, distribution, intake, KillSwitch, scheduler | archived plan and `log.md` |
+| 1–8 | key/registry, schema, CLI, overlay, approvals, distribution, intake, KillSwitch | archived plan and `log.md` |
+| 10 | share ratification closed by operator scope decision 2026-11-04 — two-node `peer_pair`; 4203 staged for a future third node | this step |
 | 13–21 | consensus, shared election, role inversion, parity, signer, admin surface, honest verification, signer liveness, console | archived plan and `log.md` |
+
+## Step 9 — Nocturnal batch scheduler (reopened 2026-11-03)
+
+- [ ] **Step 9** — Keep the nocturnal lease a time-boxed batch window over
+  independent idle nodes, never a pooled-memory fabric.
+  - [x] **9A–9C** — The batch-lease design, the idle-evidence collector and the
+    root WireGuard observer, and the `plan`/`arm`/`status`/`abort` lease state
+    machine are implemented and tested.
+  - [x] **9D — task ingress.** The peer bridge carries loopback
+    `/v1/cluster/submit`, `/v1/cluster/status/<id>` and
+    `/v1/cluster/result/<id>` with execution disabled by default. 9G adds the
+    signed dispatcher, placement and reduce; the ingress itself is unchanged.
+  - [x] **9E — artifact commits.** `contracts/nocturnal-artifact-schema.json`
+    and `shared/sparknet-nocturnal.py` define, validate, sign and write signed
+    participant results and manifests under
+    `01_Inbox/nocturnal/<lease_id>/<job_id>/`, with coverage, a state-dir git
+    repository and no automatic promotion.
+  - [x] **9F — optional timer.** `sparknet-nocturnal-probe.service`/`.timer`
+    runs `scheduler status --notify` and has no path to `plan` or `arm`.
+  - [ ] **9G — live deploy.** The signed dispatcher, placement, peer execution,
+    reduce and artifact path are implemented and locally tested. A two-node
+    live window on agx64/agx32 with an operator present is still
+    `DoD: confirm: user`; the scheduler only permits 02:00–05:00 local.
+  - **DoD**: 9E writes and commits signed artifacts with explicit coverage and
+    no auto-promotion; 9F cannot arm; 9G is the live two-node window.
+  - **Status 2026-11-04:** 9E/9F and the 9G code path are implemented and
+    covered by `tests/test_nocturnal.py`, `tests/test_cluster.py`, the bridge
+    cluster tests and the scheduler dispatch tests. Preflight is live: the root
+    WireGuard observer timer is enabled and writing `/mnt/log/sparknet-wg.json`,
+    and the peer telemetry pusher succeeded. 9G remains the live operator window;
+    it cannot run outside 02:00–05:00 local and the current nodes are busy.
 
 ## Step 10 — Share ratification service
 
-- [ ] **Step 10** — Accept an accepted share only when the peer's grant verifies
-  against the signed registry, then issue a Master-signed, time-boxed
-  ratification. The signer signs `sign-share-ratification`; no key is held here.
+- [~] **Step 10 — CLOSED BY SCOPE (not DoD-verified).** The share-ratification
+  service is code-complete, tested and staged, but the current fabric is a
+  two-node `peer_pair`, where governance is symmetric and no Master ratification
+  is required. A live 4203 round trip needs a third host and a three-entry
+  registry. On 2026-11-04 the operator chose the two-node posture; the 4203
+  queue stays built, disabled and inactive for a future third node. This is a
+  scope retirement, not a claim that the live leg ran.
   - **DoD**: signed accept/refuse envelopes, deadline and flag-retained fields,
     duplicate/expired/unknown-grant refusals, tests through the real signer, a
-    staged `4203` listener. Live listener and a peer round trip are
-    `DoD: confirm: user`.
-  - **Status**: code complete 2026-10-29. On 2026-10-31 a signed multi-key
-    listener and a durable human-approval queue were added; the listener queues
-    but never signs, and only `--approve/--refuse` reaches the isolated signer.
-    Tests cover key ring, key/node binding, restart and no-auto-ratify. No unit
-    is enabled; a live peer round trip remains `DoD: confirm: user`. The
-    three-node preparation is in `docs/share-ratification-live.md`; the unit is
-    rendered, never enabled on the pair. No third host exists yet. On agx32 the
-    unit is installed **disabled/inactive** (state 0700, key dir peer-only,
-    port 4203 unbound) as the two-node posture.
+    staged `4203` listener. The live third-node leg is retained for a future
+    three-node deployment.
+  - **Status**: code complete 2026-10-29; multi-key listener and durable human
+    queue added 2026-10-31. Tested; no unit enabled on the pair. Closed by
+    operator scope decision 2026-11-04.
 
 ## Step 11 — Evidence capture and review repository
 
-- [ ] **Step 11** — Validate one share-evidence event, write it under
-  `evidence-repo/events/`, record its digest in the signed ledger and commit it.
+- [x] **Step 11 — complete and live-verified on agx32 2026-11-04.** Validate one
+  share-evidence event, write it under `evidence-repo/events/`, record its digest
+  in the signed ledger and commit it.
   - **DoD**: hashed event, signer-recorded ledger block, git commit, `verify_repo`
     against the ledger, missing/unrecorded file discrepancy; tests green.
-  - **Status**: code complete 2026-10-29; live repository/telemetry consumption
-    is `DoD: confirm: user`.
+  - **Status**: the live `share.transfer` event was captured, its SHA-256
+    `8723c220…` recorded as ledger block `c4ea7399…`, committed to the evidence
+    repository, and `verify_repo` returned `ok: true` with one recorded file.
 
 ## Step 12 — Review agents and trust decisions
 
-- [ ] **Step 12** — Produce a finding for each evidence event without modifying
-  the evidence, and emit a reversible signed trust belief. Never write a registry
-  or a grant.
+- [x] **Step 12 — complete and live-verified on agx32 2026-11-04.** Produce a
+  finding for each evidence event without modifying the evidence, and emit a
+  reversible signed trust belief. Never write a registry or a grant.
   - **DoD**: signed `trust_level_changed` with `reversible`/`flag_preserved`,
     invalid levels refused, evidence read-only, tests green.
-  - **Status**: code complete 2026-10-29; live review round trip is
-    `DoD: confirm: user`.
+  - **Status**: one finding was produced for the live evidence event; a signed
+    `authenticated` transition and its `flagged` reversal were recorded for a
+    test node id, both with `reversible: true` and `flag_preserved: true`; no
+    registry or grant was written.
 
 ## Step 22 — Scoped knowledge responder and AI context
 
@@ -102,12 +137,13 @@ current: 24
     `model-uplift` and delivered 200; 8091 intake mirroring 41 inventory
     records; four agx64 snapshots uploaded and one restored (40 points); a real
     Qwen2.5-7B→Qwen2.5-1.5B LoRA run was signed (`run-20261101T101033Z-…`) and
-    its model card published. Raw vLLM KV capture remains open (root 81H).
+    its model card published. Raw vLLM KV capture completed as root 81H on
+    2026-11-01 (299 blocks, 627 MB, pushed and digest-verified).
   - **DoD**: master suite green; live legs `DoD: confirm: user`.
 
 ## Step 24 — Master memory control and read-through
 
-- [ ] **Step 24** — Let the Master govern fleet memory without a mirror:
+- [x] **Step 24 — complete and live-verified on agx32 2026-11-04.** Let the Master govern fleet memory without a mirror:
   - [x] **24A — Capability and actions.** `memory-supervise` is a sensitive
     Master-issued capability; `memory_status`, `memory_policy_set`,
     `memory_read` and `memory_purge` are signed admin actions with fields inside
@@ -125,7 +161,25 @@ current: 24
     `make contract-test`, `make context-check`, `make bundle-verify ROLE=master`;
     live `memory_status` and an on-demand content read are
     `DoD: confirm: user`.
-  - **Status: local implementation complete 2026-11-02.** Code, tests, contracts and both bundle verifications pass; live node/browser legs are `DoD: confirm: user`.
+  - **Status: complete 2026-11-04.** The peer memory sidecar is live on agx64, and the Master's signed `memory_status` and `memory-read` actions returned live records through the peer gateway. The root `memory-supervise` capability is in registry sequence 8; no mirror is stored. The cursor stays at Step 9 because 9G is the remaining open step.
+
+## Step 25 — Master admin-only WebUI and OpenCode engine
+
+- [x] **Step 25** — Recreate the Master admin surface as admin-only, retire the
+  old cluster2 user surface, and give the administrator a working engine.
+  - [x] `admin-surface/docker-compose.admin.yml` is host-network, Open WebUI
+    `v0.13.0`, `ENABLE_SIGNUP=false`, one `admin@sparknet.local` account from a
+    deploy-time password at 0600.
+  - [x] The engine runs as `sparknet-opencode-engine@master` with
+    `--single-vault /srv/sparknet/knowledge/master-admin`; the role vault is
+    never mounted.
+  - [x] The old cluster2 `sparknet-webui` on `8181` was exported and retired;
+    its one user chat was imported into the peer account and its volume was
+    removed after the backup.
+  - [x] Live admin chat returned `webui-master-ok` on agx32; the Master
+    `/api/v1/users/` list has exactly one admin.
+  - **DoD**: admin-only WebUI, live engine round trip, no user surface on the
+    Master; browser click-through `DoD: confirm: user`.
 
 ## Next
 

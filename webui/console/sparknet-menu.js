@@ -1,66 +1,113 @@
-/* Sparknet launcher injected into Open WebUI by nginx.
+/* Sparknet sidebar group, injected into Open WebUI by nginx.
  *
- * It is deliberately a same-origin link block, not a second app framework: the
- * console validates the user's Open WebUI token and the role scope. The launcher
- * hides Learning for a peer after asking the console for its surface.
+ * The group sits directly under the pinned Notes/Workspace items and uses the
+ * same row classes, so it behaves like a native sidebar section instead of a
+ * floating overlay. The console validates the Open WebUI token and the role
+ * scope; Learning is read-only on the peer (proxied from the Master's 4221
+ * snapshot) and local on the Master.
  */
 (function () {
   "use strict";
   if (location.pathname.startsWith("/sparknet-console")) return;
   var BASE = "/sparknet-console/";
-  var mounted = false;
+  var GROUP_ID = "sparknet-menu-group";
+  var ITEMS = [
+    { id: "mesh", label: "Mesh", href: BASE + "#mesh" },
+    { id: "vectors", label: "Vectors", href: BASE + "#vectors" },
+    { id: "learning", label: "Learning", href: BASE + "#learning" }
+  ];
 
-  function mount() {
-    if (mounted || !document.body) return;
-    if (document.getElementById("sparknet-launcher")) {
-      mounted = true;
-      return;
-    }
-    var box = document.createElement("div");
-    box.id = "sparknet-launcher";
-    box.setAttribute("aria-label", "Sparknet");
-    box.innerHTML =
-      '<div style="font:600 10px/1.2 ui-sans-serif,system-ui,sans-serif;letter-spacing:.12em;color:#5eead4;margin:0 6px 7px;">SPARKNET</div>' +
-      '<a data-s="mesh" href="' + BASE + '#mesh">Mesh</a>' +
-      '<a data-s="vectors" href="' + BASE + '#vectors">Vectors</a>' +
-      '<a data-s="learning" href="' + BASE + '#learning">Learning</a>';
-    box.style.cssText =
-      "position:fixed;right:16px;bottom:72px;z-index:2147483646;display:flex;flex-direction:column;gap:2px;" +
-      "padding:10px;border:1px solid #253041;border-radius:12px;background:rgba(9,12,18,.94);" +
-      "box-shadow:0 12px 30px rgba(0,0,0,.35);backdrop-filter:blur(8px);";
-    for (var a of box.querySelectorAll("a")) {
-      a.style.cssText =
-        "display:block;padding:5px 9px;border-radius:7px;color:#cbd5e1;text-decoration:none;" +
-        "font:500 12px/1.4 ui-sans-serif,system-ui,sans-serif;";
-      a.onmouseenter = function () { this.style.background = "#13201f"; this.style.color = "#5eead4"; };
-      a.onmouseleave = function () { this.style.background = "transparent"; this.style.color = "#cbd5e1"; };
-    }
-    document.body.appendChild(box);
-    mounted = true;
+  var ICONS = {
+    mesh:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" class="size-4"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="18" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="M10.7 6.8 6.2 15.8M13.3 6.8l4.5 9M7.2 18h9.6"/></svg>',
+    vectors:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M4 19V5M4 19h16"/><path d="m7 15 4-5 3 2 5-7"/><circle cx="7" cy="15" r="1.2" fill="currentColor"/><circle cx="11" cy="10" r="1.2" fill="currentColor"/><circle cx="14" cy="12" r="1.2" fill="currentColor"/><circle cx="19" cy="5" r="1.2" fill="currentColor"/></svg>',
+    learning:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M12 3v3M12 18v3M4.2 7.5l2.6 1.5M17.2 15l2.6 1.5M4.2 16.5l2.6-1.5M17.2 9l2.6-1.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></svg>'
+  };
 
+  function el(tag, cls, html) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (html !== undefined) node.innerHTML = html;
+    return node;
+  }
+
+  function row(item) {
+    var wrap = el("div", "px-1 flex justify-center text-gray-700 dark:text-gray-300");
+    wrap.dataset.sparknet = item.id;
+    var link = el("a", "grow flex items-center space-x-2 rounded-xl px-2 py-1.5 transition hover:bg-gray-100 dark:hover:bg-gray-900");
+    link.href = item.href;
+    link.draggable = false;
+    link.setAttribute("aria-label", item.label);
+    var icon = el("div", "self-center flex size-4 shrink-0 items-center justify-center", ICONS[item.id]);
+    var label = el("div", "flex self-center translate-y-[0.5px]");
+    label.appendChild(el("div", "self-center text-[0.8125rem] leading-5", item.label));
+    link.appendChild(icon);
+    link.appendChild(label);
+    wrap.appendChild(link);
+    return wrap;
+  }
+
+  function build() {
+    var group = el("div", "sparknet-sidebar-group");
+    group.id = GROUP_ID;
+    var heading = el("div", "px-1 pt-2 pb-1");
+    heading.appendChild(el("div", "border-t border-gray-100 dark:border-gray-900"));
+    heading.appendChild(
+      el(
+        "div",
+        "px-2 pt-2 text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-gray-500 dark:text-gray-500",
+        "SPARKNET"
+      )
+    );
+    group.appendChild(heading);
+    for (var i = 0; i < ITEMS.length; i++) group.appendChild(row(ITEMS[i]));
+    return group;
+  }
+
+  function applySurface(group) {
     var token = localStorage.getItem("token");
     if (!token) return;
     fetch(BASE + "api/surface", { headers: { Authorization: "Bearer " + token, Accept: "application/json" } })
       .then(function (response) { return response.ok ? response.json() : null; })
       .then(function (surface) {
         if (!surface || !Array.isArray(surface.menus)) return;
-        var learning = box.querySelector('[data-s="learning"]');
-        if (learning && surface.menus.indexOf("learning") === -1) learning.style.display = "none";
+        var learning = group.querySelector('[data-sparknet="learning"]');
+        if (learning && surface.menus.indexOf("learning") === -1) learning.remove();
       })
       .catch(function () {});
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", mount, { once: true });
-  } else {
-    mount();
+  function mount() {
+    if (document.getElementById(GROUP_ID)) return;
+    var pinned = document.getElementById("pinned-menu-items-list");
+    if (!pinned || !pinned.parentNode) return;
+    var group = build();
+    pinned.insertAdjacentElement("afterend", group);
+    applySurface(group);
   }
+
+  function scheduleMount() {
+    if (document.readyState === "loading") return;
+    if (!document.getElementById(GROUP_ID)) mount();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", scheduleMount, { once: true });
+  } else {
+    scheduleMount();
+  }
+
   if (document.body) {
+    var pending = false;
     new MutationObserver(function () {
-      if (document.body && !document.getElementById("sparknet-launcher")) {
-        mounted = false;
-        mount();
-      }
-    }).observe(document.body, { childList: true });
+      if (pending) return;
+      pending = true;
+      requestAnimationFrame(function () {
+        pending = false;
+        scheduleMount();
+      });
+    }).observe(document.body, { childList: true, subtree: true });
   }
 })();

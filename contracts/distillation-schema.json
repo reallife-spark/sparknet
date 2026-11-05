@@ -34,6 +34,13 @@
     "fields": ["model_id", "family", "base_model", "teacher_model", "run_id", "artifact_uri", "artifact_sha256", "eval_metrics", "license", "notes"],
     "publication": "optional, through the signed 4221 file share after operator approval; a peer deploys it only as a distinct model, never by overwriting its base"
   },
+  "status_snapshot": {
+    "schema": "sparknet-distill-status/1",
+    "fields": ["schema", "generated_at", "config", "runs", "read_only", "source"],
+    "share_path": "/srv/sparknet/share/learning/status.json",
+    "excludes": ["state_dir", "errors", "datasets", "traces", "prompts", "weights", "artifacts"],
+    "transport": "Signed 4221 read-only file fetch by a p2p-sync peer; the peer console never stores a mirror."
+  },
   "limits": {
     "raw_kv": "raw KV tensors are archived/research data; cross-size distillation trains on traces/logits unless an architecture-compatible experiment is explicitly recorded",
     "hardware": "make distill-doctor must pass before a run; a failed check refuses the run",

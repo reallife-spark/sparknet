@@ -1,6 +1,6 @@
 ---
 title: sparknet — user manual
-updated: 2026-10-30
+updated: 2026-11-05
 ---
 
 # sparknet — user manual
@@ -12,6 +12,15 @@ updated: 2026-10-30
 >
 > The four sibling repositories have their own manuals, listed in
 > [§11](#11-where-the-rest-of-the-system-lives). Read this one first.
+
+---
+
+> **Current deployment (2026-11-05).** `agx64` is the peer and the only human
+> user surface. `agx32` is the Master and is **admin-only**. Open WebUI is
+> `v0.13.0` on both; the agent execution path is the loopback OpenCode engine
+> (`1.19.5`) on `4204`, with one sandbox per user's `peer-<user_id>` vault. The
+> old cluster2 Master WebUI on `8181` is retired. Prompts, tools, functions and
+> per-user models are installed by `peer-node/scripts/sparknet-webui-workspace.py`.
 
 ---
 

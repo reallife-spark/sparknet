@@ -6,11 +6,12 @@ ROLE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$ROLE_ROOT/scripts/sparknet-master-env.sh" >/dev/null
 
 IDENTITY=""
+NODE_PUBKEY=""
 OUT=""
 
 usage() {
   cat <<'USAGE'
-usage: sparknet-registry-revoke.sh --identity <identity.json> [--out <entry.json>]
+usage: sparknet-registry-revoke.sh --identity <identity.json> [--node-pubkey <file-or-b64>] [--out <entry.json>]
 
 Signs a REVOKED authorization for an identity. The entry grants nothing, so
 there is no capability list to set: --capabilities used to be accepted here and
@@ -20,6 +21,7 @@ USAGE
 while [ $# -gt 0 ]; do
   case "$1" in
     --identity) IDENTITY="$2"; shift 2 ;;
+    --node-pubkey) NODE_PUBKEY="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown arg: $1" >&2; usage; exit 1 ;;
@@ -47,6 +49,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 identity = json.loads(Path('${IDENTITY}').read_text())
+node_pubkey = (Path('${NODE_PUBKEY}').read_text().strip() if '${NODE_PUBKEY}' and Path('${NODE_PUBKEY}').is_file() else ('${NODE_PUBKEY}' or None)) or identity.get('node_pubkey_b64')
 priv_b64 = Path('${OP_PRIV}').read_text().strip()
 priv = authz.private_key_from_b64(priv_b64)
 cap = []
@@ -54,7 +57,7 @@ now = datetime.now(timezone.utc)
 # `revoked` is inside the signed envelope: setting it after signing (what this
 # script used to do) yields an entry no peer accepts. The implementation takes
 # it as an argument so the signature covers it.
-entry = authz.sign_authorization(identity, priv, cap, ttl_days=365, now=now, revoked=True)
+entry = authz.sign_authorization(identity, priv, cap, ttl_days=365, now=now, revoked=True, node_pubkey_b64=node_pubkey)
 print(json.dumps(entry, indent=2))
 PYEOF
 "$PY" "$tmp.py" > "$tmp.out"

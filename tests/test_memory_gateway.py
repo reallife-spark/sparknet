@@ -191,7 +191,7 @@ def test_grant_forces_the_user_scope(stack):
     status, payload = stack["gateway"].handle("POST", "/v1/memory/remember", headers, body)
     assert status == 200 and payload["ok"] is True
     call = MemoryHandler.calls[-1]
-    assert call["body"]["scope"]["user_id"] == "U-1"
+    assert call["body"]["record"]["scope"]["user_id"] == "U-1"
     assert call["body"]["vault_path"] == str(stack["role"])
     assert call["token"] == "memory-token"
 
@@ -204,7 +204,7 @@ def test_webui_token_is_bound_to_the_users_vault(stack):
     assert status == 200 and payload["ok"] is True
     call = MemoryHandler.calls[-1]
     assert call["body"]["vault_path"] == str(stack["knowledge"] / "peer-user-1")
-    assert call["body"]["scope"]["user_id"] == "user-1"
+    assert call["body"]["record"]["scope"]["user_id"] == "user-1"
 
 
 def test_local_token_can_select_an_allowed_vault(stack):

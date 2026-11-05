@@ -31,7 +31,7 @@ SYSTEM_UNIT_DIR="${SYSTEM_UNIT_DIR:-/etc/systemd/system}"
 
 # System units that run as root need their shim in the system location.
 # Entries are bare names; the shim is always sparknet-<name>.
-ROOT_UNITS=(wireguard-anchor guard dispatch-bridge wifi-guard firewall vault-provisioner admin-agent)
+ROOT_UNITS=(wireguard-anchor guard dispatch-bridge wifi-guard firewall vault-provisioner admin-agent opencode-engine)
 
 APPLY=0
 for arg in "$@"; do
@@ -75,6 +75,7 @@ shim_body() {
     firewall)   printf 'exec %q %q "$@"' "$SPARKNET_VAULT_ROOT/scripts/sparknet-run" "$SPARKNET_VAULT_ROOT/scripts/sparknet-firewall.sh" ;;
     vault-provisioner) printf 'exec %q %q %q "$@"' "$SPARKNET_VAULT_ROOT/scripts/sparknet-run" "$SPARKNET_PYTHON" "$SPARKNET_VAULT_ROOT/services/sparknet-vault-provisioner.py" ;;
     admin-agent) printf 'exec %q %q %q "$@"' "$SPARKNET_VAULT_ROOT/scripts/sparknet-run" "$SPARKNET_PYTHON" "$SPARKNET_VAULT_ROOT/services/sparknet-admin-agent.py" ;;
+    opencode-engine) printf 'exec %q %q %q "$@"' "$SPARKNET_VAULT_ROOT/scripts/sparknet-run" "$SPARKNET_PYTHON" "$SPARKNET_VAULT_ROOT/services/sparknet-opencode-engine.py" ;;
     inventory) printf 'exec %q %q %q "$@"' "$SPARKNET_VAULT_ROOT/scripts/sparknet-run" "${SPARKNET_VECTOR_PYTHON:-$SPARKNET_VAULT_ROOT/../.venv-vector/bin/python}" "$SPARKNET_VAULT_ROOT/services/sparknet-inventory-agent.py" ;;
     uplift-push) printf 'exec %q %q %q "$@"' "$SPARKNET_VAULT_ROOT/scripts/sparknet-run" "${SPARKNET_VECTOR_PYTHON:-$SPARKNET_VAULT_ROOT/../.venv-vector/bin/python}" "$SPARKNET_VAULT_ROOT/../scripts/sparknet-uplift-push.py" ;;
     telemetry-push) printf 'exec %q %q %q "$@"' "$SPARKNET_VAULT_ROOT/scripts/sparknet-run" "$SPARKNET_PYTHON" "$SPARKNET_VAULT_ROOT/services/sparknet-telemetry-push.py" ;;
@@ -124,7 +125,7 @@ done
 
 # --- units ------------------------------------------------------------------
 # System units run as root (the guard is root-gated); the sync pair is a user unit.
-SYSTEM_UNITS=(sparknet-wireguard-anchor.service sparknet-guard-daemon.service sparknet-dispatch-bridge.service sparknet-wifi-guard.service sparknet-vault-provisioner.service sparknet-admin-agent.service sparknet-firewall.service)
+SYSTEM_UNITS=(sparknet-wireguard-anchor.service sparknet-guard-daemon.service sparknet-dispatch-bridge.service sparknet-wifi-guard.service sparknet-vault-provisioner.service sparknet-admin-agent.service sparknet-firewall.service sparknet-opencode-engine@.service)
 USER_UNITS=(sparknet-sync.service sparknet-sync.timer sparknet-telemetry-push.service sparknet-telemetry-push.timer sparknet-liveness-monitor.service sparknet-checkpoint-anchor.service sparknet-checkpoint-anchor.timer sparknet-vault-health.service sparknet-vault-health.timer sparknet-inventory.service sparknet-inventory.timer sparknet-uplift-sync.service sparknet-uplift-sync.timer)
 
 echo

@@ -69,7 +69,7 @@ x-agx-node: &agx-node
       gospark: ${GOSPARK_DIR:-../gospark}
     args:
       L4T_BASE: ${L4T_BASE:-nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3}
-      OPENCODE_VERSION: ${OPENCODE_VERSION:-1.18.35}
+      OPENCODE_VERSION: ${OPENCODE_VERSION:-1.19.5}
       NATS_VERSION: ${NATS_VERSION:-2.14.2}
       # The build escape hatches: point the engine at a fork's fixes without
       # patching anything (documented in goagx/README.md).
@@ -373,7 +373,7 @@ services:
 
   # Open WebUI, the only foreign image, pointing at the node's own gateway.
   webui:
-    image: ghcr.io/open-webui/open-webui:${WEBUI_TAG:-v0.12.2}
+    image: ghcr.io/open-webui/open-webui:${WEBUI_TAG:-v0.13.0}
     profiles: ["webui"]
     container_name: sparknet-webui
     depends_on:

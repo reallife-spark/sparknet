@@ -59,7 +59,7 @@ x-spark-node: &spark-node
       gospark: ${GOSPARK_DIR:-./gospark}
     args:
       VLLM_BASE: ${VLLM_BASE:-nvcr.io/nvidia/vllm:26.04-py3}
-      OPENCODE_VERSION: ${OPENCODE_VERSION:-1.18.35}
+      OPENCODE_VERSION: ${OPENCODE_VERSION:-1.19.5}
       NATS_VERSION: ${NATS_VERSION:-2.14.2}
       INSTALL_DCGM: ${INSTALL_DCGM:-0}
   restart: unless-stopped
@@ -362,7 +362,7 @@ services:
 
   # Open WebUI, the only foreign image, pointing at the node's own gateway.
   webui:
-    image: ghcr.io/open-webui/open-webui:${WEBUI_TAG:-v0.12.2}
+    image: ghcr.io/open-webui/open-webui:${WEBUI_TAG:-v0.13.0}
     profiles: ["webui"]
     container_name: sparknet-webui
     depends_on:
@@ -466,6 +466,11 @@ services:
   # fabric edge. The vault is the image's WORKDIR, so opencode resolves the
   # node's project without a flag; its sessions and caches are pointed into the
   # mounted state so they survive a container recreation.
+  #
+  # The Open WebUI engine adapter is a separate host systemd service
+  # (`sparknet-opencode-engine@peer`) on loopback 4204; it is deliberately not
+  # a compose service because it supervises one sandbox container per user and
+  # needs the Docker socket.
   opencode:
     <<: [*spark-node]
     profiles: ["opencode"]

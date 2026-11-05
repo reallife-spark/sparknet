@@ -42,16 +42,17 @@ the branch, and the `share` verbs declare a session-view/session-handoff share
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-import uuid
 
 try:  # Python 3.9+
     from collections.abc import Callable
@@ -443,6 +444,12 @@ class Bridge:
         self.http = _load_http()
         self.authz = self.http._load_authz()
         self.prov = _load_provenance()
+        self.cluster = _load_shared("sparknet-cluster", "sparknet_cluster_bridge", ("sparknet-cluster.py",))
+        self.nocturnal = _load_shared(
+            "sparknet-nocturnal",
+            "sparknet_nocturnal_bridge",
+            ("sparknet-authz.py", "sparknet-nocturnal.py"),
+        )
         self.reflex = _load_shared("sparknet-reflex", "sparknet_reflex_bridge", ("sparknet-reflex.py",))
         self._registry: dict[str, Any] | None = None
         self._registry_stamp: tuple[int, int] | None = None
@@ -454,6 +461,10 @@ class Bridge:
         self._cluster_jobs_dir = _state_dir(self.vault_root) / "cluster-jobs"
         self._cluster_jobs_dir.mkdir(parents=True, exist_ok=True)
         self._cluster_jobs_lock = threading.RLock()
+        self._cluster_executor: Callable[[dict[str, Any]], str] | None = None
+        self._cluster_artifact_git_dir = os.environ.get("SPARKNET_NOCTURNAL_GIT_DIR") or str(
+            _state_dir(self.vault_root) / "nocturnal.git"
+        )
         self._cluster_execute_enabled = os.environ.get("SPARKNET_CLUSTER_EXECUTE_ENABLED", "0").strip().lower() in (
             "1",
             "true",
@@ -537,50 +548,216 @@ class Bridge:
                 regime.restore(record)
         return regime, records
 
-    # --- cluster job ingress (Seam E) + construction/placement stubs (items 4-5) ---
+    # --- cluster job ingress (Seam E) and local execution -------------------
 
-    @staticmethod
-    def _cluster_construct(job: dict[str, Any], roster: list[str] | None = None) -> dict[str, Any]:
-        """Deterministic construction (Seam B) — stub; no dispatch."""
-        subtasks = job.get("subtasks") if isinstance(job.get("subtasks"), list) else []
-        roster = list(roster or [])
-        roster_sorted = sorted(roster) if roster else []
-        constructed = {
-            "subtasks": subtasks,
-            "roster": roster_sorted,
-            "placement": {"topology": "none", "assignments": []},
-            "truncated": False,
-        }
-        return constructed
+    def _cluster_artifact_git(self) -> str:
+        """The state-dir git repository used for nocturnal artifact commits.
 
-    def cluster_job_submit(self, body: dict[str, Any], _grant: dict[str, Any]) -> dict[str, Any]:
-        if not isinstance(body, dict):
-            raise _HttpRequestError(400, "malformed", "cluster job must be a JSON object")
+        The role vault is not restructured. The git dir lives under the node
+        state and uses the vault as its work-tree, so only the intake directory
+        is committed and no `.git` appears in the vault.
+        """
+        path = Path(self._cluster_artifact_git_dir)
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if not path.exists():
+            subprocess.run(
+                ["git", f"--git-dir={path}", f"--work-tree={self.vault_root}", "init", "-q"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", f"--git-dir={path}", "config", "user.email", "sparknet-node@localhost"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ["git", f"--git-dir={path}", "config", "user.name", "sparknet-node"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        return str(path)
+
+    def _cluster_master_key(self) -> Any | None:
+        return self._master_public_key()
+
+    def _cluster_verify_job(self, body: dict[str, Any]) -> dict[str, Any]:
         job = body.get("job")
         if not isinstance(job, dict):
             raise _HttpRequestError(400, "malformed", "cluster job requires a 'job' object")
-        job_id = job.get("job_id") or body.get("job_id") or f"cj-{uuid.uuid4().hex}"
-        if not isinstance(job_id, str) or not job_id:
-            raise _HttpRequestError(400, "malformed", "cluster job_id required")
-        subtasks = job.get("subtasks")
-        if not isinstance(subtasks, list) or not subtasks:
-            raise _HttpRequestError(400, "bad-job", "cluster job subtasks must be a non-empty list")
-        mode = job.get("mode")
-        if mode not in ("map_reduce", "scatter_gather", "pipeline"):
-            raise _HttpRequestError(400, "bad-job", f"unsupported cluster job mode {mode!r}")
+        signature = job.get("signature_b64")
+        if not isinstance(signature, str) or not signature:
+            raise _HttpRequestError(403, "missing-signature", "cluster job carries no signature_b64")
+        unsigned = {key: value for key, value in job.items() if key != "signature_b64"}
+        try:
+            message = self.authz.cluster_job_message(unsigned)
+        except Exception as exc:
+            raise _HttpRequestError(400, "bad-job", str(exc)) from exc
+        key = self._cluster_master_key()
+        if key is None:
+            raise _HttpRequestError(503, "no-master-key", "no Master public key is loaded on this node")
+        if not self.authz.verify_signature(key, signature, message):
+            raise _HttpRequestError(403, "bad-signature", "cluster job signature does not verify")
+        try:
+            job = self.cluster.validate_job(unsigned)
+        except Exception as exc:
+            raise _HttpRequestError(400, "bad-job", str(exc)) from exc
+        if self.authz.is_expired(job["expires_at"], self._now()):
+            raise _HttpRequestError(409, "expired", "cluster job has expired")
+        decision = self._authorization_decision()
+        if decision is None or not decision.allowed:
+            raise _HttpRequestError(
+                403,
+                decision.reason if decision is not None else "no-authorization",
+                "this node is not authorised by the registry",
+            )
+        if "cluster-serve" not in decision.capabilities:
+            raise _HttpRequestError(
+                403,
+                "capability_missing",
+                f"cluster-serve not granted to this node (have: {', '.join(decision.capabilities) or 'none'})",
+            )
+        return job
+
+    def _cluster_model(self) -> str:
+        return os.environ.get("SPARKNET_CLUSTER_MODEL", "").strip() or "qwen3.5-9b-q8"
+
+    def _cluster_ollama(self, subtask: dict[str, Any]) -> str:
+        endpoint = os.environ.get("SPARKNET_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
+        model = self._cluster_model()
+        payload = json.dumps(
+            {
+                "model": model,
+                "prompt": str(subtask.get("instruction") or ""),
+                "stream": False,
+                "options": {"num_predict": 512},
+            }
+        ).encode("utf-8")
+        request = urllib.request.Request(
+            endpoint + "/api/generate",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(request, timeout=300) as response:
+            answer = json.loads(response.read().decode("utf-8"))
+        output = answer.get("response") if isinstance(answer, dict) else None
+        if not isinstance(output, str):
+            raise RuntimeError("local model returned no response")
+        return output
+
+    def _cluster_run_subtask(self, subtask: dict[str, Any]) -> str:
+        if self._cluster_executor is not None:
+            return self._cluster_executor(subtask)
+        return self._cluster_ollama(subtask)
+
+    def _cluster_execute(self, record: dict[str, Any], job: dict[str, Any], lease_id: str) -> None:
+        own_id = str(self.node_identity().get("node_id") or "")
+        assigned = [item for item in job["subtasks"] if item["node_id"] == own_id]
+        if not assigned:
+            record["status"] = "failed"
+            record["error"] = "no-subtasks-for-this-node"
+            record["updated_at"] = self._now().isoformat().replace("+00:00", "Z")
+            return
+        key_path = _state_dir(self.vault_root) / "keys" / "ed25519-node.key.b64"
+        if not key_path.is_file():
+            record["status"] = "failed"
+            record["error"] = "no-node-key"
+            record["updated_at"] = self._now().isoformat().replace("+00:00", "Z")
+            return
+        private_key_b64 = key_path.read_text(encoding="utf-8").strip()
+        model = self._cluster_model()
+        results: list[dict[str, Any]] = []
+        for subtask in assigned:
+            started = self._now()
+            try:
+                output = self._cluster_run_subtask(subtask)
+            except Exception as exc:  # noqa: BLE001 - record the refusal, never fake output
+                record["status"] = "failed"
+                record["error"] = f"executor: {exc}"
+                record["updated_at"] = self._now().isoformat().replace("+00:00", "Z")
+                return
+            ended = self._now()
+            result = {
+                "schema_version": self.nocturnal.RESULT_SCHEMA,
+                "lease_id": lease_id,
+                "job_id": job["job_id"],
+                "subtask_id": subtask["subtask_id"],
+                "participant_node_id": own_id,
+                "instruction_sha256": hashlib.sha256(subtask["instruction"].encode("utf-8")).hexdigest(),
+                "output_sha256": hashlib.sha256(output.encode("utf-8")).hexdigest(),
+                "model": model,
+                "started_at": started.isoformat().replace("+00:00", "Z"),
+                "ended_at": ended.isoformat().replace("+00:00", "Z"),
+                "coverage": {"answered": [subtask["subtask_id"]], "missing": []},
+                "output": output,
+            }
+            results.append(self.nocturnal.sign_result(result, private_key_b64))
+        subtasks = []
+        for result in results:
+            result_bytes = (json.dumps(result, sort_keys=True, indent=2) + "\n").encode("utf-8")
+            subtasks.append(
+                {
+                    "subtask_id": result["subtask_id"],
+                    "result_sha256": hashlib.sha256(result_bytes).hexdigest(),
+                    "answered": True,
+                }
+            )
+        manifest = {
+            "schema_version": self.nocturnal.MANIFEST_SCHEMA,
+            "lease_id": lease_id,
+            "job_id": job["job_id"],
+            "participant_node_id": own_id,
+            "subtasks": sorted(subtasks, key=lambda item: item["subtask_id"]),
+            "model": model,
+            "corpus_digest": None,
+            "started_at": results[0]["started_at"],
+            "ended_at": results[-1]["ended_at"],
+            "coverage": {"answered": sorted(result["subtask_id"] for result in results), "missing": []},
+            "created_at": self._now().isoformat().replace("+00:00", "Z"),
+        }
+        manifest = self.nocturnal.sign_manifest(manifest, private_key_b64)
+        try:
+            artifact = self.nocturnal.write_artifact_set(
+                self.vault_root,
+                lease_id,
+                job["job_id"],
+                results,
+                manifest,
+                git_dir=self._cluster_artifact_git(),
+            )
+        except Exception as exc:  # noqa: BLE001 - execution result is still useful, but never claim a commit
+            record["status"] = "failed"
+            record["error"] = f"artifact: {exc}"
+            record["updated_at"] = self._now().isoformat().replace("+00:00", "Z")
+            return
+        record["status"] = "completed"
+        record["result"] = {"results": results, "manifest": manifest, "artifact": artifact}
+        record["updated_at"] = self._now().isoformat().replace("+00:00", "Z")
+
+    def cluster_job_submit(self, body: dict[str, Any]) -> dict[str, Any]:
+        job = self._cluster_verify_job(body)
+        lease_id = body.get("lease_id")
+        if not isinstance(lease_id, str) or not lease_id.strip():
+            raise _HttpRequestError(400, "bad-job", "cluster job body requires lease_id")
+        job_id = job["job_id"]
+        own_id = str(self.node_identity().get("node_id") or "")
+        assigned = [item for item in job["subtasks"] if item["node_id"] == own_id]
+        if not assigned:
+            raise _HttpRequestError(409, "no-subtasks", "this node has no subtasks in the job")
         now = self._now().isoformat().replace("+00:00", "Z")
-        constructed = self._cluster_construct(job)
         record = {
             "job_id": job_id,
+            "lease_id": lease_id,
             "job": job,
             "status": "accepted",
             "execute_enabled": bool(getattr(self, "_cluster_execute_enabled", False)),
             "accepted_at": now,
             "updated_at": now,
             "result": None,
-            "constructed": constructed,
-            "placement": constructed.get("placement") or {"topology": "none", "assignments": []},
-            "reduced": None,
         }
         with self._cluster_jobs_lock:
             path = self._cluster_jobs_dir / f"{job_id}.json"
@@ -589,10 +766,14 @@ class Bridge:
             tmp = path.with_suffix(".json.tmp")
             tmp.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n", encoding="utf-8")
             os.replace(tmp, path)
+        if bool(getattr(self, "_cluster_execute_enabled", False)):
+            self._cluster_execute(record, job, lease_id)
+            with self._cluster_jobs_lock:
+                path.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n", encoding="utf-8")
         return {
             "ok": True,
             "job_id": job_id,
-            "status": "accepted",
+            "status": record["status"],
             "execute_enabled": bool(getattr(self, "_cluster_execute_enabled", False)),
         }
 
@@ -606,13 +787,14 @@ class Bridge:
             try:
                 record = json.loads(path.read_text(encoding="utf-8"))
             except Exception as exc:
-                raise _HttpRequestError(500, "unreadable", str(exc))
+                raise _HttpRequestError(500, "unreadable", str(exc)) from exc
         return {
             "ok": True,
             "job_id": job_id,
             "status": record.get("status"),
             "execute_enabled": bool(record.get("execute_enabled")),
             "updated_at": record.get("updated_at"),
+            "error": record.get("error"),
         }
 
     def cluster_job_result(self, job_id: str) -> dict[str, Any]:
@@ -625,10 +807,25 @@ class Bridge:
             try:
                 record = json.loads(path.read_text(encoding="utf-8"))
             except Exception as exc:
-                raise _HttpRequestError(500, "unreadable", str(exc))
+                raise _HttpRequestError(500, "unreadable", str(exc)) from exc
         if record.get("status") not in ("completed", "failed", "cancelled"):
             raise _HttpRequestError(409, "not-ready", f"cluster job {job_id} not ready (status={record.get('status')})")
-        return {"ok": True, "job_id": job_id, "status": record.get("status"), "result": record.get("result")}
+        return {
+            "ok": True,
+            "job_id": job_id,
+            "status": record.get("status"),
+            "result": record.get("result"),
+            "error": record.get("error"),
+        }
+
+    def handle_cluster(self, method: str, path: str, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+        if method == "POST" and path == "/v1/cluster/submit":
+            return 200, self.cluster_job_submit(body)
+        if method == "GET" and path.startswith("/v1/cluster/status/"):
+            return 200, self.cluster_job_status(path[len("/v1/cluster/status/") :].strip("/"))
+        if method == "GET" and path.startswith("/v1/cluster/result/"):
+            return 200, self.cluster_job_result(path[len("/v1/cluster/result/") :].strip("/"))
+        raise _HttpRequestError(404, "unknown-path", method + " " + path)
 
     def _now(self) -> datetime:
         return (self.clock or _utcnow)()
@@ -1467,38 +1664,47 @@ class Bridge:
         headers = {
             "Accept": "application/json",
             "X-Sparknet-Local-Token": token,
-            "X-Sparknet-Vault-Path": str(vault),
         }
+        # The role vault is the gateway's default. Sending the host path would
+        # be rejected when memory runs in a container at /srv/sparknet/peer-node.
+        # A per-user vault is a real container path under /srv/sparknet/knowledge.
+        vault_path = str(vault) if user_id else ""
         if user_id:
             headers["X-Sparknet-User"] = user_id
+            headers["X-Sparknet-Vault-Path"] = vault_path
         method = "GET"
         path = "/v1/memory/status"
         body: dict[str, Any] | None = None
         if action == "memory_status":
-            path += "?" + urllib.parse.urlencode({"vault_path": str(vault)})
+            if vault_path:
+                path += "?" + urllib.parse.urlencode({"vault_path": vault_path})
         elif action == "memory_read":
             method = "POST"
             path = "/v1/memory/inspect"
             body = {
-                "vault_path": str(vault),
                 "query": str(request.get("memory_query") or ""),
                 "memory_types": request.get("memory_types") or [],
                 "scope": {"user_id": user_id} if user_id else {},
                 "top_k": 20,
             }
+            if vault_path:
+                body["vault_path"] = vault_path
         elif action == "memory_policy_set":
             method = "POST"
             path = "/v1/memory/policy"
-            body = {"vault_path": str(vault), "policy": request.get("policy") or {}}
+            body = {"policy": request.get("policy") or {}}
+            if vault_path:
+                body["vault_path"] = vault_path
         elif action == "memory_purge":
             method = "POST"
             path = "/v1/memory/forget"
             body = {
-                "vault_path": str(vault),
                 "ids": request.get("memory_ids") or [],
                 "mode": "delete",
                 "reason": str(request.get("reason") or "Master memory purge"),
             }
+            if vault_path:
+                body["vault_path"] = vault_path
         data = json.dumps(body).encode("utf-8") if body is not None else None
         req = urllib.request.Request(base + path, data=data, method=method)
         for key, value in headers.items():
@@ -1644,14 +1850,6 @@ class Bridge:
             return 200, self.chat_completions(body, grant)
         if method == "POST" and path == "/v1/reflex/decide":
             return 200, self.reflex_decide(body, grant)
-        if method == "POST" and path == "/v1/cluster/submit":
-            return 200, self.cluster_job_submit(body, grant)
-        if method == "GET" and path.startswith("/v1/cluster/status/"):
-            job_id = path[len("/v1/cluster/status/") :].strip("/")
-            return 200, self.cluster_job_status(job_id)
-        if method == "GET" and path.startswith("/v1/cluster/result/"):
-            job_id = path[len("/v1/cluster/result/") :].strip("/")
-            return 200, self.cluster_job_result(job_id)
         if path.startswith("/session/"):
             rest = urllib.parse.unquote(path[len("/session/") :].strip("/"))
             parts = [part for part in rest.split("/") if part]
@@ -1743,6 +1941,14 @@ def _make_handler(bridge: Bridge, states: list[str], signed_router: Callable) ->
                     )
                 if path.startswith(ADMIN_PREFIX):
                     code, payload = bridge.handle_admin(method, path, body)
+                    self._send(code, payload)
+                    return
+                if path.startswith("/v1/cluster/"):
+                    # Cluster jobs carry their own signed envelope and are
+                    # checked against the registry in handle_cluster. They do
+                    # not use a Bearer session grant: the Master dispatches
+                    # work, not a user session.
+                    code, payload = bridge.handle_cluster(method, path, body)
                     self._send(code, payload)
                     return
                 auth = self.headers.get("Authorization", "")

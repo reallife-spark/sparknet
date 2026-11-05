@@ -1,0 +1,136 @@
+{
+  "ui.enable_signup": false,
+  "ui.default_user_role": "pending",
+  "ui.default_models": "sparknet-chat",
+  "ui.default_pinned_models": "sparknet-chat,sparknet-plan,llama3.2:latest",
+  "ui.model_order_list": [
+    "sparknet-chat",
+    "sparknet-plan",
+    "qwen3.5-9b-q8:latest",
+    "llama3.2:latest"
+  ],
+  "models.default_params": {
+    "function_calling": "native",
+    "temperature": 0.2,
+    "top_p": 0.9
+  },
+  "models.default_metadata": {
+    "capabilities": {
+      "citations": true,
+      "status_updates": true,
+      "builtin_tools": true
+    }
+  },
+  "task.model.default": "qwen3.5-9b-q8:latest",
+  "rag.embedding_engine": "",
+  "rag.embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "web.search.enable": false,
+  "code_execution.enable": false,
+  "code_interpreter.enable": false,
+  "image_generation.enable": false,
+  "images.edit.enable": false,
+  "memories.enable": false,
+  "memories.system_context.enable": false,
+  "channels.enable": false,
+  "automations.enable": false,
+  "calendar.enable": false,
+  "folders.enable": true,
+  "notes.enable": true,
+  "openai.enable": true,
+  "openai.api_base_urls": ["http://127.0.0.1:4204/v1"],
+  "openai.api_keys": ["__ENGINE_TOKEN__"],
+  "openai.api_configs": {
+    "0": {
+      "enable": true,
+      "tags": ["sparknet", "engine", "master"],
+      "headers": {
+        "X-Sparknet-User": "{{USER_ID}}",
+        "X-Sparknet-User-Role": "{{USER_ROLE}}",
+        "X-Sparknet-Chat-Id": "{{CHAT_ID}}",
+        "X-Sparknet-Model-Id": "{{MODEL_ID}}"
+      }
+    }
+  },
+  "ollama.enable": true,
+  "ollama.base_urls": ["http://127.0.0.1:11434"],
+  "tool_server.connections": [],
+  "user.permissions": {
+    "workspace": {
+      "models": false,
+      "knowledge": false,
+      "prompts": false,
+      "tools": false,
+      "skills": false,
+      "models_import": false,
+      "models_export": false,
+      "prompts_import": false,
+      "prompts_export": false,
+      "tools_import": false,
+      "tools_export": false,
+      "skills_import": false,
+      "skills_export": false
+    },
+    "sharing": {
+      "models": false,
+      "public_models": false,
+      "knowledge": false,
+      "public_knowledge": false,
+      "prompts": false,
+      "public_prompts": false,
+      "tools": false,
+      "public_tools": false,
+      "skills": false,
+      "public_skills": false,
+      "notes": false,
+      "public_notes": false,
+      "folders": false,
+      "public_chats": false,
+      "open_chats": false,
+      "public_calendars": false
+    },
+    "access_grants": {
+      "allow_users": true,
+      "allow_groups": true
+    },
+    "chat": {
+      "controls": true,
+      "valves": false,
+      "system_prompt": false,
+      "params": false,
+      "file_upload": true,
+      "web_upload": false,
+      "delete": true,
+      "delete_message": true,
+      "continue_response": true,
+      "regenerate_response": true,
+      "rate_response": true,
+      "edit": true,
+      "share": false,
+      "export": true,
+      "import": true,
+      "stt": false,
+      "tts": false,
+      "call": false,
+      "multiple_models": false,
+      "temporary": true,
+      "temporary_enforced": false
+    },
+    "features": {
+      "api_keys": false,
+      "notes": true,
+      "folders": true,
+      "channels": false,
+      "direct_tool_servers": false,
+      "web_search": false,
+      "image_generation": false,
+      "code_interpreter": false,
+      "memories": false,
+      "automations": false,
+      "calendar": false,
+      "webhooks": false
+    },
+    "settings": {
+      "interface": true
+    }
+  }
+}

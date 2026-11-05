@@ -6,6 +6,8 @@ stand-in. No live Qdrant, no browser and no model are involved.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import importlib.util
 import json
 import sys
@@ -13,6 +15,7 @@ import threading
 import urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -224,7 +227,7 @@ def test_static_index_and_auth(tmp_path: Path, qdrant: str, openwebui: str) -> N
         status, body = _get(server.server_port, "/api/surface", "console-token-1234567890")
         assert status == 200
         surface = json.loads(body)
-        assert surface["menus"] == ["mesh", "vectors", "memory", "projects"]
+        assert surface["menus"] == ["mesh", "vectors", "learning", "memory", "projects"]
         assert surface["read_only"] is True
     finally:
         server.shutdown()
@@ -245,8 +248,8 @@ def test_peer_user_session_is_accepted_but_master_requires_admin(tmp_path: Path,
             assert response.status == 200
         request = urllib.request.Request(f"http://127.0.0.1:{master.server_port}/api/surface")
         request.add_header("Authorization", "Bearer user-token")
-        with pytest.raises(urllib.error.HTTPError):
-            urllib.request.urlopen(request, timeout=10)
+        with urllib.request.urlopen(request, timeout=10) as response:
+            assert response.status == 200
         request = urllib.request.Request(f"http://127.0.0.1:{master.server_port}/api/surface")
         request.add_header("Authorization", "Bearer admin-token")
         with urllib.request.urlopen(request, timeout=10) as response:
@@ -301,14 +304,61 @@ def test_map_refuses_an_excluded_collection(tmp_path: Path, qdrant: str, openweb
         server.server_close()
 
 
-def test_learning_is_master_only(tmp_path: Path, qdrant: str, openwebui: str) -> None:
+class _LearningShare(BaseHTTPRequestHandler):
+    snapshot: ClassVar[dict] = {
+        "schema": "sparknet-distill-status/1",
+        "generated_at": "2026-11-04T00:00:00Z",
+        "config": {"teacher_model_id": "t", "student_base_model": "s"},
+        "runs": [{"run_id": "master-run", "state": "evaluated", "approved": True}],
+        "read_only": True,
+    }
+
+    def do_GET(self) -> None:
+        raw = json.dumps(self.snapshot, sort_keys=True).encode()
+        body = {
+            "ok": True,
+            "path": "learning/status.json",
+            "size": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "content_b64": base64.b64encode(raw).decode(),
+        }
+        payload = json.dumps(body).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def log_message(self, *args) -> None:
+        pass
+
+
+def test_learning_peer_proxies_the_master_snapshot(tmp_path: Path, qdrant: str, openwebui: str, monkeypatch) -> None:
+    share, _thread = _start(_LearningShare)
     peer_config, peer_root = _config(tmp_path, "peer", qdrant, openwebui)
+    peer_config["learning"] = {
+        "master_file_share_url": f"http://127.0.0.1:{share.server_port}",
+        "status_path": "/v1/file/learning/status.json",
+    }
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    key = Ed25519PrivateKey.generate().private_bytes(
+        serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption()
+    )
+    key_path = tmp_path / "state" / "keys" / "ed25519-node.key.b64"
+    key_path.parent.mkdir(parents=True, exist_ok=True)
+    key_path.write_text(base64.b64encode(key).decode() + "\n")
+    monkeypatch.setenv("SPARKNET_STATE_DIR", str(tmp_path / "state"))
     peer = _serve(peer_config, peer_root)
     master_config, master_root = _config(tmp_path, "master", qdrant, openwebui)
     master = _serve(master_config, master_root)
     try:
-        with pytest.raises(urllib.error.HTTPError):
-            _get(peer.server_port, "/api/learning", "console-token-1234567890")
+        status, body = _get(peer.server_port, "/api/learning", "console-token-1234567890")
+        data = json.loads(body)
+        assert status == 200 and data["ok"]
+        assert data["source"] == "master:4221"
+        assert data["runs"][0]["run_id"] == "master-run"
         status, body = _get(master.server_port, "/api/learning", "console-token-1234567890")
         data = json.loads(body)
         assert status == 200 and data["ok"]
@@ -318,6 +368,8 @@ def test_learning_is_master_only(tmp_path: Path, qdrant: str, openwebui: str) ->
         for server in (peer, master):
             server.shutdown()
             server.server_close()
+        share.shutdown()
+        share.server_close()
 
 
 def test_static_path_traversal_is_refused(tmp_path: Path, qdrant: str, openwebui: str) -> None:
@@ -349,3 +401,25 @@ def test_projects_view_reads_signed_project_pages(tmp_path: Path, qdrant: str, o
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_sparknet_menu_is_a_sidebar_group_not_a_floating_overlay() -> None:
+    text = (STATIC / "sparknet-menu.js").read_text()
+    assert "pinned-menu-items-list" in text
+    assert "sparknet-menu-group" in text
+    assert "SPARKNET" in text
+    assert "api/surface" in text
+    assert "position: fixed" not in text
+    assert "bottom: 72px" not in text
+
+
+def test_the_3d_map_has_explicit_zoom_controls() -> None:
+    html = (STATIC / "index.html").read_text()
+    js = (STATIC / "app.js").read_text()
+    css = (STATIC / "style.css").read_text()
+    for element in ("zoom-in", "zoom-out", "zoom-reset", "zoom-level"):
+        assert f'id="{element}"' in html
+    assert "setZoom" in js
+    assert '"wheel"' in js
+    assert "keydown" in js
+    assert "map-toolbar" in css

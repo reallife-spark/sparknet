@@ -34,7 +34,7 @@ HEALTHCHECK = CONTAINER / "healthcheck.sh"
 COMPOSE = ROLE_ROOT / "configs" / "container" / "docker-compose.yml"
 PREFLIGHT = ROLE_ROOT / "scripts" / "sparknet-chattr-preflight.sh"
 
-PINNED_OPENCODE = "1.18.35"
+PINNED_OPENCODE = "1.19.5"
 PINNED_WG = "0.0.20230223"
 
 

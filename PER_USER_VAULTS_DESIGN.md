@@ -1,14 +1,12 @@
 # Per-user knowledge vaults (`peer-<user_id>`) — design
 
-Status: **adopted as code; live proof open.** The peer-side provisioner, vault
-slice materialiser, KB wiring, re-indexer, tests and systemd unit are built
-(`peer-node/services/sparknet-vault-provisioner.py`,
-`peer-node/tests/test_vault_provisioner.py`). The only live provisioning
-evidence is from the **retired cluster2 pair** (`.131` Master / `.133` peer,
-2026-10-11/12), including the peer-`<id>` KB at 20 pages after two slow-embed
-timeouts. The current `agx64` peer / `agx32` Master pair has **not** been shown
-to provision a `peer-<id>` vault on a real signup/approve cycle. That live leg is
-`DoD: confirm: user`; peer `PLAN.md` Step 11 is therefore open again. This is the
+Status: **adopted as code; live-verified on the current pair 2026-10-31; extended 2026-11-05.** The peer now gives each approved user a `peer-<user_id>` model based on the OpenCode engine (`sparknet-chat`) with their personal KB and the structure-only KB attached. The Master is admin-only; there is no second user surface. The
+peer-side provisioner, vault slice materialiser, KB wiring, re-indexer, tests and
+systemd unit are built (`peer-node/services/sparknet-vault-provisioner.py`,
+`peer-node/tests/test_vault_provisioner.py`). A disposable account on agx64 was
+approved, provisioned with 26 files and a KB, then deleted with its vault, KB,
+model and state record; peer `PLAN.md` Step 11 is closed. The retired cluster2
+pair remains historical evidence, not current state. This is the
 fabric-root sibling of `CLUSTER_INFERENCE_DESIGN.md`: that note designs the
 cluster *job*; this one designs what a human user of a node's Open WebUI owns.
 

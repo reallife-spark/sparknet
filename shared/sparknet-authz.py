@@ -138,6 +138,7 @@ SIGNED_FIELDS = (
     "expires_at",
     "revoked",
     "department",
+    "node_pubkey_b64",
 )
 
 
@@ -164,6 +165,7 @@ def authorization_message(entry: dict[str, Any]) -> bytes:
             "expires_at": entry["expires_at"],
             "revoked": bool(entry.get("revoked", False)),
             "department": entry.get("department"),
+            "node_pubkey_b64": entry.get("node_pubkey_b64"),
         }
     except (KeyError, AuthzError, TypeError) as exc:
         raise AuthzError(f"authorization entry is malformed: {exc}") from exc
@@ -449,6 +451,7 @@ def sign_authorization(
     now: datetime | None = None,
     revoked: bool = False,
     department: str | None = None,
+    node_pubkey_b64: str | None = None,
 ) -> dict[str, Any]:
     """Build a signed registry entry. MASTER-SIDE ONLY — needs the Master private key.
 
@@ -471,6 +474,11 @@ def sign_authorization(
     unknown = [c for c in capabilities if c not in KNOWN_CAPABILITIES]
     if unknown:
         raise AuthzError(f"unknown capability/capabilities: {', '.join(unknown)}")
+    if node_pubkey_b64 is not None:
+        # Validate here so a registry entry can never carry a key that no
+        # verifier can parse. It is outside the identity projection, so adding
+        # it does not change the node fingerprint.
+        public_key_from_b64(node_pubkey_b64)
 
     stamp = now.isoformat().replace("+00:00", "Z")
     entry: dict[str, Any] = {
@@ -482,6 +490,7 @@ def sign_authorization(
         "expires_at": (now + timedelta(days=ttl_days)).isoformat().replace("+00:00", "Z"),
         "revoked": bool(revoked),
         "department": department,
+        "node_pubkey_b64": node_pubkey_b64,
     }
     entry["signature_b64"] = base64.b64encode(master_private_key.sign(authorization_message(entry))).decode("ascii")
     return entry

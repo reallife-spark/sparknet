@@ -25,6 +25,7 @@ ROLE_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG = ROLE_ROOT / "configs" / "distill.json"
 DEFAULT_STATE = Path("/srv/sparknet/distill")
 DEFAULT_OUT = Path.home() / "sparknet" / "master-node" / ".state" / "webui" / "distill-status.json"
+DEFAULT_SHARE_OUT = Path("/srv/sparknet/share/learning/status.json")
 
 
 def now_iso() -> str:
@@ -75,6 +76,19 @@ def snapshot(config_path: Path, state: Path) -> dict[str, Any]:
     }
 
 
+def shared_snapshot(value: dict[str, Any]) -> dict[str, Any]:
+    """Strip host paths and error detail before the snapshot crosses 4221."""
+    shared = {
+        "schema": value.get("schema"),
+        "generated_at": value.get("generated_at"),
+        "config": value.get("config"),
+        "runs": value.get("runs") or [],
+        "read_only": True,
+        "source": "master:distill-status",
+    }
+    return shared
+
+
 def write(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     payload = json.dumps(value, indent=2, sort_keys=True) + "\n"
@@ -97,10 +111,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--state", type=Path, default=DEFAULT_STATE)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--share-out", type=Path, default=None, help="sanitized copy for the 4221 read-only file share")
     args = parser.parse_args(argv)
     try:
-        write(args.out, snapshot(args.config, args.state))
+        value = snapshot(args.config, args.state)
+        write(args.out, value)
         print(f"sparknet-distill-status: wrote {args.out}", file=sys.stderr)
+        if args.share_out:
+            write(args.share_out, shared_snapshot(value))
+            print(f"sparknet-distill-status: wrote {args.share_out}", file=sys.stderr)
         return 0
     except Exception as exc:
         print(f"sparknet-distill-status: {exc}", file=sys.stderr)

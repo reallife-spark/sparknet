@@ -1,13 +1,13 @@
 ---
 title: Sparknet admin federation — cross-node administration design
 updated: 2026-10-26
-status: design (adopted as code; live proof on retired cluster2; current pair open)
+status: design (adopted as code; live on the current pair 2026-11-03; KDE push operator-confirmed)
 ---
 
 # Sparknet admin federation
 
-**Adopted as code through the console; live deploy proven on the retired
-cluster2 pair, not on the current pair.**
+**Adopted as code through the console; live on the current `agx64`/`agx32`
+pair since 2026-11-03 (the retired cluster2 proof is historical).**
 This page records the operator decisions and the build plan for one capability:
 a Master-side administrator who can see and supervise the Open WebUI users,
 privileges and activity of **every node in the fabric**, while nobody can log
@@ -15,12 +15,14 @@ in as an administrator on a peer node. The capability name it needs
 (`admin-supervise`) is **reserved and wired cross-role** (contracts +
 `shared/sparknet-authz.py`, fabric Step 29 phase 2): the Master's signer
 produces signed admin requests and the peer's bridge `/admin/*` route executes
-them, inert until the peer's own registry grants the capability. Phases 1–4
-(the node agent, the signed transport, and the Master console with its event
-feed and KDE push) are landed as code and tested. Phase 5 ran live on the
-**retired** `.131` Master / `.133` peer pair on 2026-10-12. The current
-`agx64` peer / `agx32` Master pair has not redeployed it; that leg remains
-`DoD: confirm: user`.
+them, gated by the peer's own registry grant. Phases 1–4 (the node agent, the
+signed transport, and the Master console with its event feed and KDE push) are
+landed as code and tested. Phase 5 ran live on the **retired** `.131` Master /
+`.133` peer pair on 2026-10-12, and on the current `agx64` peer / `agx32`
+Master pair on 2026-11-03: `users`, `events` (500 rows) and `knowledge` return
+200 over the signed overlay, after the agx64 bridge was restarted so its
+in-process `KNOWN_CAPABILITIES` matched the current registry. A real KDE
+paired-device push remains `DoD: confirm: user`.
 
 Related, already-proposed surface: the per-user vaults design in
 [`PER_USER_VAULTS_DESIGN.md`](PER_USER_VAULTS_DESIGN.md) already names the
@@ -219,9 +221,9 @@ the approval decision is the Master's.
 | 0 | This design page; fabric `PLAN.md` step; peer and master plan pointers. | `make contract-test`, fabric suite green with only doc + plan edits. | **landed 2026-10-12** |
 | 1 | Compose: signup + `pending` + audit trail; `sparknet-admin-agent.py`; unit + installer; tests. | peer suite green; `--help` contract; relocatable. | **landed 2026-10-12** |
 | 2 | `admin-supervise` in `contracts/` + `shared/`; bridge `/admin/*` route; signer `sign-admin-request`. | `make contract-test`, master parity green. | **landed as code + signed plumbing 2026-10-12**; signed route proven on the retired cluster2 pair |
-| 3 | Master admin console; deploy the declared admin surface; service-account enforcement. | console serves; no human admin on peer (DoD: confirm: user). | **landed as code 2026-10-12** (`sparknet-admin-console.py`, `make console`); the admin webui runs on the current Master (`agx32`, `10.100.0.1:8088`), but the cross-node console deploy is the open current-pair leg |
+| 3 | Master admin console; deploy the declared admin surface; service-account enforcement. | console serves; no human admin on peer (DoD: confirm: user). | **landed as code 2026-10-12** (`sparknet-admin-console.py`, `make console`); the admin webui runs on the current Master (`agx32`, `10.100.0.1:8088`), and the current-pair cross-node console answered 2026-11-03 |
 | 4 | KDE Connect + live feed notifications. | plugin path proven against a paired device. | **landed as code 2026-10-12** (`feed --ping`); a real paired-device ping on the current pair is still `DoD: confirm: user` |
-| 5 | Live deploy on the retired `.131`/`.133` pair (turns the overlay-reachable surface on; bridge binds loopback by default). | `DoD: confirm: user`. | **executed on the retired cluster2 pair 2026-10-12**; the runbook is now historical (`contracts/admin-federation-runbook.md`). The current `agx64`/`agx32` pair has not redeployed it. Recon surfaced **F1**, fixed in code (route-class source policy + repeatable `--bind`). |
+| 5 | Live deploy on the retired `.131`/`.133` pair (turns the overlay-reachable surface on; bridge binds loopback by default). | `DoD: confirm: user`. | **executed on the retired cluster2 pair 2026-10-12** and on the current `agx64`/`agx32` pair 2026-11-03 (admin agent, dual-bound bridge, signed `users`/`events`/`knowledge`); the runbook remains `contracts/admin-federation-runbook.md`. Recon surfaced **F1**, fixed in code (route-class source policy + repeatable `--bind`). |
 | 6 | Full gates: `make test-all`, `contract-test`, `lint`, `validate`, `keys-check`, `shims-check`, `bundle-verify`, `precommit`. | green. | re-run whenever a phase lands |
 
 ## Boundaries — what this is not

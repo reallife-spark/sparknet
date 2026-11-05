@@ -36,7 +36,7 @@ services:
   # loopback-only dispatch bridge. Ollama is the node's infra container and
   # Qdrant is declared beside this file; both are reachable on `127.0.0.1`.
   open-webui:
-    image: ghcr.io/open-webui/open-webui:${WEBUI_TAG:-v0.12.2}
+    image: ghcr.io/open-webui/open-webui:${WEBUI_TAG:-v0.13.0}
     container_name: sparknet-webui
     restart: unless-stopped
     # Shares the host netns (LLM: the bridge is loopback-only). It binds host
@@ -76,23 +76,19 @@ services:
       # Preserve the running instance's session-secret across a compose
       # project migration. Empty on a fresh deploy; Open WebUI generates one.
       WEBUI_SECRET_KEY: "${WEBUI_SECRET_KEY:-}"
-      # Step 5 surface — the node's agents as OpenAI-compatible models on THIS
-      # node's dispatch bridge (loopback 4096; on the host netns the loopback
-      # address is the host's own). The roles come from
-      # ../manifests/agent-models.json: declared here, not clicked into Open
-      # WebUI's database, so a redeploy cannot lose the surface.
-      OPENAI_API_BASE_URLS: "http://127.0.0.1:4096/v1"
-      # A signed session grant for this stack, mounted at deploy time. Never a
-      # committed token — grants expire, and a standing bearer token in the tree
-      # would be the quieter way to lose authority. Compose fails loudly while
-      # the variable is unset.
-      OPENAI_API_KEYS: "${SPARKNET_WEBUI_BRIDGE_GRANT:?set at deploy time; do not commit a grant}"
+      # The OpenCode engine is the agent execution path. It is an
+      # OpenAI-compatible endpoint on loopback 4204; the engine maps the
+      # forwarded WebUI user to that user's private vault sandbox. The old
+      # dispatch-bridge model surface (fix/plan/build acks) is deliberately
+      # removed: the bridge remains the authority/vault tool surface, never a
+      # fake assistant.
+      OPENAI_API_BASE_URLS: "http://127.0.0.1:4204/v1"
+      OPENAI_API_KEYS: "${SPARKNET_OPENCODE_ENGINE_TOKEN:?set at deploy time; do not commit the engine token}"
       MODEL_FILTER_ENABLED: "true"
-      MODEL_FILTER_LIST: "qwen3.6-35b-262k:latest,qwen3.6-35b-262k-q8:latest,llama3.2:latest,plan,build,vault,node-orchestrator,masterspike"
-      # The default chat model is a LOCAL Ollama model (present on every node),
-      # not a bridge agent: chat still answers even if the bridge grant lapses,
-      # and the node's agents stay selectable via the filter above.
-      DEFAULT_MODELS: "llama3.2:latest"
+      MODEL_FILTER_LIST: "sparknet-chat,sparknet-plan,sparknet-build,qwen3.6-35b-262k:latest,qwen3.6-35b-262k-q8:latest,llama3.2:latest,sparknet-masterspike:latest"
+      # The default is the vault-aware engine chat. A local Ollama model remains
+      # selectable as a fallback if the engine is down.
+      DEFAULT_MODELS: "sparknet-chat"
       # The memory filter is a service adapter, not a second memory store. It
       # talks to the loopback Python gateway, which maps the signed-in WebUI
       # user to that user's provisioned vault before the Go store is touched.
@@ -105,6 +101,16 @@ services:
       # 02_Daily, 03_Sources, .state). The corpus builder is
       # scripts/sparknet-rag-corpus.py.
       RAG_INGESTION_ENABLED: "true"
+      # Keep the CPU MiniLM model the existing KBs were embedded with. The
+      # node's Qwen3/Nomic Ollama embeddings were measured at ~20 s per request
+      # on agx64 (GPU shared with the text model), which makes a reindex
+      # unusable. Upgrade only when a dedicated embed engine is resident.
+      RAG_EMBEDDING_ENGINE: ""
+      RAG_EMBEDDING_MODEL: "sentence-transformers/all-MiniLM-L6-v2"
+      ENABLE_RAG_HYBRID_SEARCH: "true"
+      RAG_TOP_K: "8"
+      RAG_CHUNK_SIZE: "1000"
+      RAG_CHUNK_OVERLAP: "150"
       VECTOR_DB: "qdrant"
       # Qdrant is declared in docker-compose.qdrant.yml and bound to loopback.
       # The key is deploy-time; no secret is committed. Open WebUI persists
@@ -114,6 +120,14 @@ services:
       QDRANT_URI: "http://127.0.0.1:6333"
       QDRANT_API_KEY: "${SPARKNET_QDRANT_API_KEY:?set at deploy time; do not commit}"
       QDRANT_ON_DISK: "true"
+      # One memory plane: the Sparknet memory filter/gateway. Open WebUI's
+      # built-in memory store is not a second vault.
+      ENABLE_MEMORIES: "false"
+      ENABLE_WEB_SEARCH: "false"
+      ENABLE_CODE_INTERPRETER: "false"
+      ENABLE_IMAGE_GENERATION: "false"
+      WEBUI_NAME: "Sparknet Node"
+      WEBUI_URL: "${SPARKNET_WEBUI_PUBLIC_URL:-http://127.0.0.1:8181}"
     volumes:
       - open-webui-data:/app/backend/data
 

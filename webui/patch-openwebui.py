@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add the Sparknet console entries to an Open WebUI 0.12.x checkout.
+"""Add the Sparknet console entries to an Open WebUI 0.12.x/0.13.x checkout.
 
 The patch is deliberately tiny and idempotent: three pinned menu items that point
 at the same-origin console. The console itself is served by nginx, so this script
@@ -37,7 +37,9 @@ def patch(text: str) -> tuple[str, bool]:
         "const DEFAULT_PINNED_ITEMS = ['notes', 'workspace', 'sparknet-mesh', 'sparknet-vectors', 'sparknet-learning'];"
     )
     if old_default not in text:
-        raise PatchError("DEFAULT_PINNED_ITEMS anchor not found; this is not Open WebUI 0.12.x")
+        raise PatchError(
+            "DEFAULT_PINNED_ITEMS anchor not found; this is not a supported Open WebUI 0.12.x/0.13.x checkout"
+        )
     text = text.replace(old_default, new_default, 1)
 
     old_items = "$: pinnedItems = $settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS;"
@@ -102,7 +104,7 @@ def patch(text: str) -> tuple[str, bool]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="patch Open WebUI 0.12.x with the Sparknet console menu")
+    parser = argparse.ArgumentParser(description="patch Open WebUI 0.12.x/0.13.x with the Sparknet console menu")
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--check", action="store_true")

@@ -58,6 +58,7 @@ def _load(name: str, label: str) -> ModuleType:
 
 authz = _load("sparknet-authz", "sparknet_authz_bridge")
 prov = _load("sparknet-provenance", "sparknet_provenance_bridge")
+nocturnal = _load("sparknet-nocturnal", "sparknet_nocturnal_bridge_test")
 
 
 def _load_bridge() -> ModuleType:
@@ -765,3 +766,86 @@ def test_an_unreadable_registry_still_propagates(ctx: dict) -> None:
     ctx["vault"].joinpath("manifests", "node-authorizations.json").unlink()
     with pytest.raises(OSError):
         bridge.registry()
+
+
+# --- cluster job ingress (Seam E) -------------------------------------------
+
+
+def _cluster_registry(ctx: dict, *, capabilities: list[str] | None = None) -> str:
+    caps = list(capabilities or ["telemetry", "cluster-serve"])
+    node_key = (ctx["state"] / "keys" / "ed25519-node.key.b64").read_text().strip()
+    node_pub = authz.public_key_b64(authz.private_key_from_b64(node_key).public_key())
+    entry = authz.sign_authorization(
+        ctx["identity"],
+        ctx["master_key"],
+        caps,
+        now=NOW,
+        node_pubkey_b64=node_pub,
+    )
+    registry = {
+        "schema_version": "1.0",
+        "master_public_key_b64": _master_pub_b64(ctx["master_key"]),
+        "description": "cluster test registry",
+        "authorizations": [entry],
+    }
+    path = ctx["vault"] / "manifests" / "node-authorizations.json"
+    path.write_text(json.dumps(registry, indent=2) + "\n")
+    key_path = ctx["vault"] / "manifests" / "keys" / "master-ed25519.pub.b64"
+    key_path.parent.mkdir(parents=True, exist_ok=True)
+    key_path.write_text(_master_pub_b64(ctx["master_key"]) + "\n")
+    return node_pub
+
+
+def _cluster_job(ctx: dict) -> dict:
+    return {
+        "job_id": "job-cluster-1",
+        "conversation_id": "conv-cluster-1",
+        "initiator_node_id": ctx["identity"]["node_id"],
+        "created_at": "2026-10-07T11:00:00Z",
+        "expires_at": "2026-10-07T13:00:00Z",
+        "mode": "decompose",
+        "prompt": "explain the fabric",
+        "subtasks": [
+            {
+                "node_id": ctx["identity"]["node_id"],
+                "subtask_id": "subtask-1",
+                "instruction": "answer briefly",
+                "context_refs": [],
+            }
+        ],
+    }
+
+
+def test_cluster_job_requires_a_master_signature_and_cluster_serve(server, ctx):
+    _cluster_registry(ctx, capabilities=["telemetry"])
+    job = _cluster_job(ctx)
+    job["signature_b64"] = authz.sign_bytes(ctx["master_key"], authz.cluster_job_message(job))
+    status, payload = server.request("POST", "/v1/cluster/submit", {"job": job, "lease_id": "lease-test"})
+    assert status == 403
+    assert payload["reason"] == "capability_missing"
+
+
+def test_cluster_job_executes_and_returns_a_signed_result(server, ctx):
+    node_pub = _cluster_registry(ctx)
+    server.bridge._cluster_execute_enabled = True
+    server.bridge._cluster_executor = lambda _subtask: "the fabric is two roles"
+    server.bridge._cluster_artifact_git_dir = str(ctx["state"] / "nocturnal.git")
+    job = _cluster_job(ctx)
+    job["signature_b64"] = authz.sign_bytes(ctx["master_key"], authz.cluster_job_message(job))
+    status, payload = server.request("POST", "/v1/cluster/submit", {"job": job, "lease_id": "lease-test"})
+    assert status == 200, payload
+    assert payload["status"] == "completed"
+    status, result = server.request("GET", "/v1/cluster/result/job-cluster-1")
+    assert status == 200, result
+    partial = result["result"]["results"][0]
+    assert partial["output"] == "the fabric is two roles"
+    assert partial["participant_node_id"] == ctx["identity"]["node_id"]
+    assert nocturnal.verify_result(partial, node_pub)
+    assert (ctx["vault"] / "01_Inbox" / "nocturnal" / "lease-test" / "job-cluster-1" / "manifest.json").is_file()
+
+
+def test_cluster_job_without_a_signature_is_refused(server, ctx):
+    _cluster_registry(ctx)
+    status, payload = server.request("POST", "/v1/cluster/submit", {"job": _cluster_job(ctx), "lease_id": "lease-test"})
+    assert status == 403
+    assert payload["reason"] == "missing-signature"

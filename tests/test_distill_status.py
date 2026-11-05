@@ -52,3 +52,20 @@ def test_snapshot_exposes_metadata_not_dataset_content(tmp_path: Path) -> None:
     assert out.is_file()
     assert stat.S_IMODE(out.stat().st_mode) == 0o644
     assert json.loads(out.read_text())["read_only"] is True
+
+
+def test_shared_snapshot_strips_host_paths_and_errors(tmp_path: Path) -> None:
+    value = {
+        "schema": "sparknet-distill-status/1",
+        "generated_at": "2026-11-04T00:00:00Z",
+        "config": {"teacher_model_id": "t"},
+        "runs": [{"run_id": "run-1"}],
+        "state_dir": "/srv/sparknet/distill",
+        "errors": ["distill state at /srv/secret is unreadable"],
+        "read_only": True,
+    }
+    shared = status.shared_snapshot(value)
+    assert "state_dir" not in shared
+    assert "errors" not in shared
+    assert "/srv/" not in json.dumps(shared)
+    assert shared["source"] == "master:distill-status"

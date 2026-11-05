@@ -60,8 +60,15 @@
           <article class="card">
             <h3>3D data cloud <span class="pill small">pilot projection</span></h3>
             <p class="muted" id="map-note">Select a collection.</p>
+            <div class="map-toolbar" aria-label="3D map controls">
+              <button id="zoom-out" type="button" title="Zoom out" aria-label="Zoom out">−</button>
+              <span id="zoom-level" class="pill small">100%</span>
+              <button id="zoom-in" type="button" title="Zoom in" aria-label="Zoom in">+</button>
+              <button id="zoom-reset" type="button" title="Reset zoom" aria-label="Reset zoom">Reset</button>
+              <span class="muted map-hint">scroll or pinch to zoom · drag to rotate</span>
+            </div>
             <div class="map-wrap">
-              <canvas id="map" width="900" height="560" aria-label="3D vector data cloud"></canvas>
+              <canvas id="map" width="900" height="560" tabindex="0" aria-label="3D vector data cloud"></canvas>
               <div id="map-tooltip" class="tooltip" hidden></div>
             </div>
             <div class="legend" id="map-legend"></div>

@@ -47,7 +47,7 @@ FROM ${VLLM_BASE}
 
 # --- pins --------------------------------------------------------------------
 # Pinned, never `latest`: a mutating tag defeats the point of a node image.
-ARG OPENCODE_VERSION=1.18.35
+ARG OPENCODE_VERSION=1.19.5
 ARG NATS_VERSION=2.14.2
 # Optional DCGM runtime for the cgo GPU sidecar's health half. Default off so
 # the build is deterministic on any base; the sidecar degrades to

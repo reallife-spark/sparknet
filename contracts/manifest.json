@@ -11,7 +11,7 @@
       "contract": "distillation-schema",
       "file": "distillation-schema.json",
       "schema_version": 1,
-      "sha256": "aa98192c92b802f8791eada79ef521d36c299b5b2fb0439e5484b30d4b5824b5"
+      "sha256": "0b15bff116dc200e61d2e9dbcde579fc3d699b75e21dfcb7f34e98044c16fbdf"
     },
     {
       "contract": "guard-approval",
@@ -23,7 +23,7 @@
       "contract": "identity-schema",
       "file": "identity-schema.json",
       "schema_version": "1.0",
-      "sha256": "bf4c51af6b13d8ab736aa9867d43ecfffd4de083bbb6c0380196fa76f634ae2e"
+      "sha256": "57160afc335d0b5c26ee35928626392ec7d84c19dc216d7ff4624f8ccc70aaf5"
     },
     {
       "contract": "inventory-schema",
@@ -44,6 +44,12 @@
       "sha256": "07b47dc4c1ab39de703976cc33eee07c368af9f3c6a4e4004eec4a05d0409f01"
     },
     {
+      "contract": "nocturnal-artifact-schema",
+      "file": "nocturnal-artifact-schema.json",
+      "schema_version": "1.0",
+      "sha256": "3fae87633463cdb972246fedbc5274b9e121a47cd7c814d25544ae165f755459"
+    },
+    {
       "contract": "overlay",
       "file": "overlay.json",
       "schema_version": "1.0",
@@ -53,7 +59,7 @@
       "contract": "ports",
       "file": "ports.json",
       "schema_version": "2.0",
-      "sha256": "1ddae1a48f7d22bceaa363c908a23914a12ce0c6726605290bdac9bd9b4ce492"
+      "sha256": "eea88acef7f3984a51c45fd43dea7abdafe36e023fa299c322b464eab4e4503a"
     },
     {
       "contract": "proposal-schema",
@@ -77,7 +83,7 @@
       "contract": "registry-schema",
       "file": "registry-schema.json",
       "schema_version": "1.0",
-      "sha256": "0f3b79f15a2692c7788a53f223faf1f6851321ebeaa34fb070aa35ad831b53e6"
+      "sha256": "70a8b15bd1919d92eb4eebd39b05a032682f9dc77cdcdeb4639a60ed06fffd5a"
     },
     {
       "contract": "rfi-schema",
@@ -140,6 +146,13 @@
       "implementation_state": "implemented",
       "runtime": "not-listening",
       "service": "node-opencode"
+    },
+    "4204": {
+      "bound_by": "node",
+      "host_published": false,
+      "implementation_state": "implemented",
+      "runtime": "not-verifiable-here",
+      "service": "node-opencode-engine"
     },
     "4222": {
       "bound_by": "node",

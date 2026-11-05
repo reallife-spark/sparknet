@@ -6,6 +6,7 @@
   "menus": [
     "mesh",
     "vectors",
+    "learning",
     "memory",
     "projects"
   ],
@@ -42,6 +43,10 @@
   },
   "distill": null,
   "openwebui_url": "http://127.0.0.1:8181",
+  "learning": {
+    "master_file_share_url": "http://10.100.0.1:4221",
+    "status_path": "/v1/file/learning/status.json"
+  },
   "memory": {
     "gateway_url": "http://127.0.0.1:4093",
     "local_token_file": ".state/memory.local.token",
