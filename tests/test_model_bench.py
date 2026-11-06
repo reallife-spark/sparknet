@@ -96,7 +96,7 @@ def server():
 def _config(base_url: str) -> dict:
     return {
         "schema": "sparknet-model-bakeoff/1",
-        "role": "peer",
+        "role": "master",
         "node": "agx64",
         "provider": {"kind": "ollama", "base_url": base_url},
         "options": {
@@ -160,25 +160,25 @@ def test_run_builds_a_leaderboard(server: str, tmp_path: Path) -> None:
     result = bench.run(
         config=config,
         catalog={},
-        role="peer",
+        role="master",
         candidates=[],
         out=out,
         dry_run=False,
     )
     assert result["leaderboard"][0]["quality_pass_rate"] == 1.0
     assert out.is_file()
-    assert json.loads(out.read_text())["role"] == "peer"
+    assert json.loads(out.read_text())["role"] == "master"
 
 
-def test_validate_rejects_a_master_teacher(server: str) -> None:
+def test_validate_rejects_a_peer_teacher(server: str) -> None:
     config = _config(server)
-    config["role"] = "master"
-    errors = bench.validate_config(config, "master", {})
+    config["role"] = "peer"
+    errors = bench.validate_config(config, "peer", {})
     assert any("role must be student" in error for error in errors)
 
 
 def test_dry_run_prints_candidates(server: str, capsys) -> None:
     config = _config(server)
-    result = bench.run(config=config, catalog={}, role="peer", candidates=[], out=None, dry_run=True)
+    result = bench.run(config=config, catalog={}, role="master", candidates=[], out=None, dry_run=True)
     assert result["dry_run"] is True
     assert "test-teacher" in capsys.readouterr().out

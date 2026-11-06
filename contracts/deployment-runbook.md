@@ -6,7 +6,9 @@
 > (`sparknet-node-0001`, `10.100.0.2`) / `agx32` Master
 > (`sparknet-node-0002`, `10.100.0.1`)**. Do not copy a role-bound command
 > without re-mapping it. Use `MEMORY.md`'s live-fabric section for current
-> addresses and state dirs.
+> addresses and state dirs. Fabric Step 88 will invert the pair again; the
+> planned procedure is [`role-inversion-runbook.md`](role-inversion-runbook.md),
+> and it is not executed until the plan records the dated live evidence.
 >
 > Status: **Phase 0–1 complete; handoff being executed.** The two nodes were
 > moved onto the `192.168.178.0/24` LAN on 2026-10-12; the old

@@ -237,7 +237,7 @@ def test_the_declared_models_match_the_webui_model_filter():
     local_ids = [m["id"] for m in manifest.get("local_models", [])]
     assert {"sparknet-chat", "sparknet-plan", "sparknet-build", "llama3.2:latest"} <= set(filter_list)
     assert any("masterspike" in item for item in filter_list)
-    assert set(local_ids) <= set(filter_list), "the local teacher candidates stay selectable"
+    assert set(local_ids) <= set(filter_list), "the local student candidates stay selectable"
 
 
 # --- the boundary the stack must not cross ------------------------------------

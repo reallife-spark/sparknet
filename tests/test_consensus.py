@@ -480,6 +480,41 @@ def test_a_new_root_supersedes_the_old_one(consensus, cluster):
     )
 
 
+def test_reformation_may_change_identity_fields_but_not_node_ids(consensus, cluster):
+    """A role inversion keeps the node ids but changes their identity fields.
+
+    Moving the Master from one host to another changes the role, overlay address,
+    WireGuard key and node identity key, so every fingerprint changes. The
+    re-formation rule is about *membership*, not byte-identical identities: the
+    same node ids may be re-described, and the new root must still chain.
+    """
+    first = consensus.attach_root_signatures(_root(cluster["members"], "beta", nonce="first"), cluster["private"])
+    reformed_members = [dict(member) for member in cluster["members"]]
+    for member in reformed_members:
+        member["fingerprint"] = hashlib.sha256(f"role-swap-fp-{member['node_id']}".encode()).hexdigest()
+        member["wireguard_pubkey"] = base64.b64encode(
+            hashlib.sha256(f"role-swap-wg-{member['node_id']}".encode()).digest()
+        ).decode()
+
+    chained = consensus.attach_root_signatures(
+        _root(
+            reformed_members,
+            "gamma",
+            nonce="role-swap",
+            previous_root_id=consensus.root_id(first),
+            version="1.2",
+            epoch=1,
+        ),
+        cluster["private"],
+    )
+
+    assert {m["node_id"] for m in chained["members"]} == {m["node_id"] for m in first["members"]}
+    assert chained["members"][0]["fingerprint"] != first["members"][0]["fingerprint"]
+    assert consensus.verify_root(chained, trust=first) == (True, consensus.REASON_OK)
+    assert consensus.verify_chain([chained, first]) == (True, consensus.REASON_OK)
+    assert consensus.authorised_master_pubkey(chained) == chained["master_pubkey"]
+
+
 def test_a_new_nonce_without_the_chain_is_refused(consensus, cluster):
     """The F1 gap, closed: a well-signed root that does not descend from the
     held root is refused on the trust path, even with a fresh nonce."""

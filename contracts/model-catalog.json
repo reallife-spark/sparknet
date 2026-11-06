@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0",
   "contract": "model-catalog",
-  "description": "The operator-owned model catalog. It names every model the fabric may pull, which node may serve it, the quant, the runtime, the license and the approximate fit. Weights are not knowledge, not authority and never enter a vault, a bundle or 4223. The peer (agx64, 64 GB) serves the teacher; the Master (agx32, 32 GB) serves the student. The teacher is deliberately not eligible for agx32: a 32 GB node cannot serve it, and a cold backup of those weights there is not a deployment.",
-  "updated": "2026-11-01",
+  "description": "The operator-owned model catalog. It names every model the fabric may pull, which node may serve it, the quant, the runtime, the license and the approximate fit. Weights are not knowledge, not authority and never enter a vault, a bundle or 4223. The Master host (agx64, 64 GB) serves the teacher; the peer host (agx32, 32 GB) serves the student. The teacher is deliberately not eligible for agx32: a 32 GB node cannot serve it, and a cold backup of those weights there is not a deployment.",
+  "updated": "2026-11-06",
   "store": {
     "root": "/mnt/ai/models",
     "manifest_dir": "manifests",
@@ -10,21 +10,21 @@
     "note": "The store is a host path, never a vault path. A model pull is an operator action; it is not an LLM tool."
   },
   "role_placement": {
-    "peer": {
+    "master": {
       "node": "agx64",
       "roles": [
         "teacher",
         "embedding"
       ],
-      "why": "64 GB unified memory is the only node that can hold the teacher with context headroom."
+      "why": "The 64 GB Master host is the only node that can hold the teacher with context headroom. The Master uses it for authority-plane reasoning and distillation, not user chat."
     },
-    "master": {
+    "peer": {
       "node": "agx32",
       "roles": [
         "student",
         "embedding"
       ],
-      "why": "32 GB unified memory is the student node; it trains and serves the smaller same-family model."
+      "why": "The 32 GB peer host trains and serves the smaller same-family student model for user chat."
     }
   },
   "models": [

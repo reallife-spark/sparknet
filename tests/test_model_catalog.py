@@ -2,8 +2,8 @@
 
 The catalog is the closed list of models a node may pull. It is not knowledge
 and not authority, so the tests here check placement and shape rather than
-serving behaviour: the teacher belongs to the 64 GB peer, the student to the
-32 GB Master, and a teacher must never be eligible for agx32.
+serving behaviour: the teacher belongs to the 64 GB Master host, the student to
+the 32 GB peer host, and a teacher must never be eligible for agx32.
 """
 
 from __future__ import annotations
@@ -43,14 +43,14 @@ def test_catalog_is_valid(catalog: dict) -> None:
     assert pull.validate_catalog(catalog) == []
 
 
-def test_teacher_is_only_eligible_on_the_64gb_peer(catalog: dict) -> None:
+def test_teacher_is_only_eligible_on_the_64gb_master(catalog: dict) -> None:
     teachers = [model for model in catalog["models"] if model["role"] == "teacher"]
     assert teachers, "the catalog has no teacher candidate"
     for model in teachers:
         assert model["nodes"] == ["agx64"], f"{model['id']} must not be eligible on agx32"
 
 
-def test_student_is_only_eligible_on_the_32gb_master(catalog: dict) -> None:
+def test_student_is_only_eligible_on_the_32gb_peer(catalog: dict) -> None:
     students = [model for model in catalog["models"] if model["role"] == "student"]
     assert students, "the catalog has no student candidate"
     for model in students:
@@ -64,7 +64,7 @@ def test_embeddings_are_available_on_both_nodes(catalog: dict) -> None:
         assert set(model["nodes"]) == {"agx64", "agx32"}
 
 
-def test_selecting_a_teacher_for_the_master_fails(catalog: dict) -> None:
+def test_selecting_a_teacher_for_the_peer_fails(catalog: dict) -> None:
     with pytest.raises(pull.PullError):
         pull.select_models(catalog, "agx32", ["qwen3.8-flash-next-3.84bpw"])
 
@@ -91,11 +91,11 @@ def test_master_runtime_config_matches_the_catalog(catalog: dict) -> None:
     assert runtime.validate_config(config, "master", models) == []
 
 
-def test_master_runtime_rejects_a_teacher_profile(catalog: dict) -> None:
-    config = json.loads((ROOT / "master-node" / "configs" / "model-runtime" / "runtime.json").read_text())
+def test_peer_runtime_rejects_a_teacher_profile(catalog: dict) -> None:
+    config = json.loads((ROOT / "peer-node" / "configs" / "model-runtime" / "runtime.json").read_text())
     config["profiles"]["teacher"] = {
         "model_id": "qwen3.8-flash-next-3.84bpw",
-        "compose_file": "peer-node/configs/model-runtime/docker-compose.teacher.yml",
+        "compose_file": "master-node/configs/model-runtime/docker-compose.teacher.yml",
         "project": "sparknet-teacher",
         "profile": "teacher",
         "services": ["teacher"],
@@ -105,15 +105,15 @@ def test_master_runtime_rejects_a_teacher_profile(catalog: dict) -> None:
         "conflicts": [],
     }
     models = {model["id"]: model for model in catalog["models"]}
-    errors = runtime.validate_config(config, "master", models)
+    errors = runtime.validate_config(config, "peer", models)
     assert any("not eligible for agx32" in error for error in errors)
 
 
 def test_compose_profiles_are_on_demand_and_loopback() -> None:
     yaml = pytest.importorskip("yaml")
     for path in (
-        ROOT / "peer-node" / "configs" / "model-runtime" / "docker-compose.teacher.yml",
-        ROOT / "master-node" / "configs" / "model-runtime" / "docker-compose.student.yml",
+        ROOT / "master-node" / "configs" / "model-runtime" / "docker-compose.teacher.yml",
+        ROOT / "peer-node" / "configs" / "model-runtime" / "docker-compose.student.yml",
     ):
         data = yaml.safe_load(path.read_text())
         assert data["services"]

@@ -2,10 +2,11 @@
 > Standing state only. Read at session start; **replace, never append**.
 > History belongs in `log.md` and `sessions/YYYY-MM-DD.md`; pre-2026-10-31
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
-Updated: 2026-11-05
+Updated: 2026-11-06
 ## Plan cursor
-- `PLAN.md` — `current: 87` (WebUI/OpenCode engine step complete; 84G browser click and Master 9G window remain user-confirmed).
-- Open live legs (2026-11-05): 84G browser click; Master 9G 02:00–05:00 window; Step 86 full survey/promotion drill; 87 browser click-through.
+- `PLAN.md` — `current: 88` (role inversion: `agx64` Master / `agx32` peer; Step 89 is the Gemini blueprint adoption).
+- Parked live legs: 84G browser click; 86C/86D full survey/promotion drill; 87 browser click-through; Master 9G nocturnal window. Do not run 9G during the role inversion.
+- Role inversion is **planned, not executed**: the live pair is still `agx64` peer / `agx32` Master until Step 88 lands. Committed templates and the runbook now target the inverted pair.
 ## Live fabric
 - **`agx64` = peer = `sparknet-node-0001`** (`10.100.0.2/32`); **`agx32` =
   master = `sparknet-node-0002`** (`10.100.0.1/32`). Trust root `fa6f4fa5…`;

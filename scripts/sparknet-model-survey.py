@@ -26,8 +26,8 @@ CATALOG = ROOT / "contracts" / "model-catalog.json"
 STORE = Path(os.environ.get("SPARKNET_MODEL_STORE", "/mnt/ai/models"))
 BENCH = ROOT / "scripts" / "sparknet-model-bench.py"
 ROLE_CONFIG = {
-    "agx64": ROOT / "peer-node" / "configs" / "model-runtime" / "bakeoff.json",
-    "agx32": ROOT / "master-node" / "configs" / "model-runtime" / "bakeoff.json",
+    "agx64": ROOT / "master-node" / "configs" / "model-runtime" / "bakeoff.json",
+    "agx32": ROOT / "peer-node" / "configs" / "model-runtime" / "bakeoff.json",
 }
 OLLAMA = "http://127.0.0.1:11434"
 NODE_MEMORY_GB = {"agx64": 64, "agx32": 32}

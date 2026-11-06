@@ -43,16 +43,16 @@
   "why_these_agents": "plan and build are opencode built-ins (present in any opencode node); `vault` and `sparknet-node` are the node's own agent papers, bundled with the role; `masterspike` is the Step 7 format carrier \u2014 a model, selectable like the agents, that holds no signing capability (peer PLAN Step 7 DoD 4). Each id here is a role the node births, not a model the bridge invents \u2014 the bridge still discovers on-disk pods (`.opencode/agents/*.md`, `agents/*/`) as its second, unselectable tier.",
   "local_models": [
     {
-      "id": "qwen3.6-35b-262k:latest",
-      "label": "Qwen3.6 35B-A3B Q4_K_M (teacher)",
-      "role": "teacher",
-      "why": "The live teacher winner on agx64: 22.22 tok/s, 21.21 GiB, 100% on the fixed suite (Q4_K_M, Ollama). Selectable, not the default; llama3.2 remains the fallback."
+      "id": "qwen3.5-9b-q8:latest",
+      "label": "Qwen3.5 9B Q8 (student)",
+      "role": "student",
+      "why": "The live student winner on agx32: 11.27 tok/s, 8.06 GiB, 100% on the fixed suite (Q8_0, Ollama). Selectable, not the default; llama3.2 remains the fallback."
     },
     {
-      "id": "qwen3.6-35b-262k-q8:latest",
-      "label": "Qwen3.6 35B-A3B Q8 (teacher reference)",
-      "role": "teacher-reference",
-      "why": "Quality reference: 17.79 tok/s, 34.39 GiB; requires vLLM/aux stopped."
+      "id": "qwen3.8-27b-q4:latest",
+      "label": "Qwen3.8 27B Q4 (student-large)",
+      "role": "student-large",
+      "why": "Same-generation student experiment: 4.75 tok/s, 14.73 GiB; slower than the 9B and not the default."
     }
   ]
 }

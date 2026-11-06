@@ -702,6 +702,39 @@ def test_a_new_nonce_supersedes_the_held_root(election, consensus, cluster, tmp_
     assert after["trust_root"]["root_id"] == consensus.root_id(second)
 
 
+def test_the_exchange_can_form_a_role_swap_re_formation(election, consensus, cluster):
+    """A role inversion re-describes the same node ids with new fingerprints.
+
+    This is the Step 88 path: the members keep their node ids and cluster keys,
+    but their role, overlay address, WireGuard key and node identity key change.
+    The exchange must form a chained root over the new member records, and the
+    old root must remain the parent.
+    """
+    _, first = _formed(election, consensus, cluster, candidate="alpha")
+    reformed = [dict(member) for member in cluster["members"]]
+    for member in reformed:
+        member["fingerprint"] = hashlib.sha256(f"exchange-role-swap-fp-{member['node_id']}".encode()).hexdigest()
+        member["wireguard_pubkey"] = base64.b64encode(
+            hashlib.sha256(f"exchange-role-swap-wg-{member['node_id']}".encode()).digest()
+        ).decode()
+
+    _, second = _formed(
+        election,
+        consensus,
+        cluster,
+        candidate=WINNER,
+        previous_root_id=consensus.root_id(first),
+        epoch=1,
+        members=reformed,
+    )
+    assert second["previous_root_id"] == consensus.root_id(first)
+    assert second["epoch"] == 1
+    assert {m["node_id"] for m in second["members"]} == {m["node_id"] for m in first["members"]}
+    assert second["members"][0]["fingerprint"] != first["members"][0]["fingerprint"]
+    assert consensus.verify_root(second, trust=first) == (True, consensus.REASON_OK)
+    assert consensus.verify_chain([second, first]) == (True, consensus.REASON_OK)
+
+
 def test_an_unchained_new_root_is_refused_in_accept(election, consensus, cluster, tmp_path):
     """The trust flip refuses a well-signed root with no lineage to the held one."""
     _, first = _formed(election, consensus, cluster, candidate="alpha")

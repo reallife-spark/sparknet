@@ -8,9 +8,9 @@ small deterministic quality suite.
 
 Usage::
 
-    scripts/sparknet-model-bench.py --role peer --dry-run
-    scripts/sparknet-model-bench.py --role peer --candidate qwen3.6-35b-a3b-q4-k-m
-    scripts/sparknet-model-bench.py --role master --json
+    scripts/sparknet-model-bench.py --role master --dry-run
+    scripts/sparknet-model-bench.py --role master --candidate qwen3.6-35b-a3b-q4-k-m
+    scripts/sparknet-model-bench.py --role peer --candidate qwen3.5-9b-q8
 """
 
 from __future__ import annotations
@@ -111,8 +111,8 @@ def validate_config(config: dict[str, Any], role: str, catalog: dict[str, dict[s
         if cid in seen:
             errors.append(f"{cid}: duplicate id")
         seen.add(cid)
-        if candidate.get("role") != ("teacher" if role == "peer" else "student"):
-            errors.append(f"{cid}: role must be {'teacher' if role == 'peer' else 'student'}")
+        if candidate.get("role") != ("teacher" if role == "master" else "student"):
+            errors.append(f"{cid}: role must be {'teacher' if role == 'master' else 'student'}")
         if not str(candidate.get("model") or ""):
             errors.append(f"{cid}: missing model")
         catalog_id = candidate.get("catalog_id")

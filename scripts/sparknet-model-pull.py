@@ -2,8 +2,8 @@
 """Pull and verify the sparknet model catalog.
 
 The catalog is operator data, not a model tool: an LLM cannot call this. Weights
-are not knowledge and never enter a vault, a bundle or 4223. The peer (agx64)
-pulls teacher candidates; the Master (agx32) pulls student candidates; both may
+are not knowledge and never enter a vault, a bundle or 4223. The Master (agx64)
+pulls teacher candidates; the peer (agx32) pulls student candidates; both may
 pull embedding models. A teacher is never eligible for agx32.
 
 Usage::

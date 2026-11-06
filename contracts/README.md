@@ -25,6 +25,7 @@ the tests then prove both roles still agree.
 | `consensus-protocol.md` | how the members (a pair or a trio) agree on who holds the signing key: election, the cluster trust root, re-formation |
 | `phase9-recovery-runbook.md` | the approved destructive recovery exercise: snapshot, off-host archive, peer restore proof, Master restore, verification and rollback |
 | `deployment-runbook.md` | the operational procedure for bringing the real multi-node system (a pair or a trio) up on actual hosts (Step 13): overlay, election, signer unit, registry, rollback |
+| `role-inversion-runbook.md` | the planned Step 88 procedure for inverting the live pair to `agx64` Master / `agx32` peer: freeze and backup, new identities, chained re-formation, overlay/firewall swap, data/service migration, registry/grants/secrets, model placement, verification and rollback. Planned, not executed |
 | `admin-federation-runbook.md` | the operational procedure for the Phase 5 live deploy of cross-node admin federation (fabric Step 29): hosts/addressing, the route-class binding change, the `admin-supervise` grant, the node agent, the console, the confirm checklist and rollback |
 | `spark-node-runbook.md` | the operational procedure for the node image in both platform variants (`--platform spark` = DGX Spark, `agx` = AGX Xavier): what is provable without a GPU (CPU stub engine, simulated telemetry, the containerised election rehearsal) and the residual confirm-on-the-device lists |
 | `tracking-schema.json` | the numbered vault layout, the per-note tracking block and its signature, the user record, the approval record, the secret index |
@@ -35,7 +36,7 @@ the tests then prove both roles still agree.
 | `uplift-schema.json` | peer→Master consented opener: inventory, Qdrant snapshots, teacher traces, raw-KV manifests, 8091 transport and retention |
 | `inventory-schema.json` | the user/model/usage mirror Qdrant keeps, with Open WebUI as the authoritative source |
 | `distillation-schema.json` | same-family teacher→student dataset, run record, evaluation and model card |
-| `model-catalog.json` | the operator-owned model catalog: role placement (teacher on the 64 GB peer, student on the 32 GB Master), repo/revision, quant, runtime, license and fit |
+| `model-catalog.json` | the operator-owned model catalog: role placement (teacher on the 64 GB Master host, student on the 32 GB peer host), repo/revision, quant, runtime, license and fit |
 | `model-store.md` | the model store, pull/verify rule, runtime leases, idle stop, memory guard, role-specific weights and the prohibition on teacher backup on agx32 |
 | `webui-surface.md` | the peer/master Open WebUI menus, console scope, session/token rule, read-only boundary and the 3D-map pilot |
 | `knowledge-flow.md` | the map of every Master→peer, peer→Master and peer↔peer channel: what it may carry, what it must never carry, how it is authenticated, and why authority and knowledge never share a channel |

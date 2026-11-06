@@ -1,6 +1,6 @@
 ---
 title: sparknet Knowledge Index
-updated: 2026-10-30
+updated: 2026-11-06
 ---
 
 # sparknet — Knowledge Index
@@ -82,13 +82,14 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/uplift-schema.json` | peer→Master consented inventory, snapshots, traces, raw-KV manifests (8091) |
 | `contracts/inventory-schema.json` | the Qdrant user/model/usage mirror |
 | `contracts/distillation-schema.json` | same-family teacher→student dataset, run record, evaluation, model card |
-| `contracts/model-catalog.json` | role-placement model catalog: teacher only on the 64 GB peer, student only on the 32 GB Master, embeddings on both |
+| `contracts/model-catalog.json` | role-placement model catalog: teacher only on the 64 GB Master host, student only on the 32 GB peer host, embeddings on both |
 | `contracts/model-store.md` | model store, pull/verify, on-demand runtime leases, memory guard and the no-teacher-backup rule |
 | `contracts/webui-surface.md` | peer/master WebUI menus, read-only console scope and the 3D data-cloud surface |
 | `contracts/knowledge-flow.md` | the map of every Master→peer, peer→Master and peer↔peer channel: payload, authentication, refusals, and the rule that authority and knowledge never share a channel |
 | `contracts/memory-schema.json` | per-vault typed memory, retention, the Go store/Python gateway boundary, delegate runs and the memory-bundle payload profile |
 | `contracts/nocturnal-artifact-schema.json` | signed nocturnal result/manifest artefacts, coverage and local inbox commitment |
-| `contracts/deployment-runbook.md` | phased deployment guide (live on agx64+agx32) |
+| `contracts/deployment-runbook.md` | phased deployment guide (live on agx64+agx32; Step 88 inverts the pair) |
+| `contracts/role-inversion-runbook.md` | planned Step 88 procedure for `agx64` Master / `agx32` peer: freeze/backup, chained re-formation, data/service migration, registry/grants/secrets, model placement and rollback |
 | `contracts/phase9-recovery-runbook.md` | approved destructive recovery: snapshot, restore proof, verification and rollback |
 | `contracts/admin-federation-runbook.md` | Phase 5 live deploy of cross-node admin federation |
 | `contracts/spark-node-runbook.md` | DGX Spark node image: CPU smoke, simulated telemetry, containerised election today; the confirm-on-the-Spark list; AGX Xavier variant of the surface under `--platform agx` |

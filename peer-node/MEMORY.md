@@ -2,16 +2,14 @@
 > Standing state only. Read at session start; **replace, never append**.
 > The plan and its cursor live in `PLAN.md` — this file points at it.
 > History belongs in `02_Daily/YYYY-MM-DD.md` and `00_System/log.md`.
-Updated: 2026-11-05
+Updated: 2026-11-06
 ## Plan cursor
 - `PLAN.md` — read its `current:` field. Do not mirror step history here.
-- Step 15 is live-verified on agx64: memory `4110`, gateway `4093`, console
-  `/api/memory`, OpenCode MCP and the active Open WebUI filter all work.
-- **Open WebUI/OpenCode live 2026-11-05:** Open WebUI `v0.13.0`, 16 bilingual
-  prompts, 4 user-scoped tools, 2 active/global functions, per-user models on
-  `sparknet-chat`; the loopback OpenCode `1.19.5` engine (`4204`) runs one
-  vault-only sandbox per user. The Master is admin-only; the old cluster2
-  Master WebUI was retired and Jennifer's chat migrated to the peer.
+- **Role inversion planned, not executed:** `agx64` becomes Master, `agx32`
+  peer in Step 17/88; the current deployment line below is still true until
+  the live re-formation lands. 9G and data migration wait for Step 88.
+- Step 15 is live-verified on agx64: memory `4110`, gateway `4093`, console `/api/memory`, OpenCode MCP and the active Open WebUI filter all work.
+- **Open WebUI/OpenCode live 2026-11-05:** Open WebUI `v0.13.0`, 16 bilingual prompts, 4 user-scoped tools, 2 active/global functions, per-user models on `sparknet-chat`; loopback OpenCode `1.19.5` (`4204`) runs one vault-only sandbox per user. The Master is admin-only; the old cluster2 Master WebUI was retired and Jennifer's chat migrated to the peer.
 - Open WebUI sidebar: SPARKNET Mesh/Vectors/Learning; peer Learning is a signed
   4221 read-only Master snapshot. Model survey/update tools live in `scripts/`.
 ## Durable facts

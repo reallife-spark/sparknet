@@ -1,8 +1,8 @@
 {
   "schema": "sparknet-model-bakeoff/1",
   "role": "master",
-  "node": "agx32",
-  "description": "Student bake-off on the 32 GB Master. The candidates are catalog entries; the models must be pulled and imported into the Master's local Ollama runtime before this config can run.",
+  "node": "agx64",
+  "description": "Teacher bake-off on the 64 GB Master host. These are existing Ollama models; the newest Qwen3.8 Flash Next candidate stays in the catalog but is not benchmarkable until a qwen4exp-capable runtime is installed.",
   "provider": {
     "kind": "ollama",
     "base_url": "http://127.0.0.1:11434"
@@ -10,7 +10,7 @@
   "options": {
     "runs": 2,
     "warmup": 1,
-    "num_ctx": 4096,
+    "num_ctx": 8192,
     "num_predict": 256,
     "temperature": 0,
     "seed": 42,
@@ -20,18 +20,25 @@
   },
   "candidates": [
     {
-      "id": "qwen3.5-9b-q8",
-      "catalog_id": "qwen3.5-9b-q8",
-      "role": "student",
-      "model": "qwen3.5-9b-q8:latest",
-      "why": "Safe default student: fits 32 GB with room for Qdrant/Open WebUI."
+      "id": "qwen3.6-35b-a3b-q4-k-m",
+      "catalog_id": "qwen3.6-35b-a3b-q4-k-m",
+      "role": "teacher",
+      "model": "qwen3.6-35b-262k:latest",
+      "why": "Proven Qwen3.6 35B-A3B Q4_K_M on the peer; the live teacher winner on the Master host."
     },
     {
-      "id": "qwen3.8-27b-q4",
-      "catalog_id": "qwen3.8-27b-q4",
-      "role": "student",
-      "model": "qwen3.8-27b-q4:latest",
-      "why": "Same-generation student; inference fits, but QLoRA needs an exclusive window."
+      "id": "qwen3.6-35b-a3b-q8",
+      "catalog_id": "qwen3.6-35b-a3b-q8",
+      "role": "teacher",
+      "model": "qwen3.6-35b-262k-q8:latest",
+      "why": "Quality reference; needs more free unified memory than Q4_K_M."
+    },
+    {
+      "id": "gemma4-26b-a4b",
+      "catalog_id": null,
+      "role": "teacher",
+      "model": "gemma4-26b-262k:latest",
+      "why": "Existing MoE baseline on the peer; different family, included only to calibrate speed/memory."
     }
   ],
   "prompts": [
@@ -45,10 +52,10 @@
     },
     {
       "id": "json",
-      "prompt": "Return only JSON with keys node, role, reachable. Use node=agx32, role=master, reachable=true.",
+      "prompt": "Return only JSON with keys node, role, reachable. Use node=agx64, role=master, reachable=true.",
       "must_include": [
         "\"node\"",
-        "agx32"
+        "agx64"
       ],
       "max_tokens": 96
     },
@@ -82,6 +89,14 @@
         "unable to",
         "not able"
       ]
+    },
+    {
+      "id": "long-context",
+      "prompt": "Read this identifier list and answer with the third identifier only: alpha-17, beta-42, gamma-91, delta-08.",
+      "must_include": [
+        "gamma-91"
+      ],
+      "max_tokens": 48
     }
   ]
 }

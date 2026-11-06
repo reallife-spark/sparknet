@@ -2,9 +2,13 @@
 > Standing state only. Read at session start; **replace, never append**.
 > The plan and cursor live in `PLAN.md`; history belongs in
 > `02_Daily/YYYY-MM-DD.md` and `00_System/log.md`.
-Updated: 2026-11-05
+Updated: 2026-11-06
 ## Plan cursor
 - `PLAN.md` — read its `current:` field. Do not mirror step history here.
+- **Role inversion planned, not executed:** `agx64` will become Master and
+  `agx32` the peer in Step 26/88. Until the live re-formation lands, the
+  current deployment line below remains the truth. Step 9G is parked until
+  after Step 26.
 - **Admin-only WebUI live 2026-11-05:** Open WebUI `v0.13.0` on `10.100.0.1:8088`
   has exactly one `admin@sparknet.local` account and signup off. The old
   cluster2 `sparknet-webui` on `8181` was retired after Jennifer's chat was
@@ -33,7 +37,7 @@ Updated: 2026-11-05
   `/srv/sparknet/share/learning/status.json`; 4221 serves it to the peer console.
   Master console accepts authenticated `user` and `admin` for read-only pages.
 - **Live on agx32 (2026-11-04)**: 8090 intake/RFI responder active; admin `users`/`events`/`knowledge` 200; registry sequence 8 carries the peer node key, `cluster-serve` and `memory-supervise`; Master `memory_status`/read-200 through the peer gateway. A long-running bridge must be restarted after a capability is added.
-- **Open items**: Step 9G is the only Master plan step left — the signed dispatcher is built but the live 02:00–05:00 window is operator-confirmed. Step 10 is closed by operator scope (two-node `peer_pair`); 4203 stays staged, disabled and inactive. Steps 11–12 and 24 are live-verified (2026-11-04); Step 25 is live-verified 2026-11-05.
+- **Open items**: Step 9G is parked until after the Step 26 role inversion — the signed dispatcher is built but the live 02:00–05:00 window is operator-confirmed. Step 10 is closed by operator scope (two-node `peer_pair`); 4203 stays staged, disabled and inactive. Steps 11–12 and 24 are live-verified (2026-11-04); Step 25 is live-verified 2026-11-05.
 - **Knowledge flow**: a signed RFI answer is the only Master→peer knowledge
   channel. Registry, approvals, telemetry and admin requests are not knowledge;
   see `../contracts/knowledge-flow.md`.

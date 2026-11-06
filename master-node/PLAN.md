@@ -1,7 +1,7 @@
 ---
 title: sparknet master-node Plan
-updated: 2026-11-05
-current: 9
+updated: 2026-11-06
+current: 26
 ---
 
 # sparknet master-node — Active Plan
@@ -59,6 +59,9 @@ current: 9
     WireGuard observer timer is enabled and writing `/mnt/log/sparknet-wg.json`,
     and the peer telemetry pusher succeeded. 9G remains the live operator window;
     it cannot run outside 02:00–05:00 local and the current nodes are busy.
+  - **Deferred 2026-11-06:** 9G is parked until after Step 26. Do not arm or
+    run the nocturnal window during the role inversion; the Master host and
+    scheduler state move.
 
 ## Step 10 — Share ratification service
 
@@ -180,6 +183,69 @@ current: 9
     `/api/v1/users/` list has exactly one admin.
   - **DoD**: admin-only WebUI, live engine round trip, no user surface on the
     Master; browser click-through `DoD: confirm: user`.
+
+## Step 26 — Master role inversion: agx64 Master
+
+- [ ] **Step 26** — Move the elected Master role from `agx32` to `agx64` by a
+  chained re-formation, not a fresh election.
+  - [ ] **26A — Freeze and backup.** Park 9G; stop the signer and Master
+    services; archive and verify the ledger, evidence repo, registry, trust
+    root, `master-admin` vault, admin WebUI volume, Master Qdrant,
+    `/srv/sparknet/uplift`, `/srv/sparknet/distill`, share-ratify and scheduler
+    state; record the old root id, ledger head and registry sequence.
+  - [ ] **26B — Identity and roster.** Point `master-node/manifests/master-identity.json`
+    and `master-node/manifests/node-identity.json` at `sparknet-node-0001` /
+    `10.100.0.1/32`; keep `role: peer` in the committed templates; generate the
+    new operational key on `agx64`; build the new roster with new fingerprints
+    and existing cluster pubkeys; copy the held old root to `agx64`.
+  - [ ] **26C — Re-formation.** Run the exchange with `--trust <old-root>`;
+    `agx64` approves `EXPECT=sparknet-node-0001`; `agx32` requests
+    `CANDIDATE=sparknet-node-0001`; verify 2/2 signatures, lineage, epoch,
+    master id and new operational key; keep the old signer disabled.
+  - [ ] **26D — Move Master services.** Restore ledger/evidence/registry/root/
+    admin vault/admin WebUI/Master Qdrant/uplift/distill on `agx64`; do not
+    copy the old operational key or signer socket; start signer, ledger,
+    parity, admin console/surface, 8090/8091, 4220–4223, 4203, scheduler and
+    firewall units; set `SPARKNET_NODE_ID=sparknet-node-0001`.
+  - [ ] **26E — Registry and grants.** Sign the higher-sequence registry for the
+    new identities with the existing capability sets; deliver to `agx32`;
+    re-issue grants and tokens; point admin federation at `agx32`; rotate
+    secrets; update goSpark control-plane placement.
+  - [ ] **26F — Model and verification.** Move the teacher runtime config and
+    compose to `master-node/`, update the catalog/role placement/admin model
+    filter, keep the teacher weights on `agx64`, and benchmark; run the Master
+    suite and every gate; remove old Master services/keys from `agx32` after
+    verification.
+  - **DoD**: new root verifies and chains; signer on `agx64` returns the new
+    root id; old signer is disabled; registry verifies on both; admin 8088,
+    8090, 8091 and 4220–4223 are healthy on `agx64`; ledger/evidence/admin vault
+    parity holds; teacher runs on `agx64`; `make test-master`,
+    `make contract-test`, `make context-check`, `make bundle-verify ROLE=master`
+    and `make ci` pass; live legs are `DoD: confirm: user`.
+
+## Step 27 — Master-side Gemini blueprint surfaces
+
+- [ ] **Step 27** — Add the Master half of the sovereign-cluster blueprint after
+  Step 26: ABAC governance, event orchestrator, lake intake, collaboration
+  broker, online distillation, package index and the extended dashboard.
+  - [ ] **27A — Contracts and envelopes.** Adopt the event/ABAC/collab/exec/
+    self-improve/package/lake/realtime-distill contracts and signer operations.
+  - [ ] **27B — Orchestrator and ABAC.** Route signed events to named agents,
+    enforce clearance/department/tag policy, audit denials and never carry
+    authority on a knowledge channel.
+  - [ ] **27C — Lake and collaboration.** Consented/redacted per-department lake
+    intake with retention/deletion; live cross-department collaboration broker
+    with personal-agent participation and ABAC filtering.
+  - [ ] **27D — Distillation and packages.** Online trace-tap scheduler,
+    training lease, evaluation, signed run/model card and student hot-swap;
+    signed package index and distribution.
+  - [ ] **27E — Dashboard and verification.** Extend the console/admin surface
+    for nodes, queue, KB browser, users/approvals, lake stats, distill runs,
+    events, ABAC and collaboration; all writes remain signed admin requests.
+  - **DoD**: Master-side loopback rehearsals for every new channel; no direct
+    peer vault/DB write; `make test-master`, `make contract-test`,
+    `make context-check`, `make bundle-verify ROLE=master`, `make ci`; live legs
+    `DoD: confirm: user`.
 
 ## Next
 
