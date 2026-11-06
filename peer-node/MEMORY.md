@@ -5,7 +5,7 @@
 Updated: 2026-11-06
 ## Plan cursor
 - `PLAN.md` — read its `current:` field. Do not mirror step history here.
-- **Role inversion core live 2026-11-06:** `agx32` is the peer; root `c77a3446…`, registry sequence 9. Step 17E cleanup and goSpark placement remain.
+- **Role inversion complete 2026-11-06:** `agx32` is the peer; root `c77a3446…`, registry sequence 9, old copies/units removed, teacher/student benchmark done. Step 18 is next.
 - Step 15 is live-verified on agx32: memory `4110`, gateway `4093`, console `/api/memory`, OpenCode MCP and the active Open WebUI filter all work.
 - **Open WebUI/OpenCode live 2026-11-05:** Open WebUI `v0.13.0`, 16 bilingual prompts, 4 user-scoped tools, 2 active/global functions, per-user models on `sparknet-chat`; loopback OpenCode `1.19.5` (`4204`) runs one vault-only sandbox per user. The Master is admin-only; the old cluster2 Master WebUI was retired and Jennifer's chat migrated to the peer.
 - Open WebUI sidebar: SPARKNET Mesh/Vectors/Learning; peer Learning is a signed

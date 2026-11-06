@@ -3,8 +3,9 @@
 Status: **executed 2026-11-06; core role inversion complete.** The live pair
 is now `agx64` Master (`sparknet-node-0001`, `10.100.0.1`) / `agx32` peer
 (`sparknet-node-0002`, `10.100.0.2`). Root `c77a3446…` (epoch 1, parent
-`fa6f4fa5…`), registry sequence 9. Remaining: secret rotation, old
-service/key/data cleanup, and goSpark control/agent placement. Every live leg
+`fa6f4fa5…`), registry sequence 9. Old peer/master data copies, units and keys have been removed; goSpark
+control is on `agx64` and agent on `agx32`. Remaining: loopback
+engine/memory/Qdrant token rotation and browser click-through. Every live leg
 below is a dated host observation; do not generalise it.
 
 ## Target topology

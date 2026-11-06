@@ -5,7 +5,7 @@
 Updated: 2026-11-06
 ## Plan cursor
 - `PLAN.md` — read its `current:` field. Do not mirror step history here.
-- **Role inversion core live 2026-11-06:** `agx64` is Master; root `c77a3446…`, registry sequence 9. Step 26F cleanup, benchmark and goSpark control/agent placement remain. Step 9G is parked.
+- **Role inversion complete 2026-11-06:** `agx64` is Master; root `c77a3446…`, registry sequence 9, old copies/units/keys removed, teacher benchmark done, goSpark control on `agx64`/agent on `agx32`. Step 27 is next; 88G loopback token rotation remains. Step 9G is parked.
 - **Admin-only WebUI live on agx64 2026-11-06:** Open WebUI `v0.13.0` on `10.100.0.1:8088`
   has exactly one `admin@sparknet.local` account and signup off. The old
   cluster2 `sparknet-webui` on `8181` was retired after Jennifer's chat was

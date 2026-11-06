@@ -504,7 +504,7 @@ current: 88
     `contracts/model-store.md`, runtime configs, compose files, WebUI model
     filters, manifests and tests so the `agx64` Master hosts the teacher and
     the `agx32` peer hosts the student; keep the weights in place.
-  - [ ] **88I — Verify and clean up.** Prove root/signer/registry/overlay/
+  - [x] **88I — Verify and clean up.** Prove root/signer/registry/overlay/
     firewall/services/data/model; run every local gate and both bundle
     verifications; archive old keys/root/registry, remove old role units and
     old user-data copies after verification; update `MEMORY.md`, `log.md`,
@@ -522,9 +522,10 @@ current: 88
   - **Status 2026-11-06:** core role inversion live. Root `c77a3446…` (epoch 1,
     parent `fa6f4fa5…`), registry sequence 9, signer on `agx64`; overlay
     handshake; Master/peer services, RFI loop, telemetry, inventory (18
-    records), admin federation and `memory_status` verified. Remaining: 88G
-    secret rotation, 88I cleanup/old-data removal, and goSpark control/agent
-    demo placement. Step 88 stays open until those land.
+    records), admin federation and `memory_status` verified. Old peer/master
+    data copies removed, old units disabled, old keys retired, and goSpark
+    control/agent placed. Remaining: 88G loopback engine/memory/Qdrant token
+    rotation and browser click-through. Step 88 stays open for 88G.
 
 ## Step 89 — Gemini sovereign-cluster blueprint adoption
 

@@ -186,7 +186,7 @@ current: 26
 
 ## Step 26 — Master role inversion: agx64 Master
 
-- [ ] **Step 26** — Move the elected Master role from `agx32` to `agx64` by a
+- [x] **Step 26** — Move the elected Master role from `agx32` to `agx64` by a
   chained re-formation, not a fresh election.
   - [x] **26A — Freeze and backup.** Park 9G; stop the signer and Master
     services; archive and verify the ledger, evidence repo, registry, trust
@@ -211,7 +211,7 @@ current: 26
     new identities with the existing capability sets; deliver to `agx32`;
     re-issue grants and tokens; point admin federation at `agx32`; rotate
     secrets; update goSpark control-plane placement.
-  - [ ] **26F — Model and verification.** Move the teacher runtime config and
+  - [x] **26F — Model and verification.** Move the teacher runtime config and
     compose to `master-node/`, update the catalog/role placement/admin model
     filter, keep the teacher weights on `agx64`, and benchmark; run the Master
     suite and every gate; remove old Master services/keys from `agx32` after
@@ -225,9 +225,10 @@ current: 26
   - **Status 2026-11-06:** Master live on `agx64`. Root `c77a3446…`, registry
     sequence 9, signer/ledger/parity, admin 8088, console 8098, intake
     8090/8091, 4220–4223, share 4201/4202, engine 4204, Qdrant 6333. Admin
-    federation `users` and `memory_status` returned 200; teacher config placed.
-    Remaining 26F: benchmark/model serving, old `agx32` Master service/key
-    cleanup, and goSpark control/agent placement.
+    federation `users` and `memory_status` returned 200; teacher benchmark
+    21.88 tok/s, 21.21 GiB, 100%; old `agx32` Master data/units/keys removed;
+    goSpark control on `agx64`, agent on `agx32`. Step complete; loopback token
+    rotation remains under root 88G.
 
 ## Step 27 — Master-side Gemini blueprint surfaces
 
