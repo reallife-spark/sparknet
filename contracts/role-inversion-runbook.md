@@ -1,9 +1,11 @@
 # Role inversion runbook — agx64 Master, agx32 peer
 
-Status: **planned, not executed.** This runbook is the operator procedure for
-fabric Step 88. It is not evidence that the live pair has been inverted. Every
-live leg below is `DoD: confirm: user` until a human on the host records the
-dated observation.
+Status: **executed 2026-11-06; core role inversion complete.** The live pair
+is now `agx64` Master (`sparknet-node-0001`, `10.100.0.1`) / `agx32` peer
+(`sparknet-node-0002`, `10.100.0.2`). Root `c77a3446…` (epoch 1, parent
+`fa6f4fa5…`), registry sequence 9. Remaining: secret rotation, old
+service/key/data cleanup, and goSpark control/agent placement. Every live leg
+below is a dated host observation; do not generalise it.
 
 ## Target topology
 

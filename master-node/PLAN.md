@@ -188,26 +188,26 @@ current: 26
 
 - [ ] **Step 26** — Move the elected Master role from `agx32` to `agx64` by a
   chained re-formation, not a fresh election.
-  - [ ] **26A — Freeze and backup.** Park 9G; stop the signer and Master
+  - [x] **26A — Freeze and backup.** Park 9G; stop the signer and Master
     services; archive and verify the ledger, evidence repo, registry, trust
     root, `master-admin` vault, admin WebUI volume, Master Qdrant,
     `/srv/sparknet/uplift`, `/srv/sparknet/distill`, share-ratify and scheduler
     state; record the old root id, ledger head and registry sequence.
-  - [ ] **26B — Identity and roster.** Point `master-node/manifests/master-identity.json`
+  - [x] **26B — Identity and roster.** Point `master-node/manifests/master-identity.json`
     and `master-node/manifests/node-identity.json` at `sparknet-node-0001` /
     `10.100.0.1/32`; keep `role: peer` in the committed templates; generate the
     new operational key on `agx64`; build the new roster with new fingerprints
     and existing cluster pubkeys; copy the held old root to `agx64`.
-  - [ ] **26C — Re-formation.** Run the exchange with `--trust <old-root>`;
+  - [x] **26C — Re-formation.** Run the exchange with `--trust <old-root>`;
     `agx64` approves `EXPECT=sparknet-node-0001`; `agx32` requests
     `CANDIDATE=sparknet-node-0001`; verify 2/2 signatures, lineage, epoch,
     master id and new operational key; keep the old signer disabled.
-  - [ ] **26D — Move Master services.** Restore ledger/evidence/registry/root/
+  - [x] **26D — Move Master services.** Restore ledger/evidence/registry/root/
     admin vault/admin WebUI/Master Qdrant/uplift/distill on `agx64`; do not
     copy the old operational key or signer socket; start signer, ledger,
     parity, admin console/surface, 8090/8091, 4220–4223, 4203, scheduler and
     firewall units; set `SPARKNET_NODE_ID=sparknet-node-0001`.
-  - [ ] **26E — Registry and grants.** Sign the higher-sequence registry for the
+  - [x] **26E — Registry and grants.** Sign the higher-sequence registry for the
     new identities with the existing capability sets; deliver to `agx32`;
     re-issue grants and tokens; point admin federation at `agx32`; rotate
     secrets; update goSpark control-plane placement.
@@ -222,6 +222,12 @@ current: 26
     parity holds; teacher runs on `agx64`; `make test-master`,
     `make contract-test`, `make context-check`, `make bundle-verify ROLE=master`
     and `make ci` pass; live legs are `DoD: confirm: user`.
+  - **Status 2026-11-06:** Master live on `agx64`. Root `c77a3446…`, registry
+    sequence 9, signer/ledger/parity, admin 8088, console 8098, intake
+    8090/8091, 4220–4223, share 4201/4202, engine 4204, Qdrant 6333. Admin
+    federation `users` and `memory_status` returned 200; teacher config placed.
+    Remaining 26F: benchmark/model serving, old `agx32` Master service/key
+    cleanup, and goSpark control/agent placement.
 
 ## Step 27 — Master-side Gemini blueprint surfaces
 

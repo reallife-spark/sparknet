@@ -145,20 +145,20 @@ current: 17
 
 - [ ] **Step 17** — Move the peer role from `agx64` to `agx32` as part of the
   fabric role inversion.
-  - [ ] **17A — Freeze and preflight.** Park peer live legs; stop peer services;
+  - [x] **17A — Freeze and preflight.** Park peer live legs; stop peer services;
     archive and verify `peer-*` vaults, provisioner `.state`, WebUI volume,
     Qdrant volume, memory state, OpenCode engine state and peer state dir;
     record users, KBs, chats, collection counts and service paths.
-  - [ ] **17B — Identity and overlay.** Set `peer-node/manifests/node-identity.json`
+  - [x] **17B — Identity and overlay.** Set `peer-node/manifests/node-identity.json`
     to `sparknet-node-0002` at `10.100.0.2/32`; generate the new peer node
     identity key on `agx32`; keep the cluster key; render the peer WireGuard
     config and firewall egress restriction to `10.100.0.1`.
-  - [ ] **17C — Move data and services.** Restore the peer vaults, provisioner
+  - [x] **17C — Move data and services.** Restore the peer vaults, provisioner
     state, WebUI volume, Qdrant volume, memory and engine state on `agx32`;
     start guard, bridge, 4201/4202, telemetry/checkpoint/inventory/RFI, memory
     4110/4093, WebUI 8181, engine 4204, Qdrant, provisioner, admin agent and
     self-healing.
-  - [ ] **17D — Registry and model placement.** Install the higher-sequence
+  - [x] **17D — Registry and model placement.** Install the higher-sequence
     registry signed by the new `agx64` Master; verify the peer entry; move the
     student runtime config/compose to `peer-node/`; update the peer WebUI model
     filter and `agent-models.json` to the student surface.
@@ -172,6 +172,12 @@ current: 17
     peer suite, `make contract-test`, `make context-check`,
     `make bundle-verify ROLE=peer` and `make ci` pass; live legs are
     `DoD: confirm: user`.
+  - **Status 2026-11-06:** peer live on `agx32`. Guard 9090, bridge 4096,
+    share 4201/4202, memory 4110/4093, WebUI 8181, console 8099, engine 4204,
+    Qdrant 6333. Registry sequence 9 installed; `authz-verify` allowed; RFI
+    answer installed with `inbox_acceptance`; telemetry and 18-record
+    inventory pushed. Remaining 17E: old `agx64` peer service/data cleanup and
+    model benchmark.
 
 ## Step 18 — Peer-side Gemini blueprint surfaces
 

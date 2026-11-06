@@ -5,11 +5,8 @@
 Updated: 2026-11-06
 ## Plan cursor
 - `PLAN.md` — read its `current:` field. Do not mirror step history here.
-- **Role inversion planned, not executed:** `agx64` will become Master and
-  `agx32` the peer in Step 26/88. Until the live re-formation lands, the
-  current deployment line below remains the truth. Step 9G is parked until
-  after Step 26.
-- **Admin-only WebUI live 2026-11-05:** Open WebUI `v0.13.0` on `10.100.0.1:8088`
+- **Role inversion core live 2026-11-06:** `agx64` is Master; root `c77a3446…`, registry sequence 9. Step 26F cleanup, benchmark and goSpark control/agent placement remain. Step 9G is parked.
+- **Admin-only WebUI live on agx64 2026-11-06:** Open WebUI `v0.13.0` on `10.100.0.1:8088`
   has exactly one `admin@sparknet.local` account and signup off. The old
   cluster2 `sparknet-webui` on `8181` was retired after Jennifer's chat was
   migrated to the peer. The admin engine runs on loopback `4204` over
@@ -18,11 +15,8 @@ Updated: 2026-11-06
 - **Fleet memory (2026-11-02):** the Master inspects peer memory only through
   signed, on-demand `memory-supervise`; no mirror. The peer audits the read and
   the user sees the access log. Other memory data is counts and posture.
-- **Current deployment**: `agx32` is the elected Master
-  (`sparknet-node-0002`, `wg1 10.100.0.1/32`); `agx64` is the peer
-  (`0001`, `10.100.0.2/32`). The `agx32` text vLLM is deliberately stopped;
-  `agx64` is the fabric inference path.
-- **The election/signer arc is proven live** (2026-10-07, re-formed 2026-10-19):
+- **Current deployment**: `agx64` is the elected Master (`sparknet-node-0001`, `wg1 10.100.0.1/32`); `agx32` is the peer (`0002`, `10.100.0.2/32`). Root `c77a3446…`, registry sequence 9; teacher on agx64, student on agx32.
+- **The election/signer arc is proven live** (2026-10-07; re-formed 2026-11-06 to root `c77a3446…`, epoch 1, parent `fa6f4fa5…`):
   a 2/2 trust root, `sparknet-master-signer.service`, a signed registry entry
   verified by a still-peer, a real reboot, and a revoke→inert→re-authorize
   cycle. That is a dated claim about those hosts, not a general guarantee.

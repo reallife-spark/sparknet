@@ -462,35 +462,35 @@ current: 88
 - [ ] **Step 88** — Invert the live pair so `agx64` is the elected Master at
   `10.100.0.1` and `agx32` is the peer at `10.100.0.2`, using a chained
   re-formation rather than a fresh election.
-  - [ ] **88A — Freeze, backup, preflight.** Park 84G, 86C/86D, 87 click-through
+  - [x] **88A — Freeze, backup, preflight.** Park 84G, 86C/86D, 87 click-through
     and Master 9G; freeze both hosts; archive and verify role vaults, user
     vaults, WebUI volumes, Qdrant volumes, memory/engine state, ledger,
     evidence, registry, trust root and `.env`; record exact units, paths,
     volumes, ports and key locations.
-  - [ ] **88B — Identities and roster.** Update the committed identity
+  - [x] **88B — Identities and roster.** Update the committed identity
     templates to `sparknet-node-0001` at `agx64`/`10.100.0.1` and
     `sparknet-node-0002` at `agx32`/`10.100.0.2`; keep `role: peer` in every
     committed manifest; generate new node identity keys; keep the cluster keys
     on their hosts; build the new `cluster-members.json` with new fingerprints
     and existing cluster pubkeys; copy the held old root to `agx64` for chain
     verification.
-  - [ ] **88C — Chained re-formation.** Run the exchange with
+  - [x] **88C — Chained re-formation.** Run the exchange with
     `shared/sparknet-election.py serve --trust <old-root> --members
     cluster-members.json`; `agx64` runs `election-approve EXPECT=sparknet-node-0001`;
     `agx32` runs `election-request CANDIDATE=sparknet-node-0001`; verify 2/2
     signatures, `previous_root_id`, `epoch + 1`, `master_node_id`, and
     `verify_chain`; stop the old signer on `agx32`; start the new signer on
     `agx64` only after the root is formed.
-  - [ ] **88D — Overlay and firewall.** Re-address `agx64` to `10.100.0.1/32`
+  - [x] **88D — Overlay and firewall.** Re-address `agx64` to `10.100.0.1/32`
     and `agx32` to `10.100.0.2/32`; re-render WireGuard and the host firewall;
     `agx64` Master is unrestricted, `agx32` peer egress is restricted to
     `10.100.0.1`; prove both directions and the peer restriction.
-  - [ ] **88E — Move Master state/services to agx64.** Copy ledger, evidence,
+  - [x] **88E — Move Master state/services to agx64.** Copy ledger, evidence,
     registry, old/new roots, `master-admin`, admin WebUI volume, Master Qdrant,
     uplift/distill and share-ratify/scheduler state; do not copy the old
     operational key or signer socket; start signer, ledger, parity, admin
     console/surface, 8090/8091, 4220–4223, 4203, scheduler and firewall units.
-  - [ ] **88F — Move peer state/services to agx32.** Copy `peer-*` vaults,
+  - [x] **88F — Move peer state/services to agx32.** Copy `peer-*` vaults,
     provisioner state, peer WebUI volume, peer Qdrant, memory and OpenCode
     engine state; generate a new peer node identity key; start guard, bridge,
     4201/4202, telemetry/checkpoint/inventory/RFI, memory 4110/4093, WebUI
@@ -500,7 +500,7 @@ current: 88
     peer guard; re-issue grants and tokens; point admin federation and goSpark
     control/agent at the new hosts; rotate WebUI, admin, engine, memory,
     Qdrant and share secrets after migration.
-  - [ ] **88H — Model placement.** Update `contracts/model-catalog.json`,
+  - [x] **88H — Model placement.** Update `contracts/model-catalog.json`,
     `contracts/model-store.md`, runtime configs, compose files, WebUI model
     filters, manifests and tests so the `agx64` Master hosts the teacher and
     the `agx32` peer hosts the student; keep the weights in place.
@@ -519,6 +519,12 @@ current: 88
     `make validate`, `make keys-check`, `make shims-check`,
     `make bundle-verify ROLE=peer|master`, `make ci` and
     `make -C gospark ci` are green; every live leg is `DoD: confirm: user`.
+  - **Status 2026-11-06:** core role inversion live. Root `c77a3446…` (epoch 1,
+    parent `fa6f4fa5…`), registry sequence 9, signer on `agx64`; overlay
+    handshake; Master/peer services, RFI loop, telemetry, inventory (18
+    records), admin federation and `memory_status` verified. Remaining: 88G
+    secret rotation, 88I cleanup/old-data removal, and goSpark control/agent
+    demo placement. Step 88 stays open until those land.
 
 ## Step 89 — Gemini sovereign-cluster blueprint adoption
 
