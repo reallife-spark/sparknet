@@ -575,8 +575,8 @@ current: 89
     adds the signed argv-only daemon; 89H adds the package CLI and grant nonce
     replay. O1 now records classification/department and graph/hybrid read it;
     graph/hybrid and the foundations API are live on agx32/agx64. The exec
-    daemon is live-verified in validate-only mode; collab writes are live;
-    execution enablement and package distribution remain open. Separately, the OpenCode runtime pin
+    daemon is live with an exact allowlist and audit; collab writes are live;
+    package distribution remains open. Separately, the OpenCode runtime pin
     is `2.2.5`; the engine adapter is on v2 `/api/*` with per-sandbox auth and the sandbox is live on agx64/agx32 (2026-11-06).
   - **DoD**: every new channel has a contract row, a canonical envelope, a
     refusal test and a loopback rehearsal; no channel carries authority and
