@@ -53,6 +53,14 @@ def _parser() -> argparse.ArgumentParser:
     plan = sub.add_parser("plan", help="print a dependency-first install plan")
     plan.add_argument("--index", required=True)
     plan.add_argument("--root", action="append", type=_dep, required=True)
+
+    install = sub.add_parser("install", help="verify and copy a signed package into a destination")
+    install.add_argument("--index", required=True)
+    install.add_argument("--source", required=True, help="root containing <id>/<version>/package.json and artifacts")
+    install.add_argument("--dest", required=True)
+    install.add_argument("--public-key", required=True, help="signer public key file (base64 or hex)")
+    install.add_argument("--package", action="append", type=_dep, required=True)
+    install.add_argument("--confirm", action="store_true")
     return parser
 
 
@@ -125,6 +133,42 @@ def main(argv: list[str] | None = None) -> int:
                         sort_keys=True,
                     )
                 )
+            return 0
+        if args.command == "install":
+            if not args.confirm:
+                raise PACKAGE.PackageError("install-refused", "install requires --confirm")
+            index = json.loads(Path(args.index).read_text(encoding="utf-8"))
+            public = AUTHZ.load_public_key(Path(args.public_key))
+            if not PACKAGE.verify_index_signature(index, public):
+                raise PACKAGE.PackageError("bad-signature", "package index signature does not verify")
+            source = Path(args.source).resolve()
+            dest = Path(args.dest).resolve()
+            plan = PACKAGE.install_plan(index, args.package)
+            installed = []
+            for row in plan:
+                package_id, version = row["package_id"], row["version"]
+                root = source / package_id / version
+                manifest_path = root / "package.json"
+                try:
+                    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError) as exc:
+                    raise PACKAGE.PackageError("unknown-package", f"{manifest_path}: {exc}") from exc
+                if not PACKAGE.verify_package_signature(manifest, public):
+                    raise PACKAGE.PackageError("bad-signature", f"{package_id} {version} signature does not verify")
+                target_root = dest / package_id / version
+                if target_root.exists():
+                    raise PACKAGE.PackageError("install-refused", f"{target_root} already exists")
+                for artifact in manifest["artifacts"]:
+                    data = (root / artifact["path"]).read_bytes()
+                    if not PACKAGE.verify_artifact(artifact, data):
+                        raise PACKAGE.PackageError(
+                            "bad-digest", f"{package_id} {version} {artifact['path']} digest mismatch"
+                        )
+                    target = target_root / artifact["path"]
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(data)
+                installed.append({"package_id": package_id, "version": version, "path": str(target_root)})
+            print(json.dumps({"ok": True, "installed": installed}, indent=2, sort_keys=True))
             return 0
         index = json.loads(Path(args.index).read_text(encoding="utf-8"))
         plan = PACKAGE.install_plan(index, args.root)

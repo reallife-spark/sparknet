@@ -47,7 +47,7 @@ SCOPE ?= fabric
         vector-index vector-stamp vector-query vector-parity kv-export reflex-eval reflex-live-check reflex-live-query \
         reflex-plan-eval verify-plans env-init wiki-sync wiki-verify \
         wiki-preflight bundle bundle-verify status-plan clean dist \
-        role-skills role-skills-check keys-check shims-check hooks
+        role-skills role-skills-check keys-check shims-check hooks self-improve package-install
 
 help: ## Show this help
 	@echo "sparknet — fabric root"
@@ -478,6 +478,12 @@ bundle: ## Build a standalone bundle for ROLE=peer|master into dist/
 bundle-verify: ## Extract the newest bundle and prove it runs standalone
 	@./scripts/sparknet-bundle.sh --verify \
 		$$(ls -t "$(VAULT_ROOT)"/dist/sparknet-$(ROLE)-*.tar.gz 2>/dev/null | head -1)
+
+self-improve: ## Run a bounded worktree benchmark candidate (ARGS=...)
+	@$(PY) scripts/sparknet-self-improve.py $(ARGS)
+
+package-install: ## Verify and install a signed package (ARGS=...)
+	@$(PY) scripts/sparknet-package.py install $(ARGS)
 
 status-plan: ## Show each role's plan cursor
 	@printf 'peer-node:\n'

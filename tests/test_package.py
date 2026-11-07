@@ -147,3 +147,53 @@ def test_package_and_index_signatures_verify_and_refuse_tampering():
     assert package.verify_index_signature(index, public) is True
     index["updated_at"] = "2099-01-01T00:00:00Z"
     assert package.verify_index_signature(index, public) is False
+
+
+def test_cli_install_verifies_signatures_and_copies_artifacts(tmp_path):
+    import json
+    import subprocess
+
+    from contract_helpers import REPO_ROOT
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    authz_spec = importlib.util.spec_from_file_location(
+        "package_install_authz", REPO_ROOT / "shared" / "sparknet-authz.py"
+    )
+    authz = importlib.util.module_from_spec(authz_spec)
+    sys.modules[authz_spec.name] = authz
+    authz_spec.loader.exec_module(authz)
+
+    key = Ed25519PrivateKey.generate()
+    signed = package.sign_package(manifest(artifacts=[{"path": "bin/tool", "sha256": DIGEST, "size": 8}]), key)
+    index = package.sign_index(package.make_index([signed]), key)
+    source = tmp_path / "source" / "tool" / "1.0.0"
+    (source / "bin").mkdir(parents=True)
+    (source / "bin" / "tool").write_bytes(b"artifact")
+    (source / "package.json").write_text(json.dumps(signed))
+    index_file = tmp_path / "index.json"
+    index_file.write_text(json.dumps(index))
+    public = tmp_path / "public.b64"
+    public.write_text(authz.public_key_b64(key.public_key()))
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts" / "sparknet-package.py"),
+            "install",
+            "--index",
+            str(index_file),
+            "--source",
+            str(tmp_path / "source"),
+            "--dest",
+            str(tmp_path / "dest"),
+            "--public-key",
+            str(public),
+            "--package",
+            "tool@1.0.0",
+            "--confirm",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (tmp_path / "dest" / "tool" / "1.0.0" / "bin" / "tool").read_bytes() == b"artifact"

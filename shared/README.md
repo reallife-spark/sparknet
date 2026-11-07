@@ -231,6 +231,7 @@ implementations; none of them signs or grants:
 | `sparknet-collab.py` | `contracts/collab-schema.json` | Validates bounded collaboration rooms and messages; no authority. |
 | `sparknet-package.py` | `contracts/package-schema.json` | Validates and signs packages/indexes and computes a dependency-first install plan; never executes. |
 | `sparknet-pipeline.py` | `contracts/pipeline-schema.json` | Plans/applies O1→O2 and stages O5; promotion is explicit, source is never deleted. |
+| `sparknet-self-improve.py` | `contracts/self-improvement-schema.json` | Validates and signs bounded benchmark runs; promotion is separate. |
 
 The canonical bytes are pinned by `contracts/vectors/foundations.json` and
 mirrored at `gospark/spec/sparknet/foundations-vectors.json`.
