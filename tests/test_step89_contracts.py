@@ -59,3 +59,13 @@ def test_exec_policy_is_closed_and_validate_only_by_default():
     assert "no allowlist, no execution" in text
     assert "starts validate-only" in text
     assert "never accepts a shell" in text
+
+
+def test_pipeline_contract_requires_confirmation_and_inheritance():
+    schema = load("pipeline-schema.json")
+    assert schema["o2"]["marker"].startswith("<!-- o2-source:")
+    assert set(schema["eligibility"]["states"]) == {"signed", "sanitized"}
+    text = " ".join(schema["rules"]).lower()
+    assert "never deleted" in text
+    assert "human action" in text
+    assert "not authority" in text

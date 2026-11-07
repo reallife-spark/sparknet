@@ -1,0 +1,64 @@
+{
+  "contract": "pipeline-schema",
+  "schema_version": "1.0",
+  "description": "The O1→O2→O5 knowledge pipeline. O1 is an accepted signed/sanitized inbox note, O2 is an append to the dated daily log, and O5 is a staged candidate that only an explicit human confirmation promotes into 05_Knowledge/. The pipeline never deletes the source, widens scope or lowers classification.",
+  "eligibility": {
+    "states": [
+      "signed",
+      "sanitized"
+    ],
+    "required_meta": [
+      "classification",
+      "source_sha256"
+    ],
+    "rule": "An unsigned/pending item is skipped, never silently treated as accepted."
+  },
+  "o2": {
+    "target": "02_Daily/YYYY-MM-DD.md",
+    "companion": "If the date page exists without a tracking block, write 02_Daily/YYYY-MM-DD-o2.md instead of modifying a human page.",
+    "marker": "<!-- o2-source: <sha256> -->",
+    "content": "A dated section containing the source path, digest, classification and source body.",
+    "signing": "The O2 note is signed with the user key; an existing tracked page is re-signed after the append.",
+    "idempotency": "The source digest marker is the idempotency key; a second apply does not duplicate the section."
+  },
+  "o5": {
+    "staging": "_staging/o5/YYYY-MM-DD-<slug>.md",
+    "type": "o5-candidate",
+    "categories": [
+      "concepts",
+      "entities",
+      "skills",
+      "synthesis",
+      "projects",
+      "references"
+    ],
+    "promotion": "Only an explicit `promote --category ... --confirm` moves the candidate to 05_Knowledge/<category>/<slug>.md.",
+    "collision": "A target that already exists is refused; a staging path with a different source digest is a conflict and blocks apply."
+  },
+  "inheritance": {
+    "classification": "The O2 and O5 records inherit the O1 classification; a lower classification is refused.",
+    "department": "The department is inherited when present.",
+    "provenance": "source_path, source_sha256 and captured date travel with both derived records."
+  },
+  "rules": [
+    "The O1 source is never deleted or moved by the pipeline.",
+    "O5 promotion is a human action, never automatic.",
+    "A conflict is held for a human; it is never overwritten.",
+    "A derived note is signed or refused, not written unsigned.",
+    "The pipeline is not authority: it cannot grant, revoke or widen a capability."
+  ],
+  "refusal_codes": [
+    "missing-inbox",
+    "missing-classification",
+    "bad-department",
+    "unreadable-source",
+    "confirmation-required",
+    "user-record-unfilled",
+    "conflict",
+    "bad-date",
+    "bad-candidate",
+    "bad-category",
+    "unsigned-candidate",
+    "target-exists"
+  ]
+}

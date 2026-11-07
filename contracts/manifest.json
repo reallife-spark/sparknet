@@ -110,6 +110,12 @@
       "sha256": "1e35308d7ac1711f78e0a960853070a1d8b3c6f002165c06d8238691235120bf"
     },
     {
+      "contract": "pipeline-schema",
+      "file": "pipeline-schema.json",
+      "schema_version": "1.0",
+      "sha256": "4b19ed10e49d318abe652fb849c5b8aba45e38977b279a35af0120cfea38852a"
+    },
+    {
       "contract": "ports",
       "file": "ports.json",
       "schema_version": "2.0",

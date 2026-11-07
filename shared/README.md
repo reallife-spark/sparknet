@@ -230,6 +230,7 @@ implementations; none of them signs or grants:
 | `sparknet-exec-rpc.py` | `contracts/exec-schema.json` | Validates signed argv-only execution requests and bounded responses; no shell. |
 | `sparknet-collab.py` | `contracts/collab-schema.json` | Validates bounded collaboration rooms and messages; no authority. |
 | `sparknet-package.py` | `contracts/package-schema.json` | Validates and signs packages/indexes and computes a dependency-first install plan; never executes. |
+| `sparknet-pipeline.py` | `contracts/pipeline-schema.json` | Plans/applies O1→O2 and stages O5; promotion is explicit, source is never deleted. |
 
 The canonical bytes are pinned by `contracts/vectors/foundations.json` and
 mirrored at `gospark/spec/sparknet/foundations-vectors.json`.
