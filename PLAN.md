@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
 updated: 2026-11-06
-current: 88
+current: 89
 ---
 
 # sparknet — Active Plan
@@ -492,7 +492,7 @@ current: 88
     engine state; generate a new peer node identity key; start guard, bridge,
     4201/4202, telemetry/checkpoint/inventory/RFI, memory 4110/4093, WebUI
     8181, engine 4204, Qdrant, provisioner, admin agent and self-healing.
-  - [ ] **88G — Registry, grants and secrets.** Sign a higher-sequence registry
+  - [x] **88G — Registry, grants and secrets.** Sign a higher-sequence registry
     for the new identities with the existing capability sets; deliver to the
     peer guard; re-issue grants and tokens; point admin federation and goSpark
     control/agent at the new hosts; rotate WebUI, admin, engine, memory,
@@ -516,13 +516,13 @@ current: 88
     `make validate`, `make keys-check`, `make shims-check`,
     `make bundle-verify ROLE=peer|master`, `make ci` and
     `make -C gospark ci` are green; every live leg is `DoD: confirm: user`.
-  - **Status 2026-11-06:** core role inversion live. Root `c77a3446…` (epoch 1,
+  - **Status 2026-11-07:** core role inversion live. Root `c77a3446…` (epoch 1,
     parent `fa6f4fa5…`), registry sequence 9, signer on `agx64`; overlay
     handshake; Master/peer services, RFI loop, telemetry, inventory (18
-    records), admin federation and `memory_status` verified. Old peer/master
-    data copies removed, old units disabled, old keys retired, and goSpark
-    control/agent placed. Remaining: 88G loopback engine/memory/Qdrant token
-    rotation and browser click-through. Step 88 stays open for 88G.
+    records), admin federation and `memory_status` verified. 88G rotated the
+    engine, memory and Qdrant tokens on `agx32`/`agx64`; old tokens are refused
+    and peer/Master WebUI signin, model list and chat returned 200. Step 88
+    complete; Step 89 execution starts.
 
 ## Step 89 — Gemini sovereign-cluster blueprint adoption
 

@@ -2,18 +2,19 @@
 > Standing state only. Read at session start; **replace, never append**.
 > History belongs in `log.md` and `sessions/YYYY-MM-DD.md`; pre-2026-10-31
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
-Updated: 2026-11-06
+Updated: 2026-11-07
 ## Plan cursor
-- `PLAN.md` — `current: 88` (role inversion: `agx64` Master / `agx32` peer; Step 89 is the Gemini blueprint adoption).
+- `PLAN.md` — `current: 89` (Step 88 closed; Step 89 Gemini blueprint execution starts at Phase 1).
 - Parked live legs: 84G browser click; 86C/86D full survey/promotion drill; 87 browser click-through; Master 9G nocturnal window.
-- **Role inversion core live 2026-11-06:** root `c77a3446…` (epoch 1, parent `fa6f4fa5…`), registry sequence 9, signer on agx64. Old peer/master data copies removed, old units disabled, old keys retired; goSpark control on agx64, agent on agx32. Remaining: 88G loopback token rotation and browser click-through.
+- **Role inversion core live 2026-11-06:** root `c77a3446…` (epoch 1, parent `fa6f4fa5…`), registry sequence 9, signer on agx64. Old peer/master data copies removed, old units disabled, old keys retired; goSpark control on agx64, agent on agx32.
+- **88G complete 2026-11-07:** engine, memory and Qdrant tokens rotated on agx32/agx64; old tokens refused; peer and Master WebUI signin/models/chat returned 200. Visual browser click-through remains a user confirmation note.
 ## Live fabric
 - **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`). Overlay handshake both ways; peer overlay egress only to Master.
 - Master on agx64: signer/ledger/parity, 8088 admin, 8098 console, 8090/8091 intake, 4220–4223, 4201/4202 share, 4204 engine, Qdrant 6333, teacher config.
 - Peer on agx32: 9090 guard, 4096 bridge, 4201/4202 share, 4110/4093 memory, 8181 WebUI, 8099 console, 4204 engine, Qdrant 6333, student config.
 - Data moved: user vaults/WebUI/Qdrant/memory to agx32; master-admin/WebUI/Qdrant/uplift/distill/ledger/evidence to agx64. RFI loop, telemetry, inventory (18 records), admin federation and memory_status verified live 2026-11-06; old copies removed after verification.
 - **Teacher/student:** agx64 teacher Qwen3.6-35B-A3B Q4_K_M via Ollama (22.2 tok/s, 21.2 GiB, 100%); agx32 student Qwen3.5-9B Q8 (11.3 tok/s, 8.1 GiB, 100%); 27B Q4 slower (4.75 tok/s). vLLM/aux stopped; Qwen3.8-Flash-Next blocked on qwen4exp.
-- **WebUI/OpenCode live 2026-11-05:** both nodes run Open WebUI `v0.13.0`; the peer is the user surface on agx32, the Master is admin-only on agx64; the loopback OpenCode engine (`4204`) runs one vault-only sandbox per user. The live sandbox is now `2.2.5` on agx64/agx32 (rebuilt 2026-11-06); peer and Master chat returned `OK` with HTTP 200. Browser click-through remains.
+- **WebUI/OpenCode live 2026-11-05:** both nodes run Open WebUI `v0.13.0`; the peer is the user surface on agx32, the Master is admin-only on agx64; the loopback OpenCode engine (`4204`) runs one vault-only sandbox per user. The live sandbox is `2.2.5` on agx64/agx32 (rebuilt 2026-11-06); peer and Master chat returned `OK` with HTTP 200 (2026-11-07).
 - **Memory/evidence live 2026-11-04:** memory `4110`/gateway `4093` now on agx32; Master `memory_status`/`memory-read` 200; registry sequence 9; share/evidence preserved.
 ## Durable facts
 - **Memory plane (2026-11-02):** per-vault typed memory runs in Go
