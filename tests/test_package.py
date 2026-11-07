@@ -8,6 +8,7 @@ import sys
 
 import pytest
 from contract_helpers import REPO_ROOT, load
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 PACKAGE_PATH = REPO_ROOT / "shared" / "sparknet-package.py"
 
@@ -131,3 +132,18 @@ def test_unreachable_cycle_is_refused():
             [{"package_id": "root", "version": "1.0.0"}],
         )
     assert refused.value.code == "dependency-cycle"
+
+
+def test_package_and_index_signatures_verify_and_refuse_tampering():
+    key = Ed25519PrivateKey.generate()
+    public = key.public_key()
+    signed = package.sign_package(manifest(), key)
+    assert signed["signature_b64"]
+    assert package.verify_package_signature(signed, public) is True
+    signed["description"] = "tampered"
+    assert package.verify_package_signature(signed, public) is False
+
+    index = package.sign_index(package.make_index([manifest()]), key)
+    assert package.verify_index_signature(index, public) is True
+    index["updated_at"] = "2099-01-01T00:00:00Z"
+    assert package.verify_index_signature(index, public) is False

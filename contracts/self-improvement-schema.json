@@ -1,0 +1,94 @@
+{
+  "contract": "self-improvement-schema",
+  "schema_version": "1.0",
+  "description": "A bounded mutation-and-benchmark run. The run may propose code or prompt changes, but promotion is a separate decision backed by deterministic benchmarks and Git history; no run grants authority or installs itself.",
+  "run": {
+    "schema": "sparknet-self-improvement/1",
+    "fields": [
+      "schema_version",
+      "run_id",
+      "mode",
+      "base_commit",
+      "worktree",
+      "mutation_sha256",
+      "benchmark_suite",
+      "metrics",
+      "thresholds",
+      "decision",
+      "created_at",
+      "signature_b64"
+    ],
+    "required": [
+      "schema_version",
+      "run_id",
+      "mode",
+      "base_commit",
+      "worktree",
+      "mutation_sha256",
+      "benchmark_suite",
+      "metrics",
+      "thresholds",
+      "decision",
+      "created_at"
+    ],
+    "modes": [
+      "worktree",
+      "firecracker"
+    ],
+    "decisions": [
+      "pending",
+      "promote",
+      "rollback"
+    ],
+    "worktree": "Relative path under the node state directory. It must not be a vault path or a protected path.",
+    "mutation_sha256": "64 lowercase hex characters over the candidate diff.",
+    "thresholds": "The fixed pass/fail thresholds recorded before the run; a post-hoc threshold is refused.",
+    "decision": "promote only when every threshold passes; otherwise rollback.",
+    "signature_b64": "Optional Ed25519 signature over the run record. It proves provenance, not authority."
+  },
+  "benchmark": {
+    "suite": "A named, versioned, deterministic suite; randomness and network calls are excluded.",
+    "metrics": [
+      "task_accuracy",
+      "latency_ms",
+      "token_efficiency",
+      "tool_call_accuracy",
+      "refusal_rate"
+    ],
+    "report": "One record per metric with baseline, candidate, delta and threshold; a missing metric refuses promotion."
+  },
+  "promotion": {
+    "requires": [
+      "decision=promote",
+      "every threshold passed",
+      "base_commit still current",
+      "explicit operator action"
+    ],
+    "action": "Commit the candidate to Git, then fast-forward the managed branch.",
+    "rollback": "Hard reset to base_commit and remove the worktree; no partial merge."
+  },
+  "fallback": {
+    "when": "Firecracker or KVM is unavailable on the host",
+    "mode": "worktree",
+    "note": "The worktree/container fallback is recorded in the run as mode=worktree; it is not presented as a microVM run."
+  },
+  "rules": [
+    "A run is data and a proposal, never authority.",
+    "No benchmark, no promotion.",
+    "No threshold change after the run starts.",
+    "No auto-merge and no auto-deploy.",
+    "A failed or cancelled run leaves the managed branch at base_commit."
+  ],
+  "refusal_codes": [
+    "malformed-run",
+    "bad-mode",
+    "bad-commit",
+    "bad-worktree",
+    "bad-digest",
+    "benchmark-missing",
+    "threshold-regression",
+    "base-commit-moved",
+    "kvm-unavailable",
+    "promotion-refused"
+  ]
+}

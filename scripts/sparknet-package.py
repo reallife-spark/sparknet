@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "shared"))
 from sparknet_loader import load_shared
 
 PACKAGE = load_shared("sparknet-package.py", "sparknet_package_cli")
+AUTHZ = load_shared("sparknet-authz.py", "sparknet_authz_package_cli")
 SKIP_PARTS = {".git", ".state", "keys", "manifests", "__pycache__", ".pytest_cache", ".ruff_cache"}
 SKIP_NAMES = {"secrets-index.json", "user-env-manifest.json", ".env"}
 
@@ -40,6 +41,11 @@ def _parser() -> argparse.ArgumentParser:
     index = sub.add_parser("index", help="build an index from package files")
     index.add_argument("--package", action="append", required=True)
     index.add_argument("--out", required=True)
+
+    sign = sub.add_parser("sign", help="sign a package or index with an Ed25519 key")
+    sign.add_argument("--file", required=True)
+    sign.add_argument("--key-file", required=True)
+    sign.add_argument("--out", required=True)
 
     verify = sub.add_parser("verify", help="validate a package or index")
     verify.add_argument("--file", required=True)
@@ -93,6 +99,18 @@ def main(argv: list[str] | None = None) -> int:
             index = PACKAGE.make_index(packages)
             Path(args.out).write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
             print(json.dumps({"packages": len(index["packages"]), "out": args.out}))
+            return 0
+        if args.command == "sign":
+            value = json.loads(Path(args.file).read_text(encoding="utf-8"))
+            key = AUTHZ.load_private_key(Path(args.key_file))
+            if isinstance(value, dict) and value.get("schema_version") == PACKAGE.INDEX_SCHEMA:
+                signed = PACKAGE.sign_index(value, key)
+                kind = "index"
+            else:
+                signed = PACKAGE.sign_package(value, key)
+                kind = "package"
+            Path(args.out).write_text(json.dumps(signed, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            print(json.dumps({"kind": kind, "out": args.out}, sort_keys=True))
             return 0
         if args.command == "verify":
             value = json.loads(Path(args.file).read_text(encoding="utf-8"))

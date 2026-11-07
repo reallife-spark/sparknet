@@ -48,6 +48,10 @@ the tests then prove both roles still agree.
 | `exec-schema.json` | the signed argv-only execution contract: vector argv, vault-relative cwd, environment allow-list, operator OS cap, timeout and output bounds |
 | `collab-schema.json` | bounded collaboration rooms: participants, classification ceiling, department boundary, provenance and no authority |
 | `package-schema.json` | signed package manifests and the closed dependency-first install plan; a package is data and never executes itself |
+| `agent-schema.json` | event-driven agent descriptors: one role family, bounded runtime/concurrency, no authority, no vault write |
+| `self-improvement-schema.json` | bounded mutation/benchmark runs, deterministic thresholds, promotion/rollback and the worktree fallback |
+| `release-schema.json` | signed release manifests, immutable artifacts, package-index binding and the 4221 distribution/install rules |
+| `data-lake-schema.json` | consented Master-side uplift/trace/artifact intake; training and backup evidence that is never served as knowledge |
 | `nocturnal-artifact-schema.json` | signed cluster-job results and manifests under `01_Inbox/nocturnal/`, coverage, local commit and the no-auto-promotion rule |
 | `manifest.json` | **generated** — the machine-readable inventory of this directory: each JSON contract by hash (so an edit without a re-render is caught) plus the projected capability and port tables. Rendered by `scripts/sparknet-render.py`; never hand-edited. |
 

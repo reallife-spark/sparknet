@@ -11,10 +11,14 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import sys
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from sparknet_loader import load_shared
 
 PACKAGE_SCHEMA = "sparknet-package/1"
 INDEX_SCHEMA = "sparknet-package-index/1"
@@ -260,3 +264,46 @@ def install_plan(index: Mapping[str, Any], roots: Sequence[Mapping[str, Any]]) -
 def verify_artifact(artifact: Mapping[str, Any], data: bytes) -> bool:
     normalised = _artifact(artifact)
     return len(data) == normalised["size"] and hashlib.sha256(data).hexdigest() == normalised["sha256"]
+
+
+def _authz() -> Any:
+    """Load the one signing implementation by path, never a package-local copy."""
+    return load_shared("sparknet-authz.py", "sparknet_authz_package")
+
+
+def sign_package(package: Mapping[str, Any], private_key: Any) -> dict[str, Any]:
+    """Return a validated package with an Ed25519 signature over its projection."""
+    normalised = validate_package(package)
+    normalised["signature_b64"] = _authz().sign_bytes(private_key, package_message(normalised))
+    return normalised
+
+
+def verify_package_signature(package: Mapping[str, Any], public_key: Any) -> bool:
+    """Verify a package signature; an unsigned or malformed package is false."""
+    try:
+        normalised = validate_package(package)
+        signature = normalised.get("signature_b64")
+        if not isinstance(signature, str) or not signature:
+            return False
+        return bool(_authz().verify_signature(public_key, signature, package_message(normalised)))
+    except (PackageError, ValueError, TypeError):
+        return False
+
+
+def sign_index(index: Mapping[str, Any], private_key: Any) -> dict[str, Any]:
+    """Return a validated package index with an Ed25519 signature over its projection."""
+    normalised = validate_index(index)
+    normalised["signature_b64"] = _authz().sign_bytes(private_key, index_message(normalised))
+    return normalised
+
+
+def verify_index_signature(index: Mapping[str, Any], public_key: Any) -> bool:
+    """Verify a package-index signature; an unsigned or malformed index is false."""
+    try:
+        normalised = validate_index(index)
+        signature = normalised.get("signature_b64")
+        if not isinstance(signature, str) or not signature:
+            return False
+        return bool(_authz().verify_signature(public_key, signature, index_message(normalised)))
+    except (PackageError, ValueError, TypeError):
+        return False

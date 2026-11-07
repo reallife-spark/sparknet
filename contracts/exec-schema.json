@@ -114,18 +114,44 @@
     "An expired request is refused, never replayed; the lifetime is bounded and issued_at may not be far in the future."
   ],
   "refusal_codes": [
-    "malformed-request",
+    "approval-expired",
+    "approval-required",
     "bad-argv",
+    "bad-capabilities",
     "bad-cwd",
     "bad-env",
-    "bad-timeout",
-    "bad-operator-os",
-    "bad-capabilities",
-    "bad-nonce",
-    "subject-unverified",
-    "expired-request",
-    "malformed-response",
     "bad-exit-code",
-    "bad-output"
-  ]
+    "bad-nonce",
+    "bad-operator-os",
+    "bad-output",
+    "bad-timeout",
+    "expired-request",
+    "malformed-request",
+    "malformed-response",
+    "not-allowlisted",
+    "subject-unverified"
+  ],
+  "policy": {
+    "schema": "sparknet-exec-policy/1",
+    "fields": [
+      "allowed_argv",
+      "cwd_roots",
+      "env_allow",
+      "max_timeout_seconds",
+      "max_output_bytes",
+      "approval_ttl_seconds",
+      "audit_path"
+    ],
+    "allowed_argv": "An ordered list of {binary, args} entries. A request matches one entry exactly or by an explicit prefix; no glob, shell expansion or interpreter.",
+    "cwd_roots": "Relative vault paths an execution may use. Empty means no execution.",
+    "env_allow": "The subset of the env allow-list an operator may set; the daemon always supplies PATH.",
+    "approval_ttl_seconds": "1..3600; a mutating command needs a signed approval no older than this.",
+    "audit_path": "Node-state-relative append-only JSONL path; a request is audited before and after execution.",
+    "rules": [
+      "No allowlist, no execution. The daemon starts validate-only until an operator installs a policy.",
+      "The policy is data; it cannot grant a capability or reach the signer.",
+      "A request that does not match an allowlist entry is refused before any process is created.",
+      "The daemon never accepts a shell, interpreter or wildcard entry."
+    ]
+  }
 }

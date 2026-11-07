@@ -1,0 +1,69 @@
+{
+  "contract": "data-lake-schema",
+  "schema_version": "1.0",
+  "description": "The Master's consented data-lake intake for uplift, traces and artifacts. It extends uplift-schema.json; the lake is training and backup evidence, never an answer corpus and never a peer knowledge channel.",
+  "extends": "uplift-schema.json",
+  "record": {
+    "schema": "sparknet-data-lake/1",
+    "fields": [
+      "schema_version",
+      "record_id",
+      "node_id",
+      "user_id",
+      "consent",
+      "kind",
+      "classification",
+      "department",
+      "digest",
+      "size",
+      "retention_days",
+      "created_at",
+      "signature_b64"
+    ],
+    "required": [
+      "schema_version",
+      "record_id",
+      "node_id",
+      "user_id",
+      "consent",
+      "kind",
+      "classification",
+      "digest",
+      "size",
+      "retention_days",
+      "created_at"
+    ],
+    "kinds": [
+      "inventory",
+      "qdrant-snapshot",
+      "teacher-trace",
+      "raw-kv-manifest"
+    ],
+    "consent": "Must be true; a missing or false consent is refused before storage.",
+    "digest": "64 lowercase hex characters over the stored bytes.",
+    "retention_days": "1..3650; the intake refuses a longer retention without an explicit signed exception.",
+    "signature_b64": "The peer node's signature over the record projection; it proves provenance, not authority."
+  },
+  "storage": {
+    "root": "The Master's uplift state directory, outside every vault and outside the 4223 corpus.",
+    "index": "A signed manifest of records, digests and retention; no payload is inlined in the index.",
+    "never_served": "The lake is never served by 4223, never installed into a vault, never used as an answer corpus and never enters a peer AI context."
+  },
+  "rules": [
+    "Consent is per record and per user; opted-out data is never stored.",
+    "A record is training or backup evidence, never authority.",
+    "Redaction happens before storage; a secret that reaches the lake is a leak, not training data.",
+    "Retention is enforced by the intake; deletion is recorded, not silent.",
+    "A peer cannot read the lake; only the Master's distillation and backup jobs may consume it."
+  ],
+  "refusal_codes": [
+    "malformed-record",
+    "consent-missing",
+    "unknown-kind",
+    "bad-digest",
+    "bad-size",
+    "retention-too-long",
+    "unauthorized-node",
+    "bad-signature"
+  ]
+}

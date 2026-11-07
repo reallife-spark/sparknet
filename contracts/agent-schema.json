@@ -1,0 +1,67 @@
+{
+  "contract": "agent-schema",
+  "schema_version": "1.0",
+  "description": "An event-driven agent descriptor. An agent is a bounded executor, not a capability holder: it consumes one topic family, produces results and never grants authority, writes a vault page or widens a scope.",
+  "descriptor": {
+    "schema": "sparknet-agent/1",
+    "fields": [
+      "schema_version",
+      "agent_id",
+      "role",
+      "enabled",
+      "topics",
+      "model_scope",
+      "max_runtime_seconds",
+      "max_concurrency"
+    ],
+    "required": [
+      "schema_version",
+      "agent_id",
+      "role",
+      "enabled",
+      "topics",
+      "max_runtime_seconds",
+      "max_concurrency"
+    ],
+    "agent_id_pattern": "^[a-z][a-z0-9-]{1,63}$",
+    "roles": [
+      "engineering",
+      "cyber",
+      "vault-curator"
+    ],
+    "model_scope": "The local model or engine the agent may call. It names a model, never a capability, key or signer socket.",
+    "max_runtime_seconds": "1..3600; a timed-out agent publishes a failure event and stops.",
+    "max_concurrency": "1..16; the bus refuses more than the declared number of in-flight tasks for one agent."
+  },
+  "topics": {
+    "consume": [
+      "sparknet.task.<role>",
+      "sparknet.task.<role>.*"
+    ],
+    "produce": [
+      "sparknet.result.<role>",
+      "sparknet.event.<role>"
+    ],
+    "syntax": "A topic, a single-segment wildcard `*`, or a tail wildcard `>`; the same syntax as event-schema.json.",
+    "rule": "An agent subscribes only to its own role family and publishes only to its own result/event family."
+  },
+  "rules": [
+    "An agent is data-driven work, never authority. It cannot grant, revoke or widen a capability.",
+    "An agent never writes a vault page directly; a result is data until a human or a signed pipeline accepts it.",
+    "An agent must reject an event whose classification, department or scope exceeds its own context.",
+    "The cyber agent is defensive-only by default; offensive security is routed to the red role and is out of scope for the default fabric.",
+    "A result carries provenance and a refusal carries a reason; silence is not a result.",
+    "An agent cannot read the ledger, registry, keys or signer socket."
+  ],
+  "refusal_codes": [
+    "malformed-agent",
+    "unknown-role",
+    "bad-topic",
+    "authority-field",
+    "scope-widening",
+    "classification-downgrade",
+    "runtime-exceeded",
+    "concurrency-exceeded",
+    "model-unavailable"
+  ]
+}

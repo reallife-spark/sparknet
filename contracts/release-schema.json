@@ -1,0 +1,71 @@
+{
+  "contract": "release-schema",
+  "schema_version": "1.0",
+  "description": "A signed release manifest that binds a version to immutable artifacts and a package index. A release is data; installing or deploying it is a separate operator action.",
+  "release": {
+    "schema": "sparknet-release/1",
+    "fields": [
+      "schema_version",
+      "release_id",
+      "version",
+      "channel",
+      "artifacts",
+      "package_index_sha256",
+      "signer_node_id",
+      "created_at",
+      "signature_b64"
+    ],
+    "required": [
+      "schema_version",
+      "release_id",
+      "version",
+      "channel",
+      "artifacts",
+      "package_index_sha256",
+      "signer_node_id",
+      "created_at"
+    ],
+    "channels": [
+      "stable",
+      "candidate",
+      "test"
+    ],
+    "artifact": {
+      "fields": [
+        "path",
+        "sha256",
+        "size"
+      ],
+      "required": [
+        "path",
+        "sha256",
+        "size"
+      ]
+    },
+    "package_index_sha256": "64 lowercase hex characters over the canonical package index bytes.",
+    "signature_b64": "Ed25519 signature over the release projection; it proves provenance and grants nothing."
+  },
+  "distribution": {
+    "channel": "The existing signed 4221 read-only file share carries the release manifest and artifacts bundle; no new port is introduced.",
+    "install": "A peer verifies the release and package signatures, checks every digest and writes only into _staging/; an explicit operator action performs installation.",
+    "rollback": "The previous release manifest remains available; rollback is an explicit install of that manifest, never a silent overwrite."
+  },
+  "rules": [
+    "A release cannot grant a capability or execute itself.",
+    "A release is immutable once signed; a changed artifact requires a new release_id.",
+    "Every artifact path is relative and stays inside the release root.",
+    "A package index digest that disagrees with the referenced index is refused.",
+    "A release channel never bypasses the package install plan or the operator action."
+  ],
+  "refusal_codes": [
+    "malformed-release",
+    "bad-release-id",
+    "bad-version",
+    "bad-channel",
+    "bad-artifact",
+    "bad-digest",
+    "index-mismatch",
+    "bad-signature",
+    "install-refused"
+  ]
+}

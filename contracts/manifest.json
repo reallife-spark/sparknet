@@ -8,6 +8,12 @@
       "sha256": "f9ca216f22df02b538b5e3f37f77957a63b6d7f7434e77beccaa5b3ec4431a71"
     },
     {
+      "contract": "agent-schema",
+      "file": "agent-schema.json",
+      "schema_version": "1.0",
+      "sha256": "7832421bd1818579ef5385ec7435e899f73444e8fd35573dc916d2134b5d8ebc"
+    },
+    {
       "contract": "capabilities",
       "file": "capabilities.json",
       "schema_version": "1.0",
@@ -18,6 +24,12 @@
       "file": "collab-schema.json",
       "schema_version": "1.0",
       "sha256": "bf52ac17f1ec683a1b5325b660bec842c6248eeb135ed8cc42b28967dd0814e6"
+    },
+    {
+      "contract": "data-lake-schema",
+      "file": "data-lake-schema.json",
+      "schema_version": "1.0",
+      "sha256": "04f8c92051f56164989e3c16bece56122d039fc55243da23a7e36fc6e481ec96"
     },
     {
       "contract": "distillation-schema",
@@ -35,7 +47,7 @@
       "contract": "exec-schema",
       "file": "exec-schema.json",
       "schema_version": "1.0",
-      "sha256": "009529d2611de75f1cc1bdfcc37a445d5656ffa7ec8229fa29e0a14a34d1e3ea"
+      "sha256": "4a0b3ab3123691bac13e13f403624417b051e30c805e88b330a357f6cfddddc0"
     },
     {
       "contract": "graph-schema",
@@ -128,10 +140,22 @@
       "sha256": "70a8b15bd1919d92eb4eebd39b05a032682f9dc77cdcdeb4639a60ed06fffd5a"
     },
     {
+      "contract": "release-schema",
+      "file": "release-schema.json",
+      "schema_version": "1.0",
+      "sha256": "5fd048cd6167ef3cca098de901efdda975b25765a68a17a1cfb5e1646a9f28f8"
+    },
+    {
       "contract": "rfi-schema",
       "file": "rfi-schema.json",
       "schema_version": "1.0",
       "sha256": "377f608c1bfc001d2c4226ea4640a46aac7820d8131fdac8d4d9cdaeb57191c3"
+    },
+    {
+      "contract": "self-improvement-schema",
+      "file": "self-improvement-schema.json",
+      "schema_version": "1.0",
+      "sha256": "ce15154b95f1e89ebb92a7ed19e6a7d7436bd01e95c47285420e93f825f80055"
     },
     {
       "contract": "telemetry-schema",

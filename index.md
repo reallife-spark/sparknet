@@ -94,6 +94,10 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/exec-schema.json` | signed argv-only execution contract: vector argv, vault-relative cwd, environment allow-list, operator OS cap, timeout and output bounds |
 | `contracts/collab-schema.json` | bounded collaboration rooms: participants, classification ceiling, department boundary, provenance and no authority |
 | `contracts/package-schema.json` | signed package manifests and the closed dependency-first install plan; a package is data and never executes itself |
+| `contracts/agent-schema.json` | event-driven agent descriptors: bounded runtime and concurrency, one role family, no authority |
+| `contracts/self-improvement-schema.json` | mutation/benchmark runs, deterministic thresholds, promotion/rollback and the worktree fallback |
+| `contracts/release-schema.json` | signed release manifests, immutable artifacts, package-index binding and 4221 distribution |
+| `contracts/data-lake-schema.json` | consented Master-side uplift/trace/artifact intake; training evidence that is never served |
 | `contracts/nocturnal-artifact-schema.json` | signed nocturnal result/manifest artefacts, coverage and local inbox commitment |
 | `contracts/deployment-runbook.md` | phased deployment guide (live on agx64+agx32; Step 88 inverts the pair) |
 | `contracts/role-inversion-runbook.md` | executed Step 88 procedure for `agx64` Master / `agx32` peer: freeze/backup, chained re-formation, data/service migration, registry/grants/secrets, model placement and rollback |

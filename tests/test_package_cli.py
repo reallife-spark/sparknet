@@ -18,7 +18,7 @@ def _run(*args):
 def test_package_cli_help():
     result = _run("--help")
     assert result.returncode == 0, result.stdout + result.stderr
-    for command in ("manifest", "index", "verify", "plan"):
+    for command in ("manifest", "index", "sign", "verify", "plan"):
         assert command in result.stdout
 
 

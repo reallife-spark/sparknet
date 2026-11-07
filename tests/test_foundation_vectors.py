@@ -44,6 +44,18 @@ CANONICAL = {
     "collab.message": collab.to_json,
     "package.package": lambda value: package.package_message(value).decode("utf-8"),
     "package.index": lambda value: package.index_message(value).decode("utf-8"),
+    "agent.descriptor": lambda value: json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    ),
+    "self-improvement.run": lambda value: json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    ),
+    "release.manifest": lambda value: json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    ),
+    "data-lake.record": lambda value: json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    ),
 }
 
 
