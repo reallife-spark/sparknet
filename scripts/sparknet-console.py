@@ -250,6 +250,7 @@ def api_foundations(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
         "release-schema.json",
         "data-lake-schema.json",
         "step89-admin-schema.json",
+        "step89-matrix.json",
     )
     module_names = (
         "sparknet-abac.py",

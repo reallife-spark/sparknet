@@ -54,6 +54,7 @@ the tests then prove both roles still agree.
 | `data-lake-schema.json` | consented Master-side uplift/trace/artifact intake; training and backup evidence that is never served as knowledge |
 | `pipeline-schema.json` | O1→O2→O5 eligibility, daily-log append, staged O5 candidate and explicit human promotion |
 | `step89-admin-schema.json` | signed Master-side lake, collaboration, distill-schedule and package-index envelopes; provenance, never authority |
+| `step89-matrix.json` | the Step 89 channel matrix: contract, implementation, tests and live state per channel |
 | `nocturnal-artifact-schema.json` | signed cluster-job results and manifests under `01_Inbox/nocturnal/`, coverage, local commit and the no-auto-promotion rule |
 | `manifest.json` | **generated** — the machine-readable inventory of this directory: each JSON contract by hash (so an edit without a re-render is caught) plus the projected capability and port tables. Rendered by `scripts/sparknet-render.py`; never hand-edited. |
 

@@ -170,6 +170,12 @@
       "sha256": "41d286ae7ac317192fb03537beccd4455ea8edc39e64a5266dbf7dda94268c2c"
     },
     {
+      "contract": "step89-matrix",
+      "file": "step89-matrix.json",
+      "schema_version": "1.0",
+      "sha256": "0ccd35a99873e5eb9b8c1b32ad93640e1aa857767033dd4e28f86d4182a6807c"
+    },
+    {
       "contract": "telemetry-schema",
       "file": "telemetry-schema.json",
       "schema_version": "1.0",

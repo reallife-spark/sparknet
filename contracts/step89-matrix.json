@@ -1,0 +1,133 @@
+{
+  "contract": "step89-matrix",
+  "schema_version": "1.0",
+  "description": "The Step 89 channel matrix. Every channel names its contract, implementation, refusal/loopback tests and live state. A channel without a row is not part of the verified fabric.",
+  "channels": [
+    {
+      "id": "event-bus",
+      "contract": "event-schema.json",
+      "module": "sparknet-event.py",
+      "tests": ["tests/test_event.py", "tests/test_event_bus.py", "tests/test_event_cli.py"],
+      "state": "live",
+      "live": "agx64/agx32 2026-11-07"
+    },
+    {
+      "id": "abac",
+      "contract": "abac-schema.json",
+      "module": "sparknet-abac.py",
+      "tests": ["tests/test_abac.py"],
+      "state": "implemented",
+      "live": "loopback"
+    },
+    {
+      "id": "graph",
+      "contract": "graph-schema.json",
+      "module": "sparknet-graph.py",
+      "tests": ["tests/test_graph.py", "tests/test_memory_gateway.py"],
+      "state": "live",
+      "live": "agx32 2026-11-07"
+    },
+    {
+      "id": "hybrid",
+      "contract": "hybrid-schema.json",
+      "module": "sparknet-hybrid.py",
+      "tests": ["tests/test_hybrid.py", "tests/test_memory_gateway.py"],
+      "state": "live",
+      "live": "agx32 2026-11-07"
+    },
+    {
+      "id": "exec",
+      "contract": "exec-schema.json",
+      "module": "sparknet-exec-rpc.py",
+      "tests": ["tests/test_exec_rpc.py", "tests/test_exec_daemon.py", "tests/test_exec_cli.py"],
+      "state": "live",
+      "live": "agx32 allowlist 2026-11-07"
+    },
+    {
+      "id": "collab",
+      "contract": "collab-schema.json",
+      "module": "sparknet-collab.py",
+      "tests": ["tests/test_collab.py", "tests/test_memory_gateway.py"],
+      "state": "live",
+      "live": "agx32 2026-11-07"
+    },
+    {
+      "id": "package",
+      "contract": "package-schema.json",
+      "module": "sparknet-package.py",
+      "tests": ["tests/test_package.py", "tests/test_package_cli.py"],
+      "state": "live",
+      "live": "4221 fetch/install 2026-11-07"
+    },
+    {
+      "id": "agent-bus",
+      "contract": "agent-schema.json",
+      "module": "sparknet-agent-bus.py",
+      "tests": ["tests/test_agent_bus.py"],
+      "state": "loopback",
+      "live": "not yet"
+    },
+    {
+      "id": "orchestrator",
+      "contract": "agent-schema.json",
+      "module": "sparknet-agent-bus.py",
+      "tests": ["tests/test_orchestrator.py"],
+      "state": "loopback",
+      "live": "not yet"
+    },
+    {
+      "id": "pipeline",
+      "contract": "pipeline-schema.json",
+      "module": "sparknet-pipeline.py",
+      "tests": ["tests/test_pipeline.py"],
+      "state": "dry-run",
+      "live": "agx32 plan 2026-11-07"
+    },
+    {
+      "id": "self-improvement",
+      "contract": "self-improvement-schema.json",
+      "module": "sparknet-self-improve.py",
+      "tests": ["tests/test_self_improve.py"],
+      "state": "loopback",
+      "live": "not yet"
+    },
+    {
+      "id": "step89-admin",
+      "contract": "step89-admin-schema.json",
+      "module": null,
+      "tests": ["master-node/tests/test_step89_admin.py"],
+      "state": "loopback",
+      "live": "not yet"
+    },
+    {
+      "id": "release",
+      "contract": "release-schema.json",
+      "module": null,
+      "tests": ["tests/test_step89_contracts.py"],
+      "state": "contract",
+      "live": "not yet"
+    },
+    {
+      "id": "data-lake",
+      "contract": "data-lake-schema.json",
+      "module": null,
+      "tests": ["tests/test_step89_contracts.py"],
+      "state": "contract",
+      "live": "not yet"
+    }
+  ],
+  "rules": [
+    "A channel row names one contract, one implementation or null, and at least one test.",
+    "A live row names a host and date; loopback/dry-run/contract rows do not claim live.",
+    "A channel cannot be marked live without a contract row, a refusal test and a loopback rehearsal.",
+    "The matrix is evidence, not authority."
+  ],
+  "refusal_codes": [
+    "missing-contract",
+    "missing-module",
+    "missing-test",
+    "duplicate-channel",
+    "unknown-state",
+    "live-without-date"
+  ]
+}
