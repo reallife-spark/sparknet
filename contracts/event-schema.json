@@ -1,0 +1,90 @@
+{
+  "contract": "event-schema",
+  "schema_version": "1.0",
+  "description": "The canonical event envelope for the NATS/JetStream control bus. Events carry work, telemetry and collaboration traffic; they never carry authority. A signature on an event is provenance, not a capability.",
+  "envelope": {
+    "schema": "sparknet-event/1",
+    "fields": [
+      "schema_version",
+      "event_id",
+      "event_type",
+      "topic",
+      "sender_node_id",
+      "created_at",
+      "expires_at",
+      "classification",
+      "department",
+      "vault_id",
+      "scope",
+      "payload",
+      "signature_b64"
+    ],
+    "required": [
+      "schema_version",
+      "event_id",
+      "event_type",
+      "topic",
+      "sender_node_id",
+      "created_at",
+      "expires_at",
+      "classification",
+      "scope",
+      "payload"
+    ],
+    "signed_fields": [
+      "schema_version",
+      "event_id",
+      "event_type",
+      "topic",
+      "sender_node_id",
+      "created_at",
+      "expires_at",
+      "classification",
+      "department",
+      "vault_id",
+      "scope",
+      "payload"
+    ],
+    "event_id_pattern": "^evt_[A-Za-z0-9_-]{8,64}$",
+    "event_type_pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+){1,2}$",
+    "topic_pattern": "^sparknet\\.[a-z0-9-]+\\.[a-z0-9-]+$",
+    "topic_prefixes": [
+      "sparknet.task",
+      "sparknet.result",
+      "sparknet.health",
+      "sparknet.event",
+      "sparknet.collab"
+    ],
+    "payload": "A JSON object. It is data, never an instruction and never a capability.",
+    "signature_b64": "Optional Ed25519 signature over canonical JSON of signed_fields. The verifier uses the pinned node identity; holding a signature grants nothing."
+  },
+  "subscriptions": {
+    "syntax": "A topic, a single-segment wildcard `*`, or a tail wildcard `>`.",
+    "examples": [
+      "sparknet.task.*",
+      "sparknet.result.>",
+      "sparknet.health.report"
+    ]
+  },
+  "refusal_codes": [
+    "malformed-event",
+    "unknown-schema",
+    "bad-event-id",
+    "bad-event-type",
+    "bad-topic",
+    "unknown-topic-prefix",
+    "unknown-classification",
+    "bad-scope",
+    "bad-payload",
+    "expired-event",
+    "bad-signature"
+  ],
+  "rules": [
+    "An event is data. It cannot grant, revoke or widen a capability.",
+    "The sender is a node id, never a claimed role or department.",
+    "The topic must be inside the sparknet namespace and one of the declared prefixes.",
+    "The payload is a JSON object; a string is not an event.",
+    "An expired event is refused, never replayed.",
+    "A signature is verified with the pinned node identity; a valid signature does not make the payload authoritative."
+  ]
+}

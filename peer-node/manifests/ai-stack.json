@@ -4,7 +4,7 @@
   "description": "A node's own AI stack, as committed config: its own chat surface (Open WebUI) standing on its own model server (infra Ollama) and its own vector store (Qdrant), the declarative slice of adoption item 3 in CLUSTER_INFERENCE_DESIGN.md. Read by peer-node/tests/test_node_ai_stack.py, which fails the build if the committed topology stops being the declared surface the design requires. Cluster fan-out is NOT here: accepting a signed subtask belongs to the task ingress + cluster client (item 5), so nothing in this file can be a vector for delegated inference.",
   "authored": "2026-10-10",
   "source": "CLUSTER_INFERENCE_DESIGN.md §Docker packaging",
-  "status": "live on agx64 2026-11-05; target after fabric Step 88 is agx32 (peer role inversion): Open WebUI v0.13.0, OpenCode engine 1.19.5 sandbox, Qdrant v1.20.0",
+  "status": "live on agx64 2026-11-05; target after fabric Step 88 is agx32 (peer role inversion): Open WebUI v0.13.0, OpenCode engine 2.2.5 sandbox (live 2026-11-06), Qdrant v1.20.0",
   "topology": {
     "services": [
       "open-webui",
@@ -78,7 +78,7 @@
     "proxy": "nginx:1.27-alpine host network; injects /sparknet-menu.js and proxies /sparknet-console/ to the read-only console on 127.0.0.1:8099",
     "engine_route": "OPENAI_API_BASE_URLS=http://127.0.0.1:4204/v1 — the loopback Sparknet OpenCode engine. Open WebUI forwards X-Sparknet-User, X-Sparknet-User-Role, X-Sparknet-Chat-Id and X-Sparknet-Model-Id as custom headers.",
     "engine_key": "OPENAI_API_KEYS expands a deploy-time engine token ($SPARKNET_OPENCODE_ENGINE_TOKEN); the token is generated at 0600 under the node state dir and is never committed.",
-    "per_user_sandbox": "The engine starts one OpenCode 1.19.5 container per user from sparknet-opencode-runtime. The container mounts only /srv/sparknet/knowledge/peer-<user_id>; it has an internal Docker network whose only peer is the host model proxy, a read-only root filesystem, dropped capabilities and no key/state/ledger mount.",
+    "per_user_sandbox": "The engine starts one OpenCode 2.2.5 container per user from sparknet-opencode-runtime. The container mounts only /srv/sparknet/knowledge/peer-<user_id>; it has an internal Docker network whose only peer is the host model proxy, a read-only root filesystem, dropped capabilities and no key/state/ledger mount.",
     "per_user_models": "Every approved user gets a private workspace model (peer-<user_id>) based on sparknet-chat, with their personal KB and the shared structure KB attached.",
     "prompts": "16 bilingual prompt templates (EN + DE) installed as public-read slash commands.",
     "tools": "Four native user-scoped tools: sparknet_vault (list/search/read/capture), sparknet_memory, sparknet_rfi and sparknet_status. They call the loopback memory gateway with the WebUI service token and the signed-in user id.",
@@ -140,7 +140,7 @@
     "port": 4204,
     "bind": "127.0.0.1",
     "unit": "peer-node/systemd/sparknet-opencode-engine@.service",
-    "runtime_image": "sparknet-opencode-runtime:1.19.5",
+    "runtime_image": "sparknet-opencode-runtime:2.2.5",
     "model_proxy": "host model proxy per sandbox network gateway; only /v1/ model paths are allowed",
     "authority": "none — no key, no signer socket, no ledger/registry mount; each sandbox sees only its user vault",
     "master": "the Master admin surface uses the same engine with --single-vault /srv/sparknet/knowledge/master-admin; the master role vault is never mounted"

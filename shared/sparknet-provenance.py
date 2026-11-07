@@ -200,6 +200,16 @@ def _load_merkle() -> Any:
     )
 
 
+def _load_abac() -> Any:
+    """Load the ABAC vocabulary by path; ingestion must not restate it."""
+    return load_shared(
+        "sparknet-abac.py",
+        "sparknet_abac",
+        error=ProvenanceError,
+        message="cannot find shared/sparknet-abac.py; set SPARKNET_SHARED_DIR.",
+    )
+
+
 _contract_cache: dict[str, Any] | None = None
 
 
@@ -1030,6 +1040,8 @@ def ingest_note(
     source: str,
     sender: str | None = None,
     title: str | None = None,
+    classification: str | None = None,
+    department: str | None = None,
     agent: str = "ingest",
     model: str = "local",
     clock=None,
@@ -1047,6 +1059,18 @@ def ingest_note(
     """
     if source not in INGEST_SOURCES:
         raise ProvenanceError(f"source must be one of {', '.join(INGEST_SOURCES)}")
+    abac = _load_abac()
+    selected = classification or abac.INGEST_DEFAULTS[source]
+    if selected not in abac.CLASSIFICATIONS:
+        raise ProvenanceError(f"classification must be one of {', '.join(abac.CLASSIFICATIONS)}")
+    minimum = abac.INGEST_MINIMUM.get(source)
+    if minimum is not None and abac.CLASSIFICATIONS.index(selected) < abac.CLASSIFICATIONS.index(minimum):
+        raise ProvenanceError(f"source {source!r} cannot be classified below {minimum!r}")
+    selected_department = None
+    if department is not None:
+        selected_department = department.strip()
+        if not selected_department or not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", selected_department):
+            raise ProvenanceError("department must be 1-64 characters of letters, digits, dot, underscore or dash")
     record = parse_user_record(vault)
     if source == "email":
         address = (sender or "").strip()
@@ -1080,7 +1104,10 @@ def ingest_note(
         "type": "inbox-item",
         "source": source,
         "captured": now.date().isoformat(),
+        "classification": selected,
     }
+    if selected_department:
+        meta["department"] = selected_department
     if source == "email":
         meta["sender"] = str(sender)
     tracking: dict[str, Any] = {
@@ -2542,6 +2569,12 @@ def main(argv: list[str] | None = None) -> int:
     p_ingest.add_argument("--source", required=True, choices=INGEST_SOURCES)
     p_ingest.add_argument("--sender", help="the sender address; required for --source email")
     p_ingest.add_argument("--title", help="title and slug; defaults to the first heading")
+    p_ingest.add_argument(
+        "--classification",
+        choices=_load_abac().CLASSIFICATIONS,
+        help="classification recorded at O1; source defaults apply when omitted",
+    )
+    p_ingest.add_argument("--department", help="department attribute recorded at O1")
     p_ingest.add_argument("--agent", default="ingest")
     p_ingest.add_argument("--model", default="local")
 
@@ -2645,6 +2678,8 @@ def main(argv: list[str] | None = None) -> int:
                 source=args.source,
                 sender=args.sender,
                 title=args.title,
+                classification=args.classification,
+                department=args.department,
                 agent=args.agent,
                 model=args.model,
             )

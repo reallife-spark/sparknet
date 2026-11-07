@@ -365,7 +365,7 @@ SPARKNET_OPENCODE_ENGINE_TOKEN_FILE=$engine_secret
 SPARKNET_OPENCODE_ENGINE_STATE=$NODE_STATE/opencode-engine
 SPARKNET_KNOWLEDGE_ROOT=/srv/sparknet/knowledge
 SPARKNET_OPENCODE_SINGLE_VAULT=$engine_single
-SPARKNET_OPENCODE_IMAGE=${SPARKNET_OPENCODE_IMAGE:-sparknet-opencode-runtime:1.19.5}
+SPARKNET_OPENCODE_IMAGE=${SPARKNET_OPENCODE_IMAGE:-sparknet-opencode-runtime:2.2.5}
 SPARKNET_DOCKER=${SPARKNET_DOCKER:-docker}
 SPARKNET_MODEL_UPSTREAM=${SPARKNET_MODEL_UPSTREAM:-http://127.0.0.1:11434}
 SPARKNET_OPENCODE_MODEL=$engine_model
@@ -375,8 +375,8 @@ SPARKNET_OPENCODE_IDLE_SECONDS=${SPARKNET_OPENCODE_IDLE_SECONDS:-1800}
 EOF2
   chmod 600 "$engine_env"
   log "wrote $engine_env (engine model=$engine_model)"
-  if ! docker image inspect "${SPARKNET_OPENCODE_IMAGE:-sparknet-opencode-runtime:1.19.5}" >/dev/null 2>&1; then
-    log "WARNING: ${SPARKNET_OPENCODE_IMAGE:-sparknet-opencode-runtime:1.19.5} is missing; run: make -C peer-node opencode-runtime"
+  if ! docker image inspect "${SPARKNET_OPENCODE_IMAGE:-sparknet-opencode-runtime:2.2.5}" >/dev/null 2>&1; then
+    log "WARNING: ${SPARKNET_OPENCODE_IMAGE:-sparknet-opencode-runtime:2.2.5} is missing; run: make -C peer-node opencode-runtime"
   fi
   if [ -n "${JOIN_REGISTRY_PATH:-}" ]; then
     log "joined fabric: registry staged, master key $([ -n "$JOIN_MASTER_PUB" ] && echo pinned || echo 'from registry')"

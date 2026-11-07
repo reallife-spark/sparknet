@@ -220,7 +220,7 @@ Stages and their pins:
 | `XFORMERS_PIP_SPEC` | `xformers==0.0.20` |
 | `TRANSFORMERS_PIP_SPEC` | `transformers==4.37.2` |
 | `MAX_JOBS` | `4` — the compile parallelism the 16 GB machine can survive |
-| `OPENCODE_VERSION` | `1.19.5` |
+| `OPENCODE_VERSION` | `2.2.5` |
 | `NATS_VERSION` | `2.14.2` |
 | `LLAMA_CPP_REF` | `v0.7.0` |
 | `WHISPER_CPP_REF` | `v1.9.5` |

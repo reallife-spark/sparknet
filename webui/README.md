@@ -8,7 +8,8 @@ surfaces. The contract is `contracts/webui-surface.md`.
 **Live 2026-11-05 on agx64 (peer) and agx32 (Master admin), Open WebUI v0.13.0.**
 
 - The agent execution path is the loopback **Sparknet OpenCode engine** on
-  `127.0.0.1:4204`; each user gets an OpenCode 1.19.5 sandbox that mounts only
+  `127.0.0.1:4204`; each user gets an OpenCode 2.2.5 sandbox (live 2026-11-06)
+  that mounts only
   their `peer-<user_id>` vault.
 - 16 bilingual prompts, four user-scoped native tools and two active/global
   functions are installed by `peer-node/scripts/sparknet-webui-workspace.py apply`.
@@ -125,7 +126,7 @@ compose service: it needs the Docker socket to supervise one sandbox per user.
 
 - `peer-node/configs/opencode-engine/opencode.json.template` — chat/plan are
   read-only; build may edit and shell inside `/work` only.
-- `peer-node/configs/opencode-runtime/` — the pinned 1.19.5 runtime image and
+- `peer-node/configs/opencode-runtime/` — the pinned 2.2.5 runtime image and
   its Unix-socket bridge. Build it with `make -C peer-node opencode-runtime`.
 - The engine binds loopback only and requires the deploy-time engine token plus
   the WebUI-forwarded user header. It holds no key and mounts no role state.

@@ -1,0 +1,131 @@
+{
+  "contract": "exec-schema",
+  "schema_version": "1.0",
+  "description": "The signed JSON-RPC contract for the user-privileged execution daemon. A request is an argv vector, never a shell string. The daemon runs it under the attested operator's OS identity, inside the user's vault, with a bounded timeout and bounded output.",
+  "request": {
+    "schema": "sparknet-exec-request/1",
+    "fields": [
+      "schema_version",
+      "request_id",
+      "node_id",
+      "user_id",
+      "argv",
+      "cwd",
+      "env",
+      "timeout_seconds",
+      "operator_os",
+      "capabilities",
+      "nonce",
+      "issued_at",
+      "expires_at",
+      "signature_b64"
+    ],
+    "required": [
+      "schema_version",
+      "request_id",
+      "node_id",
+      "user_id",
+      "argv",
+      "cwd",
+      "timeout_seconds",
+      "operator_os",
+      "capabilities",
+      "nonce",
+      "issued_at",
+      "expires_at",
+      "signature_b64"
+    ],
+    "signed_fields": [
+      "schema_version",
+      "request_id",
+      "node_id",
+      "user_id",
+      "argv",
+      "cwd",
+      "env",
+      "timeout_seconds",
+      "operator_os",
+      "capabilities",
+      "nonce",
+      "issued_at",
+      "expires_at"
+    ],
+    "argv": "A non-empty list of strings. It is executed as a vector; no shell parses it.",
+    "cwd": "A relative POSIX path inside the user's vault; no absolute path and no parent escape.",
+    "env": "Only the declared allow-list keys; values are strings.",
+    "timeout_seconds": "1..300.",
+    "operator_os": "The attested OS identity: uid, euid, username, groups and is_root. It is accepted only from a verified grant; an absent attestation is refused and is never treated as root.",
+    "capabilities": "The capabilities the caller presents; the daemon still checks that the request does not need more."
+  },
+  "response": {
+    "schema": "sparknet-exec-response/1",
+    "fields": [
+      "schema_version",
+      "request_id",
+      "node_id",
+      "user_id",
+      "exit_code",
+      "stdout",
+      "stderr",
+      "started_at",
+      "completed_at",
+      "truncated",
+      "signature_b64"
+    ],
+    "required": [
+      "schema_version",
+      "request_id",
+      "node_id",
+      "user_id",
+      "exit_code",
+      "stdout",
+      "stderr",
+      "started_at",
+      "completed_at",
+      "truncated"
+    ]
+  },
+  "limits": {
+    "max_timeout_seconds": 300,
+    "max_request_ttl_seconds": 3600,
+    "clock_skew_seconds": 300,
+    "max_output_bytes": 1048576,
+    "env_allow_list": [
+      "HOME",
+      "LANG",
+      "LC_ALL",
+      "PATH",
+      "TERM",
+      "TMPDIR",
+      "USER",
+      "XDG_CACHE_HOME",
+      "XDG_CONFIG_HOME",
+      "XDG_DATA_HOME"
+    ]
+  },
+  "rules": [
+    "No shell, no string command and no implicit interpreter. The request is an argv vector.",
+    "The working directory is relative and inside the user's vault.",
+    "The environment is an allow-list; an unknown key is refused.",
+    "The attested operator OS identity caps the execution; an absent attestation runs nothing.",
+    "The output is bounded and marked truncated when it exceeds the limit.",
+    "A request is accepted only after its signature and its operator_os/capabilities grant are verified; the shape validator refuses an unverified request.",
+    "A signature proves provenance; it does not grant a capability.",
+    "An expired request is refused, never replayed; the lifetime is bounded and issued_at may not be far in the future."
+  ],
+  "refusal_codes": [
+    "malformed-request",
+    "bad-argv",
+    "bad-cwd",
+    "bad-env",
+    "bad-timeout",
+    "bad-operator-os",
+    "bad-capabilities",
+    "bad-nonce",
+    "subject-unverified",
+    "expired-request",
+    "malformed-response",
+    "bad-exit-code",
+    "bad-output"
+  ]
+}

@@ -2,10 +2,22 @@
   "contract": "sparknet-contract-manifest",
   "contracts": [
     {
+      "contract": "abac",
+      "file": "abac-schema.json",
+      "schema_version": "1.0",
+      "sha256": "f9ca216f22df02b538b5e3f37f77957a63b6d7f7434e77beccaa5b3ec4431a71"
+    },
+    {
       "contract": "capabilities",
       "file": "capabilities.json",
       "schema_version": "1.0",
       "sha256": "e3ff2d9ab5e6807bbe6d6c7638a3107f4b0ab607538fc29677012f0db2ae93cd"
+    },
+    {
+      "contract": "collab-schema",
+      "file": "collab-schema.json",
+      "schema_version": "1.0",
+      "sha256": "bf52ac17f1ec683a1b5325b660bec842c6248eeb135ed8cc42b28967dd0814e6"
     },
     {
       "contract": "distillation-schema",
@@ -14,10 +26,34 @@
       "sha256": "0b15bff116dc200e61d2e9dbcde579fc3d699b75e21dfcb7f34e98044c16fbdf"
     },
     {
+      "contract": "event-schema",
+      "file": "event-schema.json",
+      "schema_version": "1.0",
+      "sha256": "695a33c8f67fddd6ea8efb220c61e093e64d19481540cd6625b73c495bd00c84"
+    },
+    {
+      "contract": "exec-schema",
+      "file": "exec-schema.json",
+      "schema_version": "1.0",
+      "sha256": "009529d2611de75f1cc1bdfcc37a445d5656ffa7ec8229fa29e0a14a34d1e3ea"
+    },
+    {
+      "contract": "graph-schema",
+      "file": "graph-schema.json",
+      "schema_version": "1.0",
+      "sha256": "b0155b8a1671774a2dacc693233818cd45de9fbbe206995c02b094765b906b57"
+    },
+    {
       "contract": "guard-approval",
       "file": "guard-approval.json",
       "schema_version": "1.0",
       "sha256": "e95dad8bfda51ef83020ac9ee9c39e89bb345268517ac7ff73c68ee71ea45f7c"
+    },
+    {
+      "contract": "hybrid-schema",
+      "file": "hybrid-schema.json",
+      "schema_version": "1.0",
+      "sha256": "c05cb6cffb5b182eb6c77d97846aeff538433bced175252099c2ef3efda5907b"
     },
     {
       "contract": "identity-schema",
@@ -56,10 +92,16 @@
       "sha256": "3b73cb625f33aabb19345a94491702def0731a2b85496115e3406cad5ec83437"
     },
     {
+      "contract": "package-schema",
+      "file": "package-schema.json",
+      "schema_version": "1.0",
+      "sha256": "1e35308d7ac1711f78e0a960853070a1d8b3c6f002165c06d8238691235120bf"
+    },
+    {
       "contract": "ports",
       "file": "ports.json",
       "schema_version": "2.0",
-      "sha256": "eea88acef7f3984a51c45fd43dea7abdafe36e023fa299c322b464eab4e4503a"
+      "sha256": "b45966cbf3455d1b9c4b20e08134197f0a10060daf899b2b056e5bfbdbb999bb"
     },
     {
       "contract": "proposal-schema",

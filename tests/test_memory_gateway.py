@@ -12,7 +12,7 @@ import importlib.util
 import json
 import sys
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import ClassVar
@@ -146,11 +146,25 @@ def stack(tmp_path: Path):
             registry=registry,
             now=NOW,
         )
+        empty = authz.mint_grant(
+            node_identity=identity,
+            grant_id="GRANT-MEMORY-EMPTY",
+            user_identity="U-1",
+            conversation_key="02020202-0202-0202-0202-020202020202-9",
+            capabilities=["p2p-sync"],
+            vault_scope=[],
+            ttl_minutes=60,
+            nonce="memory-nonce-2",
+            master_private_key=master,
+            registry=registry,
+            now=NOW,
+        )
         yield {
             "gateway": gateway,
             "role": role,
             "knowledge": knowledge,
             "grant": base64.urlsafe_b64encode(json.dumps(grant).encode()).decode(),
+            "grant_empty": base64.urlsafe_b64encode(json.dumps(empty).encode()).decode(),
             "memory": memory,
         }
     finally:
@@ -228,3 +242,236 @@ def test_admin_inspection_requires_the_local_token(stack):
             {"query": "x"},
         )
     assert refusal.value.code in {"admin-refused", "vault-forbidden"}
+
+
+def test_authority_surfaces_are_not_readable_listed_or_searched(stack):
+    role = stack["role"]
+    (role / "00_System").mkdir()
+    (role / "00_System" / "secret.md").write_text("SECRET AUTHORITY", encoding="utf-8")
+    (role / "blockchain").mkdir()
+    (role / "blockchain" / "ledger.json").write_text("SECRET LEDGER", encoding="utf-8")
+    (role / "05_Knowledge").mkdir()
+    (role / "05_Knowledge" / "note.md").write_text("hello world", encoding="utf-8")
+    gateway = stack["gateway"]
+
+    with pytest.raises(gateway_mod.GatewayError) as refused:
+        gateway.vault_read(str(role), "00_System/secret.md")
+    assert refused.value.code == "authority-surface"
+
+    listed = gateway.vault_list(str(role))
+    assert "00_System/secret.md" not in listed["paths"]
+    assert "blockchain/ledger.json" not in listed["paths"]
+    assert gateway.vault_search(str(role), "SECRET")["hits"] == []
+    assert gateway.vault_read(str(role), "05_Knowledge/note.md")["content"] == "hello world"
+
+
+def test_vault_graph_is_a_filtered_projection(stack):
+    role = stack["role"]
+    (role / "05_Knowledge").mkdir(exist_ok=True)
+    (role / "05_Knowledge" / "a.md").write_text("# Alpha\n\nSee [[05_Knowledge/b]].\n", encoding="utf-8")
+    (role / "05_Knowledge" / "b.md").write_text("# Beta\n", encoding="utf-8")
+    (role / "00_System").mkdir(exist_ok=True)
+    (role / "00_System" / "secret.md").write_text("# Secret\n[[05_Knowledge/a]]\n", encoding="utf-8")
+    headers = {"x-sparknet-local-token": "local-token", "x-sparknet-vault-path": str(role)}
+    status, payload = stack["gateway"].handle("GET", "/v1/vault/graph", headers, {})
+    assert status == 200 and payload["ok"] is True
+    graph = payload["graph"]
+    paths = {node["path"] for node in graph["nodes"]}
+    assert "05_Knowledge/a.md" in paths
+    assert "00_System/secret.md" not in paths
+    assert any(edge["target"].endswith("05_Knowledge/b.md") for edge in graph["edges"])
+
+
+def test_grant_scope_narrows_read_list_search_and_graph(stack):
+    role = stack["role"]
+    (role / "06_Projects").mkdir()
+    (role / "06_Projects" / "in.md").write_text("# In\n", encoding="utf-8")
+    (role / "02_Daily").mkdir()
+    (role / "02_Daily" / "secret.md").write_text("# Secret\n", encoding="utf-8")
+    headers = {"authorization": f"Bearer {stack['grant']}"}
+    gateway = stack["gateway"]
+
+    status, payload = gateway.handle("GET", "/v1/vault/read", headers, {"path": "06_Projects/in.md"})
+    assert status == 200 and payload["ok"] is True
+    with pytest.raises(gateway_mod.GatewayError) as refused:
+        gateway.handle("GET", "/v1/vault/read", headers, {"path": "02_Daily/secret.md"})
+    assert refused.value.code == "scope-refused"
+
+    _, listed = gateway.handle("GET", "/v1/vault/list", headers, {})
+    assert "06_Projects/in.md" in listed["paths"]
+    assert "02_Daily/secret.md" not in listed["paths"]
+    _, searched = gateway.handle("GET", "/v1/vault/search", headers, {"query": "secret"})
+    assert searched["hits"] == []
+    _, graph = gateway.handle("GET", "/v1/vault/graph", headers, {})
+    assert {node["path"] for node in graph["graph"]["nodes"]} == {"06_Projects/in.md"}
+
+
+def test_empty_grant_scope_denies_knowledge_reads(stack):
+    role = stack["role"]
+    (role / "06_Projects").mkdir()
+    (role / "06_Projects" / "in.md").write_text("# In\n", encoding="utf-8")
+    headers = {"authorization": f"Bearer {stack['grant_empty']}"}
+    with pytest.raises(gateway_mod.GatewayError) as refused:
+        stack["gateway"].handle("GET", "/v1/vault/read", headers, {"path": "06_Projects/in.md"})
+    assert refused.value.code == "scope-refused"
+    _, listed = stack["gateway"].handle("GET", "/v1/vault/list", headers, {})
+    assert listed["paths"] == []
+
+
+def test_personal_names_are_not_listed_searched_or_graphed(stack):
+    role = stack["role"]
+    (role / "MEMORY.md").write_text("SECRET MEMORY", encoding="utf-8")
+    (role / "secrets-index.json").write_text("SECRET INDEX", encoding="utf-8")
+    (role / "05_Knowledge").mkdir(exist_ok=True)
+    (role / "05_Knowledge" / "note.md").write_text("hello", encoding="utf-8")
+    gateway = stack["gateway"]
+    _, listed = gateway.handle("GET", "/v1/vault/list", {"x-sparknet-local-token": "local-token"}, {})
+    assert "MEMORY.md" not in listed["paths"]
+    assert "secrets-index.json" not in listed["paths"]
+    _, searched = gateway.handle(
+        "GET", "/v1/vault/search", {"x-sparknet-local-token": "local-token"}, {"query": "SECRET"}
+    )
+    assert searched["hits"] == []
+    _, graph = gateway.handle("GET", "/v1/vault/graph", {"x-sparknet-local-token": "local-token"}, {})
+    assert "MEMORY.md" not in {node["path"] for node in graph["graph"]["nodes"]}
+
+
+def test_capture_cannot_escape_its_prefix_and_requires_post(stack):
+    role = stack["role"]
+    headers = {"x-sparknet-local-token": "local-token", "x-sparknet-vault-path": str(role)}
+    with pytest.raises(gateway_mod.GatewayError) as refused:
+        stack["gateway"].handle(
+            "POST",
+            "/v1/vault/capture",
+            headers,
+            {"title": "escape", "body": "x", "target": "01_Inbox/../rootnote"},
+        )
+    assert refused.value.code == "vault-forbidden"
+    with pytest.raises(gateway_mod.GatewayError) as method:
+        stack["gateway"].handle(
+            "GET",
+            "/v1/vault/capture",
+            headers,
+            {"title": "get", "body": "x"},
+        )
+    assert method.value.code == "method-not-allowed"
+
+
+def test_grant_nonce_is_single_use_for_mutating_routes(stack):
+    MemoryHandler.calls.clear()
+    headers = {"authorization": f"Bearer {stack['grant']}"}
+    body = {"record": {"memory_type": "episodic", "text": "once", "source_kind": "session"}}
+    status, _payload = stack["gateway"].handle("POST", "/v1/memory/remember", headers, body)
+    assert status == 200
+    with pytest.raises(gateway_mod.GatewayError) as refused:
+        stack["gateway"].handle("POST", "/v1/memory/remember", headers, body)
+    assert refused.value.code == "grant-refused"
+
+
+def test_vault_hybrid_returns_semantic_and_agentic_sets(stack):
+    role = stack["role"]
+    (role / "05_Knowledge").mkdir(exist_ok=True)
+    (role / "05_Knowledge" / "alpha.md").write_text("# Alpha\n\nAlpha links [[05_Knowledge/beta]].\n", encoding="utf-8")
+    (role / "05_Knowledge" / "beta.md").write_text("# Beta\n\nBeta is linked.\n", encoding="utf-8")
+    headers = {"x-sparknet-local-token": "local-token", "x-sparknet-vault-path": str(role)}
+    status, payload = stack["gateway"].handle("GET", "/v1/vault/hybrid", headers, {"query": "alpha"})
+    assert status == 200 and payload["ok"] is True
+    bundle = payload["bundle"]
+    assert bundle["semantic"][0]["path"] == "05_Knowledge/alpha.md"
+    assert bundle["agentic"][0]["tool"] == "vault_graph"
+    assert "05_Knowledge/beta.md" in bundle["agentic"][0]["result"]["neighbors"]
+    assert "Semantic results" in payload["rendered"]
+    assert "Agentic results" in payload["rendered"]
+
+
+def test_graph_and_hybrid_use_the_o1_classification(stack):
+    role = stack["role"]
+    (role / "05_Knowledge").mkdir(exist_ok=True)
+    (role / "05_Knowledge" / "classified.md").write_text(
+        "---\nclassification: restricted\ndepartment: red\n---\n# Classified\n\nclassified body\n",
+        encoding="utf-8",
+    )
+    headers = {"x-sparknet-local-token": "local-token", "x-sparknet-vault-path": str(role)}
+    gateway = stack["gateway"]
+    status, payload = gateway.handle("GET", "/v1/vault/graph", headers, {})
+    assert status == 200 and payload["ok"] is True
+    node = next(row for row in payload["graph"]["nodes"] if row["path"] == "05_Knowledge/classified.md")
+    assert node["classification"] == "restricted"
+    assert node["department"] == "red"
+
+    status, payload = gateway.handle("GET", "/v1/vault/hybrid", headers, {"query": "classified"})
+    assert status == 200 and payload["ok"] is True
+    assert payload["bundle"]["semantic"][0]["classification"] == "restricted"
+    assert payload["bundle"]["department"] == "red"
+
+
+def test_unknown_o1_classification_is_refused(stack):
+    role = stack["role"]
+    (role / "05_Knowledge").mkdir(exist_ok=True)
+    (role / "05_Knowledge" / "bad.md").write_text(
+        "---\nclassification: secret\n---\n# Bad\n",
+        encoding="utf-8",
+    )
+    headers = {"x-sparknet-local-token": "local-token", "x-sparknet-vault-path": str(role)}
+    with pytest.raises(gateway_mod.GatewayError) as refused:
+        stack["gateway"].handle("GET", "/v1/vault/graph", headers, {})
+    assert refused.value.code == "unknown-classification"
+
+
+def test_collab_room_and_message_round_trip(stack):
+    role = stack["role"]
+    headers = {"x-sparknet-local-token": "local-token", "x-sparknet-vault-path": str(role)}
+    gateway = stack["gateway"]
+    status, created = gateway.handle(
+        "POST",
+        "/v1/collab/room",
+        headers,
+        {"room_id": "room-test", "classification": "internal"},
+    )
+    assert status == 200 and created["room"]["room_id"] == "room-test"
+    assert (role / "01_Inbox" / "collab" / "room-test" / "room.json").is_file()
+
+    status, posted = gateway.handle(
+        "POST",
+        "/v1/collab/message",
+        headers,
+        {"room_id": "room-test", "text": "hello"},
+    )
+    assert status == 200 and posted["message"]["text"] == "hello"
+    status, listed = gateway.handle("GET", "/v1/collab/messages", headers, {"room_id": "room-test"})
+    assert status == 200 and listed["messages"][0]["text"] == "hello"
+    status, rooms = gateway.handle("GET", "/v1/collab/rooms", headers, {})
+    assert status == 200 and rooms["rooms"][0]["room_id"] == "room-test"
+
+
+def test_exec_validation_route_is_local_only(stack):
+    role = stack["role"]
+    request = {
+        "schema_version": "sparknet-exec-request/1",
+        "request_id": "req-1",
+        "node_id": "sparknet-node-0002",
+        "user_id": "user-1",
+        "argv": ["pwd"],
+        "cwd": "05_Knowledge",
+        "env": {"PATH": "/usr/bin"},
+        "timeout_seconds": 10,
+        "operator_os": {"uid": 1000, "euid": 1000, "username": "raxxar", "groups": ["users"], "is_root": False},
+        "capabilities": [],
+        "nonce": "nonce-1",
+        "issued_at": (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat().replace("+00:00", "Z"),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat().replace("+00:00", "Z"),
+        "signature_b64": "test-signature",
+    }
+    headers = {"x-sparknet-local-token": "local-token", "x-sparknet-vault-path": str(role)}
+    status, payload = stack["gateway"].handle("POST", "/v1/exec/validate", headers, {"request": request})
+    assert status == 200
+    assert payload["executed"] is False
+    assert payload["request"]["argv"] == ["pwd"]
+    with pytest.raises(gateway_mod.GatewayError) as refused:
+        stack["gateway"].handle(
+            "POST",
+            "/v1/exec/validate",
+            {"authorization": f"Bearer {stack['grant']}"},
+            {"request": request},
+        )
+    assert refused.value.code == "local-only"

@@ -32,7 +32,8 @@ state and evidence. It never signs, grants, revokes, trains or writes a registry
 ## OpenCode engine
 
 Open WebUI's agent execution path is the loopback **Sparknet OpenCode engine**
-(`127.0.0.1:4204`), an OpenAI-compatible adapter in front of OpenCode 1.19.5.
+(`127.0.0.1:4204`), an OpenAI-compatible adapter in front of OpenCode 2.2.5.
+The live sandbox is 2.2.5 on agx64/agx32 (rebuilt 2026-11-06).
 The engine maps the WebUI-forwarded user id and chat id to a private per-user
 sandbox:
 

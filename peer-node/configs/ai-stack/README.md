@@ -40,10 +40,10 @@ survives a redeploy.
 
 ## Status
 
-**Live on agx64 2026-11-05.** Open WebUI is `v0.13.0`, the OpenCode engine is
-`1.19.5` and the engine connection is live. The host firewall and browser
-interaction remain target-host checks; the service and API path are dated live
-evidence.
+**Live on agx64 2026-11-05, OpenCode 2.2.5 rollout 2026-11-06.** Open WebUI is
+`v0.13.0`; the live OpenCode sandbox is `2.2.5` and the engine connection is
+live. The host firewall and browser interaction remain target-host checks; the
+service and API path are dated live evidence.
 
 Validate the compose without pulling anything:
 

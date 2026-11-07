@@ -423,3 +423,11 @@ def test_the_3d_map_has_explicit_zoom_controls() -> None:
     assert '"wheel"' in js
     assert "keydown" in js
     assert "map-toolbar" in css
+
+
+def test_foundations_api_reports_all_contracts_and_modules():
+    payload = console.api_foundations({"role": "peer"}, ROOT / "peer-node")
+    assert payload["ok"] is True
+    assert payload["ready"] is True
+    assert all(payload["contracts"].values())
+    assert all(payload["modules"].values())

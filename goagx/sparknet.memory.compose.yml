@@ -65,6 +65,10 @@ services:
     image: ${SPARKNET_IMAGE:-sparknet-agx-node:dev}
     container_name: sparknet-memory-gateway
     network_mode: host
+    # Run as the operator so collaboration writes land with vault ownership.
+    # Create the collab directory first:
+    #   install -d -m 0700 -o "$(id -u)" -g "$(id -g)" peer-node/01_Inbox/collab
+    user: "${SPARKNET_UID:-1000}:${SPARKNET_GID:-1000}"
     entrypoint: ["/opt/sparknet/venv/bin/python", "/opt/sparknet/shared/sparknet-memory-gateway.py"]
     command:
       - "--role"
@@ -95,6 +99,11 @@ services:
         source: ${SPARKNET_MEMORY_VAULT_HOST:-../peer-node}
         target: /srv/sparknet/peer-node
         read_only: true
+      # Collaboration is the one writable vault surface. It is a nested bind,
+      # so the rest of the role vault stays read-only to the gateway.
+      - type: bind
+        source: ${SPARKNET_COLLAB_HOST:-../peer-node/01_Inbox/collab}
+        target: /srv/sparknet/peer-node/01_Inbox/collab
       - type: bind
         source: ${SPARKNET_KNOWLEDGE_HOST:-/srv/sparknet/knowledge}
         target: /srv/sparknet/knowledge

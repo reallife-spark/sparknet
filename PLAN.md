@@ -61,7 +61,6 @@ current: 88
     only intended changes; live legs are `DoD: confirm: user`.
   - **Status: complete 2026-10-31.** Local gates, both bundle verifications and `make drift-check` pass; `goagx` was republished. Live on agx64/agx32: provisioning/admin ingestion, RFI request→answer→inbox, bridge `vault.rfi`, telemetry/checkpoints, self-healing timer, admin federation `feed`/`users`, registry sequence 2 with `admin-supervise`. The remaining fresh signup→approval cycle is tracked in peer Step 11.
 
-
 ## Step 76 — Disposable user lifecycle (phase 1)
 
 - [x] **Step 76** — Prove the peer account path on the live pair with a
@@ -169,7 +168,6 @@ current: 88
     to fingerprint `84bd134e…`, and the WebUI grant was re-minted. User vaults
     were backed up but not overwritten.
 
-
 ## Step 81 — Qdrant substrate, uplift and Master distillation
 
 - [x] **Step 81** — Replace ChromaDB with Qdrant, lift consented vectors and
@@ -227,7 +225,6 @@ current: 88
     Qdrant migration, 4223, inventory, four snapshots, one restore, consent
     grant, same-family distillation run and raw-KV capture are verified on
     agx64/agx32. Chroma volumes are retained for 14 days.
-
 
 ## Step 82 — Model catalog, store and runtime leases
 
@@ -569,6 +566,18 @@ current: 88
     rehearsals for every new channel; run all gates; roll out in the order
     Master contracts/registry → Master services → peer services → event bus →
     model plane → collaboration → execution → self-improvement → dashboard.
+  - **Status 2026-11-07:** 89A/89B Python foundations are in place and hardened:
+    `abac`, `event`, `graph`, `hybrid`, `exec`, `collab` and `package`
+    contracts, modules and tests; the goSpark canonicalizer and shared vectors
+    pin the bytes. 89C adds the NATS client/CLI and is live-verified over the
+    overlay; 89D adds authority/scope filtering and graph/hybrid routes; 89E adds
+    a read-only foundations API; 89F adds collab and exec-validation routes; 89G
+    adds the signed argv-only daemon; 89H adds the package CLI and grant nonce
+    replay. O1 now records classification/department and graph/hybrid read it;
+    graph/hybrid and the foundations API are live on agx32/agx64. The exec
+    daemon is live-verified in validate-only mode; collab writes are live;
+    execution enablement and package distribution remain open. Separately, the OpenCode runtime pin
+    is `2.2.5`; the engine adapter is on v2 `/api/*` with per-sandbox auth and the sandbox is live on agx64/agx32 (2026-11-06).
   - **DoD**: every new channel has a contract row, a canonical envelope, a
     refusal test and a loopback rehearsal; no channel carries authority and
     knowledge together; no personal page enters a shared corpus; `make

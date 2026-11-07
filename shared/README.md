@@ -212,3 +212,24 @@ contract change in `contracts/`, not a patched local variant.
 This also means a role subvault on its own is **not** a working deployment: it
 cannot verify anything, because it does not have this file. `make bundle`
 assembles the role together with `shared/` and `contracts/`.
+
+## Step 89 shared foundations
+
+The sovereignty blueprint added the ABAC foundation plus six
+narrowing/transport modules. They are data contracts, not authority
+implementations; none of them signs or grants:
+
+| Module | Contract | What it does |
+|---|---|---|
+| `sparknet-abac.py` | `contracts/abac-schema.json` | Narrows knowledge reads using verified registry/session attributes; never grants a capability. |
+| `sparknet-event.py` | `contracts/event-schema.json` | Validates the canonical bus envelope, topics and lifetime; a signature is provenance only. |
+| `sparknet-graph.py` | `contracts/graph-schema.json` | Builds the derived, vault-scoped document-link graph; no second store. |
+| `sparknet-hybrid.py` | `contracts/hybrid-schema.json` | Returns the semantic and agentic result sets together with provenance; never silently merges them. |
+| `sparknet-exec-rpc.py` | `contracts/exec-schema.json` | Validates signed argv-only execution requests and bounded responses; no shell. |
+| `sparknet-collab.py` | `contracts/collab-schema.json` | Validates bounded collaboration rooms and messages; no authority. |
+| `sparknet-package.py` | `contracts/package-schema.json` | Validates signed packages and computes a dependency-first install plan; never executes. |
+
+The canonical bytes are pinned by `contracts/vectors/foundations.json` and
+mirrored at `gospark/spec/sparknet/foundations-vectors.json`.
+`gospark/internal/foundations` is the Go canonicalizer; its test reads the same
+vectors, so a Python-only canonical dialect fails the gate.

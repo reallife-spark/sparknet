@@ -735,6 +735,7 @@ def test_ingest_lands_a_pending_item_that_verifies_green(vault: Path, provenance
     frontmatter, body = provenance.split_note(path.read_bytes())
     assert frontmatter["type"] == "inbox-item"
     assert frontmatter["source"] == "master-node"
+    assert frontmatter["classification"] == "internal"
     assert frontmatter["tracking"]["validity"]["state"] == "unsigned"
     assert "signature" not in frontmatter["tracking"]
     assert body == b"# incoming plan\n\nthe body\n"
@@ -742,6 +743,35 @@ def test_ingest_lands_a_pending_item_that_verifies_green(vault: Path, provenance
     assert verify(provenance, vault, path)[0] == "pending"
     code, text = provenance.verify_vault(vault)
     assert code == 0, text
+
+
+def test_ingest_records_explicit_classification_and_department(vault: Path, provenance: ModuleType):
+    path = provenance.ingest_note(
+        vault,
+        b"# restricted item\n",
+        source="peer-node",
+        title="Restricted item",
+        classification="restricted",
+        department="red",
+    )
+    frontmatter = provenance.split_note(path.read_bytes())[0]
+    assert frontmatter["classification"] == "restricted"
+    assert frontmatter["department"] == "red"
+
+
+def test_ingest_refuses_unknown_classification_and_downgraded_email(vault: Path, provenance: ModuleType):
+    with pytest.raises(provenance.ProvenanceError, match="classification must be one of"):
+        provenance.ingest_note(vault, b"# bad\n", source="peer-node", classification="secret")
+    with pytest.raises(provenance.ProvenanceError, match="cannot be classified below"):
+        provenance.ingest_note(vault, b"# public peer\n", source="peer-node", classification="public")
+    with pytest.raises(provenance.ProvenanceError, match="cannot be classified below"):
+        provenance.ingest_note(
+            vault,
+            b"# public mail\n",
+            source="email",
+            sender="ops@example.org",
+            classification="public",
+        )
 
 
 def test_ingest_refuses_to_overwrite_an_existing_item(vault: Path, provenance: ModuleType):
@@ -762,7 +792,9 @@ def test_email_ingest_fails_closed_until_the_sender_is_authorised(vault: Path, p
     )
 
     path = provenance.ingest_note(vault, b"# from mail\n", source="email", sender="ops@example.org")
-    assert provenance.split_note(path.read_bytes())[0]["sender"] == "ops@example.org"
+    frontmatter = provenance.split_note(path.read_bytes())[0]
+    assert frontmatter["sender"] == "ops@example.org"
+    assert frontmatter["classification"] == "confidential"
     with pytest.raises(provenance.ProvenanceError, match="fails closed"):
         provenance.ingest_note(
             vault,

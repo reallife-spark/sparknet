@@ -41,6 +41,7 @@ master role vault (which contains keys, the ledger and the registry).
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import html
 import http.client
@@ -48,6 +49,7 @@ import json
 import os
 import queue
 import re
+import secrets
 import signal
 import socket
 import subprocess
@@ -327,12 +329,15 @@ class ProxyThread:
 
 
 class Sandbox:
-    def __init__(self, user: str, container: str, socket_path: Path, vault: Path, proxy_url: str) -> None:
+    def __init__(
+        self, user: str, container: str, socket_path: Path, vault: Path, proxy_url: str, password: str = ""
+    ) -> None:
         self.user = user
         self.container = container
         self.socket_path = socket_path
         self.vault = vault
         self.proxy_url = proxy_url
+        self.password = password
         self.base_url = f"unix://{socket_path}"
 
 
@@ -355,6 +360,7 @@ class SandboxManager:
         self.small_model_id = args.small_model
         self.allocator = NetworkAllocator(self.state_root)
         self.lock = threading.Lock()
+        self._password_lock = threading.Lock()
         self.proxies: dict[str, ProxyThread] = {}
         self.last_used: dict[str, float] = {}
         self._owned_vaults: set[str] = set()
@@ -443,6 +449,25 @@ class SandboxManager:
     def container_name(self, user: str) -> str:
         return f"{DEFAULT_NETWORK_PREFIX}-{user}"
 
+    def password_for(self, user: str) -> str:
+        """A per-sandbox server password, kept in the 0700 engine state dir.
+
+        OpenCode 2 requires HTTP basic auth on its loopback API. The password is
+        per user, never logged, and never the engine token.
+        """
+        state = self.user_state(user)
+        path = state / "opencode-password"
+        with self._password_lock:
+            try:
+                value = path.read_text(encoding="utf-8").strip()
+            except OSError:
+                value = ""
+            if len(value) < 32:
+                value = secrets.token_urlsafe(32)
+                path.write_text(value + "\n", encoding="utf-8")
+                os.chmod(path, 0o600)
+            return value
+
     # -- docker --------------------------------------------------------------
     def _run(self, args: list[str], timeout: float = 60.0) -> tuple[int, str, str]:
         try:
@@ -529,10 +554,10 @@ class SandboxManager:
         rc, out, _err = self._run(["inspect", "--type", "container", "-f", "{{.State.Running}}", name])
         return rc == 0 and out.lower() == "true"
 
-    def _wait_health(self, socket_path: Path, timeout: float = 60.0) -> None:
+    def _wait_health(self, socket_path: Path, password: str, timeout: float = 60.0) -> None:
         deadline = time.time() + timeout
         last = ""
-        client = OpenCodeClient(f"unix://{socket_path}")
+        client = OpenCodeClient(f"unix://{socket_path}", password)
         while time.time() < deadline:
             if socket_path.exists() and client.health():
                 return
@@ -548,9 +573,16 @@ class SandboxManager:
         name = self.container_name(user)
         state = self.user_state(user)
         socket_dir, socket_path = self.socket_for(user)
+        password = self.password_for(user)
+        password_env = state / "opencode.env"
+        password_env.write_text(f"OPENCODE_SERVER_PASSWORD={password}\n", encoding="utf-8")
+        os.chmod(password_env, 0o600)
+        rc, running_image, _err = self._run(["inspect", "--type=container", "-f", "{{.Config.Image}}", name])
+        if rc == 0 and running_image.strip() != self.image:
+            self._run(["rm", "-f", name], timeout=60)
         if self._running(name):
             self.last_used[user] = time.time()
-            return Sandbox(user, name, socket_path, vault, proxy_url)
+            return Sandbox(user, name, socket_path, vault, proxy_url, password)
         rc, _out, _err = self._run(["inspect", "--type", "container", name])
         if rc == 0:
             rc, _out, err = self._run(["start", name], timeout=60)
@@ -600,6 +632,8 @@ class SandboxManager:
                 f"type=bind,src={config},dst=/etc/opencode/opencode.json,readonly",
                 "--env",
                 "OPENCODE_CONFIG=/etc/opencode/opencode.json",
+                "--env-file",
+                str(password_env),
                 "--env",
                 "HOME=/home/opencode",
                 "--env",
@@ -619,12 +653,12 @@ class SandboxManager:
             if rc != 0:
                 raise EngineError(503, f"cannot create sandbox: {err}")
         try:
-            self._wait_health(socket_path)
+            self._wait_health(socket_path, password)
         except EngineError:
             _rc, logs, _err = self._run(["logs", "--tail", "40", name])
             raise EngineError(503, f"sandbox health failed: {logs}")
         self.last_used[user] = time.time()
-        return Sandbox(user, name, socket_path, vault, proxy_url)
+        return Sandbox(user, name, socket_path, vault, proxy_url, password)
 
     def touch(self, user: str) -> None:
         self.last_used[user] = time.time()
@@ -664,8 +698,15 @@ class UnixHTTPConnection(http.client.HTTPConnection):
 
 
 class OpenCodeClient:
-    def __init__(self, base_url: str) -> None:
+    """The OpenCode 2 HTTP API over the sandbox's loopback Unix socket.
+
+    v2 moved the API under ``/api`` and requires HTTP basic auth. The password
+    is per sandbox, generated and stored in the 0700 engine state directory.
+    """
+
+    def __init__(self, base_url: str, password: str = "") -> None:
         self.base_url = base_url.rstrip("/")
+        self.password = password
         self.socket_path = ""
         if self.base_url.startswith("unix://"):
             self.socket_path = self.base_url[len("unix://") :]
@@ -676,10 +717,19 @@ class OpenCodeClient:
         parsed = urllib.parse.urlsplit(self.base_url)
         return http.client.HTTPConnection(parsed.hostname, parsed.port or 80, timeout=timeout)
 
+    def _authorization(self) -> str:
+        if not self.password:
+            return ""
+        token = base64.b64encode(f"opencode:{self.password}".encode()).decode("ascii")
+        return "Basic " + token
+
     def request(self, method: str, path: str, body: Any = None, timeout: float = 600.0) -> tuple[int, Any]:
         connection = self._connection(timeout=timeout)
         data = None
         headers = {"Accept": "application/json", "Connection": "close"}
+        authorization = self._authorization()
+        if authorization:
+            headers["Authorization"] = authorization
         if body is not None:
             data = json.dumps(body).encode("utf-8")
             headers["Content-Type"] = "application/json"
@@ -697,66 +747,71 @@ class OpenCodeClient:
 
     def health(self) -> bool:
         try:
-            status, body = self.request("GET", "/global/health", timeout=3)
-            return status == 200 and bool(isinstance(body, dict) and body.get("healthy"))
+            status, body = self.request("GET", "/api/info", timeout=3)
+            return status == 200 and bool(isinstance(body, dict) and body.get("version"))
         except Exception:
             return False
 
-    def create_session(self, vault_in_container: str = "/work", title: str = "") -> str:
-        query = urllib.parse.urlencode({"directory": vault_in_container})
-        status, body = self.request(
-            "POST",
-            "/session?" + query,
-            body={"title": title or "Sparknet WebUI"},
-            timeout=30,
-        )
-        if status != 200 or not isinstance(body, dict) or not body.get("id"):
-            raise EngineError(502, f"OpenCode could not create a session: {body}")
-        return str(body["id"])
+    def create_session(
+        self, *, title: str = "", agent: str = "", model_id: str = "", model_provider: str = "local"
+    ) -> str:
+        body: dict[str, Any] = {"title": title or "Sparknet WebUI"}
+        if agent:
+            body["agent"] = agent
+        if model_id:
+            body["model"] = {"providerID": model_provider, "id": model_id}
+        status, payload = self.request("POST", "/api/session", body=body, timeout=30)
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if status != 200 or not isinstance(data, dict) or not data.get("id"):
+            raise EngineError(502, f"OpenCode could not create a session: {payload}")
+        return str(data["id"])
 
-    def prompt(
-        self,
-        session_id: str,
-        agent: str,
-        text: str,
-        model_id: str,
-        vault_in_container: str = "/work",
-        async_mode: bool = False,
-    ) -> dict[str, Any]:
-        query = urllib.parse.urlencode({"directory": vault_in_container})
-        path = "/session/{}/{}".format(session_id, "prompt_async" if async_mode else "message")
-        body = {
-            "agent": agent,
-            "model": {"providerID": "local", "modelID": model_id},
-            "parts": [{"type": "text", "text": text}],
-        }
-        status, result = self.request("POST", path + "?" + query, body=body, timeout=900)
+    def prompt(self, session_id: str, text: str, *, delivery: str = "queue") -> dict[str, Any]:
+        body = {"text": text, "delivery": delivery}
+        status, result = self.request("POST", f"/api/session/{session_id}/prompt", body=body, timeout=900)
         if status not in (200, 204):
             raise EngineError(502, f"OpenCode prompt failed: {result}")
         return result if isinstance(result, dict) else {}
 
+    def messages(self, session_id: str, timeout: float = 30.0) -> list[dict[str, Any]]:
+        query = urllib.parse.urlencode({"order": "desc", "type": "assistant", "limit": "20"})
+        status, payload = self.request("GET", f"/api/session/{session_id}/message?{query}", timeout=timeout)
+        data = payload.get("data") if isinstance(payload, dict) else None
+        return [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
+
     def answer_permission(self, session_id: str, permission_id: str, response: str = "reject") -> None:
-        path = f"/session/{session_id}/permissions/{permission_id}"
+        path = f"/api/session/{session_id}/permission/{permission_id}/reply"
         try:
-            self.request("POST", path, body={"response": response}, timeout=20)
+            self.request("POST", path, body={"decision": response}, timeout=20)
         except Exception as exc:  # noqa: BLE001 - an unresolved card is reported in the answer
             log(f"permission {permission_id} could not be answered: {exc}")
 
     def abort(self, session_id: str) -> None:
         try:
-            self.request("POST", f"/session/{session_id}/abort", timeout=10)
+            self.request("POST", f"/api/session/{session_id}/interrupt", timeout=10)
         except Exception:
             pass
 
-    def event_lines(self, timeout: float = 900.0) -> Iterator[str]:
-        connection = self._connection(timeout=timeout)
-        connection.request("GET", "/event", headers={"Accept": "text/event-stream"})
+    def event_lines(self, stop: threading.Event | None = None, timeout: float = 900.0) -> Iterator[str]:
+        # A bounded read timeout lets the reader observe `stop` after the turn
+        # ends without breaking the HTTP/1.1 response object on every heartbeat.
+        # The server heartbeats well inside this window, so an active turn keeps
+        # its stream alive; an idle reader exits within one heartbeat.
+        connection = self._connection(timeout=60.0)
+        headers = {"Accept": "text/event-stream"}
+        authorization = self._authorization()
+        if authorization:
+            headers["Authorization"] = authorization
+        connection.request("GET", "/api/event", headers=headers)
         response = connection.getresponse()
         if response.status != 200:
             raise EngineError(502, f"OpenCode event stream refused: HTTP {response.status}")
         try:
-            while True:
-                line = response.readline()
+            while stop is None or not stop.is_set():
+                try:
+                    line = response.readline()
+                except (TimeoutError, OSError):
+                    continue
                 if not line:
                     break
                 yield line.decode("utf-8", "replace").rstrip("\r\n")
@@ -791,27 +846,28 @@ class Engine:
     def close(self) -> None:
         self.prune_stop.set()
 
-    def _session_key(self, user: str, chat_id: str) -> str:
-        return "{}:{}".format(user, chat_id or "api")
+    def _session_key(self, user: str, chat_id: str, agent: str) -> str:
+        return "{}:{}:{}".format(user, chat_id or "api", agent)
 
-    def _session_for(self, user: str, chat_id: str, title: str) -> str:
-        key = self._session_key(user, chat_id)
+    def _session_for(self, user: str, chat_id: str, title: str, agent: str, model_id: str) -> str:
+        key = self._session_key(user, chat_id, agent)
         with self.sessions_lock:
             row = self.sessions.get(key)
             if isinstance(row, dict) and row.get("session_id"):
                 return str(row["session_id"])
-        client = OpenCodeClient(self.sandbox.ensure(user).base_url)
-        session_id = client.create_session(title=title)
+        sandbox = self.sandbox.ensure(user)
+        client = OpenCodeClient(sandbox.base_url, sandbox.password)
+        session_id = client.create_session(title=title, agent=agent, model_id=model_id)
         with self.sessions_lock:
-            self.sessions[key] = {"session_id": session_id, "created_at": _now(), "user": user, "chat_id": chat_id}
+            self.sessions[key] = {
+                "session_id": session_id,
+                "created_at": _now(),
+                "user": user,
+                "chat_id": chat_id,
+                "agent": agent,
+            }
             _write_json_file(self.sessions_path, self.sessions)
         return session_id
-
-    def _forget_session(self, user: str, chat_id: str) -> None:
-        key = self._session_key(user, chat_id)
-        with self.sessions_lock:
-            self.sessions.pop(key, None)
-            _write_json_file(self.sessions_path, self.sessions)
 
     def models(self) -> list[dict[str, Any]]:
         return [
@@ -872,12 +928,11 @@ class Engine:
             text = f"{system}\n\nUser request:\n{text}"
         sandbox = self.sandbox.ensure(user)
         self.sandbox.touch(user)
-        client = OpenCodeClient(sandbox.base_url)
+        client = OpenCodeClient(sandbox.base_url, sandbox.password)
         if not client.health():
             raise EngineError(503, "OpenCode sandbox is not healthy")
-        session_id = self._session_for(user, chat_id, title="Sparknet %s" % (chat_id or user))
-        result = client.prompt(session_id, agent, text, self.model_id)
-        content = self._render_result(result, session_id)
+        session_id = self._session_for(user, chat_id, "Sparknet %s" % (chat_id or user), agent, self.model_id)
+        content = self._collect_turn(client, session_id, text)
         completion = {
             "id": f"chatcmpl-{hashlib.sha256((session_id + text).encode()).hexdigest()[:24]}",
             "object": "chat.completion",
@@ -900,10 +955,20 @@ class Engine:
         status = str(state.get("status") or "")
         if status not in ("completed", "error"):
             return ""
-        name = html.escape(str(part.get("tool") or "tool"))
+        name = html.escape(str(part.get("tool") or part.get("name") or "tool"))
         call_id = html.escape(str(part.get("callID") or part.get("id") or "tool"))
         arguments = html.escape(json.dumps(state.get("input") or {}, ensure_ascii=False))
         output = state.get("output") or state.get("error") or ""
+        if not output and isinstance(state.get("content"), list):
+            texts = []
+            for item in state["content"]:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("type") == "text":
+                    texts.append(str(item.get("text") or ""))
+                elif item.get("type") == "file":
+                    texts.append(str(item.get("path") or item.get("name") or ""))
+            output = "\n".join(texts)
         return (
             f'<details type="tool_calls" done="true" id="{call_id}" name="{name}" arguments="{arguments}">\n'
             f"<summary>Tool Executed</summary>\n{html.escape(str(output))}\n</details>\n"
@@ -923,6 +988,156 @@ class Engine:
                     if block:
                         pieces.append(block)
         return "".join(pieces).strip()
+
+    def _render_messages(self, messages: list[dict[str, Any]]) -> str:
+        for message in messages:
+            if not isinstance(message, dict) or message.get("type") != "assistant":
+                continue
+            pieces = []
+            content = message.get("content")
+            if isinstance(content, list):
+                for part in content:
+                    if not isinstance(part, dict):
+                        continue
+                    if part.get("type") == "text":
+                        pieces.append(str(part.get("text") or ""))
+                    elif part.get("type") == "tool":
+                        block = self._render_tool(part)
+                        if block:
+                            pieces.append(block)
+            return "".join(pieces).strip()
+        return ""
+
+    def _render_tool_event(self, data: dict[str, Any]) -> str:
+        status = "error" if data.get("error") else "completed"
+        state = {"status": status, "input": data.get("input") or {}}
+        if status == "error":
+            state["error"] = str(data.get("error"))
+        elif isinstance(data.get("content"), list):
+            state["content"] = data["content"]
+        part = {
+            "type": "tool",
+            "tool": data.get("name") or "tool",
+            "callID": data.get("id") or "tool",
+            "state": state,
+        }
+        return self._render_tool(part)
+
+    def _event_reader(self, client: OpenCodeClient, stop: threading.Event, events: queue.Queue) -> None:
+        try:
+            for line in client.event_lines(stop):
+                if not line or line.startswith(":"):
+                    continue
+                if not line.startswith("data:"):
+                    continue
+                raw = line[5:].strip()
+                if not raw:
+                    continue
+                try:
+                    payload = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                try:
+                    events.put_nowait(payload)
+                except queue.Full:
+                    try:
+                        events.put_nowait({"type": "engine.error", "error": "event queue overflow"})
+                    except queue.Full:
+                        pass
+        except Exception as exc:  # noqa: BLE001
+            try:
+                events.put_nowait({"type": "engine.error", "error": str(exc)})
+            except queue.Full:
+                pass
+        finally:
+            try:
+                events.put_nowait(None)
+            except queue.Full:
+                pass
+
+    def _consume_events(self, client: OpenCodeClient, session_id: str, events: queue.Queue, emit: Any) -> None:
+        seen: dict[tuple[str, int], str] = {}
+        tool_meta: dict[str, dict[str, Any]] = {}
+        deadline = time.time() + 900.0
+        while True:
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                client.abort(session_id)
+                raise EngineError(504, "OpenCode turn timed out")
+            try:
+                event = events.get(timeout=min(remaining, 5.0))
+            except queue.Empty:
+                continue
+            if event is None:
+                break
+            etype = event.get("type")
+            data = event.get("data") if isinstance(event.get("data"), dict) else {}
+            if etype == "engine.error":
+                raise EngineError(502, "OpenCode event stream failed: {}".format(event.get("error")))
+            if etype == "permission.asked":
+                if data.get("sessionID") != session_id:
+                    continue
+                permission_id = str(data.get("id") or "")
+                if permission_id:
+                    client.answer_permission(session_id, permission_id, "reject")
+                    emit(
+                        "\n\n[Sparknet: a sandbox permission request was refused; "
+                        "the action was outside the agent's allowed scope.]\n\n"
+                    )
+                continue
+            event_session = data.get("sessionID")
+            if event_session not in (None, session_id):
+                continue
+            if etype == "session.text.delta":
+                delta = data.get("delta")
+                if isinstance(delta, str) and delta:
+                    emit(delta)
+                    key = (str(data.get("assistantMessageID") or ""), int(data.get("ordinal") or 0))
+                    seen[key] = seen.get(key, "") + delta
+            elif etype == "session.text.ended":
+                full = data.get("text")
+                if isinstance(full, str) and full:
+                    key = (str(data.get("assistantMessageID") or ""), int(data.get("ordinal") or 0))
+                    previous = seen.get(key, "")
+                    addition = full[len(previous) :] if full.startswith(previous) else full
+                    if addition:
+                        emit(addition)
+                    seen[key] = full
+            elif etype == "session.tool.called":
+                tool_id = str(data.get("id") or "")
+                if tool_id:
+                    tool_meta[tool_id] = {"name": data.get("name"), "input": data.get("input")}
+            elif etype in ("session.tool.success", "session.tool.failed"):
+                tool_id = str(data.get("id") or "")
+                meta = tool_meta.get(tool_id, {})
+                merged = dict(data)
+                merged.setdefault("name", meta.get("name"))
+                merged.setdefault("input", meta.get("input"))
+                block = self._render_tool_event(merged)
+                if block:
+                    emit(block)
+            elif etype == "session.execution.failed":
+                emit(f"\n\n[Sparknet: the sandbox turn failed: {html.escape(str(data.get('error')))}\n\n")
+                break
+            elif etype in ("session.execution.succeeded", "session.execution.interrupted"):
+                break
+
+    def _collect_turn(self, client: OpenCodeClient, session_id: str, text: str) -> str:
+        stop = threading.Event()
+        events: queue.Queue = queue.Queue(maxsize=10000)
+        thread = threading.Thread(
+            target=self._event_reader, args=(client, stop, events), name="opencode-events", daemon=True
+        )
+        thread.start()
+        pieces: list[str] = []
+        try:
+            client.prompt(session_id, text)
+            self._consume_events(client, session_id, events, pieces.append)
+        finally:
+            stop.set()
+            thread.join(timeout=3)
+        rendered = self._render_messages(client.messages(session_id))
+        return rendered or "".join(pieces).strip()
 
 
 class StreamingHandler(BaseHTTPRequestHandler):
@@ -1108,91 +1323,24 @@ class StreamingHandler(BaseHTTPRequestHandler):
             text = f"{system}\n\nUser request:\n{text}"
         sandbox = self.engine.sandbox.ensure(user)
         self.engine.sandbox.touch(user)
-        client = OpenCodeClient(sandbox.base_url)
+        client = OpenCodeClient(sandbox.base_url, sandbox.password)
         if not client.health():
             raise EngineError(503, "OpenCode sandbox is not healthy")
-        session_id = self.engine._session_for(user, chat_id, title="Sparknet %s" % (chat_id or user))
-        events: queue.Queue[dict[str, Any] | None] = queue.Queue()
-
-        def reader() -> None:
-            try:
-                for line in client.event_lines():
-                    if not line or line.startswith(":"):
-                        continue
-                    if not line.startswith("data:"):
-                        continue
-                    raw = line[5:].strip()
-                    if not raw:
-                        continue
-                    try:
-                        events.put(json.loads(raw))
-                    except json.JSONDecodeError:
-                        continue
-            except Exception as exc:  # noqa: BLE001
-                events.put({"type": "engine.error", "error": str(exc)})
-            finally:
-                events.put(None)
-
-        threading.Thread(target=reader, name="opencode-events", daemon=True).start()
-        client.prompt(session_id, agent, text, self.engine.model_id, async_mode=True)
-        assistant_ids: set[str] = set()
-        seen: dict[str, str] = {}
-        tool_seen: set[str] = set()
-        idle_deadline = time.time() + 900.0
-        while True:
-            remaining = idle_deadline - time.time()
-            if remaining <= 0:
-                client.abort(session_id)
-                raise EngineError(504, "OpenCode turn timed out")
-            try:
-                event = events.get(timeout=min(remaining, 5.0))
-            except queue.Empty:
-                continue
-            if event is None:
-                break
-            etype = event.get("type")
-            props = event.get("properties") if isinstance(event.get("properties"), dict) else {}
-            if etype == "engine.error":
-                raise EngineError(502, "OpenCode event stream failed: {}".format(event.get("error")))
-            if etype == "message.updated":
-                info = props.get("info") if isinstance(props.get("info"), dict) else {}
-                if info.get("role") == "assistant" and info.get("id"):
-                    assistant_ids.add(str(info["id"]))
-            elif etype == "message.part.updated":
-                part = props.get("part") if isinstance(props.get("part"), dict) else {}
-                if part.get("type") == "text" and part.get("messageID") in assistant_ids:
-                    part_id = str(part.get("id") or "")
-                    delta = props.get("delta")
-                    if isinstance(delta, str) and delta:
-                        emit(delta)
-                        seen[part_id] = seen.get(part_id, "") + delta
-                    else:
-                        current = str(part.get("text") or "")
-                        previous = seen.get(part_id, "")
-                        addition = current[len(previous) :] if current.startswith(previous) else current
-                        if addition:
-                            emit(addition)
-                            seen[part_id] = current
-                elif part.get("type") == "tool":
-                    part_id = str(part.get("id") or part.get("callID") or "")
-                    state = part.get("state") if isinstance(part.get("state"), dict) else {}
-                    if state.get("status") in ("completed", "error") and part_id not in tool_seen:
-                        block = self.engine._render_tool(part)
-                        if block:
-                            emit(block)
-                            tool_seen.add(part_id)
-            elif etype == "permission.updated":
-                permission = props if props.get("id") else event.get("properties", {})
-                permission_id = str(permission.get("id") or "")
-                if permission_id:
-                    client.answer_permission(session_id, permission_id, "reject")
-                    emit(
-                        "\n\n[Sparknet: a sandbox permission request was refused; "
-                        "the action was outside the agent's allowed scope.]\n\n"
-                    )
-            elif etype == "session.idle":
-                if props.get("sessionID") in (None, session_id):
-                    break
+        session_id = self.engine._session_for(
+            user, chat_id, "Sparknet %s" % (chat_id or user), agent, self.engine.model_id
+        )
+        stop = threading.Event()
+        events: queue.Queue = queue.Queue(maxsize=10000)
+        thread = threading.Thread(
+            target=self.engine._event_reader, args=(client, stop, events), name="opencode-events", daemon=True
+        )
+        thread.start()
+        try:
+            client.prompt(session_id, text)
+            self.engine._consume_events(client, session_id, events, emit)
+        finally:
+            stop.set()
+            thread.join(timeout=3)
 
 
 def _constant_time_equal(left: str, right: str) -> bool:
@@ -1212,7 +1360,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--token-file", default=os.environ.get("SPARKNET_OPENCODE_ENGINE_TOKEN_FILE", ""))
     p.add_argument("--token", default=os.environ.get("SPARKNET_OPENCODE_ENGINE_TOKEN", ""))
-    p.add_argument("--image", default=os.environ.get("SPARKNET_OPENCODE_IMAGE", "sparknet-opencode-runtime:1.19.5"))
+    p.add_argument("--image", default=os.environ.get("SPARKNET_OPENCODE_IMAGE", "sparknet-opencode-runtime:2.2.5"))
     p.add_argument("--docker", default=os.environ.get("SPARKNET_DOCKER", "docker"))
     p.add_argument(
         "--port-base", type=int, default=int(os.environ.get("SPARKNET_OPENCODE_PORT_BASE", DEFAULT_PORT_BASE))

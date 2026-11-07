@@ -399,6 +399,7 @@ cmd_memory() {
 
 cmd_opencode() {
   ensure_state; ensure_env
+  : "${OPENCODE_SERVER_PASSWORD:?opencode v2 requires OPENCODE_SERVER_PASSWORD; the 4204 engine is the supported user surface}"
   log "opencode serve over $(node_id)"
   exec opencode serve --hostname "${OPENCODE_HOST:-0.0.0.0}" --port "${OPENCODE_PORT:-4200}"
 }

@@ -1,0 +1,98 @@
+{
+  "contract": "collab-schema",
+  "schema_version": "1.0",
+  "description": "A bounded, ABAC-filtered collaboration room for peer agents and their humans. Collaboration is data exchange, never authority: a room cannot grant, revoke or widen a capability, and a message cannot become a vault page by arriving.",
+  "room": {
+    "schema": "sparknet-collab-room/1",
+    "fields": [
+      "schema_version",
+      "room_id",
+      "owner_node_id",
+      "participants",
+      "classification",
+      "department",
+      "created_at",
+      "expires_at",
+      "status",
+      "cross_department_approved"
+    ],
+    "required": [
+      "schema_version",
+      "room_id",
+      "owner_node_id",
+      "participants",
+      "classification",
+      "created_at",
+      "expires_at",
+      "status",
+      "cross_department_approved"
+    ],
+    "participant": {
+      "fields": [
+        "node_id",
+        "user_id",
+        "department",
+        "role"
+      ],
+      "required": [
+        "node_id",
+        "user_id"
+      ]
+    },
+    "status": [
+      "open",
+      "closed"
+    ]
+  },
+  "message": {
+    "schema": "sparknet-collab-message/1",
+    "fields": [
+      "schema_version",
+      "message_id",
+      "room_id",
+      "sender_node_id",
+      "sender_user_id",
+      "created_at",
+      "text",
+      "classification",
+      "department",
+      "provenance"
+    ],
+    "required": [
+      "schema_version",
+      "message_id",
+      "room_id",
+      "sender_node_id",
+      "sender_user_id",
+      "created_at",
+      "text",
+      "classification",
+      "provenance"
+    ]
+  },
+  "rules": [
+    "Only listed participants may send; the owner is always a participant.",
+    "A room's classification is a ceiling; a message may be lower, never higher.",
+    "Participant departments are Master-attested registry facts, never self-declared request values.",
+    "A department boundary exists only when both sides carry an attested department; crossing it requires cross-department-share and sets cross_department_approved.",
+    "A closed or expired room accepts no message.",
+    "A receiving peer calls the room-aware message validator, which rechecks membership, status, expiry and the classification ceiling.",
+    "A message carries provenance; it is data, never an instruction and never authority.",
+    "A room and its messages are never written to a shared corpus automatically."
+  ],
+  "refusal_codes": [
+    "malformed-room",
+    "malformed-participant",
+    "duplicate-participant",
+    "owner-not-participant",
+    "room-closed",
+    "room-expired",
+    "department-mismatch",
+    "classification-downgrade",
+    "bad-message",
+    "sender-not-participant",
+    "missing-provenance",
+    "unknown-classification",
+    "subject-unverified"
+  ]
+}

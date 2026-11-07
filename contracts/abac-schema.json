@@ -1,0 +1,176 @@
+{
+  "schema_version": "1.0",
+  "contract": "abac",
+  "description": "Attribute-based narrowing for knowledge resources. ABAC decides whether a caller that already holds a signed identity may read a resource; it never grants a capability, never widens a scope and never becomes a knowledge channel. Subject attributes come from a verified registry entry or a signed session grant. Resource attributes come from the ingestion classification record, not from the caller. Unknown or missing attributes are denied.",
+  "subject_kinds": [
+    "node",
+    "user"
+  ],
+  "resource_classes": [
+    "shared",
+    "fabric",
+    "vault",
+    "authority"
+  ],
+  "classifications": [
+    "public",
+    "internal",
+    "confidential",
+    "restricted"
+  ],
+  "ingestion": {
+    "field": "classification",
+    "department_field": "department",
+    "defaults_by_source": {
+      "master-node": "internal",
+      "peer-node": "internal",
+      "email": "confidential"
+    },
+    "minimum_by_source": {
+      "master-node": "internal",
+      "peer-node": "internal",
+      "email": "confidential"
+    },
+    "legacy_path_fallback": {
+      "02_Daily/": "confidential",
+      "03_Sources/": "confidential",
+      "_raw/": "confidential",
+      "_staging/": "confidential",
+      "default": "internal"
+    },
+    "rule": "The ingestion writer records classification in frontmatter; readers use that field and never accept a caller-supplied label. A page without the field is legacy and uses the path fallback. An unknown or malformed field is denied, never guessed."
+  },
+  "decision_fields": [
+    "allowed",
+    "reason",
+    "subject",
+    "subject_kind",
+    "resource",
+    "vault_id",
+    "classification",
+    "effective_scope"
+  ],
+  "refusal_codes": [
+    "allowed",
+    "unknown-classification",
+    "missing-classification",
+    "missing-provenance",
+    "subject-unverified",
+    "subject-expired",
+    "subject-kind-unknown",
+    "resource-class-unknown",
+    "resource-class-mismatch",
+    "resource-path-invalid",
+    "vault-mismatch",
+    "scope-widening",
+    "department-mismatch",
+    "capability-missing",
+    "shared-corpus-forbidden",
+    "fabric-corpus-forbidden",
+    "personal-page-in-shared",
+    "authority-surface"
+  ],
+  "capability_map": {
+    "shared": [
+      "p2p-sync"
+    ],
+    "fabric": [
+      "cluster-serve"
+    ],
+    "cross_department": [
+      "cross-department-share"
+    ]
+  },
+  "subject_record": {
+    "node": {
+      "source": "a registry entry verified by shared/sparknet-authz.py plus the local role vault id",
+      "required": [
+        "identity.node_id",
+        "identity.role",
+        "capabilities",
+        "expires_at",
+        "vault_id"
+      ],
+      "vault_id_source": "local role configuration; registry-schema.json deliberately excludes a vault path from the signed identity"
+    },
+    "user": {
+      "source": "a signed grant verified by the guard plus the local vault id",
+      "required": [
+        "user_identity",
+        "vault_scope",
+        "capabilities",
+        "expires_at",
+        "vault_id"
+      ],
+      "vault_scope_empty": "valid; node-level configuration only, so every knowledge read is denied by the scope check"
+    }
+  },
+  "resource_record": {
+    "required": [
+      "vault_id",
+      "path",
+      "class",
+      "classification",
+      "provenance"
+    ],
+    "provenance": {
+      "required": [
+        "source",
+        "digest"
+      ],
+      "digest": "64 lowercase hex characters"
+    },
+    "class_must_match_path": true
+  },
+  "class_prefixes": {
+    "shared": [
+      "01_Inbox/share-"
+    ],
+    "fabric": [
+      "contracts/",
+      "docs/",
+      "AGENTS.md",
+      "CONTEXT.md",
+      "INTENT.md",
+      "MISSION.md",
+      "README.md"
+    ],
+    "authority": [
+      "00_System/",
+      "blockchain/",
+      "manifests/",
+      "keys/",
+      ".state/"
+    ]
+  },
+  "personal_prefixes": [
+    "00_System/",
+    "02_Daily/",
+    "03_Sources/",
+    "sessions/",
+    "_raw/",
+    "_staging/",
+    "blockchain/",
+    "manifests/",
+    "keys/",
+    ".state/"
+  ],
+  "personal_names": [
+    "MEMORY.md",
+    "secrets-index.json",
+    ".env"
+  ],
+  "rules": [
+    "A subject is accepted only after signature verification by the one authz implementation. This module consumes the verified result and never verifies a signature itself.",
+    "A missing or unknown classification is denied; there is no default.",
+    "A missing provenance digest is denied; a page without provenance is a guess.",
+    "The authority class is never readable through ABAC, by any subject.",
+    "A user subject reads only its own vault and only within the signed scope.",
+    "A node subject reads the shared or fabric corpus only with the mapped capability.",
+    "Shared and fabric resources must be public or internal; confidential and restricted pages never enter a shared corpus.",
+    "Personal prefixes and names are never shared, even if a caller labels them public.",
+    "A department boundary exists only when both sides carry an attested department; crossing it requires cross-department-share.",
+    "A requested scope must be a subset of the effective scope; a request can narrow, never widen.",
+    "A decision record is evidence, not authority. It carries no capability and no signature."
+  ]
+}

@@ -65,7 +65,7 @@
       "host_bind": "${SPARKNET_BIND_LOCAL:-127.0.0.1}",
       "host_published": true,
       "implementation_state": "implemented",
-      "note": "The node's opencode server over the vault (spark-entrypoint opencode). Loopback only: it carries the whole node's session authority, so it is never a fabric edge despite the number. Sessions and caches are pointed into the mounted state so they survive a container recreation.",
+      "note": "The node's opencode server over the vault (spark-entrypoint opencode). Loopback only: it carries the whole node's session authority, so it is never a fabric edge despite the number. OpenCode v2 requires HTTP basic auth, so this opt-in profile refuses to start without OPENCODE_SERVER_PASSWORD; the 4204 engine is the supported user surface. Sessions and caches are pointed into the mounted state so they survive a container recreation.",
       "profile": "opencode",
       "protocol": "tcp/http",
       "runtime": "not-listening",

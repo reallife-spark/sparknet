@@ -1,0 +1,75 @@
+{
+  "contract": "graph-schema",
+  "schema_version": "1.0",
+  "description": "A derived document-link graph over vault pages. It is a projection, not a second store: rebuild it from pages, never write it back into the vault.",
+  "node": {
+    "schema": "sparknet-graph-node/1",
+    "fields": [
+      "id",
+      "path",
+      "title",
+      "category",
+      "tags",
+      "classification",
+      "department",
+      "vault_id"
+    ],
+    "required": [
+      "id",
+      "path",
+      "title",
+      "category",
+      "tags",
+      "classification",
+      "vault_id"
+    ],
+    "id": "`<vault_id>:<path>`; a node id is scoped to one vault."
+  },
+  "edge": {
+    "schema": "sparknet-graph-edge/1",
+    "fields": [
+      "source",
+      "target",
+      "kind",
+      "provenance"
+    ],
+    "required": [
+      "source",
+      "target",
+      "kind",
+      "provenance"
+    ],
+    "kinds": [
+      "wikilink",
+      "frontmatter",
+      "manual"
+    ],
+    "provenance": "The source path and the literal link target; an unresolved link is reported, never invented."
+  },
+  "graph": {
+    "schema": "sparknet-graph/1",
+    "fields": [
+      "schema_version",
+      "nodes",
+      "edges",
+      "unresolved"
+    ]
+  },
+  "rules": [
+    "The graph is derived state; it is never an authority and never a knowledge channel.",
+    "Nodes are scoped by vault; an edge never crosses a vault boundary.",
+    "Wikilinks may carry an anchor or an alias; both are stripped for resolution.",
+    "An unresolved link is reported with its source and literal target.",
+    "Node and edge ordering is deterministic so two builds of one corpus are byte-identical.",
+    "A page's classification and department travel with the node; the graph does not infer them."
+  ],
+  "refusal_codes": [
+    "malformed-page",
+    "bad-path",
+    "bad-vault",
+    "duplicate-node",
+    "cross-vault-edge",
+    "unknown-node",
+    "bad-direction"
+  ]
+}

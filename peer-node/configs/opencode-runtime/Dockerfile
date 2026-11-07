@@ -8,13 +8,13 @@
 # Build (the tarball is downloaded by `make -C peer-node opencode-runtime`):
 #   docker build \
 #     --build-arg BASE_IMAGE=sparknet-spark-node:dev \
-#     --build-arg OPENCODE_VERSION=1.19.5 \
-#     -t sparknet-opencode-runtime:1.19.5 \
+#     --build-arg OPENCODE_VERSION=2.2.5 \
+#     -t sparknet-opencode-runtime:2.2.5 \
 #     peer-node/configs/opencode-runtime
 ARG BASE_IMAGE=sparknet-spark-node:dev
 FROM ${BASE_IMAGE}
 
-ARG OPENCODE_VERSION=1.19.5
+ARG OPENCODE_VERSION=2.2.5
 ARG TARGETARCH
 
 LABEL org.opencontainers.image.title="sparknet-opencode-runtime"

@@ -41,6 +41,13 @@ the tests then prove both roles still agree.
 | `webui-surface.md` | the peer/master Open WebUI menus, console scope, session/token rule, read-only boundary and the 3D-map pilot |
 | `knowledge-flow.md` | the map of every Master→peer, peer→Master and peer↔peer channel: what it may carry, what it must never carry, how it is authenticated, and why authority and knowledge never share a channel |
 | `memory-schema.json` | per-vault typed memory, retention, the Go store/Python gateway boundary, delegate runs and the memory-bundle payload profile |
+| `abac-schema.json` | attribute-based narrowing for knowledge resources: verified subject sources, resource classes, classifications, refusal codes, and the rule that ABAC never grants a capability or widens a scope |
+| `event-schema.json` | the canonical NATS/JetStream event envelope: topic namespace, bounded lifetime, payload as data, and the rule that a signature is provenance not authority |
+| `graph-schema.json` | the derived document-link graph: vault-scoped nodes, wikilink/frontmatter/manual edges, deterministic ordering and reported unresolved links |
+| `hybrid-schema.json` | the semantic + agentic retrieval bundle: both result sets, provenance, and the rule that they are never silently merged |
+| `exec-schema.json` | the signed argv-only execution contract: vector argv, vault-relative cwd, environment allow-list, operator OS cap, timeout and output bounds |
+| `collab-schema.json` | bounded collaboration rooms: participants, classification ceiling, department boundary, provenance and no authority |
+| `package-schema.json` | signed package manifests and the closed dependency-first install plan; a package is data and never executes itself |
 | `nocturnal-artifact-schema.json` | signed cluster-job results and manifests under `01_Inbox/nocturnal/`, coverage, local commit and the no-auto-promotion rule |
 | `manifest.json` | **generated** — the machine-readable inventory of this directory: each JSON contract by hash (so an edit without a re-render is caught) plus the projected capability and port tables. Rendered by `scripts/sparknet-render.py`; never hand-edited. |
 

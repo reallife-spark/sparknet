@@ -1,0 +1,83 @@
+{
+  "contract": "hybrid-schema",
+  "schema_version": "1.0",
+  "description": "The semantic + agentic retrieval bundle. Both result sets are returned to the agent together, with provenance; the fabric never silently merges them into one answer.",
+  "bundle": {
+    "schema": "sparknet-hybrid/1",
+    "fields": [
+      "schema_version",
+      "query",
+      "semantic",
+      "agentic",
+      "generated_at",
+      "classification",
+      "department",
+      "vault_id"
+    ],
+    "required": [
+      "schema_version",
+      "query",
+      "semantic",
+      "agentic",
+      "generated_at",
+      "classification"
+    ]
+  },
+  "semantic_result": {
+    "schema": "sparknet-hybrid-semantic/1",
+    "fields": [
+      "result_id",
+      "source",
+      "path",
+      "score",
+      "text",
+      "classification",
+      "provenance"
+    ],
+    "required": [
+      "result_id",
+      "source",
+      "path",
+      "score",
+      "text",
+      "classification",
+      "provenance"
+    ],
+    "score": "A finite number; the retrieval backend's score, never authority."
+  },
+  "agentic_result": {
+    "schema": "sparknet-hybrid-agentic/1",
+    "fields": [
+      "result_id",
+      "tool",
+      "action",
+      "result",
+      "classification",
+      "provenance"
+    ],
+    "required": [
+      "result_id",
+      "tool",
+      "action",
+      "result",
+      "classification",
+      "provenance"
+    ],
+    "provenance": "The tool, action and source the agent actually used; a result without provenance is refused."
+  },
+  "rules": [
+    "Both result sets are returned; an empty set is stated as empty, never hidden.",
+    "A result without provenance is refused.",
+    "The bundle is evidence for the agent, not an answer, a capability or a knowledge channel.",
+    "Ordering is deterministic by result id.",
+    "The bundle's classification is the highest classification of its results; it never lowers one."
+  ],
+  "refusal_codes": [
+    "malformed-bundle",
+    "missing-provenance",
+    "unknown-classification",
+    "bad-score",
+    "bad-result",
+    "classification-downgrade"
+  ]
+}

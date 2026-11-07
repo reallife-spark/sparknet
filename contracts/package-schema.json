@@ -1,0 +1,88 @@
+{
+  "contract": "package-schema",
+  "schema_version": "1.0",
+  "description": "A signed package index and package manifests for distributing code and skills. A package is data; installing it is a separate, explicit action and no manifest can grant authority or execute itself.",
+  "package": {
+    "schema": "sparknet-package/1",
+    "fields": [
+      "schema_version",
+      "package_id",
+      "version",
+      "description",
+      "artifacts",
+      "dependencies",
+      "signer_node_id",
+      "created_at",
+      "signature_b64"
+    ],
+    "required": [
+      "schema_version",
+      "package_id",
+      "version",
+      "artifacts",
+      "dependencies",
+      "signer_node_id",
+      "created_at"
+    ],
+    "artifact": {
+      "fields": [
+        "path",
+        "sha256",
+        "size"
+      ],
+      "required": [
+        "path",
+        "sha256",
+        "size"
+      ],
+      "path": "relative POSIX path; no absolute path and no parent escape",
+      "sha256": "64 lowercase hex characters"
+    },
+    "dependency": {
+      "fields": [
+        "package_id",
+        "version"
+      ],
+      "required": [
+        "package_id",
+        "version"
+      ]
+    }
+  },
+  "index": {
+    "schema": "sparknet-package-index/1",
+    "fields": [
+      "schema_version",
+      "updated_at",
+      "packages",
+      "signature_b64"
+    ],
+    "required": [
+      "schema_version",
+      "updated_at",
+      "packages"
+    ]
+  },
+  "rules": [
+    "A package is data; installation is an explicit operator action.",
+    "Artifact paths are relative and stay inside the package root.",
+    "Every artifact carries a sha256 and a size.",
+    "Dependencies are closed: an index install plan refuses an unknown package or version.",
+    "Dependency ordering is deterministic and cycle detection fails closed.",
+    "A signature proves provenance; it grants no capability and executes nothing."
+  ],
+  "refusal_codes": [
+    "malformed-package",
+    "bad-package-id",
+    "bad-version",
+    "bad-artifact",
+    "bad-artifact-path",
+    "bad-digest",
+    "bad-dependency",
+    "duplicate-package",
+    "unknown-package",
+    "dependency-cycle",
+    "malformed-index",
+    "bad-signature"
+  ]
+}

@@ -232,6 +232,42 @@ def api_surface(config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def api_foundations(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
+    """Read-only readiness view of the Step 89 foundation modules."""
+    contracts = ROOT / "contracts"
+    shared = ROOT / "shared"
+    contract_names = (
+        "abac-schema.json",
+        "event-schema.json",
+        "graph-schema.json",
+        "hybrid-schema.json",
+        "exec-schema.json",
+        "collab-schema.json",
+        "package-schema.json",
+    )
+    module_names = (
+        "sparknet-abac.py",
+        "sparknet-event.py",
+        "sparknet-graph.py",
+        "sparknet-hybrid.py",
+        "sparknet-exec-rpc.py",
+        "sparknet-collab.py",
+        "sparknet-package.py",
+    )
+    contract_state = {name: (contracts / name).is_file() for name in contract_names}
+    module_state = {name: (shared / name).is_file() for name in module_names}
+    ready = all(contract_state.values()) and all(module_state.values())
+    return {
+        "ok": True,
+        "schema": SCHEMA,
+        "role": str(config.get("role") or role_root.name),
+        "generated_at": now_iso(),
+        "ready": ready,
+        "contracts": contract_state,
+        "modules": module_state,
+    }
+
+
 def api_mesh(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
     paths = config.get("paths") or {}
     result: dict[str, Any] = {"ok": True, "role": config.get("role"), "node": config.get("node"), "errors": []}
@@ -677,6 +713,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(status, payload)
             elif path == "/api/memory":
                 self._json(200, api_memory(self.config, self.role_root))
+            elif path == "/api/foundations":
+                self._json(200, api_foundations(self.config, self.role_root))
             elif path == "/api/projects":
                 self._json(200, api_projects(self.config, self.role_root))
             else:

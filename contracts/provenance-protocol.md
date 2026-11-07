@@ -274,6 +274,14 @@ agent sanitizes it before anything downstream reads it.
 - source `email` → the sender must be on the authorized list in
   `00_System/user.md`, then treated as peer-origin.
 
+Every intake also records its O1 `classification` in the note frontmatter:
+`master-node` and `peer-node` default to `internal`, `email` to `confidential`
+and never below it. A caller may raise but not lower that floor. Readers use
+the recorded field; a page that predates it falls back to the path policy
+(`02_Daily`, `03_Sources`, `_raw`, `_staging` → `confidential`, otherwise
+`internal`). An unknown or malformed recorded classification is refused, never
+guessed. The vocabulary and defaults are pinned in `contracts/abac-schema.json`.
+
 The peer reviewer is built: `agents/vault-curator` is a deterministic CLI (no
 listener) that refuses untrusted ingress without an accepted, `sanitized: true`
 `inbox_acceptance` naming it, strips active content outside fenced code, refuses

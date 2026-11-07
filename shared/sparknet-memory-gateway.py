@@ -28,6 +28,7 @@ import json
 import os
 import re
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -39,6 +40,13 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from sparknet_loader import load_shared
+
+ABAC = load_shared("sparknet-abac.py", "sparknet_abac_memory_gateway")
+GRAPH = load_shared("sparknet-graph.py", "sparknet_graph_memory_gateway")
+HYBRID = load_shared("sparknet-hybrid.py", "sparknet_hybrid_memory_gateway")
+COLLAB = load_shared("sparknet-collab.py", "sparknet_collab_memory_gateway")
+EXEC = load_shared("sparknet-exec-rpc.py", "sparknet_exec_memory_gateway")
+YAML = load_shared("sparknet-yaml.py", "sparknet_yaml_memory_gateway")
 
 HERE = Path(__file__).resolve().parent
 SCHEMA = "sparknet-memory-gateway/1"
@@ -145,6 +153,7 @@ class Gateway:
         self.identity_path = Path(identity_path or (HERE.parent / "peer-node" / "manifests" / "node-identity.json"))
         self.authz = load_shared("sparknet-authz.py", "sparknet_authz_gateway")
         self._webui_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        self._nonce_lock = threading.Lock()
 
     # -- authority ---------------------------------------------------------
 
@@ -186,12 +195,41 @@ class Gateway:
             raise GatewayError(503, "registry-invalid", "registry has no master key")
         return registry, self.authz.public_key_from_b64(encoded)
 
-    def _identity(self) -> dict[str, Any] | None:
+    def _identity(self) -> dict[str, Any]:
         try:
             value = json.loads(self.identity_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return None
-        return value if isinstance(value, dict) else None
+        except (OSError, json.JSONDecodeError) as exc:
+            raise GatewayError(503, "identity-unavailable", str(exc)) from exc
+        if not isinstance(value, dict):
+            raise GatewayError(503, "identity-invalid", "identity is not an object")
+        return value
+
+    @property
+    def _nonce_path(self) -> Path:
+        return self.state_dir / "consumed-grant-nonces.json"
+
+    def _read_nonces(self) -> set[str]:
+        path = self._nonce_path
+        if not path.is_file():
+            return set()
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise GatewayError(503, "nonce-store-unavailable", str(exc)) from exc
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise GatewayError(503, "nonce-store-invalid", "consumed nonce store is malformed")
+        return set(value)
+
+    def _write_nonces(self, nonces: set[str]) -> None:
+        path = self._nonce_path
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            temp = path.with_name(path.name + ".tmp")
+            temp.write_text(json.dumps(sorted(nonces)) + "\n", encoding="utf-8")
+            os.chmod(temp, 0o600)
+            os.replace(temp, path)
+        except OSError as exc:
+            raise GatewayError(503, "nonce-store-unavailable", str(exc)) from exc
 
     def _grant(self, token: str) -> dict[str, Any] | None:
         try:
@@ -201,17 +239,31 @@ class Gateway:
             return None
         if not isinstance(grant, dict) or not grant.get("grant_id"):
             return None
+        nonce = grant.get("nonce")
+        if not isinstance(nonce, str) or not nonce:
+            raise GatewayError(403, "grant-refused", "grant names no nonce")
         registry, master_key = self._registry()
-        decision = self.authz.verify_grant(
-            grant,
-            master_public_key=master_key,
-            registry=registry,
-            node_identity=self._identity(),
-            consumed_nonces=frozenset(),
-        )
-        if not decision.allowed:
-            raise GatewayError(403, "grant-refused", decision.reason)
+        with self._nonce_lock:
+            consumed = self._read_nonces()
+            decision = self.authz.verify_grant(
+                grant,
+                master_public_key=master_key,
+                registry=registry,
+                node_identity=self._identity(),
+                consumed_nonces=frozenset(consumed),
+            )
+            if not decision.allowed:
+                raise GatewayError(403, "grant-refused", decision.reason)
         return grant
+
+    def _consume_grant_nonce(self, nonce: str | None) -> None:
+        if not nonce:
+            return
+        with self._nonce_lock:
+            consumed = self._read_nonces()
+            if nonce in consumed:
+                raise GatewayError(403, "grant-refused", "grant nonce was already used")
+            self._write_nonces(consumed | {nonce})
 
     def _webui_user(self, token: str) -> dict[str, Any]:
         cached = self._webui_cache.get(token)
@@ -288,7 +340,16 @@ class Gateway:
             requested = str(body.get("vault_path") or "").strip()
             if requested and Path(requested).expanduser().resolve() != Path(vault_path).resolve():
                 raise GatewayError(403, "vault-forbidden", "a session grant is bound to the role vault")
-            constraints = {"vault_path": vault_path, "scope": {"user_id": user_id}}
+            try:
+                subject = ABAC.subject_from_grant(grant, Path(vault_path).name, verified=True)
+            except ABAC.AbacError as exc:
+                raise GatewayError(403, exc.code, exc.message) from exc
+            constraints = {
+                "vault_path": vault_path,
+                "scope": {"user_id": user_id},
+                "scope_paths": list(subject["scope"]),
+                "grant_nonce": str(grant.get("nonce") or ""),
+            }
             return "grant", user_id, vault_path, constraints
 
         user = self._webui_user(token)
@@ -303,6 +364,22 @@ class Gateway:
     def _slug(value: str) -> str:
         slug = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip()).strip("-._")
         return slug[:80] or "note"
+
+    @staticmethod
+    def _authority(rel: str) -> bool:
+        try:
+            return ABAC.resource_class_for(rel) == "authority"
+        except ABAC.AbacError:
+            return True
+
+    @staticmethod
+    def _scope_row(rel: str, scope_paths: list[str] | None) -> bool:
+        if scope_paths is None:
+            return True
+        rel = rel.strip("/")
+        return any(
+            rel == str(prefix).strip("/") or rel.startswith(str(prefix).strip("/") + "/") for prefix in scope_paths
+        )
 
     def _vault_candidate(self, vault_path: str, rel: str) -> Path:
         root = Path(vault_path).expanduser().resolve()
@@ -319,6 +396,8 @@ class Gateway:
             raise GatewayError(403, "vault-forbidden", "path names runtime state")
         if candidate.name in VAULT_SKIP_NAMES:
             raise GatewayError(403, "vault-forbidden", "path names a secret index")
+        if self._authority(candidate.relative_to(root).as_posix()):
+            raise GatewayError(403, "authority-surface", "path names an authority surface")
         return candidate
 
     def _vault_files(self, vault_path: str) -> list[Path]:
@@ -330,12 +409,247 @@ class Gateway:
             rel = path.relative_to(root)
             if any(part in VAULT_SKIP_PARTS for part in rel.parts):
                 continue
+            if path.name in VAULT_SKIP_NAMES:
+                continue
+            if self._authority(rel.as_posix()):
+                continue
             if path.suffix.lower() not in VAULT_SUFFIXES:
                 continue
             files.append(path)
         return sorted(files)
 
-    def vault_list(self, vault_path: str, prefix: str = "", limit: int = 500) -> dict[str, Any]:
+    @staticmethod
+    def _page_classification(rel: str) -> str:
+        """Legacy fallback only; the O1 field is authoritative when present."""
+        for prefix, classification in ABAC.LEGACY_PATH_CLASSIFICATION.items():
+            if rel.startswith(prefix):
+                return classification
+        return ABAC.DEFAULT_LEGACY_CLASSIFICATION
+
+    def _page_attributes(self, rel: str, text: str) -> tuple[str, str | None]:
+        """Read classification and department from the note, fail-closed.
+
+        A page with no frontmatter is legacy and uses the path fallback. A page
+        that has frontmatter but an unknown classification is refused rather
+        than silently lowered to a path-derived label.
+        """
+        fallback = self._page_classification(rel)
+        if not text.startswith("---\n"):
+            return fallback, None
+        end = text.find("\n---\n", 4)
+        if end == -1:
+            raise GatewayError(400, "malformed-frontmatter", f"{rel} has an unclosed frontmatter fence")
+        try:
+            meta = YAML.parse_yaml_subset(text[4:end])
+        except YAML.ProvenanceError as exc:
+            raise GatewayError(400, "malformed-frontmatter", f"{rel}: {exc}") from exc
+        if not isinstance(meta, dict):
+            raise GatewayError(400, "malformed-frontmatter", f"{rel} frontmatter is not a mapping")
+        classification = meta.get("classification", fallback)
+        if not isinstance(classification, str) or classification not in ABAC.CLASSIFICATIONS:
+            raise GatewayError(400, "unknown-classification", f"{rel} has an unknown classification")
+        department = meta.get("department")
+        if department is not None and not isinstance(department, str):
+            raise GatewayError(400, "malformed-frontmatter", f"{rel} department must be a string")
+        return classification, (department.strip() or None if isinstance(department, str) else None)
+
+    @staticmethod
+    def _page_title(text: str, rel: str) -> str:
+        for line in text.splitlines():
+            if line.startswith("# "):
+                return line[2:].strip() or Path(rel).stem
+        return Path(rel).stem
+
+    def vault_graph(self, vault_path: str, scope_paths: list[str] | None = None) -> dict[str, Any]:
+        root = Path(vault_path).resolve()
+        if not root.is_dir():
+            raise GatewayError(404, "not-found", "vault path is not a directory")
+        pages = []
+        for path in self._vault_files(vault_path):
+            rel = path.relative_to(root).as_posix()
+            if not self._scope_row(rel, scope_paths):
+                continue
+            if len(pages) >= 500:
+                break
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            classification, department = self._page_attributes(rel, text)
+            pages.append(
+                {
+                    "vault_id": root.name,
+                    "path": rel,
+                    "title": self._page_title(text, rel),
+                    "classification": classification,
+                    "department": department,
+                    "text": text,
+                }
+            )
+        try:
+            graph = GRAPH.build_graph(pages)
+        except GRAPH.GraphError as exc:
+            raise GatewayError(400, exc.code, exc.message) from exc
+        return {"ok": True, "graph": graph}
+
+    @staticmethod
+    def _write_json_atomic(path: Path, value: dict[str, Any]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        temp = path.with_name(path.name + ".tmp")
+        temp.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        os.chmod(temp, 0o600)
+        os.replace(temp, path)
+
+    def _collab_root(self, vault_path: str) -> Path:
+        root = Path(vault_path).resolve()
+        path = root / "01_Inbox" / "collab"
+        path.mkdir(parents=True, exist_ok=True, mode=0o700)
+        return path
+
+    def collab_create_room(self, vault_path: str, actor_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        participants = body.get("participants")
+        if not isinstance(participants, list) or not participants:
+            participants = [{"node_id": actor_id, "user_id": actor_id, "department": None}]
+        cleaned = []
+        for item in participants:
+            if isinstance(item, dict):
+                cleaned.append(
+                    {
+                        "node_id": str(item.get("node_id") or actor_id),
+                        "user_id": str(item.get("user_id") or actor_id),
+                        "department": None,
+                        "role": str(item.get("role") or "participant"),
+                    }
+                )
+        if not any(item["node_id"] == actor_id and item["user_id"] == actor_id for item in cleaned):
+            cleaned.append({"node_id": actor_id, "user_id": actor_id, "department": None, "role": "owner"})
+        room_id = str(body.get("room_id") or "").strip()
+        room = COLLAB.make_room(
+            owner_node_id=actor_id,
+            participants=cleaned,
+            classification=str(body.get("classification") or "internal"),
+            department=None,
+            room_id=room_id or None,
+            verified=True,
+        )
+        path = self._collab_root(vault_path) / room["room_id"] / "room.json"
+        self._write_json_atomic(path, room)
+        return {"ok": True, "room": room}
+
+    def collab_list_rooms(self, vault_path: str) -> dict[str, Any]:
+        root = self._collab_root(vault_path)
+        rooms = []
+        for room_file in sorted(root.glob("*/room.json")):
+            try:
+                room = COLLAB.validate_room(json.loads(room_file.read_text(encoding="utf-8")))
+            except (OSError, ValueError, COLLAB.CollabError):
+                continue
+            rooms.append(room)
+        return {"ok": True, "rooms": rooms}
+
+    def collab_post_message(self, vault_path: str, actor_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        room_id = str(body.get("room_id") or "").strip()
+        if not room_id:
+            raise GatewayError(400, "malformed", "room_id is required")
+        room_file = self._collab_root(vault_path) / room_id / "room.json"
+        try:
+            room = COLLAB.validate_room(json.loads(room_file.read_text(encoding="utf-8")))
+        except (OSError, ValueError, COLLAB.CollabError) as exc:
+            raise GatewayError(404, "not-found", "collaboration room not found") from exc
+        message = COLLAB.make_message(
+            room,
+            sender_node_id=actor_id,
+            sender_user_id=actor_id,
+            text=str(body.get("text") or ""),
+            provenance={"source": "local"},
+            classification=str(body.get("classification") or room["classification"]),
+        )
+        path = self._collab_root(vault_path) / room_id / "messages" / f"{message['message_id']}.json"
+        self._write_json_atomic(path, message)
+        return {"ok": True, "message": message}
+
+    def collab_list_messages(self, vault_path: str, room_id: str) -> dict[str, Any]:
+        if not room_id:
+            raise GatewayError(400, "malformed", "room_id is required")
+        room_file = self._collab_root(vault_path) / room_id / "room.json"
+        try:
+            room = COLLAB.validate_room(json.loads(room_file.read_text(encoding="utf-8")))
+        except (OSError, ValueError, COLLAB.CollabError) as exc:
+            raise GatewayError(404, "not-found", "collaboration room not found") from exc
+        messages = []
+        for message_file in sorted((room_file.parent / "messages").glob("*.json")):
+            try:
+                messages.append(COLLAB.validate_message(json.loads(message_file.read_text(encoding="utf-8")), room))
+            except (OSError, ValueError, COLLAB.CollabError):
+                continue
+        messages.sort(key=lambda item: (item["created_at"], item["message_id"]))
+        return {"ok": True, "room": room, "messages": messages}
+
+    def vault_hybrid(
+        self, vault_path: str, query: str, top_k: int = 8, scope_paths: list[str] | None = None
+    ) -> dict[str, Any]:
+        search = self.vault_search(vault_path, query, top_k, scope_paths)
+        root = Path(vault_path).resolve()
+        graph = self.vault_graph(vault_path, scope_paths)["graph"]
+        by_path = {node["path"]: node for node in graph["nodes"]}
+
+        def attributes(rel: str) -> tuple[str, str | None]:
+            node = by_path.get(rel)
+            if node is not None:
+                return str(node["classification"]), node.get("department")
+            try:
+                text = (root / rel).read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                return self._page_classification(rel), None
+            return self._page_attributes(rel, text)
+
+        semantic = []
+        semantic_departments = set()
+        for index, hit in enumerate(search["hits"]):
+            rel = hit["path"]
+            classification, department = attributes(rel)
+            if department:
+                semantic_departments.add(department)
+            semantic.append(
+                HYBRID.semantic_result(
+                    result_id=f"sem-{index + 1}",
+                    source="vault_search",
+                    path=rel,
+                    score=float(hit["score"]),
+                    text=hit["snippet"],
+                    classification=classification,
+                    provenance={"source": rel},
+                )
+            )
+        agentic = []
+        for index, hit in enumerate(search["hits"][:3]):
+            rel = hit["path"]
+            classification, department = attributes(rel)
+            if department:
+                semantic_departments.add(department)
+            neighbours = [node.split(":", 1)[-1] for node in GRAPH.neighbors(graph, f"{root.name}:{rel}")]
+            agentic.append(
+                HYBRID.agentic_result(
+                    result_id=f"agt-{index + 1}",
+                    tool="vault_graph",
+                    action="neighbors",
+                    result={"path": rel, "neighbors": neighbours},
+                    classification=classification,
+                    provenance={"source": rel},
+                )
+            )
+        bundle = HYBRID.bundle(
+            query=query,
+            semantic=semantic,
+            agentic=agentic,
+            department=next(iter(semantic_departments)) if len(semantic_departments) == 1 else None,
+            vault_id=root.name,
+        )
+        return {"ok": True, "query": query, "bundle": bundle, "rendered": HYBRID.render_for_agent(bundle)}
+
+    def vault_list(
+        self, vault_path: str, prefix: str = "", limit: int = 500, scope_paths: list[str] | None = None
+    ) -> dict[str, Any]:
         base = self._vault_candidate(vault_path, prefix)
         rows = []
         if base.is_dir():
@@ -345,36 +659,52 @@ class Gateway:
                 rel = path.relative_to(Path(vault_path).resolve()).as_posix()
                 if any(part in VAULT_SKIP_PARTS for part in Path(rel).parts):
                     continue
+                if path.name in VAULT_SKIP_NAMES:
+                    continue
+                if self._authority(rel):
+                    continue
+                if not self._scope_row(rel, scope_paths):
+                    continue
                 if path.suffix.lower() not in VAULT_SUFFIXES:
                     continue
                 rows.append(rel)
                 if len(rows) >= max(1, min(int(limit), 2000)):
                     break
         elif base.is_file():
-            rows = [base.relative_to(Path(vault_path).resolve()).as_posix()]
+            rel = base.relative_to(Path(vault_path).resolve()).as_posix()
+            if base.name not in VAULT_SKIP_NAMES and self._scope_row(rel, scope_paths):
+                rows = [rel]
         return {"ok": True, "vault": Path(vault_path).name, "paths": rows}
 
-    def vault_read(self, vault_path: str, rel: str) -> dict[str, Any]:
+    def vault_read(self, vault_path: str, rel: str, scope_paths: list[str] | None = None) -> dict[str, Any]:
         path = self._vault_candidate(vault_path, rel)
         if not path.is_file() or path.is_symlink():
             raise GatewayError(404, "not-found", "vault page not found")
+        relative = path.relative_to(Path(vault_path).resolve()).as_posix()
+        if not self._scope_row(relative, scope_paths):
+            raise GatewayError(403, "scope-refused", "page is outside the signed grant scope")
         size = path.stat().st_size
         if size > MAX_VAULT_FILE:
             raise GatewayError(413, "too-large", "vault page exceeds the read limit")
         return {
             "ok": True,
-            "path": path.relative_to(Path(vault_path).resolve()).as_posix(),
+            "path": relative,
             "content": path.read_text(encoding="utf-8", errors="replace"),
             "bytes": size,
         }
 
-    def vault_search(self, vault_path: str, query: str, top_k: int = 8) -> dict[str, Any]:
+    def vault_search(
+        self, vault_path: str, query: str, top_k: int = 8, scope_paths: list[str] | None = None
+    ) -> dict[str, Any]:
         terms = [term.lower() for term in re.split(r"\s+", query.strip()) if len(term) > 1][:8]
         if not terms:
             raise GatewayError(400, "malformed", "query must contain at least one word")
         scored = []
         root = Path(vault_path).resolve()
         for path in self._vault_files(vault_path):
+            rel = path.relative_to(root).as_posix()
+            if not self._scope_row(rel, scope_paths):
+                continue
             try:
                 if path.stat().st_size > MAX_VAULT_FILE:
                     continue
@@ -389,7 +719,7 @@ class Gateway:
             snippet = text[max(0, first - 180) : first + 420].replace("\n", " ").strip()
             scored.append(
                 {
-                    "path": path.relative_to(root).as_posix(),
+                    "path": rel,
                     "score": score,
                     "snippet": snippet,
                 }
@@ -416,8 +746,9 @@ class Gateway:
                 "capture target must be under 01_Inbox/, _raw/, 04_Evergreen/, 05_Knowledge/ or 06_Projects/",
             )
         path = self._vault_candidate(vault_path, target)
-        if not str(path).startswith(str(Path(vault_path).resolve())):
-            raise GatewayError(403, "vault-forbidden", "target escapes the user vault")
+        relative = path.relative_to(Path(vault_path).resolve())
+        if not relative.parts or relative.parts[0] not in VAULT_CAPTURE_PREFIXES:
+            raise GatewayError(403, "vault-forbidden", "capture target must be under an allowed prefix")
         if path.exists():
             stem = path.with_suffix("")
             for index in range(2, 100):
@@ -554,17 +885,61 @@ class Gateway:
         if isinstance(merged.get("scope"), dict) and isinstance(constraints.get("scope"), dict):
             merged["scope"] = {**constraints["scope"], **merged["scope"]}
             merged["scope"]["user_id"] = constraints["scope"]["user_id"]
+        if path == "/v1/exec/validate":
+            if method != "POST":
+                raise GatewayError(405, "method-not-allowed", "execution validation requires POST")
+            if kind != "local":
+                raise GatewayError(403, "local-only", "execution validation is a local operator action")
+            request = merged.get("request")
+            if not isinstance(request, dict):
+                raise GatewayError(400, "malformed", "request must be an object")
+            normalised = EXEC.validate_request(request, verified=True)
+            self.audit(kind, actor_id, "exec.validate", vault_path, {"request_id": normalised.get("request_id")})
+            return 200, {"ok": True, "executed": False, "request": normalised}
+        if path.startswith("/v1/collab/"):
+            if path == "/v1/collab/rooms":
+                if method != "GET":
+                    raise GatewayError(405, "method-not-allowed", "room listing requires GET")
+                payload = self.collab_list_rooms(vault_path)
+                self.audit(kind, actor_id, "collab.rooms", vault_path, {"rooms": len(payload["rooms"])})
+                return 200, payload
+            if path == "/v1/collab/messages":
+                if method != "GET":
+                    raise GatewayError(405, "method-not-allowed", "message listing requires GET")
+                payload = self.collab_list_messages(vault_path, str(merged.get("room_id") or ""))
+                self.audit(kind, actor_id, "collab.messages", vault_path, {"room_id": merged.get("room_id")})
+                return 200, payload
+            if path == "/v1/collab/room":
+                if method != "POST":
+                    raise GatewayError(405, "method-not-allowed", "room creation requires POST")
+                payload = self.collab_create_room(vault_path, actor_id, merged)
+                self.audit(kind, actor_id, "collab.room.create", vault_path, {"room_id": payload["room"]["room_id"]})
+                self._consume_grant_nonce(constraints.get("grant_nonce"))
+                return 200, payload
+            if path == "/v1/collab/message":
+                if method != "POST":
+                    raise GatewayError(405, "method-not-allowed", "messages require POST")
+                payload = self.collab_post_message(vault_path, actor_id, merged)
+                self.audit(kind, actor_id, "collab.message", vault_path, {"room_id": merged.get("room_id")})
+                self._consume_grant_nonce(constraints.get("grant_nonce"))
+                return 200, payload
+            raise GatewayError(404, "not-found", "unknown collaboration route")
         if path.startswith("/v1/vault/"):
+            if path == "/v1/vault/capture" and method != "POST":
+                raise GatewayError(405, "method-not-allowed", "vault capture requires POST")
             if path == "/v1/vault/list":
                 payload = self.vault_list(
                     vault_path,
                     prefix=str(merged.get("prefix") or ""),
                     limit=int(merged.get("limit") or 500),
+                    scope_paths=constraints.get("scope_paths"),
                 )
                 self.audit(kind, actor_id, "vault.list", vault_path, {"prefix": merged.get("prefix")})
                 return 200, payload
             if path == "/v1/vault/read":
-                payload = self.vault_read(vault_path, str(merged.get("path") or ""))
+                payload = self.vault_read(
+                    vault_path, str(merged.get("path") or ""), scope_paths=constraints.get("scope_paths")
+                )
                 self.audit(kind, actor_id, "vault.read", vault_path, {"path": payload.get("path")})
                 return 200, payload
             if path == "/v1/vault/search":
@@ -572,15 +947,32 @@ class Gateway:
                     vault_path,
                     str(merged.get("query") or ""),
                     int(merged.get("top_k") or 8),
+                    scope_paths=constraints.get("scope_paths"),
                 )
                 self.audit(kind, actor_id, "vault.search", vault_path, {"query": merged.get("query")})
+                return 200, payload
+            if path == "/v1/vault/graph":
+                payload = self.vault_graph(vault_path, constraints.get("scope_paths"))
+                self.audit(kind, actor_id, "vault.graph", vault_path, {"nodes": len(payload["graph"]["nodes"])})
+                return 200, payload
+            if path == "/v1/vault/hybrid":
+                payload = self.vault_hybrid(
+                    vault_path,
+                    str(merged.get("query") or ""),
+                    int(merged.get("top_k") or 8),
+                    constraints.get("scope_paths"),
+                )
+                self.audit(kind, actor_id, "vault.hybrid", vault_path, {"query": merged.get("query")})
                 return 200, payload
             if path == "/v1/vault/capture":
                 payload = self.vault_capture(vault_path, merged)
                 self.audit(kind, actor_id, "vault.capture", vault_path, {"path": payload.get("path")})
+                self._consume_grant_nonce(constraints.get("grant_nonce"))
                 return 200, payload
             raise GatewayError(404, "not-found", "unknown vault route")
         if path == "/v1/rfi":
+            if method != "POST":
+                raise GatewayError(405, "method-not-allowed", "RFI requests require POST")
             payload = self.rfi(str(merged.get("question") or ""), list(merged.get("scope") or []))
             self.audit(
                 kind,
@@ -589,7 +981,10 @@ class Gateway:
                 vault_path,
                 {"scope": merged.get("scope"), "request": payload.get("request", {}).get("request_id")},
             )
+            self._consume_grant_nonce(constraints.get("grant_nonce"))
             return 200, payload
+        if path in MUTATING and method != "POST":
+            raise GatewayError(405, "method-not-allowed", f"{path} requires POST")
         if path == "/v1/memory/remember":
             # The Go remember envelope is {vault_path, record}; the scope belongs
             # inside the record. A top-level scope is an unknown field there.
@@ -603,7 +998,7 @@ class Gateway:
                 record["scope"] = record_scope
         if path.startswith("/v1/delegates/"):
             if isinstance(merged.get("plan"), dict):
-                merged["plan"].setdefault("user_id", actor_id)
+                merged["plan"]["user_id"] = actor_id
             if method == "POST" and path == "/v1/delegates/plan":
                 self.audit(
                     kind, actor_id, "delegate.plan", vault_path, {"plan_id": merged.get("plan", {}).get("plan_id")}
@@ -613,6 +1008,8 @@ class Gateway:
                 status, payload = self.forward(method, path, None, query)
             else:
                 status, payload = self.forward(method, path, merged, query)
+            if method == "POST" and path == "/v1/delegates/plan":
+                self._consume_grant_nonce(constraints.get("grant_nonce"))
             return status, payload
         if path.startswith("/v1/memory/"):
             if method == "POST" and (path in MUTATING or path == "/v1/memory/inspect"):
@@ -622,6 +1019,8 @@ class Gateway:
                 status, payload = self.forward(method, path, None, query)
             else:
                 status, payload = self.forward(method, path, merged, query)
+            if method == "POST" and path in MUTATING:
+                self._consume_grant_nonce(constraints.get("grant_nonce"))
             return status, payload
         if path == "/v1/admin/inspect":
             if kind not in ("local",):

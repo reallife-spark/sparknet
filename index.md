@@ -87,6 +87,13 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/webui-surface.md` | peer/master WebUI menus, read-only console scope and the 3D data-cloud surface |
 | `contracts/knowledge-flow.md` | the map of every Master→peer, peer→Master and peer↔peer channel: payload, authentication, refusals, and the rule that authority and knowledge never share a channel |
 | `contracts/memory-schema.json` | per-vault typed memory, retention, the Go store/Python gateway boundary, delegate runs and the memory-bundle payload profile |
+| `contracts/abac-schema.json` | attribute-based narrowing for knowledge resources: verified subjects, resource classes, classifications and refusal codes; never a capability grant |
+| `contracts/event-schema.json` | canonical NATS/JetStream event envelope: topic namespace, bounded lifetime, payload as data, signature as provenance not authority |
+| `contracts/graph-schema.json` | derived document-link graph: vault-scoped nodes, edge kinds, deterministic ordering and unresolved links |
+| `contracts/hybrid-schema.json` | semantic + agentic retrieval bundle: both result sets with provenance, never silently merged |
+| `contracts/exec-schema.json` | signed argv-only execution contract: vector argv, vault-relative cwd, environment allow-list, operator OS cap, timeout and output bounds |
+| `contracts/collab-schema.json` | bounded collaboration rooms: participants, classification ceiling, department boundary, provenance and no authority |
+| `contracts/package-schema.json` | signed package manifests and the closed dependency-first install plan; a package is data and never executes itself |
 | `contracts/nocturnal-artifact-schema.json` | signed nocturnal result/manifest artefacts, coverage and local inbox commitment |
 | `contracts/deployment-runbook.md` | phased deployment guide (live on agx64+agx32; Step 88 inverts the pair) |
 | `contracts/role-inversion-runbook.md` | executed Step 88 procedure for `agx64` Master / `agx32` peer: freeze/backup, chained re-formation, data/service migration, registry/grants/secrets, model placement and rollback |

@@ -69,7 +69,7 @@ x-agx-node: &agx-node
       gospark: ${GOSPARK_DIR:-../gospark}
     args:
       L4T_BASE: ${L4T_BASE:-nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3}
-      OPENCODE_VERSION: ${OPENCODE_VERSION:-1.19.5}
+      OPENCODE_VERSION: ${OPENCODE_VERSION:-2.2.5}
       NATS_VERSION: ${NATS_VERSION:-2.14.2}
       # The build escape hatches: point the engine at a fork's fixes without
       # patching anything (documented in goagx/README.md).
@@ -479,6 +479,7 @@ services:
       <<: *agx-env
       OPENCODE_HOST: ${OPENCODE_HOST:-127.0.0.1}
       OPENCODE_PORT: ${OPENCODE_PORT:-4200}
+      OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-}
       XDG_DATA_HOME: /srv/sparknet/peer-node/.state/opencode/data
       XDG_CACHE_HOME: /srv/sparknet/peer-node/.state/opencode/cache
     volumes:
