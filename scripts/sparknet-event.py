@@ -24,6 +24,10 @@ def _parser() -> argparse.ArgumentParser:
     subscribe = sub.add_parser("subscribe", help="receive one event")
     subscribe.add_argument("--subject", required=True)
     subscribe.add_argument("--timeout", type=float, default=5.0)
+    stream = sub.add_parser("stream", help="create or update a JetStream stream")
+    stream.add_argument("--name", required=True)
+    stream.add_argument("--subject", action="append", required=True)
+    stream.add_argument("--max-age", type=int, default=86400)
     return parser
 
 
@@ -36,6 +40,12 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("event file must contain a JSON object")
             published = BUS.publish(args.url, payload)
             print(json.dumps({"published": len(published), "topic": payload.get("topic")}, sort_keys=True))
+            return 0
+        if args.command == "stream":
+            address = BUS.BusAddress.parse(args.url)
+            with BUS.NatsClient(address.host, address.port) as client:
+                reply = client.js_create_stream(args.name, args.subject, max_age_seconds=args.max_age)
+            print(json.dumps(reply, indent=2, sort_keys=True))
             return 0
         received = BUS.subscribe_once(args.url, args.subject, timeout=args.timeout)
         print(json.dumps(received, indent=2, sort_keys=True))

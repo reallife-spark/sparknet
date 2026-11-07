@@ -11,7 +11,7 @@
       "contract": "agent-schema",
       "file": "agent-schema.json",
       "schema_version": "1.0",
-      "sha256": "7832421bd1818579ef5385ec7435e899f73444e8fd35573dc916d2134b5d8ebc"
+      "sha256": "46bca7bb340167cf236dd4ebd85525e6fa31b199cd9af0c9a126d0a0f9b25ad9"
     },
     {
       "contract": "capabilities",

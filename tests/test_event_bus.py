@@ -117,3 +117,56 @@ def test_subscribe_subject_is_validated_before_framing():
     with pytest.raises(bus.NatsError) as refused:
         bus.NatsClient().subscribe_once("bad\r\nSUB other")
     assert refused.value.code == "bad-subject"
+
+
+class FakeJetStream:
+    def __init__(self):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.bind(("127.0.0.1", 0))
+        self.sock.listen(1)
+        self.port = self.sock.getsockname()[1]
+        self.request = None
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+
+    def _run(self):
+        conn, _ = self.sock.accept()
+        with conn:
+            stream = conn.makefile("rwb", buffering=0)
+            stream.write(b'INFO {"server_id":"fake-js"}\r\n')
+            while True:
+                line = stream.readline()
+                if not line:
+                    break
+                if line.startswith(b"CONNECT"):
+                    continue
+                if line.startswith(b"PING"):
+                    stream.write(b"PONG\r\n")
+                elif line.startswith(b"PUB "):
+                    parts = line.split()
+                    subject = parts[1].decode("ascii")
+                    reply = parts[2].decode("ascii")
+                    size = int(parts[3])
+                    self.request = (subject, stream.read(size))
+                    stream.read(2)
+                    payload = json.dumps({"config": {"name": "sparknet"}}).encode("utf-8")
+                    stream.write(f"MSG {reply} 1 {len(payload)}\r\n".encode("ascii") + payload + b"\r\n")
+
+    def close(self):
+        with contextlib.suppress(OSError):
+            self.sock.close()
+
+
+def test_jetstream_stream_creation_is_a_server_request():
+    server = FakeJetStream()
+    try:
+        with bus.NatsClient("127.0.0.1", server.port, timeout=2) as client:
+            reply = client.js_create_stream("sparknet", ["sparknet.task.>"], max_age_seconds=600)
+        assert reply["config"]["name"] == "sparknet"
+        assert server.request[0] == "$JS.API.STREAM.CREATE.sparknet"
+        config = json.loads(server.request[1].decode("utf-8"))
+        assert config["subjects"] == ["sparknet.task.>"]
+        assert config["max_age"] == 600_000_000_000
+    finally:
+        server.close()

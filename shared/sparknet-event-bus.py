@@ -16,6 +16,7 @@ import contextlib
 import json
 import socket
 import sys
+import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -127,6 +128,76 @@ class NatsClient:
             self._expect_pong()
         return payload
 
+    def request(self, subject: str, payload: bytes, *, timeout: float | None = None) -> bytes:
+        """Send one request/reply message and return the reply payload."""
+        self._subject(subject)
+        self._sid += 1
+        sid = str(self._sid)
+        inbox = f"_INBOX.{sid}.{uuid.uuid4().hex}"
+        self._send(f"SUB {inbox} {sid}\r\n".encode("ascii"))
+        self._send(self._pub_frame(subject, payload, reply=inbox))
+        self._socket.settimeout(timeout or self.timeout)  # type: ignore[union-attr]
+        try:
+            while True:
+                line = self._line()
+                if line.startswith(b"PING"):
+                    self._send(b"PONG\r\n")
+                    continue
+                if line.startswith(b"-ERR"):
+                    raise NatsError("server-error", line.decode("utf-8", "replace"))
+                if not line.startswith(b"MSG "):
+                    continue
+                parts = line.decode("ascii", "replace").split()
+                if len(parts) < 4:
+                    raise NatsError("bad-message", "malformed MSG line")
+                size = int(parts[-1])
+                if size < 0 or size > MAX_MESSAGE_BYTES:
+                    raise NatsError("bad-message", "MSG size is out of range")
+                data = self._reader.read(size)
+                if len(data) != size:
+                    raise NatsError("bad-message", "MSG payload is truncated")
+                self._reader.read(2)
+                return data
+        finally:
+            self._send(f"UNSUB {sid}\r\n".encode("ascii"))
+
+    def js_create_stream(
+        self,
+        name: str,
+        subjects: list[str],
+        *,
+        max_age_seconds: int = 86400,
+        storage: str = "file",
+        timeout: float = 5.0,
+    ) -> dict[str, Any]:
+        """Create or update one JetStream stream; the server owns persistence."""
+        if not name or any(ch not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-" for ch in name):
+            raise NatsError("bad-stream", "stream name must be non-empty and alphanumeric/underscore/dash")
+        if not isinstance(subjects, list) or not subjects or not all(isinstance(item, str) for item in subjects):
+            raise NatsError("bad-stream", "stream subjects must be a non-empty list of strings")
+        if not isinstance(max_age_seconds, int) or not 1 <= max_age_seconds <= 30 * 86400:
+            raise NatsError("bad-stream", "max_age_seconds is out of range")
+        if storage not in ("file", "memory"):
+            raise NatsError("bad-stream", "storage must be file or memory")
+        config = {
+            "name": name,
+            "subjects": subjects,
+            "retention": "limits",
+            "max_age": max_age_seconds * 1_000_000_000,
+            "storage": storage,
+            "discard": "old",
+            "num_replicas": 1,
+        }
+        payload = json.dumps(config, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        raw = self.request(f"$JS.API.STREAM.CREATE.{name}", payload, timeout=timeout)
+        try:
+            reply = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise NatsError("bad-stream", "JetStream reply is not JSON") from exc
+        if not isinstance(reply, dict) or reply.get("error"):
+            raise NatsError("bad-stream", f"JetStream refused stream creation: {reply}")
+        return reply
+
     def subscribe_once(self, subject: str, *, timeout: float | None = None) -> dict[str, Any]:
         self._subject(subject)
         self._sid += 1
@@ -171,10 +242,13 @@ class NatsClient:
         if not subject or any(ch.isspace() or ch in "\r\n" for ch in subject):
             raise NatsError("bad-subject", "subject must be non-empty and contain no whitespace")
 
-    def _pub_frame(self, subject: str, payload: bytes) -> bytes:
+    def _pub_frame(self, subject: str, payload: bytes, *, reply: str | None = None) -> bytes:
         self._subject(subject)
         if len(payload) > MAX_MESSAGE_BYTES:
             raise NatsError("bad-payload", "payload exceeds the bus limit")
+        if reply is not None:
+            self._subject(reply)
+            return f"PUB {subject} {reply} {len(payload)}\r\n".encode("ascii") + payload + b"\r\n"
         return f"PUB {subject} {len(payload)}\r\n".encode("ascii") + payload + b"\r\n"
 
     def _line(self) -> bytes:

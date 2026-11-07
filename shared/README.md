@@ -215,19 +215,21 @@ assembles the role together with `shared/` and `contracts/`.
 
 ## Step 89 shared foundations
 
-The sovereignty blueprint added the ABAC foundation plus six
-narrowing/transport modules. They are data contracts, not authority
+The sovereignty blueprint added the ABAC foundation plus eight
+narrowing/transport/agent modules. They are data contracts, not authority
 implementations; none of them signs or grants:
 
 | Module | Contract | What it does |
 |---|---|---|
 | `sparknet-abac.py` | `contracts/abac-schema.json` | Narrows knowledge reads using verified registry/session attributes; never grants a capability. |
 | `sparknet-event.py` | `contracts/event-schema.json` | Validates the canonical bus envelope, topics and lifetime; a signature is provenance only. |
+| `sparknet-event-bus.py` | `contracts/event-schema.json` | The minimal NATS client for publishing and receiving validated events; JetStream persistence is server-owned. |
+| `sparknet-agent-bus.py` | `contracts/agent-schema.json` | Bounds agent topics, classification, idempotency and results; refuses authority fields and never writes a vault page. |
 | `sparknet-graph.py` | `contracts/graph-schema.json` | Builds the derived, vault-scoped document-link graph; no second store. |
 | `sparknet-hybrid.py` | `contracts/hybrid-schema.json` | Returns the semantic and agentic result sets together with provenance; never silently merges them. |
 | `sparknet-exec-rpc.py` | `contracts/exec-schema.json` | Validates signed argv-only execution requests and bounded responses; no shell. |
 | `sparknet-collab.py` | `contracts/collab-schema.json` | Validates bounded collaboration rooms and messages; no authority. |
-| `sparknet-package.py` | `contracts/package-schema.json` | Validates signed packages and computes a dependency-first install plan; never executes. |
+| `sparknet-package.py` | `contracts/package-schema.json` | Validates and signs packages/indexes and computes a dependency-first install plan; never executes. |
 
 The canonical bytes are pinned by `contracts/vectors/foundations.json` and
 mirrored at `gospark/spec/sparknet/foundations-vectors.json`.

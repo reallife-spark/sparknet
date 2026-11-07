@@ -9,6 +9,8 @@ def test_agent_contract_is_bounded_and_authority_free():
     schema = load("agent-schema.json")
     assert schema["descriptor"]["schema"] == "sparknet-agent/1"
     assert set(schema["descriptor"]["roles"]) == {"engineering", "cyber", "vault-curator"}
+    assert "max_classification" in schema["descriptor"]["required"]
+    assert set(schema["descriptor"]["classifications"]) == {"public", "internal", "confidential", "restricted"}
     text = " ".join(schema["rules"]).lower()
     assert "never authority" in text
     assert "never writes a vault page" in text

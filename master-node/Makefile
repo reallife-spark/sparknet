@@ -214,6 +214,9 @@ NOCTURNAL_PROBE_SHIM := $(SHIM_DIR)/sparknet-nocturnal-probe
 # the service is pulled in by it.
 REGISTRY_UNITS := sparknet-registry-deliver.service sparknet-registry-deliver.timer
 REGISTRY_TIMER := sparknet-registry-deliver.timer
+# The task orchestrator is staged but not enabled: it is a new event-plane
+# service and goes live only in the Step 89 rollout window.
+ORCHESTRATOR_UNIT := sparknet-orchestrator.service
 UNIT_DIR ?= /etc/systemd/system
 # The overlay anchor and the firewall run as root and need a stable absolute path
 # to the vault, so they are launched through generated shims (same convention as
@@ -228,7 +231,7 @@ FIREWALL_SCRIPT := $(PEER_NODE_DIR)/scripts/sparknet-firewall.sh
 FIREWALL_SHIM := $(SHIM_DIR)/sparknet-master-firewall
 
 units: ## Install + enable this role's units (needs root; set UNIT_DIR to stage only)
-	@for u in $(UNITS) $(REGISTRY_UNITS); do \
+	@for u in $(UNITS) $(REGISTRY_UNITS) $(ORCHESTRATOR_UNIT); do \
 	  install -Dm644 "$(VAULT_ROOT)/systemd/$$u" "$(UNIT_DIR)/$$u" || exit 1; \
 	done
 	@echo "  ✓ staged $(UNITS) into $(UNIT_DIR)"

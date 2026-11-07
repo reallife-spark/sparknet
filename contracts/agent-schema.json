@@ -12,7 +12,9 @@
       "topics",
       "model_scope",
       "max_runtime_seconds",
-      "max_concurrency"
+      "max_concurrency",
+      "max_classification",
+      "departments"
     ],
     "required": [
       "schema_version",
@@ -21,7 +23,8 @@
       "enabled",
       "topics",
       "max_runtime_seconds",
-      "max_concurrency"
+      "max_concurrency",
+      "max_classification"
     ],
     "agent_id_pattern": "^[a-z][a-z0-9-]{1,63}$",
     "roles": [
@@ -31,7 +34,15 @@
     ],
     "model_scope": "The local model or engine the agent may call. It names a model, never a capability, key or signer socket.",
     "max_runtime_seconds": "1..3600; a timed-out agent publishes a failure event and stops.",
-    "max_concurrency": "1..16; the bus refuses more than the declared number of in-flight tasks for one agent."
+    "max_concurrency": "1..16; the bus refuses more than the declared number of in-flight tasks for one agent.",
+    "classifications": [
+      "public",
+      "internal",
+      "confidential",
+      "restricted"
+    ],
+    "departments": "Optional list of attested departments the agent may serve. Empty means any department; a non-empty list is an allow-list and a task with another department is refused.",
+    "max_classification": "The highest classification the agent may process; a higher-classification event is refused before a handler runs."
   },
   "topics": {
     "consume": [
