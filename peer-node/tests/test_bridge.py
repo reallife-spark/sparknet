@@ -849,3 +849,40 @@ def test_cluster_job_without_a_signature_is_refused(server, ctx):
     status, payload = server.request("POST", "/v1/cluster/submit", {"job": _cluster_job(ctx), "lease_id": "lease-test"})
     assert status == 403
     assert payload["reason"] == "missing-signature"
+
+
+def test_step89_routes_proxy_to_the_memory_gateway(tmp_path: Path) -> None:
+    """Graph, hybrid, collab and exec-validation use the one gateway."""
+    import types
+
+    bridge = bridge_mod.Bridge(tmp_path)
+    calls: list[tuple[str, str]] = []
+
+    def fake_proxy(self, method, path, query, body, grant):
+        calls.append((method, path))
+        return 200, {"ok": True, "path": path}
+
+    bridge._gateway_proxy = types.MethodType(fake_proxy, bridge)
+    grant = {"user_identity": "U-1"}
+    for method, path in (
+        ("GET", "/v1/vault/graph"),
+        ("GET", "/v1/vault/hybrid"),
+        ("GET", "/v1/collab/rooms"),
+        ("GET", "/v1/collab/messages"),
+        ("POST", "/v1/collab/room"),
+        ("POST", "/v1/collab/message"),
+        ("POST", "/v1/exec/validate"),
+    ):
+        status, payload = bridge.handle(method, path, {}, {"query": "x"}, grant)
+        assert status == 200 and payload["path"] == path
+    assert calls == [
+        ("GET", "/v1/vault/graph"),
+        ("GET", "/v1/vault/hybrid"),
+        ("GET", "/v1/collab/rooms"),
+        ("GET", "/v1/collab/messages"),
+        ("POST", "/v1/collab/room"),
+        ("POST", "/v1/collab/message"),
+        ("POST", "/v1/exec/validate"),
+    ]
+    status, payload = bridge.handle("GET", "/v1/events/status", {}, {}, grant)
+    assert status == 200 and payload["read_only"] is True

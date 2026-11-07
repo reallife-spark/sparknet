@@ -1823,9 +1823,84 @@ class Bridge:
         result.setdefault("latency_ms", (time.monotonic() - started) * 1000.0)
         return result
 
+    def _gateway_proxy(
+        self,
+        method: str,
+        path: str,
+        query: dict[str, list[str]],
+        body: dict[str, Any],
+        grant: dict[str, Any],
+    ) -> tuple[int, dict[str, Any]]:
+        """Forward a Step 89 surface to the one memory gateway.
+
+        The bridge chooses the vault from the verified grant; the gateway still
+        re-checks the local token, scope and classification. Execution remains
+        validate-only; this method never runs a command.
+        """
+        token_path = _state_dir(self.vault_root) / "memory.local.token"
+        try:
+            token = token_path.read_text(encoding="utf-8").strip()
+        except OSError:
+            return 503, {"ok": False, "reason": "memory-token-missing"}
+        if len(token) < 16:
+            return 503, {"ok": False, "reason": "memory-token-invalid"}
+        user_id = str(grant.get("user_identity") or "").strip()
+        vault = self.vault_root
+        if user_id:
+            safe = "".join(char for char in user_id if char.isalnum() or char in "-_")[:64] or "user"
+            candidate = Path(os.environ.get("SPARKNET_USER_VAULT_ROOT", "/srv/sparknet/knowledge")) / f"peer-{safe}"
+            if not candidate.is_dir():
+                return 403, {"ok": False, "reason": "no-user-vault"}
+            vault = candidate
+        headers = {"Accept": "application/json", "X-Sparknet-Local-Token": token}
+        if user_id:
+            headers["X-Sparknet-User"] = user_id
+            headers["X-Sparknet-Vault-Path"] = str(vault)
+        target = os.environ.get("SPARKNET_MEMORY_GATEWAY_URL", "http://127.0.0.1:4093").rstrip("/") + path
+        data = None
+        if method == "GET":
+            filtered = {key: values[0] for key, values in query.items() if values}
+            if filtered:
+                target += "?" + urllib.parse.urlencode(filtered)
+        else:
+            data = json.dumps(body, sort_keys=True).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        request = urllib.request.Request(target, data=data, method=method)
+        for key, value in headers.items():
+            request.add_header(key, value)
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        try:
+            with opener.open(request, timeout=30) as response:
+                return response.status, json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            try:
+                payload = json.loads(exc.read().decode("utf-8"))
+            except Exception:
+                payload = {"ok": False, "reason": "memory-gateway-error"}
+            return exc.code, payload
+        except (OSError, urllib.error.URLError, json.JSONDecodeError):
+            return 503, {"ok": False, "reason": "memory-gateway-unavailable"}
+
     def handle(
         self, method: str, path: str, query: dict[str, list[str]], body: dict[str, Any], grant: dict[str, Any]
     ) -> tuple[int, dict[str, Any]]:
+        if method == "GET" and path == "/v1/events/status":
+            return 200, {
+                "ok": True,
+                "bus": os.environ.get("SPARKNET_NATS_URL", "nats://127.0.0.1:4222"),
+                "topics": ["sparknet.task.>", "sparknet.result.>", "sparknet.event.>", "sparknet.collab.>"],
+                "read_only": True,
+            }
+        if (method, path) in {
+            ("GET", "/v1/vault/graph"),
+            ("GET", "/v1/vault/hybrid"),
+            ("GET", "/v1/collab/rooms"),
+            ("GET", "/v1/collab/messages"),
+            ("POST", "/v1/collab/room"),
+            ("POST", "/v1/collab/message"),
+            ("POST", "/v1/exec/validate"),
+        }:
+            return self._gateway_proxy(method, path, query, body, grant)
         if method == "GET" and path == "/v1/models":
             return 200, {
                 "object": "list",

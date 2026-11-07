@@ -431,3 +431,26 @@ def test_foundations_api_reports_all_contracts_and_modules():
     assert payload["ready"] is True
     assert all(payload["contracts"].values())
     assert all(payload["modules"].values())
+
+
+def test_step89_dashboard_apis_are_authenticated_and_read_only(tmp_path: Path, qdrant: str, openwebui: str) -> None:
+    config, role_root = _config(tmp_path, "master", qdrant, openwebui)
+    server = _serve(config, role_root)
+    try:
+        with pytest.raises(urllib.error.HTTPError) as refused:
+            _get(server.server_port, "/api/step89")
+        assert refused.value.code == 401
+        status, raw = _get(server.server_port, "/api/step89", "console-token-1234567890")
+        assert status == 200
+        payload = json.loads(raw)
+        assert payload["read_only"] is True
+        assert payload["nodes"]["count"] >= 1
+        assert payload["users"]["configured"] is False
+        assert payload["collab"]["rooms"] == []
+        assert "messages" not in payload["collab"]
+        status, raw = _get(server.server_port, "/api/nodes", "console-token-1234567890")
+        assert status == 200
+        assert json.loads(raw)["count"] >= 1
+    finally:
+        server.shutdown()
+        server.server_close()

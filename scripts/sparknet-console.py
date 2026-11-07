@@ -244,6 +244,11 @@ def api_foundations(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
         "exec-schema.json",
         "collab-schema.json",
         "package-schema.json",
+        "agent-schema.json",
+        "pipeline-schema.json",
+        "self-improvement-schema.json",
+        "release-schema.json",
+        "data-lake-schema.json",
     )
     module_names = (
         "sparknet-abac.py",
@@ -253,6 +258,9 @@ def api_foundations(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
         "sparknet-exec-rpc.py",
         "sparknet-collab.py",
         "sparknet-package.py",
+        "sparknet-agent-bus.py",
+        "sparknet-pipeline.py",
+        "sparknet-event-bus.py",
     )
     contract_state = {name: (contracts / name).is_file() for name in contract_names}
     module_state = {name: (shared / name).is_file() for name in module_names}
@@ -417,6 +425,142 @@ def api_memory(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
                     }
         result["fleet"] = list(fleet.values())
     return result
+
+
+def _step89_nodes(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
+    mesh = api_mesh(config, role_root)
+    return {
+        "ok": bool(mesh.get("ok")),
+        "count": (mesh.get("registry") or {}).get("count", 0),
+        "nodes": (mesh.get("registry") or {}).get("nodes", []),
+        "errors": mesh.get("errors", []),
+    }
+
+
+def _step89_queue(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
+    paths = config.get("paths") or {}
+    rfi_dir = resolve(role_root, paths.get("rfi_dir"))
+    admin = resolve(role_root, paths.get("admin_events"))
+    telemetry = resolve(role_root, paths.get("telemetry"))
+    return {
+        "ok": True,
+        "rfi_requests": len(list(rfi_dir.glob("*"))) if rfi_dir and rfi_dir.is_dir() else 0,
+        "admin_events": len(tail_jsonl(admin, limit=500)) if admin else 0,
+        "telemetry_reports": len(tail_jsonl(telemetry, limit=500)) if telemetry else 0,
+        "read_only": True,
+    }
+
+
+def _step89_kb(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
+    view = api_qdrant(config, role_root)
+    return {
+        "ok": bool(view.get("ok")),
+        "collections": [row.get("name") for row in view.get("collections", []) if isinstance(row, dict)],
+        "count": len(view.get("collections", [])),
+        "error": view.get("error"),
+        "read_only": True,
+    }
+
+
+def _step89_lake(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
+    raw = os.environ.get("SPARKNET_UPLIFT_STATE", "").strip()
+    root = Path(raw) if raw else Path("/srv/sparknet/uplift")
+    if not root.is_dir():
+        return {"ok": True, "configured": False, "root": str(root), "records": 0}
+    records = sum(1 for path in root.rglob("*") if path.is_file())
+    return {"ok": True, "configured": True, "root": str(root), "records": records, "read_only": True}
+
+
+def _step89_distill(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
+    status, payload = api_learning(config, role_root)
+    if status != 200:
+        return {"ok": False, "error": payload.get("error", "distill unavailable")}
+    return {
+        "ok": True,
+        "runs": payload.get("runs", []),
+        "models": payload.get("models", []),
+        "read_only": True,
+    }
+
+
+def _step89_events(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
+    paths = config.get("paths") or {}
+    telemetry = tail_jsonl(resolve(role_root, paths.get("telemetry")) or Path("/nonexistent"), limit=500)
+    admin = tail_jsonl(resolve(role_root, paths.get("admin_events")) or Path("/nonexistent"), limit=500)
+    return {
+        "ok": True,
+        "telemetry": {
+            "count": len(telemetry),
+            "kinds": sorted({str(row.get("kind")) for row in telemetry if isinstance(row, dict) and row.get("kind")}),
+        },
+        "admin": {"count": len(admin)},
+        "read_only": True,
+    }
+
+
+def _step89_abac(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
+    schema = read_json(ROOT / "contracts" / "abac-schema.json")
+    if not isinstance(schema, dict):
+        return {"ok": False, "error": "ABAC contract unavailable"}
+    return {
+        "ok": True,
+        "classifications": schema.get("classifications", []),
+        "resource_classes": schema.get("resource_classes", []),
+        "decision_fields": schema.get("decision_fields", []),
+        "refusal_codes": schema.get("refusal_codes", []),
+        "decisions_recorded": False,
+        "read_only": True,
+    }
+
+
+def _step89_collab(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
+    root = role_root / "01_Inbox" / "collab"
+    rooms = []
+    for path in sorted(root.glob("*/room.json")) if root.is_dir() else []:
+        room = read_json(path)
+        if not isinstance(room, dict):
+            continue
+        rooms.append(
+            {
+                "room_id": room.get("room_id"),
+                "classification": room.get("classification"),
+                "department": room.get("department"),
+                "status": room.get("status"),
+                "participants": len(room.get("participants") or []),
+                "expires_at": room.get("expires_at"),
+            }
+        )
+    return {"ok": True, "rooms": rooms, "count": len(rooms), "read_only": True}
+
+
+def _step89_users(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
+    return {
+        "ok": True,
+        "configured": False,
+        "reason": (
+            "user inventory stays behind the signed admin federation; "
+            "the read-only console does not hold an Open WebUI admin token"
+        ),
+    }
+
+
+def api_step89(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
+    return {
+        "ok": True,
+        "schema": "sparknet-step89/1",
+        "role": str(config.get("role") or role_root.name),
+        "generated_at": now_iso(),
+        "read_only": True,
+        "nodes": _step89_nodes(config, role_root),
+        "queue": _step89_queue(config, role_root),
+        "kb": _step89_kb(config, role_root),
+        "users": _step89_users(config, role_root),
+        "lake": _step89_lake(config, role_root),
+        "distill": _step89_distill(config, role_root),
+        "events": _step89_events(config, role_root),
+        "abac": _step89_abac(config, role_root),
+        "collab": _step89_collab(config, role_root),
+    }
 
 
 def api_qdrant(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
@@ -717,6 +861,32 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, api_foundations(self.config, self.role_root))
             elif path == "/api/projects":
                 self._json(200, api_projects(self.config, self.role_root))
+            elif path == "/api/step89":
+                self._json(200, api_step89(self.config, self.role_root))
+            elif path in (
+                "/api/nodes",
+                "/api/queue",
+                "/api/kb",
+                "/api/users",
+                "/api/lake",
+                "/api/distill",
+                "/api/events",
+                "/api/abac",
+                "/api/collab",
+            ):
+                key = path.removeprefix("/api/")
+                view = {
+                    "nodes": _step89_nodes,
+                    "queue": _step89_queue,
+                    "kb": _step89_kb,
+                    "users": _step89_users,
+                    "lake": _step89_lake,
+                    "distill": _step89_distill,
+                    "events": _step89_events,
+                    "abac": _step89_abac,
+                    "collab": _step89_collab,
+                }[key](self.config, self.role_root)
+                self._json(200, view)
             else:
                 self._json(404, {"ok": False, "error": "unknown API path"})
             return
