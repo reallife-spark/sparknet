@@ -576,7 +576,7 @@ current: 89
     replay. O1 now records classification/department and graph/hybrid read it;
     graph/hybrid and the foundations API are live on agx32/agx64. The exec
     daemon is live with an exact allowlist and audit; collab writes are live;
-    package distribution live remains open. Separately, the OpenCode runtime pin
+    package distribution is live. Separately, the OpenCode runtime pin
     is `2.2.5`; the engine adapter is on v2 `/api/*` with per-sandbox auth and the sandbox is live on agx64/agx32 (2026-11-06).
   - **DoD**: every new channel has a contract row, a canonical envelope, a
     refusal test and a loopback rehearsal; no channel carries authority and

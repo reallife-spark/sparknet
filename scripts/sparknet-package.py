@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -14,6 +16,7 @@ from sparknet_loader import load_shared
 
 PACKAGE = load_shared("sparknet-package.py", "sparknet_package_cli")
 AUTHZ = load_shared("sparknet-authz.py", "sparknet_authz_package_cli")
+HTTP = load_shared("sparknet-http.py", "sparknet_http_package_cli")
 SKIP_PARTS = {".git", ".state", "keys", "manifests", "__pycache__", ".pytest_cache", ".ruff_cache"}
 SKIP_NAMES = {"secrets-index.json", "user-env-manifest.json", ".env"}
 
@@ -61,6 +64,16 @@ def _parser() -> argparse.ArgumentParser:
     install.add_argument("--public-key", required=True, help="signer public key file (base64 or hex)")
     install.add_argument("--package", action="append", type=_dep, required=True)
     install.add_argument("--confirm", action="store_true")
+
+    fetch = sub.add_parser("fetch", help="fetch and verify a signed package index over 4221")
+    fetch.add_argument("--base-url", required=True)
+    fetch.add_argument("--index-path", default="packages/index.json")
+    fetch.add_argument("--dest", required=True)
+    fetch.add_argument("--key-file", required=True)
+    fetch.add_argument("--registry", help="registry file carrying master_public_key_b64")
+    fetch.add_argument("--public-key", help="explicit signer public key file")
+    fetch.add_argument("--package", action="append", type=_dep, required=True)
+    fetch.add_argument("--confirm", action="store_true")
     return parser
 
 
@@ -77,6 +90,7 @@ def _artifacts(root: Path) -> list[dict]:
                 "path": path.relative_to(root).as_posix(),
                 "sha256": hashlib.sha256(data).hexdigest(),
                 "size": len(data),
+                "mode": path.stat().st_mode & 0o777,
             }
         )
     if not rows:
@@ -134,6 +148,81 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 )
             return 0
+        if args.command == "fetch":
+            if not args.confirm:
+                raise PACKAGE.PackageError("install-refused", "fetch requires --confirm")
+            if args.public_key:
+                public = AUTHZ.load_public_key(Path(args.public_key))
+            elif args.registry:
+                registry = json.loads(Path(args.registry).read_text(encoding="utf-8"))
+                encoded = registry.get("master_public_key_b64") if isinstance(registry, dict) else None
+                if not isinstance(encoded, str) or not encoded:
+                    raise PACKAGE.PackageError("bad-signature", "registry has no master public key")
+                public = AUTHZ.public_key_from_b64(encoded)
+            else:
+                raise PACKAGE.PackageError("bad-signature", "fetch needs --public-key or --registry")
+            key = AUTHZ.load_private_key(Path(args.key_file))
+            base = args.base_url.rstrip("/")
+            status, payload = HTTP.post_json(base, "GET", "/v1/file/" + args.index_path, {}, key)
+            if status != 200 or not payload.get("ok"):
+                raise PACKAGE.PackageError(
+                    "bad-signature", f"index fetch refused: HTTP {status}: {payload.get('reason')}"
+                )
+            raw = base64.b64decode(str(payload.get("content_b64") or ""), validate=True)
+            if hashlib.sha256(raw).hexdigest() != str(payload.get("sha256") or ""):
+                raise PACKAGE.PackageError("bad-digest", "index digest mismatch")
+            index = json.loads(raw.decode("utf-8"))
+            if not PACKAGE.verify_index_signature(index, public):
+                raise PACKAGE.PackageError("bad-signature", "index signature does not verify")
+            plan = PACKAGE.install_plan(index, args.package)
+            dest = Path(args.dest).resolve()
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / "index.json").write_bytes(raw)
+            fetched = []
+            for row in plan:
+                package_id, version = row["package_id"], row["version"]
+                root = dest / package_id / version
+                manifest_path = root / "package.json"
+                status, payload = HTTP.post_json(
+                    base, "GET", f"/v1/file/packages/{package_id}/{version}/package.json", {}, key
+                )
+                if status != 200 or not payload.get("ok"):
+                    raise PACKAGE.PackageError("unknown-package", f"{package_id} {version} manifest fetch refused")
+                raw = base64.b64decode(str(payload.get("content_b64") or ""), validate=True)
+                if hashlib.sha256(raw).hexdigest() != str(payload.get("sha256") or ""):
+                    raise PACKAGE.PackageError("bad-digest", f"{package_id} {version} manifest digest mismatch")
+                manifest = json.loads(raw.decode("utf-8"))
+                if not PACKAGE.verify_package_signature(manifest, public):
+                    raise PACKAGE.PackageError(
+                        "bad-signature", f"{package_id} {version} package signature does not verify"
+                    )
+                manifest_path.parent.mkdir(parents=True, exist_ok=True)
+                manifest_path.write_bytes(raw)
+                for artifact in manifest["artifacts"]:
+                    status, payload = HTTP.post_json(
+                        base, "GET", f"/v1/file/packages/{package_id}/{version}/{artifact['path']}", {}, key
+                    )
+                    if status != 200 or not payload.get("ok"):
+                        raise PACKAGE.PackageError(
+                            "bad-artifact", f"{package_id} {version} {artifact['path']} fetch refused"
+                        )
+                    data = base64.b64decode(str(payload.get("content_b64") or ""), validate=True)
+                    if hashlib.sha256(data).hexdigest() != str(payload.get("sha256") or ""):
+                        raise PACKAGE.PackageError(
+                            "bad-digest", f"{package_id} {version} {artifact['path']} digest mismatch"
+                        )
+                    if not PACKAGE.verify_artifact(artifact, data):
+                        raise PACKAGE.PackageError(
+                            "bad-digest", f"{package_id} {version} {artifact['path']} size mismatch"
+                        )
+                    target = root / artifact["path"]
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(data)
+                    if "mode" in artifact:
+                        os.chmod(target, artifact["mode"])
+                fetched.append({"package_id": package_id, "version": version, "path": str(root)})
+            print(json.dumps({"ok": True, "fetched": fetched}, indent=2, sort_keys=True))
+            return 0
         if args.command == "install":
             if not args.confirm:
                 raise PACKAGE.PackageError("install-refused", "install requires --confirm")
@@ -167,6 +256,8 @@ def main(argv: list[str] | None = None) -> int:
                     target = target_root / artifact["path"]
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(data)
+                    if "mode" in artifact:
+                        os.chmod(target, artifact["mode"])
                 installed.append({"package_id": package_id, "version": version, "path": str(target_root)})
             print(json.dumps({"ok": True, "installed": installed}, indent=2, sort_keys=True))
             return 0

@@ -28,7 +28,8 @@
       "fields": [
         "path",
         "sha256",
-        "size"
+        "size",
+        "mode"
       ],
       "required": [
         "path",
@@ -36,7 +37,8 @@
         "size"
       ],
       "path": "relative POSIX path; no absolute path and no parent escape",
-      "sha256": "64 lowercase hex characters"
+      "sha256": "64 lowercase hex characters",
+      "mode": "Optional POSIX permission bits (0..0o777); an installer preserves it for executables. It is metadata, not authority."
     },
     "dependency": {
       "fields": [

@@ -9,6 +9,7 @@ Updated: 2026-11-07
 - **Role inversion core live 2026-11-06:** root `c77a3446…` (epoch 1, parent `fa6f4fa5…`), registry sequence 9, signer on agx64. Old peer/master data copies removed, old units disabled, old keys retired; goSpark control on agx64, agent on agx32.
 - **88G complete 2026-11-07:** engine, memory and Qdrant tokens rotated on agx32/agx64; old tokens refused; peer and Master WebUI signin/models/chat returned 200. Visual browser click-through remains a user confirmation note.
 - **Step 89 live 2026-11-07:** event bus/agents, O1→O2→O5 pipeline, Master read surfaces, signed Master writes and the exec allowlist are implemented. agx32 exec daemon is live with an exact allowlist (`pwd`, `ls -la`, `git status --short`) and audit; no shell.
+- **Package distribution live 2026-11-07:** signed index/package fetch over 4221 and verified install into a staging path; executable mode preserved. Demo package removed after the test.
 ## Live fabric
 - **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`). Overlay handshake both ways; peer overlay egress only to Master.
 - Master on agx64: signer/ledger/parity, 8088 admin, 8098 console, 8090/8091 intake, 4220–4223, 4201/4202 share, 4204 engine, Qdrant 6333, teacher config.

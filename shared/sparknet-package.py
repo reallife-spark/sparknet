@@ -84,7 +84,16 @@ def _artifact(value: Any) -> dict[str, Any]:
         "bad-artifact",
         "artifact.size must be a non-negative integer",
     )
-    return {"path": _path(value.get("path")), "sha256": digest, "size": size}
+    artifact = {"path": _path(value.get("path")), "sha256": digest, "size": size}
+    mode = value.get("mode")
+    if mode is not None:
+        _require(
+            isinstance(mode, int) and not isinstance(mode, bool) and 0 <= mode <= 0o777,
+            "bad-artifact",
+            "artifact.mode must be an integer between 0 and 0o777",
+        )
+        artifact["mode"] = mode
+    return artifact
 
 
 def _dependency(value: Any) -> dict[str, str]:
