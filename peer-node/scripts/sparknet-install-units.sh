@@ -82,6 +82,7 @@ shim_body() {
     liveness-monitor) printf 'exec %q %q %q "$@"' "$SPARKNET_VAULT_ROOT/scripts/sparknet-run" "$SPARKNET_PYTHON" "$SPARKNET_VAULT_ROOT/services/sparknet-liveness-monitor.py" ;;
     checkpoint-anchor) printf 'exec %q %q %q "$@"' "$SPARKNET_VAULT_ROOT/scripts/sparknet-run" "$SPARKNET_PYTHON" "$SPARKNET_VAULT_ROOT/services/sparknet-checkpoint-anchor.py" ;;
     vault-health) printf 'exec %q %q %q %q "$@"' "$SPARKNET_PYTHON" "$SPARKNET_VAULT_ROOT/../scripts/sparknet-vault-health.py" --root "$SPARKNET_VAULT_ROOT" ;;
+    exec-daemon) printf 'exec %q %q %q "$@"' "$SPARKNET_VAULT_ROOT/scripts/sparknet-run" "$SPARKNET_PYTHON" "$SPARKNET_VAULT_ROOT/../scripts/sparknet-exec-daemon.py" ;;
     *) echo "unknown shim: $1" >&2; exit 1 ;;
   esac
 }
@@ -108,7 +109,7 @@ write_shim() {
 }
 
 echo "User launcher shims -> $BIN_DIR (for user units)"
-for name in guard wifi-guard sync wireguard-anchor telemetry-push liveness-monitor checkpoint-anchor vault-health inventory uplift-push; do
+for name in guard wifi-guard sync wireguard-anchor telemetry-push liveness-monitor checkpoint-anchor vault-health inventory uplift-push exec-daemon; do
   write_shim "$BIN_DIR" "$name"
 done
 
@@ -126,7 +127,7 @@ done
 # --- units ------------------------------------------------------------------
 # System units run as root (the guard is root-gated); the sync pair is a user unit.
 SYSTEM_UNITS=(sparknet-wireguard-anchor.service sparknet-guard-daemon.service sparknet-dispatch-bridge.service sparknet-wifi-guard.service sparknet-vault-provisioner.service sparknet-admin-agent.service sparknet-firewall.service sparknet-opencode-engine@.service)
-USER_UNITS=(sparknet-sync.service sparknet-sync.timer sparknet-telemetry-push.service sparknet-telemetry-push.timer sparknet-liveness-monitor.service sparknet-checkpoint-anchor.service sparknet-checkpoint-anchor.timer sparknet-vault-health.service sparknet-vault-health.timer sparknet-inventory.service sparknet-inventory.timer sparknet-uplift-sync.service sparknet-uplift-sync.timer)
+USER_UNITS=(sparknet-sync.service sparknet-sync.timer sparknet-telemetry-push.service sparknet-telemetry-push.timer sparknet-liveness-monitor.service sparknet-checkpoint-anchor.service sparknet-checkpoint-anchor.timer sparknet-vault-health.service sparknet-vault-health.timer sparknet-inventory.service sparknet-inventory.timer sparknet-uplift-sync.service sparknet-uplift-sync.timer sparknet-exec-daemon@.service)
 
 echo
 echo "System units -> $SYSTEM_UNIT_DIR (requires root)"

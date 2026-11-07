@@ -46,7 +46,34 @@ def _operator_matches(operator_os: dict[str, Any]) -> tuple[bool, str]:
     return True, ""
 
 
-def _execute(request: dict[str, Any], *, vault_root: Path) -> dict[str, Any]:
+def _audit(path: Path, request: dict[str, Any], *, status: str, result: dict[str, Any] | None = None) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    record = {
+        "request_id": request.get("request_id"),
+        "node_id": request.get("node_id"),
+        "user_id": request.get("user_id"),
+        "argv": request.get("argv"),
+        "cwd": request.get("cwd"),
+        "status": status,
+        "at": _iso(),
+    }
+    if result:
+        record.update(
+            {
+                "exit_code": result.get("exit_code"),
+                "stdout_bytes": len(str(result.get("stdout") or "").encode()),
+                "stderr_bytes": len(str(result.get("stderr") or "").encode()),
+                "truncated": bool(result.get("truncated")),
+            }
+        )
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, sort_keys=True) + "\n")
+    os.chmod(path, 0o600)
+
+
+def _execute(
+    request: dict[str, Any], *, vault_root: Path, max_output_bytes: int = EXEC.MAX_OUTPUT_BYTES
+) -> dict[str, Any]:
     argv = request["argv"]
     executable = Path(argv[0]).name.lower()
     if executable in SHELLS:
@@ -72,14 +99,14 @@ def _execute(request: dict[str, Any], *, vault_root: Path) -> dict[str, Any]:
             timeout=request["timeout_seconds"],
             check=False,
         )
-        stdout, cut_out = EXEC.truncate_output(completed.stdout.encode("utf-8", "replace"))
-        stderr, cut_err = EXEC.truncate_output(completed.stderr.encode("utf-8", "replace"))
+        stdout, cut_out = EXEC.truncate_output(completed.stdout.encode("utf-8", "replace"), max_output_bytes)
+        stderr, cut_err = EXEC.truncate_output(completed.stderr.encode("utf-8", "replace"), max_output_bytes)
         code = completed.returncode
     except subprocess.TimeoutExpired as exc:
         raw_stdout = exc.stdout or b""
         if isinstance(raw_stdout, str):
             raw_stdout = raw_stdout.encode("utf-8", "replace")
-        stdout, cut_out = EXEC.truncate_output(raw_stdout)
+        stdout, cut_out = EXEC.truncate_output(raw_stdout, max_output_bytes)
         stderr = f"execution timed out after {request['timeout_seconds']}s"
         cut_err = False
         code = 124
@@ -96,7 +123,15 @@ def _execute(request: dict[str, Any], *, vault_root: Path) -> dict[str, Any]:
     }
 
 
-def _handle(raw: bytes, *, vault_root: Path, node_public: Any, signing_key: Any, allow_exec: bool) -> dict[str, Any]:
+def _handle(
+    raw: bytes,
+    *,
+    vault_root: Path,
+    node_public: Any,
+    signing_key: Any,
+    allow_exec: bool,
+    policy: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     try:
         request = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
@@ -114,7 +149,17 @@ def _handle(raw: bytes, *, vault_root: Path, node_public: Any, signing_key: Any,
         return _refusal("operator-mismatch", reason)
     if not allow_exec:
         return _refusal("execution-disabled", "the daemon was started without --allow-exec")
-    result = _execute(normalised, vault_root=vault_root)
+    if policy is None:
+        return _refusal("policy-missing", "execution requires a validated allowlist policy")
+    if Path(normalised["argv"][0]).name.lower() in SHELLS:
+        return _refusal("bad-argv", "a shell binary is not an allowed execution vector")
+    allowed, reason = EXEC.policy_allows(normalised, policy)
+    if not allowed:
+        return _refusal(reason, f"request is not permitted by the execution policy: {reason}")
+    audit_path = vault_root / policy["audit_path"]
+    _audit(audit_path, normalised, status="started")
+    result = _execute(normalised, vault_root=vault_root, max_output_bytes=policy["max_output_bytes"])
+    _audit(audit_path, normalised, status="finished", result=result)
     if not result.get("ok"):
         return result
     response = EXEC.make_response(
@@ -167,6 +212,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--node-pub", required=True)
     parser.add_argument("--signing-key", required=True)
     parser.add_argument("--allow-exec", action="store_true", help="actually run requests; default is validate-only")
+    parser.add_argument("--policy", help="execution allowlist JSON; required with --allow-exec")
     parser.add_argument("--once", action="store_true", help="serve one request then exit")
     args = parser.parse_args(argv)
     vault_root = Path(args.vault_root).resolve()
@@ -179,6 +225,16 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, AUTHZ.AuthzError) as exc:
         print(f"sparknet-exec-daemon: {exc}", file=sys.stderr)
         return 2
+    policy = None
+    if args.policy:
+        try:
+            policy = EXEC.validate_policy(json.loads(Path(args.policy).read_text(encoding="utf-8")))
+        except (OSError, ValueError, EXEC.ExecError) as exc:
+            print(f"sparknet-exec-daemon: policy: {exc}", file=sys.stderr)
+            return 2
+    if args.allow_exec and policy is None:
+        print("sparknet-exec-daemon: --allow-exec requires --policy", file=sys.stderr)
+        return 2
 
     def handler(raw: bytes) -> dict[str, Any]:
         return _handle(
@@ -187,6 +243,7 @@ def main(argv: list[str] | None = None) -> int:
             node_public=node_public,
             signing_key=signing_key,
             allow_exec=args.allow_exec,
+            policy=policy,
         )
 
     _serve(Path(args.socket), handler, once=args.once)

@@ -1,0 +1,83 @@
+{
+  "contract": "step89-admin-schema",
+  "schema_version": "1.0",
+  "description": "Canonical signed envelopes for the Master-side Step 89 writes: consented lake intake, collaboration room creation, distillation scheduling and package-index publication. The signature proves provenance; it grants no capability and the envelope never executes itself.",
+  "envelope": {
+    "schema": "sparknet-step89-action/1",
+    "fields": [
+      "schema_version",
+      "request_id",
+      "action",
+      "node_id",
+      "created_at",
+      "payload",
+      "signature_b64"
+    ],
+    "required": [
+      "schema_version",
+      "request_id",
+      "action",
+      "node_id",
+      "created_at",
+      "payload",
+      "signature_b64"
+    ],
+    "signed_fields": [
+      "schema_version",
+      "request_id",
+      "action",
+      "node_id",
+      "created_at",
+      "payload"
+    ],
+    "actions": [
+      "lake-intake",
+      "collab-room",
+      "distill-schedule",
+      "package-index"
+    ],
+    "signature": "Ed25519 over canonical JSON of signed_fields. It records who asked; it grants nothing."
+  },
+  "actions": {
+    "lake-intake": {
+      "required": ["consent", "kind", "classification", "digest", "size", "retention_days"],
+      "rule": "consent must be true; the store is training/backup evidence, never a knowledge answer."
+    },
+    "collab-room": {
+      "required": ["owner_node_id", "classification"],
+      "rule": "The room is ABAC-bounded; creation never writes a message or a shared corpus."
+    },
+    "distill-schedule": {
+      "required": ["run_at"],
+      "rule": "Scheduling records intent only; training still requires the operator-triggered distill run."
+    },
+    "package-index": {
+      "required": ["packages"],
+      "rule": "The index is signed package data; a peer still installs it only by explicit action."
+    }
+  },
+  "rules": [
+    "Every write requires --confirm and a signature that verifies before apply.",
+    "The signature is provenance, not authority; it cannot grant, revoke or widen a capability.",
+    "A lake record without consent is refused.",
+    "A package index never installs or executes itself.",
+    "An action record is stored under the Master state dir; it is not a peer knowledge channel."
+  ],
+  "refusal_codes": [
+    "key-unavailable",
+    "confirmation-required",
+    "unknown-action",
+    "bad-payload",
+    "malformed-action",
+    "unsigned-action",
+    "bad-signature",
+    "consent-missing",
+    "unknown-classification",
+    "bad-digest",
+    "bad-size",
+    "retention-too-long",
+    "malformed-room",
+    "malformed-schedule",
+    "malformed-package"
+  ]
+}

@@ -15,6 +15,7 @@ from pathlib import PurePosixPath
 from typing import Any
 
 REQUEST_SCHEMA = "sparknet-exec-request/1"
+POLICY_SCHEMA = "sparknet-exec-policy/1"
 RESPONSE_SCHEMA = "sparknet-exec-response/1"
 MAX_TIMEOUT_SECONDS = 300
 MAX_REQUEST_TTL = 3600
@@ -376,3 +377,86 @@ def response_message(response: Mapping[str, Any]) -> bytes:
     return json.dumps(projected, sort_keys=True, separators=(",", ":"), allow_nan=False, ensure_ascii=False).encode(
         "utf-8"
     )
+
+
+def validate_policy(policy: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate the node's execution allow-list, fail-closed."""
+    _require(isinstance(policy, Mapping), "bad-policy", "policy must be an object")
+    _require(policy.get("schema") == POLICY_SCHEMA, "bad-policy", "unknown execution policy schema")
+    allowed = policy.get("allowed_argv")
+    _require(isinstance(allowed, (list, tuple)), "bad-policy", "allowed_argv must be a list")
+    entries = []
+    for item in allowed:
+        _require(isinstance(item, Mapping), "bad-policy", "allowlist entry must be an object")
+        binary = _nonempty(item.get("binary"), "allowlist binary", "bad-policy")
+        _require("/" not in binary and "\\" not in binary, "bad-policy", "allowlist binary must be a basename")
+        args = item.get("args")
+        _require(
+            isinstance(args, (list, tuple)) and all(isinstance(arg, str) and "\x00" not in arg for arg in args),
+            "bad-policy",
+            "allowlist args must be a list of strings",
+        )
+        entries.append({"binary": binary, "args": list(args)})
+    roots = policy.get("cwd_roots")
+    _require(isinstance(roots, (list, tuple)), "bad-policy", "cwd_roots must be a list")
+    normalised_roots = [_cwd(root) for root in roots]
+    env_allow = policy.get("env_allow")
+    _require(
+        isinstance(env_allow, (list, tuple)) and all(isinstance(key, str) for key in env_allow),
+        "bad-policy",
+        "env_allow must be a list of strings",
+    )
+    _require(set(env_allow) <= set(ENV_ALLOW), "bad-policy", "env_allow contains an unknown key")
+    max_timeout = policy.get("max_timeout_seconds")
+    _require(
+        isinstance(max_timeout, int) and not isinstance(max_timeout, bool) and 1 <= max_timeout <= MAX_TIMEOUT_SECONDS,
+        "bad-policy",
+        "max_timeout_seconds is out of range",
+    )
+    max_output = policy.get("max_output_bytes")
+    _require(
+        isinstance(max_output, int) and not isinstance(max_output, bool) and 1 <= max_output <= MAX_OUTPUT_BYTES,
+        "bad-policy",
+        "max_output_bytes is out of range",
+    )
+    approval = policy.get("approval_ttl_seconds")
+    _require(
+        isinstance(approval, int) and not isinstance(approval, bool) and 1 <= approval <= MAX_REQUEST_TTL,
+        "bad-policy",
+        "approval_ttl_seconds is out of range",
+    )
+    audit = _nonempty(policy.get("audit_path"), "audit_path", "bad-policy")
+    _require(
+        ".." not in PurePosixPath(audit).parts and not PurePosixPath(audit).is_absolute(),
+        "bad-policy",
+        "audit_path must be vault-relative",
+    )
+    return {
+        "schema": POLICY_SCHEMA,
+        "allowed_argv": entries,
+        "cwd_roots": normalised_roots,
+        "env_allow": sorted(set(env_allow)),
+        "max_timeout_seconds": max_timeout,
+        "max_output_bytes": max_output,
+        "approval_ttl_seconds": approval,
+        "audit_path": PurePosixPath(audit).as_posix(),
+    }
+
+
+def policy_allows(request: Mapping[str, Any], policy: Mapping[str, Any]) -> tuple[bool, str]:
+    """Return (allowed, reason) for one request against a validated policy."""
+    normalised = validate_request(request, require_signature=False, require_verified=False)
+    argv = normalised["argv"]
+    for entry in policy["allowed_argv"]:
+        if PurePosixPath(argv[0]).name == entry["binary"] and argv[1:] == entry["args"]:
+            break
+    else:
+        return False, "not-allowlisted"
+    cwd = normalised["cwd"]
+    if not any(cwd == root or cwd.startswith(root + "/") for root in policy["cwd_roots"]):
+        return False, "cwd-not-allowlisted"
+    if set(normalised.get("env") or {}) - set(policy["env_allow"]):
+        return False, "env-not-allowlisted"
+    if normalised["timeout_seconds"] > policy["max_timeout_seconds"]:
+        return False, "timeout-exceeds-policy"
+    return True, "allowed"

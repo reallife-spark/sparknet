@@ -80,7 +80,22 @@ def _start_daemon(tmp_path, node_pub, daemon_key, *, allow_exec=True):
         "--once",
     ]
     if allow_exec:
-        command.append("--allow-exec")
+        policy = tmp_path / "policy.json"
+        policy.write_text(
+            json.dumps(
+                {
+                    "schema": "sparknet-exec-policy/1",
+                    "allowed_argv": [{"binary": "pwd", "args": []}],
+                    "cwd_roots": ["sub"],
+                    "env_allow": ["PATH"],
+                    "max_timeout_seconds": 30,
+                    "max_output_bytes": 65536,
+                    "approval_ttl_seconds": 300,
+                    "audit_path": ".state/exec-audit.jsonl",
+                }
+            )
+        )
+        command.extend(["--policy", str(policy), "--allow-exec"])
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     for _ in range(100):
         if socket_path.exists():
@@ -155,3 +170,20 @@ def test_daemon_refuses_a_shell_vector_and_a_bad_signature(tmp_path):
         process.wait(timeout=10)
     assert result["ok"] is False
     assert result["error"] == "bad-signature"
+
+
+def test_daemon_refuses_a_command_outside_the_allowlist(tmp_path):
+    node_private_b64, node_public_b64 = authz.generate_keypair()
+    daemon_private_b64, _ = authz.generate_keypair()
+    node_private = authz.private_key_from_b64(node_private_b64)
+    daemon_private = tmp_path / "daemon.key"
+    daemon_private.write_text(daemon_private_b64)
+    node_pub = tmp_path / "node.pub"
+    node_pub.write_text(node_public_b64)
+    process, socket_path, _vault = _start_daemon(tmp_path, node_pub, daemon_private)
+    try:
+        result = _call(socket_path, _request(node_private, argv=["id"]))
+    finally:
+        process.wait(timeout=10)
+    assert result["ok"] is False
+    assert result["error"] == "not-allowlisted"

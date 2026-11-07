@@ -23,7 +23,7 @@ PY := $(if $(wildcard $(VENV_PY)),$(VENV_PY),$(if $(wildcard $(FABRIC_VENV_PY)),
 .PHONY: help env-init validate test lint devtools provision dist bundle install-units \
         install-config keys wg-render authz-verify anchor guard-status guard-contract \
         peer-manifest containment wiki-preflight wiki-status wiki-lint wiki-capture skills-sync skills-check clean \
-        provenance-verify user-init provenance-append ingest accept-inbox review-inbox precommit shims-check keys-check context-pack context-check governance-check \
+        provenance-verify user-init provenance-append ingest accept-inbox review-inbox precommit shims-check keys-check context-pack context-check governance-check exec-policy-check exec-daemon \
         ai-stack-config admin-agent-help container-build container-load container-config container-preflight container-up \
         container-health container-down model-generate model-verify model-build model-serve rfi-request vault-health vault-heal \
         opencode-runtime opencode-runtime-clean opencode-certify
@@ -101,6 +101,12 @@ dist: ## Build a standalone peer bundle into ../dist
 		$(FABRIC_ROOT)/scripts/sparknet-bundle.sh --verify \
 			$$(ls -t "$(FABRIC_ROOT)"/dist/sparknet-peer-*.tar.gz | head -1); \
 	fi
+
+exec-policy-check: ## Validate the execution allowlist (no execution)
+	@$(PY) -c "import json; from pathlib import Path; d=json.loads(Path('$(VAULT_ROOT)/configs/exec-policy.json').read_text()); assert d['schema']=='sparknet-exec-policy/1'; print('exec policy: valid')"
+
+exec-daemon: ## Run the argv-only daemon in validate-only mode (foreground)
+	@$(PY) "$(FABRIC_ROOT)/scripts/sparknet-exec-daemon.py" --socket "$${SPARKNET_EXEC_SOCKET:-/tmp/sparknet-exec.sock}" --vault-root "$(VAULT_ROOT)" --node-pub "$(VAULT_ROOT)/.state/keys/ed25519-node.pub.b64" --signing-key "$(VAULT_ROOT)/.state/keys/ed25519-node.key.b64" --policy "$(VAULT_ROOT)/configs/exec-policy.json"
 
 install-units: ## Generate shims + install systemd units (dry-run; pass APPLY=1 to write)
 	@./scripts/sparknet-install-units.sh $(if $(APPLY),--apply,)

@@ -175,3 +175,26 @@ def test_response_round_trip():
     )
     assert exec_rpc.response_message(response)
     assert response["exit_code"] == 0
+
+
+def test_policy_allowlist_is_exact_and_fail_closed():
+    policy = exec_rpc.validate_policy(
+        {
+            "schema": "sparknet-exec-policy/1",
+            "allowed_argv": [{"binary": "git", "args": ["status", "--short"]}],
+            "cwd_roots": ["05_Knowledge"],
+            "env_allow": ["PATH", "HOME"],
+            "max_timeout_seconds": 30,
+            "max_output_bytes": 65536,
+            "approval_ttl_seconds": 300,
+            "audit_path": ".state/exec-audit.jsonl",
+        }
+    )
+    allowed, reason = exec_rpc.policy_allows(request(), policy)
+    assert allowed is True and reason == "allowed"
+    allowed, reason = exec_rpc.policy_allows(request(argv=["git", "push"]), policy)
+    assert allowed is False and reason == "not-allowlisted"
+    allowed, reason = exec_rpc.policy_allows(request(cwd="06_Projects"), policy)
+    assert allowed is False and reason == "cwd-not-allowlisted"
+    allowed, reason = exec_rpc.policy_allows(request(env={"PATH": "/usr/bin", "TERM": "x"}), policy)
+    assert allowed is False and reason == "env-not-allowlisted"
