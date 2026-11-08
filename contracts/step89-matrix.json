@@ -108,8 +108,8 @@
       "tests": [
         "tests/test_pipeline.py"
       ],
-      "state": "dry-run",
-      "live": "agx32 plan 2026-11-07"
+      "state": "live",
+      "live": "agx32 2026-11-08"
     },
     {
       "id": "self-improvement",
