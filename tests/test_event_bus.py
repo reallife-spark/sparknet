@@ -170,3 +170,16 @@ def test_jetstream_stream_creation_is_a_server_request():
         assert config["max_age"] == 600_000_000_000
     finally:
         server.close()
+
+
+def test_persistent_subscribe_yields_an_event_without_resubscribing():
+    message = sample_event()
+    server = FakeNats(message)
+    try:
+        with bus.NatsClient("127.0.0.1", server.port, timeout=2) as client:
+            subscription = client.subscribe("sparknet.task.blue", timeout=2)
+            received = next(subscription)
+            subscription.close()
+        assert received["event_id"] == message["event_id"]
+    finally:
+        server.close()

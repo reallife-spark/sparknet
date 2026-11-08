@@ -7,7 +7,6 @@ import argparse
 import json
 import os
 import sys
-import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -28,6 +27,7 @@ def handle(payload, event):
         url=os.environ.get("SPARKNET_AGENT_MODEL_URL", "http://127.0.0.1:4204/v1"),
         model=os.environ.get("SPARKNET_AGENT_MODEL", "sparknet-chat"),
         token=os.environ.get("SPARKNET_AGENT_TOKEN", ""),
+        user=os.environ.get("SPARKNET_AGENT_USER", "agent-cyber"),
         timeout=float(os.environ.get("SPARKNET_AGENT_MODEL_TIMEOUT", "120")),
         max_tokens=int(os.environ.get("SPARKNET_AGENT_MAX_TOKENS", "512")),
     )
@@ -69,13 +69,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.once or not args.serve:
             print(json.dumps(runner.run_once(args.subject), indent=2, sort_keys=True))
             return 0
-        while True:
+        for event in bus.subscribe(args.subject):
             try:
-                print(json.dumps(runner.run_once(args.subject), sort_keys=True), flush=True)
-            except AGENT.NatsError as exc:
-                if "timed out" not in str(exc).lower():
-                    print(f"cyber-agent: {exc}", file=sys.stderr, flush=True)
-                time.sleep(0.5)
+                print(json.dumps(runner.handle(event), sort_keys=True), flush=True)
+            except AGENT.AgentBusError as exc:
+                print(f"cyber-agent: {exc.code}: {exc}", file=sys.stderr, flush=True)
     except (AGENT.AgentBusError, AGENT.NatsError) as exc:
         print(f"cyber-agent: {exc}", file=sys.stderr)
         return 2

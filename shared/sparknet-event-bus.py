@@ -198,6 +198,46 @@ class NatsClient:
             raise NatsError("bad-stream", f"JetStream refused stream creation: {reply}")
         return reply
 
+    def subscribe(self, subject: str, *, timeout: float | None = None):
+        """Yield events on one persistent subscription; no resubscribe gaps."""
+        self._subject(subject)
+        self._sid += 1
+        sid = str(self._sid)
+        self._send(f"SUB {subject} {sid}\r\n".encode("ascii"))
+        # A persistent subscription blocks; a read timeout would leave the
+        # buffered reader in an unusable state and silently drop later events.
+        self._socket.settimeout(None)  # type: ignore[union-attr]
+        try:
+            while True:
+                line = self._line()
+                if line.startswith(b"PING"):
+                    self._send(b"PONG\r\n")
+                    continue
+                if line.startswith(b"-ERR"):
+                    raise NatsError("server-error", line.decode("utf-8", "replace"))
+                if not line.startswith(b"MSG "):
+                    continue
+                parts = line.decode("ascii", "replace").split()
+                if len(parts) < 4:
+                    raise NatsError("bad-message", "malformed MSG line")
+                size = int(parts[-1])
+                if size < 0 or size > MAX_MESSAGE_BYTES:
+                    raise NatsError("bad-message", "MSG size is out of range")
+                payload = self._reader.read(size)
+                if len(payload) != size:
+                    raise NatsError("bad-message", "MSG payload is truncated")
+                self._reader.read(2)
+                try:
+                    event = json.loads(payload.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                    raise NatsError("bad-payload", "event payload is not JSON") from exc
+                if not isinstance(event, dict):
+                    raise NatsError("bad-payload", "event payload is not an object")
+                yield _EVENT.validate_event(event)
+        finally:
+            with contextlib.suppress(OSError):
+                self._send(f"UNSUB {sid}\r\n".encode("ascii"))
+
     def subscribe_once(self, subject: str, *, timeout: float | None = None) -> dict[str, Any]:
         self._subject(subject)
         self._sid += 1

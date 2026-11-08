@@ -7,7 +7,6 @@ import argparse
 import json
 import os
 import sys
-import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -72,18 +71,16 @@ def main(argv=None) -> int:
             client.publish(routed["topic"], routed)
             print(json.dumps({"ok": True, "topic": routed["topic"], "event_id": routed["event_id"]}, sort_keys=True))
             return 0
-        while True:
+        for event in client.subscribe(ORCHESTRATE_TOPIC):
             try:
-                routed = route(client.subscribe_once(ORCHESTRATE_TOPIC, timeout=5.0))
+                routed = route(event)
                 client.publish(routed["topic"], routed)
                 print(
                     json.dumps({"ok": True, "topic": routed["topic"], "event_id": routed["event_id"]}, sort_keys=True),
                     flush=True,
                 )
-            except BUS.NatsError as exc:
-                if "timed out" not in str(exc).lower():
-                    print(f"orchestrator: {exc}", file=sys.stderr, flush=True)
-                time.sleep(0.5)
+            except OrchestratorError as exc:
+                print(f"orchestrator: {exc.code}: {exc}", file=sys.stderr, flush=True)
     except (OrchestratorError, BUS.NatsError, EVENT.EventError) as exc:
         print(f"orchestrator: {exc}", file=sys.stderr)
         return 2

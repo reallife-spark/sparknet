@@ -217,6 +217,7 @@ def call_model(
     url: str,
     model: str,
     token: str = "",
+    user: str = "agent",
     timeout: float = 120.0,
     max_tokens: int = 512,
 ) -> str:
@@ -234,6 +235,8 @@ def call_model(
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
+    if user:
+        headers["X-Sparknet-User"] = user
     request = urllib.request.Request(url.rstrip("/") + "/chat/completions", data=body, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
