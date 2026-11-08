@@ -1743,3 +1743,44 @@ def test_it_refuses_a_non_reversible_trust_transition(signer) -> None:
     response = signer.handle({"op": "sign-trust-transition", "root_id": signer.root_id, "transition": transition})
     assert response["ok"] is False
     assert "reversible" in response["error"]
+
+
+def test_caller_allowlist_requires_an_exact_process_path(signer_module, tmp_path):
+    """The socket mode separates accounts, not processes under one account.
+
+    SO_PEERCRED plus an exact executable/script match is the narrower boundary.
+    An empty allowlist preserves the documented filesystem-only posture; a
+    configured list refuses a different executable even when it has the same uid.
+    """
+    left, right = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        assert signer_module._caller_allowed(left, ())
+        assert signer_module._caller_allowed(left, (sys.executable,))
+        assert not signer_module._caller_allowed(left, (str(tmp_path / "not-this-process.py"),))
+    finally:
+        left.close()
+        right.close()
+
+
+def test_ledger_verification_pins_the_operational_key(signer, signer_module, authz):
+    """A chain is only as trustworthy as the key it is pinned to.
+
+    Every block is self-signed by its own node_pubkey. Without pinning, an
+    attacker who can replace the ledger can simply generate a new key, sign a
+    fresh chain and satisfy ``verify_chain``. The verifier now accepts the
+    trusted key explicitly.
+    """
+    ledger_path = signer.ledger_path
+    ledger = json.loads(ledger_path.read_text())
+    spec = importlib.util.spec_from_file_location("ledger_for_key_pin", ROLE_ROOT / "services" / "sparknet-ledger.py")
+    ledger_module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(ledger_module)
+
+    ok, detail = ledger_module.verify_chain(ledger, signer.public_key_b64)
+    assert ok, detail
+
+    other_public = _keypair("a-different-operational-key")[1]
+    ok, detail = ledger_module.verify_chain(ledger, other_public)
+    assert not ok
+    assert "unexpected key" in detail

@@ -66,6 +66,7 @@ refusal.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import errno
 import importlib.util
 import json
@@ -73,6 +74,7 @@ import os
 import re
 import socket
 import stat
+import struct
 import sys
 import threading
 import time
@@ -271,7 +273,14 @@ def check_key_matches_root(public_key_b64: str, root: dict[str, Any], consensus:
         )
 
 
-def check_not_reverted(ledger_path: Path, consensus: Any, root: dict[str, Any], allow_requalification: bool) -> None:
+def check_not_reverted(
+    ledger_path: Path,
+    consensus: Any,
+    root: dict[str, Any],
+    allow_requalification: bool,
+    expected_pubkey_b64: str,
+    authz: Any,
+) -> None:
     """Refuse to start against a root older than one this node has already served.
 
     A stale root is the hardest case in this file, because on its own it is
@@ -303,6 +312,11 @@ def check_not_reverted(ledger_path: Path, consensus: Any, root: dict[str, Any], 
             f"ledger at {ledger_path} is corrupt: {exc}. Refusing to sign rather "
             f"than starting a signer that cannot say which root it is under."
         ) from exc
+
+    verifier = _load("sparknet_signer_ledger", ROLE_ROOT / "services" / "sparknet-ledger.py")
+    ok, detail = verifier.verify_chain(ledger, expected_pubkey_b64)
+    if not ok:
+        raise SignerError(f"ledger failed verification before signing: {detail}")
 
     incoming = consensus.root_id(root)
     ledgers = [block.get("data", {}).get("root_id") for block in ledger.get("blocks", []) if isinstance(block, dict)]
@@ -448,7 +462,7 @@ class Signer:
 
         check_root(root, consensus, node_id)
         check_key_matches_root(self.public_key_b64, root, consensus)
-        check_not_reverted(ledger_path, consensus, root, allow_requalification)
+        check_not_reverted(ledger_path, consensus, root, allow_requalification, self.public_key_b64, authz)
 
         # The root this process was started with is pinned. A request may name a
         # root, but only this one is acceptable — which is what makes a stale or
@@ -948,11 +962,70 @@ class Signer:
 # --- transport ---------------------------------------------------------------
 
 
+def _peer_pid(connection: socket.socket) -> int | None:
+    """Return the Linux peer PID for a unix connection, or ``None``.
+
+    The socket's 0600 mode only separates users. On a node where the signer and
+    every service run as the same account, that boundary does not distinguish a
+    trusted caller from any other process holding the key's uid. SO_PEERCRED
+    gives the connecting process, and the optional executable allowlist below
+    closes that gap without pretending the filesystem alone does.
+
+    ``None`` means the platform has no SO_PEERCRED or the kernel refused it; the
+    caller is refused when an allowlist is configured.
+    """
+    option = getattr(socket, "SO_PEERCRED", None)
+    if option is None:
+        return None
+    try:
+        raw = connection.getsockopt(socket.SOL_SOCKET, option, struct.calcsize("3i"))
+        pid, _uid, _gid = struct.unpack("3i", raw)
+        return pid if pid > 0 else None
+    except OSError:
+        return None
+
+
+def _caller_allowed(connection: socket.socket, allow_callers: tuple[str, ...]) -> bool:
+    """Check the peer process against an exact executable/script allowlist.
+
+    Match any command-line token or the resolved executable, not a substring:
+    ``/tmp/sparknet-admin-console.py`` must not pass as the real service path.
+    An allowlist entry is resolved too, so a symlink under the state directory
+    cannot be swapped for another binary after the unit starts.
+    """
+    if not allow_callers:
+        return True
+    pid = _peer_pid(connection)
+    if pid is None:
+        return False
+    candidates: set[str] = set()
+    with contextlib.suppress(OSError):
+        candidates.add(str(Path(os.readlink(f"/proc/{pid}/exe")).resolve()))
+    try:
+        cwd = Path(os.readlink(f"/proc/{pid}/cwd"))
+        raw = Path(f"/proc/{pid}/cmdline").read_bytes()
+    except OSError:
+        return False
+    for token in raw.split(b"\0"):
+        if not token:
+            continue
+        try:
+            candidate = Path(os.fsdecode(token))
+            if not candidate.is_absolute():
+                candidate = cwd / candidate
+            candidates.add(str(candidate.resolve()))
+        except (OSError, ValueError):
+            continue
+    allowed = {str(Path(value).resolve()) for value in allow_callers}
+    return bool(candidates & allowed)
+
+
 def serve(
     signer: Signer,
     socket_path: Path,
     max_request_bytes: int = 1 << 20,
     read_timeout: float = REQUEST_READ_TIMEOUT_SECONDS,
+    allow_callers: tuple[str, ...] = (),
 ) -> None:
     """One JSON object per line; each connection served on its own thread.
 
@@ -992,7 +1065,7 @@ def serve(
             connection, _ = server.accept()
             threading.Thread(
                 target=_serve_one,
-                args=(signer, connection, max_request_bytes, read_timeout, sign_lock),
+                args=(signer, connection, max_request_bytes, read_timeout, sign_lock, allow_callers),
                 name="signer-client",
                 daemon=True,
             ).start()
@@ -1041,6 +1114,7 @@ def _serve_one(
     max_request_bytes: int,
     read_timeout: float,
     sign_lock: threading.Lock,
+    allow_callers: tuple[str, ...] = (),
 ) -> None:
     """Read one line, answer once, close. Runs in a per-connection thread.
 
@@ -1098,6 +1172,16 @@ def main(argv: list[str] | None = None) -> int:
     # Path() collapses "tcp://host:port" to "tcp:/host:port" and the check that
     # exists to catch exactly that input would miss it.
     parser.add_argument("--socket", default=str(DEFAULT_STATE_DIR / "signer" / "signer.sock"))
+    parser.add_argument(
+        "--allow-caller",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help=(
+            "restrict signing to processes whose executable or script argument is exactly PATH; "
+            "repeatable. Without it the socket's 0600 mode is the only caller boundary."
+        ),
+    )
     parser.add_argument("--ledger", type=Path, default=ROLE_ROOT / "blockchain" / "ledger.json")
     parser.add_argument(
         "--accept-requalification",
@@ -1150,7 +1234,7 @@ def main(argv: list[str] | None = None) -> int:
         file=sys.stderr,
     )
     try:
-        serve(signer, args.socket)
+        serve(signer, args.socket, allow_callers=tuple(args.allow_caller))
     except KeyboardInterrupt:
         return 0
     except OSError as exc:
@@ -1168,6 +1252,7 @@ def describe() -> dict[str, Any]:
         "operations": list(OPERATIONS),
         "signs": list(SIGN_OPERATIONS),
         "transport": "unix socket, mode 0600, one JSON object per line",
+        "caller_allowlist": "not configured (socket mode is the only boundary)",
         "refuses": [
             "a TCP address for the socket",
             "a socket path outside $SPARKNET_STATE_DIR",

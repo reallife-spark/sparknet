@@ -5,7 +5,7 @@
 Updated: 2026-11-08
 ## Plan cursor
 - `PLAN.md` — `current: 89`; Step 88 closed. Step 89 implementation is live; Phase 8 rewrite is in progress.
-- Critical open items: signer caller identity, ledger key pinning, transport mTLS, remaining 416-file rewrite.
+- Critical open items: full 416-file rewrite and Step 89 closure. Signer caller allowlist, ledger key pinning and transport mTLS are implemented; deployment still needs an exact caller list and a dedicated signer uid for full isolation.
 - Phase 8: Waves A–F have targeted rewrites and tests; Wave G test coverage is green. The rewrite register is not fully closed.
 ## Live fabric
 - **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`). Peer egress only to Master.
@@ -24,6 +24,10 @@ Updated: 2026-11-08
 - Keys live in `$SPARKNET_STATE_DIR` at 0700/0600; never in git or a vault.
 - Live fleet uses iptables and userspace WireGuard.
 - Registry ships empty; fresh nodes grant nothing.
+## Security hardening 2026-11-08
+- Signer: optional exact caller allowlist (`--allow-caller`, `SO_PEERCRED`); verifies ledger against the pinned operational key before signing.
+- Ledger: `verify_chain(..., expected_pubkey_b64)`; CLI pins from `--pubkey` or the trust root.
+- goSpark: pinned mutual TLS (`Server.ClientFingerprint`, `DialOptions.ClientCertificate`), 64 incoming QUIC streams per connection; `sparknetctl send-block` requires `-pin`.
 ## Phase 8 state
 - Wave A: shared boundary/fail-closed fixes, live-deployed to memory gateway.
 - Wave B: scripts/goagx targeted rewrites, including safe tar extraction and master from-git bundle fix.
