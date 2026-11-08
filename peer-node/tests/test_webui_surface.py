@@ -352,6 +352,10 @@ def test_vault_rfi_tool_asks_within_the_grant_scope(server, ctx, monkeypatch):
 
     class FakeClient:
         @staticmethod
+        def master_endpoint(vault_root):
+            return "http://10.100.0.1:8090/api/v1/rfi-request"
+
+        @staticmethod
         def request_knowledge(vault_root, **kwargs):
             calls.update(kwargs)
             return {"ok": True, "status": 202, "request": {"request_id": "RFI-1"}, "record": "x"}
@@ -373,6 +377,10 @@ def test_vault_rfi_tool_does_not_read_local_data_outside_the_grant(server, ctx, 
     calls: dict[str, object] = {}
 
     class FakeClient:
+        @staticmethod
+        def master_endpoint(vault_root):
+            return "http://10.100.0.1:8090/api/v1/rfi-request"
+
         @staticmethod
         def request_knowledge(vault_root, **kwargs):
             calls.update(kwargs)

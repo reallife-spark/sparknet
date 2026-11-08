@@ -737,11 +737,21 @@ def test_the_governance_mode_tracks_a_registry_change_without_a_restart(ctx: dic
     """
     bridge = _bridge(ctx)
     regime = bridge._share_regime()
-    assert bridge._mesh_count() == 2, "ctx ships one authorization plus this node"
+    assert bridge._mesh_count() == 1, "the ctx registry carries only this node"
+    assert regime.mode_for() == "solo"
+
+    # One peer joins while the bridge is still running: solo -> peer_pair.
+    _registry_with_departments(ctx, self_caps=["telemetry"], self_dept=None, other_dept=None)
+    assert bridge._mesh_count() == 2
     assert regime.mode_for() == "peer_pair"
 
-    # A second authorization lands on disk while the bridge is still running.
-    _registry_with_departments(ctx, self_caps=["telemetry"], self_dept=None, other_dept=None)
+    # A second peer joins without a restart: peer_pair -> master_governed.
+    path = ctx["vault"] / "manifests" / "node-authorizations.json"
+    registry = json.loads(path.read_text())
+    registry["authorizations"].append(
+        authz.sign_authorization(_identity("node-c", "10.100.0.10"), ctx["master_key"], ["telemetry"])
+    )
+    path.write_text(json.dumps(registry, indent=2) + "\n")
     assert bridge._mesh_count() == 3
     assert regime.mode_for() == "master_governed", (
         "the same regime object must see the third node; a cached count would still say peer_pair"

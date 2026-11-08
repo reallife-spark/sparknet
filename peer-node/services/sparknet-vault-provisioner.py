@@ -100,30 +100,11 @@ SLICE_EXCLUDED = frozenset(
 SLICE_INCLUDED_TOP = frozenset(
     {
         ".env.example",
-        "00_System",
-        "01_Inbox",
-        "02_Daily",
-        "03_Sources",
-        "04_Evergreen",
-        "05_Knowledge",
-        "06_Projects",
-        "07_Archives",
-        "_staging",
         "AGENTS.md",
         "CONTEXT.md",
         "MISSION.md",
         "INTENT.md",
         "docs",
-        "audit",
-        "_archives",
-        "_raw",
-        "concepts",
-        "entities",
-        "skills",
-        "synthesis",
-        "journal",
-        "projects",
-        "references",
     }
 )
 
@@ -261,6 +242,12 @@ def materialise_vault_slice(template: Path, dest: Path) -> None:
             import shutil
 
             shutil.copy2(child, target)
+
+    # A user vault starts as an empty numbered skeleton. Personal categories
+    # from the role template (user record, inbox, daily logs, sources, raw,
+    # staging and journals) are deliberately never copied.
+    for name in NUMBERED_TOP:
+        (dest / name).mkdir(exist_ok=True, mode=0o750)
 
 
 def _copytree(src: Path, dest: Path, exclude: frozenset) -> None:

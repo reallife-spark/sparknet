@@ -46,6 +46,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -65,6 +66,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 STATES = ["PLAN", "PERMISSION_PENDING", "PERMITTED", "EXECUTING", "COMPLETE", "DENIED", "ERROR"]
+JOB_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 DEFAULT_PORT = 4096
 DEFAULT_BIND = "127.0.0.1"
 PLAIN_PREFIXES = (
@@ -73,6 +75,11 @@ PLAIN_PREFIXES = (
     "/v1/openapi.json",
     "/v1/reflex/",
     "/v1/cluster/",
+    "/v1/vault/graph",
+    "/v1/vault/hybrid",
+    "/v1/collab/",
+    "/v1/exec/validate",
+    "/v1/events/status",
     "/session/",
     "/vault/",
     "/admin/",
@@ -89,6 +96,11 @@ LOCAL_ONLY_PREFIXES = (
     "/v1/chat/completions",
     "/v1/openapi.json",
     "/v1/reflex/",
+    "/v1/vault/graph",
+    "/v1/vault/hybrid",
+    "/v1/collab/",
+    "/v1/exec/validate",
+    "/v1/events/status",
     "/session/",
     "/vault/",
 )
@@ -778,8 +790,8 @@ class Bridge:
         }
 
     def cluster_job_status(self, job_id: str) -> dict[str, Any]:
-        if not isinstance(job_id, str) or not job_id:
-            raise _HttpRequestError(400, "malformed", "job_id required")
+        if not isinstance(job_id, str) or not JOB_ID_RE.fullmatch(job_id):
+            raise _HttpRequestError(400, "malformed", "job_id required and must be a safe identifier")
         with self._cluster_jobs_lock:
             path = self._cluster_jobs_dir / f"{job_id}.json"
             if not path.exists():
@@ -798,8 +810,8 @@ class Bridge:
         }
 
     def cluster_job_result(self, job_id: str) -> dict[str, Any]:
-        if not isinstance(job_id, str) or not job_id:
-            raise _HttpRequestError(400, "malformed", "job_id required")
+        if not isinstance(job_id, str) or not JOB_ID_RE.fullmatch(job_id):
+            raise _HttpRequestError(400, "malformed", "job_id required and must be a safe identifier")
         with self._cluster_jobs_lock:
             path = self._cluster_jobs_dir / f"{job_id}.json"
             if not path.exists():
@@ -862,8 +874,16 @@ class Bridge:
         return self._registry
 
     def _mesh_count(self) -> int:
-        """Live mesh size: this node plus every authorization the registry carries."""
-        return 1 + len(list(self.registry().get("authorizations") or []))
+        """Live mesh size: this node plus distinct, non-revoked peers."""
+        local = str(self.node_identity().get("node_id") or "")
+        peers = {
+            str((entry.get("identity") or {}).get("node_id") or "")
+            for entry in self.registry().get("authorizations") or []
+            if isinstance(entry, dict) and not entry.get("revoked")
+        }
+        peers.discard("")
+        peers.discard(local)
+        return 1 + len(peers)
 
     def node_identity(self) -> dict[str, Any]:
         if self._identity is None:
@@ -1396,12 +1416,16 @@ class Bridge:
         if not isinstance(requested, list) or not requested or any(not isinstance(s, str) or not s for s in requested):
             raise _HttpRequestError(400, "malformed", "scope must be a non-empty list of categories")
         client = _load_rfi_client()
+        configured = client.master_endpoint(self.vault_root)
+        requested_endpoint = str(body.get("endpoint") or "").strip()
+        if requested_endpoint and requested_endpoint != configured:
+            raise _HttpRequestError(403, "endpoint-refused", "RFI endpoint is fixed by the node configuration")
         try:
             result = client.request_knowledge(
                 self.vault_root,
                 question=question,
                 scope=requested,
-                endpoint=str(body.get("endpoint") or "") or None,
+                endpoint=configured,
                 timeout=float(body.get("timeout") or 10),
             )
         except (RuntimeError, OSError, ValueError) as exc:

@@ -158,6 +158,7 @@ class ShareService:
             node_count=self._mesh_count,
             department_of=self._department_of,
             holds_capability=self._holds_capability,
+            vault_index=self._vault_index,
             contracts_dir=Path(contracts_dir) if contracts_dir else None,
             durations=durations,
         )
@@ -190,8 +191,34 @@ class ShareService:
                 return entry
         return None
 
+    def _vault_index(self) -> dict[str, str]:
+        """Hashes of existing vault text pages, used for share conflict detection."""
+        index: dict[str, str] = {}
+        for path in self.vault_root.rglob("*"):
+            if not path.is_file() or path.is_symlink():
+                continue
+            relative = path.relative_to(self.vault_root)
+            if any(
+                part in {".state", ".git", "__pycache__", "keys", "blockchain", "manifests"} for part in relative.parts
+            ):
+                continue
+            if path.suffix.lower() not in {".md", ".markdown", ".txt"}:
+                continue
+            try:
+                index[relative.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+            except OSError:
+                continue
+        return index
+
     def _mesh_count(self) -> int:
-        return 1 + len([e for e in self._registry().get("authorizations") or [] if isinstance(e, dict)])
+        peers = {
+            str((entry.get("identity") or {}).get("node_id") or "")
+            for entry in self._registry().get("authorizations") or []
+            if isinstance(entry, dict) and not entry.get("revoked")
+        }
+        peers.discard("")
+        peers.discard(self.node_id)
+        return 1 + len(peers)
 
     def _department_of(self, node_id: str) -> str | None:
         entry = self._entry(node_id)
@@ -254,9 +281,12 @@ class ShareService:
             )
         return body
 
-    def offers(self) -> list[dict[str, Any]]:
+    def offers(self, node_id: str | None = None) -> list[dict[str, Any]]:
         with self._lock:
-            return [dict(record) for record in self.regime.shares.values()]
+            rows = [dict(record) for record in self.regime.shares.values()]
+        if node_id:
+            rows = [record for record in rows if record.get("offered_by") == node_id or record.get("toward") == node_id]
+        return rows
 
     def get(self, share_id: str) -> dict[str, Any]:
         with self._lock:
@@ -334,7 +364,7 @@ class ShareService:
         if signed.get("share_id") != message.get("share_id") or expected != bool(message.get("decision")):
             raise ShareServeError(400, "ratification-mismatch", "signed ratification does not match this message")
 
-    def deliver(self, share_id: str, files: dict[str, str]) -> dict[str, Any]:
+    def deliver(self, share_id: str, files: dict[str, str], actor: str | None = None) -> dict[str, Any]:
         """Place a signed payload in the receiver's review inbox.
 
         A share grants a bounded read/copy, not a write into a user's vault.
@@ -349,6 +379,8 @@ class ShareService:
                 share = self.regime.get(share_id)
             except self._regime_mod.ShareError as exc:
                 raise ShareServeError(exc.status, exc.reason, str(exc)) from exc
+            if actor and actor not in {share.get("offered_by"), share.get("toward")}:
+                raise ShareServeError(403, "not-party", "the caller is not a party to this share")
             if share.get("state") != "open":
                 raise ShareServeError(409, "not-open", f"share {share_id} is {share.get('state')}")
             kind = share.get("accepted_kind")
@@ -522,13 +554,14 @@ def router_for(service: ShareService):
 
     def router(method: str, path: str, body: dict[str, Any], identity: dict[str, Any]):
         if method == "GET" and path in ("/v1/share", "/v1/share/state"):
-            return 200, {"ok": True, "node_id": service.node_id, "shares": service.offers()}
+            caller = str(identity.get("verified_key_id") or "")
+            return 200, {"ok": True, "node_id": service.node_id, "shares": service.offers(caller)}
         if method == "POST" and path == "/v1/share/payload":
             share_id = body.get("share_id")
             if not isinstance(share_id, str) or not share_id:
                 return 400, {"ok": False, "reason": "malformed", "detail": "share_id required"}
             try:
-                delivered = service.deliver(share_id, body.get("files"))
+                delivered = service.deliver(share_id, body.get("files"), str(identity.get("verified_key_id") or ""))
             except ShareServeError as exc:
                 return exc.status, {"ok": False, "reason": exc.reason, "detail": exc.detail}
             return 200, delivered
