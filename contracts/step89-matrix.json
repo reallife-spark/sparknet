@@ -118,8 +118,8 @@
       "tests": [
         "tests/test_self_improve.py"
       ],
-      "state": "loopback",
-      "live": "not yet"
+      "state": "live",
+      "live": "agx64 2026-11-08"
     },
     {
       "id": "step89-admin",
@@ -128,8 +128,8 @@
       "tests": [
         "master-node/tests/test_step89_admin.py"
       ],
-      "state": "loopback",
-      "live": "not yet"
+      "state": "live",
+      "live": "agx64 2026-11-08"
     },
     {
       "id": "release",

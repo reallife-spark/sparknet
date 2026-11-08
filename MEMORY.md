@@ -12,6 +12,8 @@ Updated: 2026-11-07
 - **Package distribution live 2026-11-07:** signed index/package fetch over 4221 and verified install into a staging path; executable mode preserved. Demo package removed after the test.
 - **Agent bus/orchestrator live 2026-11-08:** one live NATS task routed from the Master orchestrator to the agx32 engineering agent and returned an engineering result; test processes stopped afterwards.
 - **O1→O2→O5 live 2026-11-08:** a signed O1 probe produced a signed O2 append and a signed, explicitly promoted O5 page; probe artifacts removed afterwards.
+- **Self-improvement live 2026-11-08:** worktree benchmark/promotion ran on agx64 with the Firecracker fallback; signed run record and commit promotion verified. Temporary repo removed.
+- **Signed Master write live 2026-11-08:** lake-intake action signed/verified/applied on agx64 against a temp state root; test state removed.
 ## Live fabric
 - **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`). Overlay handshake both ways; peer overlay egress only to Master.
 - Master on agx64: signer/ledger/parity, 8088 admin, 8098 console, 8090/8091 intake, 4220–4223, 4201/4202 share, 4204 engine, Qdrant 6333, teacher config.

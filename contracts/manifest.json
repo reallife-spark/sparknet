@@ -173,7 +173,7 @@
       "contract": "step89-matrix",
       "file": "step89-matrix.json",
       "schema_version": "1.0",
-      "sha256": "de732ab862ebd01344cd80e6a41505fd70fe80ea1cd171ac1a30ede35630c471"
+      "sha256": "7a56751941051773eeae5432b0877a05abd83b0dcc59c53206fafe2eedfef357"
     },
     {
       "contract": "telemetry-schema",
