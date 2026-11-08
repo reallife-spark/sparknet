@@ -4,8 +4,8 @@
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
 Updated: 2026-11-08
 ## Plan cursor
-- `PLAN.md` — `current: done`; Step 89 closed 2026-11-08. Remaining work is the Phase 8 rewrite register and a new plan step for any later work.
-- Critical open items: none for Phase 8 closure; new work gets a new plan step. The 416-file register is `_archives/phase8-rewrite-register.md` (99 rewrite, 317 retain).
+- `PLAN.md` — `current: 90`; Step 90 is the 416-file Phase 8 remediation. Step 89 is archived in `_archives/PLAN_FULL_2026-11-08.md`.
+- Critical open items: Step 90 inventory is at `_archives/phase8-inventory.json`; `make phase8-closure-check` must pass before closure. Current human register: 101 rewrite / 315 retain.
 - Phase 8: closed 2026-11-08. All 416 files are dispositioned; high-risk audit findings (registry replay, signer/verifier asymmetry, script injection, peer pin, patch mode, WG injection, proxy bounds, guard audit, WLAN) are fixed.
 - 89H/89I: private loopback OCI registry (`master-node/services/sparknet-container-registry.py`, port 5000, staged unit), GitFlow policy (`shared/sparknet-gitflow.py`), self-improvement source/target branches, signed package distribution. Registry live loopback probe passed on agx64 2026-11-08.
 ## Live fabric

@@ -256,6 +256,15 @@ context-pack: ## Regenerate CONTEXT.md for the fabric and both roles
 governance-check: ## Enforce the five-file shape, budgets and template parity
 	@$(PY) scripts/sparknet-governance-check.py
 
+phase8-sync: ## Seed/refresh the 416-file Phase 8 inventory without losing verdicts
+	@$(PY) scripts/sparknet-phase8-inventory.py sync
+
+phase8-check: ## Check the Phase 8 inventory covers every file and is well formed
+	@$(PY) scripts/sparknet-phase8-inventory.py check
+
+phase8-closure-check: ## Fail unless every Phase 8 row has a terminal verdict and evidence
+	@$(PY) scripts/sparknet-phase8-inventory.py closure
+
 context-check: ## Fail if any CONTEXT.md is stale vs its source pages
 	@$(PY) scripts/sparknet-context-pack.py --root "$(VAULT_ROOT)" --role fabric --check
 	@$(PY) scripts/sparknet-context-pack.py --root "$(VAULT_ROOT)/peer-node" --role peer --check

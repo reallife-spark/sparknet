@@ -67,6 +67,7 @@ run_step() {
 
 run_step "context-check" make --no-print-directory -C "$ROOT" context-check
 run_step "governance-check" make --no-print-directory -C "$ROOT" governance-check
+run_step "phase8-check"    make --no-print-directory -C "$ROOT" phase8-check
 run_step "keys-check"    make --no-print-directory -C "$ROOT" keys-check
 run_step "shims-check"   make --no-print-directory -C "$ROOT" shims-check
 run_step "lint"          make --no-print-directory -C "$ROOT" lint
