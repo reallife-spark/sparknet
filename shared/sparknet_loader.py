@@ -72,7 +72,13 @@ def load_by_path(name: str, path: Path, *, error: type[Exception] = ImportError,
         raise error(message or f"cannot load {path}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        # A failed load must not leave a half-initialised module cached under
+        # the canonical name; the next caller would receive the broken object.
+        sys.modules.pop(name, None)
+        raise
     return module
 
 
