@@ -264,10 +264,15 @@ def _scalar(text: str) -> Any:
         depth = 0
         quote = ""
         current = ""
+        escaped = False
         for char in inner:
             if quote:
                 current += char
-                if char == quote:
+                if escaped:
+                    escaped = False
+                elif char == "\\" and quote == '"':
+                    escaped = True
+                elif char == quote:
                     quote = ""
                 continue
             if char in "\"'":
@@ -312,7 +317,7 @@ _PLAIN_UNSAFE_LEAD = frozenset("-?:,[]{}#&*!|>'\"%@`")
 
 #: Patterns that make a plain value ambiguous to a reader outside this subset:
 #: a `key: value` pair hiding in a value, a trailing comment, or a stray quote.
-_PLAIN_UNSAFE_INNER = (": ", " #", '"', "'", "\n", "\t")
+_PLAIN_UNSAFE_INNER = (": ", " #", '"', "'", "\n", "\t", ",", "[", "]", "{", "}")
 
 
 def _fmt_str(value: str) -> str:

@@ -62,12 +62,10 @@ def installation_record(vault_root: Path) -> dict[str, Any]:
         return {"schema": "sparknet-rfi-installation/1", "request_ids": []}
     try:
         record = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        # A corrupt record must not become a reason to accept a replay, so it is
-        # read as empty and the next successful install rewrites it.
-        return {"schema": "sparknet-rfi-installation/1", "request_ids": []}
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"{path} is unreadable; refusing to treat it as an empty replay record") from exc
     if not isinstance(record, dict) or not isinstance(record.get("request_ids"), list):
-        return {"schema": "sparknet-rfi-installation/1", "request_ids": []}
+        raise ValueError(f"{path} is malformed; refusing to treat it as an empty replay record")
     return record
 
 
@@ -117,13 +115,18 @@ def accept_answer(
     raises for a refusal, so a caller cannot turn an unacceptable artifact into an
     unhandled error and thereby into a half-written inbox.
     """
+    try:
+        record = installation_record(vault_root)
+    except (OSError, ValueError) as exc:
+        return {"status": "refused", "reason": "installation-record-corrupt", "detail": str(exc), "item": None}
+    installed = [str(x) for x in record.get("request_ids") or []]
     ok, reason, content = authz.verify_rfi_answer(
         artifact,
         master_public_key=master_public_key,
         peer_fingerprint=peer_fingerprint,
         now=now,
         ttl_seconds=ttl_seconds,
-        installed_request_ids=installed_request_ids(vault_root),
+        installed_request_ids=installed,
     )
     if not ok:
         return {"status": "refused", "reason": reason, "item": None}
@@ -141,7 +144,6 @@ def accept_answer(
     _atomic_write(target, content)
     _adopt_vault_owner(target, vault_root)
 
-    record = installation_record(vault_root)
     ids = [str(x) for x in record.get("request_ids") or []]
     if request_id not in ids:
         ids.append(request_id)

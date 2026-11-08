@@ -439,7 +439,7 @@ def verify_vote(
         public_key = authz.public_key_from_b64(member["cluster_pubkey"])
         public_key.verify(authz.decode_b64_strict(vote["signature_b64"], what="vote signature"), vote_message(vote))
     except ConsensusError:
-        raise
+        return False, REASON_MALFORMED
     except Exception:
         return False, REASON_BAD_SIGNATURE
     return True, REASON_OK

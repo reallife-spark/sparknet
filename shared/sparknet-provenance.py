@@ -901,8 +901,14 @@ def user_init(vault: Path, owner_id: str | None = None, force: bool = False, clo
         )
 
     private_b64, public_b64 = authz.generate_keypair()
-    private_path.write_text(private_b64 + "\n")
-    private_path.chmod(0o600)
+    descriptor = os.open(private_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(private_b64 + "\n")
+    except Exception:
+        os.close(descriptor)
+        raise
 
     number = owner_id or f"U-{10000 + (_now().microsecond % 90000):05d}"
     if not OWNER_ID_RE.match(number):
@@ -1631,9 +1637,13 @@ def anchor(
     store = load_anchored(vault)
     if not isinstance(block, dict) or not isinstance(block.get("data"), dict):
         return False, "malformed checkpoint block", None
-    key = str(block["data"].get("node_pubkey_b64") or "")
-    if not key:
-        return False, "no node_pubkey_b64 in checkpoint data", None
+    header_key = str(block.get("node_pubkey_b64") or "")
+    data_key = str(block["data"].get("node_pubkey_b64") or "")
+    if not header_key:
+        return False, "no node_pubkey_b64 in checkpoint header", None
+    if data_key != header_key:
+        return False, "checkpoint data names a different node key than its signed header", None
+    key = header_key
     anchored = store.get(key)
     ok, detail = verify_checkpoint(block, anchored=anchored, proof=proof)
     if not ok:

@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import secrets
 import sys
 import threading
@@ -225,11 +226,16 @@ def ensure_keypair(key_dir: Path, name: str, authz: Any, force: bool = False) ->
         return private_b64, public_b64, False
     key_dir.mkdir(parents=True, exist_ok=True)
     private_b64, public_b64 = authz.generate_keypair()
-    # Write the private half with its mode already set: a key file created wide
-    # and tightened afterwards has a window in which it is readable, and this
-    # one never gets one.
-    private_path.write_text(private_b64 + "\n")
-    private_path.chmod(0o600)
+    # Create the private half with its mode already set; chmod-after-write has
+    # a window in which the key is readable.
+    descriptor = os.open(private_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(private_b64 + "\n")
+    except Exception:
+        os.close(descriptor)
+        raise
     public_path = key_path(key_dir, name, private=False)
     public_path.write_text(public_b64 + "\n")
     public_path.chmod(0o644)

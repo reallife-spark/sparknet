@@ -962,3 +962,11 @@ def test_sign_bytes_round_trips_through_verify_signature(authz, cluster):
     signature = authz.sign_bytes(key, message)
     assert authz.verify_signature(key.public_key(), signature, message)
     assert not authz.verify_signature(key.public_key(), signature, b"other bytes")
+
+
+def test_a_malformed_member_vote_is_rejected_not_raised(consensus, cluster):
+    vote = _vote(consensus, cluster, "alpha", "beta", "e1", "n1")
+    vote.pop("nonce")
+    result = consensus.tally([vote], cluster["members"], "e1")
+    assert result["agreed"] is False
+    assert result["rejected"][0]["reason"] == consensus.REASON_MALFORMED

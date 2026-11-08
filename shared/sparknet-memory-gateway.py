@@ -88,6 +88,16 @@ MUTATING = {
     "/v1/memory/prune",
     "/v1/delegates/plan",
 }
+ROOM_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+GRANT_MUTATING = frozenset(
+    {
+        "/v1/collab/room",
+        "/v1/collab/message",
+        "/v1/vault/capture",
+        "/v1/rfi",
+        *MUTATING,
+    }
+)
 
 
 class GatewayError(Exception):
@@ -506,6 +516,17 @@ class Gateway:
         path.mkdir(parents=True, exist_ok=True, mode=0o700)
         return path
 
+    def _room_path(self, vault_path: str, room_id: str) -> Path:
+        if not isinstance(room_id, str) or not ROOM_ID_RE.fullmatch(room_id):
+            raise GatewayError(400, "bad-room-id", "room_id must be a single safe path component")
+        root = self._collab_root(vault_path).resolve()
+        candidate = (root / room_id).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError as exc:
+            raise GatewayError(403, "vault-forbidden", "room_id escapes the collaboration root") from exc
+        return candidate
+
     def collab_create_room(self, vault_path: str, actor_id: str, body: dict[str, Any]) -> dict[str, Any]:
         participants = body.get("participants")
         if not isinstance(participants, list) or not participants:
@@ -532,7 +553,7 @@ class Gateway:
             room_id=room_id or None,
             verified=True,
         )
-        path = self._collab_root(vault_path) / room["room_id"] / "room.json"
+        path = self._room_path(vault_path, str(room["room_id"])) / "room.json"
         self._write_json_atomic(path, room)
         return {"ok": True, "room": room}
 
@@ -551,7 +572,7 @@ class Gateway:
         room_id = str(body.get("room_id") or "").strip()
         if not room_id:
             raise GatewayError(400, "malformed", "room_id is required")
-        room_file = self._collab_root(vault_path) / room_id / "room.json"
+        room_file = self._room_path(vault_path, room_id) / "room.json"
         try:
             room = COLLAB.validate_room(json.loads(room_file.read_text(encoding="utf-8")))
         except (OSError, ValueError, COLLAB.CollabError) as exc:
@@ -564,7 +585,7 @@ class Gateway:
             provenance={"source": "local"},
             classification=str(body.get("classification") or room["classification"]),
         )
-        path = self._collab_root(vault_path) / room_id / "messages" / f"{message['message_id']}.json"
+        path = self._room_path(vault_path, room_id) / "messages" / f"{message['message_id']}.json"
         self._write_json_atomic(path, message)
         return {"ok": True, "message": message}
 
@@ -727,7 +748,9 @@ class Gateway:
         scored.sort(key=lambda row: (-row["score"], row["path"]))
         return {"ok": True, "query": query, "hits": scored[: max(1, min(int(top_k), 20))]}
 
-    def vault_capture(self, vault_path: str, body: dict[str, Any]) -> dict[str, Any]:
+    def vault_capture(
+        self, vault_path: str, body: dict[str, Any], scope_paths: list[str] | None = None
+    ) -> dict[str, Any]:
         title = str(body.get("title") or "").strip()
         text = str(body.get("body") or "").strip()
         if not title or not text:
@@ -749,6 +772,8 @@ class Gateway:
         relative = path.relative_to(Path(vault_path).resolve())
         if not relative.parts or relative.parts[0] not in VAULT_CAPTURE_PREFIXES:
             raise GatewayError(403, "vault-forbidden", "capture target must be under an allowed prefix")
+        if not self._scope_row(relative.as_posix(), scope_paths):
+            raise GatewayError(403, "scope-refused", "capture target is outside the grant's vault scope")
         if path.exists():
             stem = path.with_suffix("")
             for index in range(2, 100):
@@ -885,6 +910,11 @@ class Gateway:
         if isinstance(merged.get("scope"), dict) and isinstance(constraints.get("scope"), dict):
             merged["scope"] = {**constraints["scope"], **merged["scope"]}
             merged["scope"]["user_id"] = constraints["scope"]["user_id"]
+        if kind == "grant" and method == "POST" and path in GRANT_MUTATING:
+            # Reserve before any mutation. A failed request burns its grant (a
+            # retry needs a fresh grant), which is safer than a concurrent
+            # double-write followed by a refusal.
+            self._consume_grant_nonce(constraints.get("grant_nonce"))
         if path == "/v1/exec/validate":
             if method != "POST":
                 raise GatewayError(405, "method-not-allowed", "execution validation requires POST")
@@ -914,14 +944,12 @@ class Gateway:
                     raise GatewayError(405, "method-not-allowed", "room creation requires POST")
                 payload = self.collab_create_room(vault_path, actor_id, merged)
                 self.audit(kind, actor_id, "collab.room.create", vault_path, {"room_id": payload["room"]["room_id"]})
-                self._consume_grant_nonce(constraints.get("grant_nonce"))
                 return 200, payload
             if path == "/v1/collab/message":
                 if method != "POST":
                     raise GatewayError(405, "method-not-allowed", "messages require POST")
                 payload = self.collab_post_message(vault_path, actor_id, merged)
                 self.audit(kind, actor_id, "collab.message", vault_path, {"room_id": merged.get("room_id")})
-                self._consume_grant_nonce(constraints.get("grant_nonce"))
                 return 200, payload
             raise GatewayError(404, "not-found", "unknown collaboration route")
         if path.startswith("/v1/vault/"):
@@ -965,9 +993,8 @@ class Gateway:
                 self.audit(kind, actor_id, "vault.hybrid", vault_path, {"query": merged.get("query")})
                 return 200, payload
             if path == "/v1/vault/capture":
-                payload = self.vault_capture(vault_path, merged)
+                payload = self.vault_capture(vault_path, merged, constraints.get("scope_paths"))
                 self.audit(kind, actor_id, "vault.capture", vault_path, {"path": payload.get("path")})
-                self._consume_grant_nonce(constraints.get("grant_nonce"))
                 return 200, payload
             raise GatewayError(404, "not-found", "unknown vault route")
         if path == "/v1/rfi":
@@ -981,7 +1008,6 @@ class Gateway:
                 vault_path,
                 {"scope": merged.get("scope"), "request": payload.get("request", {}).get("request_id")},
             )
-            self._consume_grant_nonce(constraints.get("grant_nonce"))
             return 200, payload
         if path in MUTATING and method != "POST":
             raise GatewayError(405, "method-not-allowed", f"{path} requires POST")
@@ -1008,8 +1034,6 @@ class Gateway:
                 status, payload = self.forward(method, path, None, query)
             else:
                 status, payload = self.forward(method, path, merged, query)
-            if method == "POST" and path == "/v1/delegates/plan":
-                self._consume_grant_nonce(constraints.get("grant_nonce"))
             return status, payload
         if path.startswith("/v1/memory/"):
             if method == "POST" and (path in MUTATING or path == "/v1/memory/inspect"):
@@ -1019,8 +1043,6 @@ class Gateway:
                 status, payload = self.forward(method, path, None, query)
             else:
                 status, payload = self.forward(method, path, merged, query)
-            if method == "POST" and path in MUTATING:
-                self._consume_grant_nonce(constraints.get("grant_nonce"))
             return status, payload
         if path == "/v1/admin/inspect":
             if kind not in ("local",):
@@ -1052,6 +1074,7 @@ def _slug(value: str) -> str:
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "sparknet-memory-gateway/1"
+    timeout = 10
     gateway: Gateway
 
     def log_message(self, fmt: str, *args: Any) -> None:
@@ -1061,7 +1084,10 @@ class Handler(BaseHTTPRequestHandler):
         return {key.lower(): value for key, value in self.headers.items()}
 
     def _body(self) -> dict[str, Any]:
-        length = int(self.headers.get("Content-Length") or 0)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError as exc:
+            raise GatewayError(400, "malformed", "Content-Length is invalid") from exc
         if length > MAX_BODY:
             raise GatewayError(413, "too-large", "request body exceeds the limit")
         if length <= 0:

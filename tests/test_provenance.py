@@ -1237,18 +1237,21 @@ def test_a_tampered_answer_never_reaches_the_inbox(rfi: dict) -> None:
     assert not (rfi["vault"] / "01_Inbox" / "rfi-answer.md").exists()
 
 
-def test_a_corrupt_install_record_does_not_authorise_a_replay(rfi: dict) -> None:
-    """A record that cannot be read is read as empty — but the item is still there.
-
-    Failing open here would mean a corrupt state file lets an old answer install
-    again; the refusal is the safe direction even though it costs a re-delivery.
-    """
+def test_a_corrupt_install_record_refuses_a_replay(rfi: dict) -> None:
+    """A record that cannot be read is a refusal, never an empty replay set."""
     assert _accept_answer(rfi)["status"] == "installed"
+    item = rfi["vault"] / "01_Inbox" / "rfi-answer.md"
+    original = item.read_bytes()
     path = rfi["vault"] / rfi["install"].INSTALL_RECORD_RELPATH
     path.write_text("{not json")
-    assert rfi["install"].installed_request_ids(rfi["vault"]) == []
-    # The item exists, so a second install would overwrite it — which is why the
-    # record is rewritten from a clean read rather than trusted.
+    with pytest.raises(ValueError):
+        rfi["install"].installed_request_ids(rfi["vault"])
     result = _accept_answer(rfi, content=b"# second\n")
-    assert result["status"] == "installed"
-    assert (rfi["vault"] / "01_Inbox" / "rfi-answer.md").read_bytes() == b"# second\n"
+    assert result["status"] == "refused"
+    assert result["reason"] == "installation-record-corrupt"
+    assert item.read_bytes() == original
+
+
+def test_flow_lists_round_trip_ambiguous_strings(provenance: ModuleType):
+    value = {"tags": ["a,b", 'a"b', "a[b]", "x: y", "#hash"]}
+    assert provenance.parse_yaml_subset(provenance.emit_yaml(value)) == value

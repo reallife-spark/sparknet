@@ -381,7 +381,7 @@ def test_local_llm_backend_parses_openai_style_content(reflex: ModuleType, monke
         seen["timeout"] = timeout
         return FakeResponse()
 
-    monkeypatch.setattr(reflex.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(reflex, "_open_url", fake_urlopen)
     monkeypatch.setenv("SPARKNET_REFLEX_LOCAL_URL", "http://127.0.0.1:11434")
     backend = reflex.local_llm_backend(model="qwen2.5:3b", timeout_s=1.5)
     answer = backend(_request(reflex))
@@ -406,7 +406,7 @@ def test_local_llm_backend_reads_ollama_and_plain_content(reflex: ModuleType, mo
             def read(self):
                 return json.dumps(outer).encode()
 
-        monkeypatch.setattr(reflex.urllib.request, "urlopen", lambda *_a, **_k: FakeResponse())
+        monkeypatch.setattr(reflex, "_open_url", lambda *_a, **_k: FakeResponse())
         return reflex.local_llm_backend()(_request(reflex))
 
     assert fake({"response": '{"type":"noul","noul":0.7}'})["noul"] == pytest.approx(0.7)
@@ -417,7 +417,7 @@ def test_local_llm_backend_reads_ollama_and_plain_content(reflex: ModuleType, mo
 def test_local_llm_backend_raises_on_transport_parse_and_empty_content(reflex: ModuleType, monkeypatch) -> None:
     monkeypatch.setenv("SPARKNET_REFLEX_LOCAL_MODEL", "qwen2.5-3b-32k")
     backend = reflex.local_llm_backend()
-    monkeypatch.setattr(reflex.urllib.request, "urlopen", lambda *_a, **_k: (_ for _ in ()).throw(OSError("refused")))
+    monkeypatch.setattr(reflex, "_open_url", lambda *_a, **_k: (_ for _ in ()).throw(OSError("refused")))
     with pytest.raises(RuntimeError, match="unreachable"):
         backend(_request(reflex))
 
@@ -434,13 +434,13 @@ def test_local_llm_backend_raises_on_transport_parse_and_empty_content(reflex: M
         def read(self):
             return self.body
 
-    monkeypatch.setattr(reflex.urllib.request, "urlopen", lambda *_a, **_k: FakeResponse(b"not json"))
+    monkeypatch.setattr(reflex, "_open_url", lambda *_a, **_k: FakeResponse(b"not json"))
     with pytest.raises(RuntimeError, match="non-JSON"):
         backend(_request(reflex))
 
     monkeypatch.setattr(
-        reflex.urllib.request,
-        "urlopen",
+        reflex,
+        "_open_url",
         lambda *_a, **_k: FakeResponse(json.dumps({"choices": [{"message": {"content": ""}}]}).encode()),
     )
     with pytest.raises(RuntimeError, match="no content"):
@@ -453,7 +453,7 @@ def test_local_llm_failure_becomes_an_abstain_through_consult(reflex: ModuleType
     def boom(*_a, **_k):
         raise OSError("no local model")
 
-    monkeypatch.setattr(reflex.urllib.request, "urlopen", boom)
+    monkeypatch.setattr(reflex, "_open_url", boom)
     decision = reflex.consult(reflex.local_llm_backend(), _request(reflex), timeout_s=0.5)
     assert decision["verdict"] == "abstain"
     assert decision["_reason"] == "backend-error"
@@ -477,7 +477,7 @@ def test_local_llm_backend_never_asks_for_a_model_named_local(reflex: ModuleType
     monkeypatch.delenv("SPARKNET_REFLEX_LOCAL_MODEL", raising=False)
     monkeypatch.delenv("SPARKNET_LOCAL_MODEL", raising=False)
     opened: list = []
-    monkeypatch.setattr(reflex.urllib.request, "urlopen", lambda *a, **k: opened.append((a, k)))
+    monkeypatch.setattr(reflex, "_open_url", lambda *a, **k: opened.append((a, k)))
     with pytest.raises(reflex.ReflexPolicyError):
         reflex.local_llm_backend("local")
     assert opened == [], "an unconfigured endpoint must not open a socket"
@@ -603,7 +603,7 @@ def test_the_local_llm_asks_for_json_by_default(reflex: ModuleType, monkeypatch)
 
     monkeypatch.setenv("SPARKNET_REFLEX_LOCAL_MODEL", "qwen2.5-3b-32k")
     monkeypatch.delenv("SPARKNET_REFLEX_STRUCTURED", raising=False)
-    monkeypatch.setattr(reflex.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(reflex, "_open_url", fake_urlopen)
     reflex.local_llm_backend()(_request(reflex))
     assert seen["body"]["response_format"] == {"type": "json_object"}
 

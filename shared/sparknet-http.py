@@ -315,9 +315,16 @@ class _Handler(TimeoutHandler):
     def log_message(self, fmt: str, *args: Any) -> None:
         return  # loopback service; keep the log quiet
 
-    def _read_body(self) -> bytes:
-        length = int(self.headers.get("Content-Length") or 0)
-        if length <= 0 or length > 1_048_576:
+    def _read_body(self, *, allow_empty: bool = False) -> bytes:
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError as exc:
+            raise RequestError(400, "malformed", "Content-Length is invalid") from exc
+        if length <= 0:
+            if allow_empty:
+                return b"{}"
+            raise RequestError(400, "malformed", "empty or oversized body")
+        if length > 1_048_576:
             raise RequestError(400, "malformed", "empty or oversized body")
         return self.rfile.read(length)
 
@@ -390,7 +397,7 @@ class _Handler(TimeoutHandler):
         if refusal is not None:
             self._refuse(refusal)
             return
-        raw = self._read_body()
+        raw = self._read_body(allow_empty=True)
         try:
             identity = self._verify(raw)
             identity["source_kind"] = source_kind(self.client_address)

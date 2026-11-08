@@ -289,12 +289,17 @@ def load_public_key(path: Path) -> Ed25519PublicKey:
     text = Path(path).read_text().strip()
     if not text:
         raise AuthzError(f"master public key file is empty: {path}")
-    try:
-        raw = base64.b64decode(text, validate=True)
-    except Exception:
+    # A 64-character hex key is also valid base64, so detect hex first. Trying
+    # base64 first decodes it to 48 bytes and rejects it before the hex path.
+    if len(text) == 64 and all(ch in "0123456789abcdefABCDEF" for ch in text):
         try:
             raw = bytes.fromhex(text)
         except ValueError as exc:
+            raise AuthzError(f"master public key in {path} is not valid hex") from exc
+    else:
+        try:
+            raw = base64.b64decode(text, validate=True)
+        except Exception as exc:
             raise AuthzError(f"master public key in {path} is neither base64 nor hex") from exc
     if len(raw) != 32:
         raise AuthzError(f"Ed25519 public key must be 32 bytes, got {len(raw)} in {path}")
@@ -406,10 +411,14 @@ def evaluate(
         return Decision(False, REASON_REVOKED, local_fp)
 
     expires = _parse_ts(entry.get("expires_at"))
-    if expires is not None and now > expires:
+    if expires is None:
+        return Decision(False, REASON_MALFORMED, local_fp)
+    if now > expires:
         return Decision(False, REASON_EXPIRED, local_fp)
     issued = _parse_ts(entry.get("issued_at"))
-    if issued is not None and now < issued - timedelta(minutes=5):
+    if issued is None:
+        return Decision(False, REASON_MALFORMED, local_fp)
+    if now < issued - timedelta(minutes=5):
         return Decision(False, REASON_NOT_YET_VALID, local_fp)
 
     # The registry must not be able to carry an identity that hashes to

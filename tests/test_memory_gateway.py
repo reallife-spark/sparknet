@@ -475,3 +475,40 @@ def test_exec_validation_route_is_local_only(stack):
             {"request": request},
         )
     assert refused.value.code == "local-only"
+
+
+def test_collab_room_id_cannot_escape_the_collab_root(stack):
+    role = stack["role"]
+    headers = {"x-sparknet-local-token": "local-token", "x-sparknet-vault-path": str(role)}
+    with pytest.raises(gateway_mod.GatewayError) as refused:
+        stack["gateway"].handle(
+            "POST",
+            "/v1/collab/room",
+            headers,
+            {"room_id": "../../escape", "classification": "internal"},
+        )
+    assert refused.value.code == "bad-room-id"
+    assert not (role.parent / "escape").exists()
+
+
+def test_capture_respects_the_grant_scope_and_burns_the_nonce(stack):
+    role = stack["role"]
+    (role / "06_Projects").mkdir()
+    headers = {"authorization": f"Bearer {stack['grant']}"}
+    with pytest.raises(gateway_mod.GatewayError) as refused:
+        stack["gateway"].handle(
+            "POST",
+            "/v1/vault/capture",
+            headers,
+            {"title": "outside", "body": "x", "target": "01_Inbox/outside.md"},
+        )
+    assert refused.value.code == "scope-refused"
+    assert not (role / "01_Inbox" / "outside.md").exists()
+    with pytest.raises(gateway_mod.GatewayError) as replay:
+        stack["gateway"].handle(
+            "POST",
+            "/v1/vault/capture",
+            headers,
+            {"title": "outside", "body": "x", "target": "01_Inbox/outside.md"},
+        )
+    assert replay.value.code == "grant-refused"

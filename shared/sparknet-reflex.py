@@ -650,6 +650,11 @@ def _llm_content(outer: Any) -> str | None:
     return None
 
 
+def _open_url(request: Any, timeout: float):
+    """Open a local model URL without inheriting an environment proxy."""
+    return urllib.request.build_opener(urllib.request.ProxyHandler({})).open(request, timeout=timeout)
+
+
 def local_llm_backend(model: str | None = None, timeout_s: float = 5.0) -> Any:
     """Build a backend that calls an OpenAI-compatible local LLM on loopback.
 
@@ -690,7 +695,7 @@ def local_llm_backend(model: str | None = None, timeout_s: float = 5.0) -> Any:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+            with _open_url(req, timeout_s) as resp:
                 raw = resp.read().decode("utf-8")
         except Exception as exc:
             raise RuntimeError("local-llm unreachable") from exc

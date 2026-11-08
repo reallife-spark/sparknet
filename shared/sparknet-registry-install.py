@@ -82,11 +82,15 @@ def load_pinned_key(vault_root: Path, authz: Any) -> Any | None:
 
 def installation_record(vault_root: Path) -> dict[str, Any]:
     path = Path(vault_root) / "manifests" / INSTALLATION_FILE
+    if not path.is_file():
+        return {}
     try:
         data = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError) as exc:
+        raise InstallError(409, "installation-record-corrupt", f"{path} is unreadable: {exc}") from exc
+    if not isinstance(data, dict):
+        raise InstallError(409, "installation-record-corrupt", f"{path} is not an object")
+    return data
 
 
 def installed_sequence(vault_root: Path) -> int:
