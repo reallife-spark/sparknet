@@ -1,3 +1,10 @@
+---
+title: Signer isolation — root-owned key, group socket, caller allowlist
+role: master
+status: built
+updated: 2026-11-08
+---
+
 # Signer isolation: root-owned key, group socket, caller allowlist
 
 The signer is the one process that holds the operational key. Two boundaries
