@@ -2,54 +2,40 @@
 > Standing state only. Read at session start; **replace, never append**.
 > History belongs in `log.md` and `sessions/YYYY-MM-DD.md`; pre-2026-10-31
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
-Updated: 2026-11-07
+Updated: 2026-11-08
 ## Plan cursor
-- `PLAN.md` — `current: 89` (Step 88 closed; Step 89 Gemini blueprint execution starts at Phase 1).
-- Parked live legs: 84G browser click; 86C/86D full survey/promotion drill; 87 browser click-through; Master 9G nocturnal window.
-- **Role inversion core live 2026-11-06:** root `c77a3446…` (epoch 1, parent `fa6f4fa5…`), registry sequence 9, signer on agx64. Old peer/master data copies removed, old units disabled, old keys retired; goSpark control on agx64, agent on agx32.
-- **88G complete 2026-11-07:** engine, memory and Qdrant tokens rotated on agx32/agx64; old tokens refused; peer and Master WebUI signin/models/chat returned 200. Visual browser click-through remains a user confirmation note.
-- **Step 89 live 2026-11-07:** event bus/agents, O1→O2→O5 pipeline, Master read surfaces, signed Master writes and the exec allowlist are implemented. agx32 exec daemon is live with an exact allowlist (`pwd`, `ls -la`, `git status --short`) and audit; no shell.
-- **Package distribution live 2026-11-07:** signed index/package fetch over 4221 and verified install into a staging path; executable mode preserved. Demo package removed after the test.
-- **Agent bus/orchestrator live 2026-11-08:** one live NATS task routed from the Master orchestrator to the agx32 engineering agent and returned an engineering result; test processes stopped afterwards.
-- **O1→O2→O5 live 2026-11-08:** a signed O1 probe produced a signed O2 append and a signed, explicitly promoted O5 page; probe artifacts removed afterwards.
-- **Persistent agents live 2026-11-08:** agx32 runs engineering/cyber agent units; agx64 runs the orchestrator unit. Persistent routing returned `engineering.result` with `summary=OK`.
-- **Self-improvement live 2026-11-08:** worktree benchmark/promotion ran on agx64 with the Firecracker fallback; signed run record and commit promotion verified. Temporary repo removed.
-- **Signed Master write live 2026-11-08:** lake-intake action signed/verified/applied on agx64 against a temp state root; test state removed.
+- `PLAN.md` — `current: 89`; Step 88 closed. Step 89 implementation is live; Phase 8 rewrite is in progress.
+- Critical open items: signer caller identity, ledger key pinning, transport mTLS, remaining 416-file rewrite.
+- Phase 8: Waves A–F have targeted rewrites and tests; Wave G test coverage is green. The rewrite register is not fully closed.
 ## Live fabric
-- **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`). Overlay handshake both ways; peer overlay egress only to Master.
-- Master on agx64: signer/ledger/parity, 8088 admin, 8098 console, 8090/8091 intake, 4220–4223, 4201/4202 share, 4204 engine, Qdrant 6333, teacher config.
-- Peer on agx32: 9090 guard, 4096 bridge, 4201/4202 share, 4110/4093 memory, 8181 WebUI, 8099 console, 4204 engine, Qdrant 6333, student config.
-- Data moved: user vaults/WebUI/Qdrant/memory to agx32; master-admin/WebUI/Qdrant/uplift/distill/ledger/evidence to agx64. RFI loop, telemetry, inventory (18 records), admin federation and memory_status verified live 2026-11-06; old copies removed after verification.
-- **Teacher/student:** agx64 teacher Qwen3.6-35B-A3B Q4_K_M via Ollama (22.2 tok/s, 21.2 GiB, 100%); agx32 student Qwen3.5-9B Q8 (11.3 tok/s, 8.1 GiB, 100%); 27B Q4 slower (4.75 tok/s). vLLM/aux stopped; Qwen3.8-Flash-Next blocked on qwen4exp.
-- **WebUI/OpenCode live 2026-11-05:** both nodes run Open WebUI `v0.13.0`; the peer is the user surface on agx32, the Master is admin-only on agx64; the loopback OpenCode engine (`4204`) runs one vault-only sandbox per user. The live sandbox is `2.2.5` on agx64/agx32 (rebuilt 2026-11-06); peer and Master chat returned `OK` with HTTP 200 (2026-11-07).
-- **Memory/evidence live 2026-11-04:** memory `4110`/gateway `4093` now on agx32; Master `memory_status`/`memory-read` 200; registry sequence 9; share/evidence preserved.
+- **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`). Peer egress only to Master.
+- Master: signer/ledger/parity, 8088 admin, 8098 console, 8090/8091 intake, 4220–4223, 4201/4202 share, 4204 engine, Qdrant 6333, teacher.
+- Peer: 9090 guard, 4096 bridge, 4201/4202 share, 4110/4093 memory, 8181 WebUI, 8099 console, 4204 engine, Qdrant 6333, student.
+- **Teacher/student:** agx64 Qwen3.6-35B-A3B Q4_K_M; agx32 Qwen3.5-9B Q8.
+- **Agents:** agx32 `sparknet-agent@engineering` and `@cyber` user units; agx64 `sparknet-orchestrator.service`. Live task returned `engineering.result` `summary=OK`.
+- **Exec:** agx32 daemon live with exact allowlist `pwd`, `ls -la`, `git status --short`; cwd `01_Inbox`/`05_Knowledge`; audit `.state/exec-audit.jsonl`; no shell.
+- **Secrets:** engine/memory/Qdrant rotated 2026-11-07; old tokens refused. Master/peer WebUI chat verified.
 ## Durable facts
-- **Memory plane (2026-11-02):** per-vault typed memory runs in Go
-  (`sparknet-memory`, `4110`) behind the Python gateway (`4093`); OpenCode and
-  Open WebUI share one store. `memory-supervise` is on-demand; no mirror.
-- Qdrant is the vector store (loopback 6333/6334); 4223 is its only signed
-  surface. ChromaDB is retired.
-- `model-uplift` is the peer-held capability for consented inventory, snapshots,
-  traces and KV manifests on 8091; uplift is training data, never an answer corpus.
-- A peer is the user's node; a Master supplies authority and scoped knowledge.
-  Authority and knowledge never share a channel.
-- `shared/sparknet-authz.py` is the one signed-authorization implementation.
-  Never copy it; `../shared` is loaded by path where needed.
-- A role subvault is not a deployment; `make bundle` + `bundle-verify` proves one.
-- The registry ships empty; a fresh node grants nothing. Keys live in `$SPARKNET_STATE_DIR`; `make keys-check`/`shims-check` are hygiene gates.
-- The live fleet uses iptables, not nftables; both AGX hosts use userspace WG.
-- `contracts/model-catalog.json`: teacher only on `agx64`, student only on
-  `agx32`; teacher backup forbidden. `sparknet-model-runtime.py` leases on demand.
+- Memory plane: Go `sparknet-memory` 4110 behind Python gateway 4093; one store, per-vault scope.
+- Qdrant 6333/6334; 4223 is the only signed surface.
+- `model-uplift` carries consented training/backup evidence only, never answers.
+- One `shared/sparknet-authz.py`; one authorization implementation.
+- A role subvault is not a deployment; `make bundle` + `bundle-verify`.
+- Keys live in `$SPARKNET_STATE_DIR` at 0700/0600; never in git or a vault.
+- Live fleet uses iptables and userspace WireGuard.
+- Registry ships empty; fresh nodes grant nothing.
+## Phase 8 state
+- Wave A: shared boundary/fail-closed fixes, live-deployed to memory gateway.
+- Wave B: scripts/goagx targeted rewrites, including safe tar extraction and master from-git bundle fix.
+- Wave C: peer provisioner no longer copies personal categories; RFI SSRF, cluster job-id traversal, mesh/share fixes, anchor and helper repairs.
+- Wave D: master uplift signed-entry/consent checks, vector reindex auth, proxy-disabled admin delivery; distill split/publish hardening.
+- Wave E: WebUI capture redaction, query encoding, memory-filter status, installer token checks.
+- Wave F: goSpark authz/registry/transport/memory race fixes.
+- Wave G: focused tests added; full gate green.
 ## Command gotchas
-- `make ci`/`make test-all` are authoritative; a full run needs >120 s.
-  Rebuild before `bundle-verify`; run `wiki-preflight` before the wiki suite.
-- A long-running service loads `shared/sparknet-authz.py` once at start. After a
-  capability is added, restart the consumer or a valid registry entry is refused
-  as `unknown_capability`. The agx64 bridge was restarted 2026-11-03 for this.
-- OpenCode v2 certification: `make -C peer-node opencode-certify` downloads the
-  pinned binary, starts a real server and proves auth, session, SSE and interrupt.
+- `make ci`/`make test-all` are authoritative; full run >120 s.
+- Rebuild before `bundle-verify`; run `wiki-preflight` before wiki suite.
+- A long-running service loads `shared/` at start; restart after changing shared modules.
+- Do not commit the four pre-existing goSpark authz/identity changes without inspecting them first — they were committed in `b528abf`/`ff5dce2`; keep the checkout clean.
 ## Local vs live
-This development host has no GPU and no overlay. Code, tests, contracts, the
-ledger and bundles are verifiable here; WireGuard, iptables, `chattr +i`,
-systemd, the signer and a live election are target-host checks. Say
-"implemented and tested", "deployed live on <host> on <date>", or "unverified here".
+This development host has no GPU/overlay. Code, tests, contracts, ledger and bundles are verifiable here; WireGuard, iptables, `chattr +i`, systemd, signer and live election are target-host checks.

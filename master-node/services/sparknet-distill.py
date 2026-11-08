@@ -148,11 +148,15 @@ def build_dataset(config: dict[str, Any], *, uplift: Path, state: Path) -> dict[
     dataset_id = digest(selected)[:16]
     root = state / "datasets" / dataset_id
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
-    if len(selected) < 3:
-        train, val, test = selected, selected, selected
+    if len(selected) == 1:
+        train, val, test = selected, [], []
+    elif len(selected) == 2:
+        train, val, test = selected[:1], selected[1:], []
     else:
         split = max(1, len(selected) // 10)
-        train, val, test = selected[split:], selected[:split], selected[:split]
+        if 2 * split >= len(selected):
+            split = 1
+        train, val, test = selected[2 * split :], selected[split : 2 * split], selected[:split]
     for name, rows in (("train", train), ("val", val), ("test", test)):
         path = root / f"{name}.jsonl"
         path.write_text("".join(json.dumps(row, sort_keys=True) + "\n" for row in rows), encoding="utf-8")
@@ -339,10 +343,15 @@ def evaluate(run_id: str, metrics_path: Path, *, state: Path, config: dict[str, 
                 failures.append(f"{name}={metrics.get(name)} > {minimum}")
         elif float(metrics.get(key, 0.0)) < float(minimum):
             failures.append(f"{key}={metrics.get(key)} < {minimum}")
+    try:
+        run_record = json.loads((root / "run.json").read_text(encoding="utf-8"))
+    except OSError:
+        run_record = {}
     result = {
         "schema": "sparknet-distill-eval/1",
         "run_id": run_id,
         "metrics": metrics,
+        "artifact_sha256": run_record.get("artifact_sha256"),
         "failures": failures,
         "approved": not failures,
         "evaluated_at": now_iso(),
@@ -355,8 +364,16 @@ def publish(run_id: str, *, state: Path) -> dict[str, Any]:
     root = state / "runs" / run_id
     run_record = json.loads((root / "run.json").read_text(encoding="utf-8"))
     evaluation = json.loads((root / "eval.json").read_text(encoding="utf-8"))
+    if not run_record.get("signature_b64"):
+        raise SystemExit("distill: run record is unsigned; refusing to publish")
+    if run_record.get("approved") is not True:
+        raise SystemExit("distill: run is not approved; refusing to publish")
     if not evaluation.get("approved"):
         raise SystemExit("distill: evaluation is not approved; refusing to publish")
+    if evaluation.get("metrics") != run_record.get("eval_metrics"):
+        raise SystemExit("distill: evaluation metrics do not match the signed run record")
+    if evaluation.get("artifact_sha256") != run_record.get("artifact_sha256"):
+        raise SystemExit("distill: evaluation is not bound to the run artifact")
     model_id = f"distilled-{run_id}"
     card = {
         "schema": "sparknet-model-card/1",
