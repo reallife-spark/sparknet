@@ -32,6 +32,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import sys
 import tempfile
 import time
@@ -43,6 +44,8 @@ from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+
+NODE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 SERVICE_DIR = Path(__file__).resolve().parent
 ROLE_ROOT = SERVICE_DIR.parent
@@ -187,9 +190,23 @@ class Intake:
     def authorize(
         self, *, source: str, node_id: str, timestamp: str, body_sha: str, path: str, method: str, nonce: str
     ) -> dict[str, Any]:
+        if not isinstance(node_id, str) or not NODE_ID_RE.fullmatch(node_id):
+            raise Refusal(403, "bad-node-id", "node_id must be a single safe identifier")
         entry = self.registry.by_source(source)
         if entry is None:
             raise Refusal(403, "off_overlay", "source is not a registered peer")
+        authz = load_authz()
+        try:
+            if not authz.verify_signature(
+                self.registry.master_key,
+                str(entry.get("signature_b64") or ""),
+                authz.authorization_message(entry),
+            ):
+                raise Refusal(403, "unsigned-entry", "registry entry signature does not verify")
+        except Refusal:
+            raise
+        except Exception as exc:
+            raise Refusal(403, "unsigned-entry", f"registry entry is not verifiable: {exc}") from exc
         if entry.get("revoked"):
             raise Refusal(403, "revoked")
         identity = entry.get("identity") if isinstance(entry.get("identity"), dict) else {}
@@ -303,6 +320,8 @@ class Intake:
         rows = body.get("traces")
         if not isinstance(rows, list) or len(rows) > 2000:
             raise Refusal(400, "malformed", "traces must be a list of at most 2000 rows")
+        if not all(isinstance(row, dict) and row.get("consent") is True for row in rows):
+            raise Refusal(403, "consent-missing", "every trace row must carry consent=true")
         digest = hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()
         path = self.state / "traces" / node_id / f"{int(time.time() * 1000)}-{digest[:16]}.jsonl"
         self._write_jsonl(path, rows)

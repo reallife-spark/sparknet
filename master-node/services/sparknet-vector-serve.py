@@ -211,6 +211,7 @@ def router_for(store: VectorStore):
             return 200, {"ok": True, "collections": ["fabric", "shared"]}
         if path.startswith("/admin/"):
             try:
+                store.authorize(caller)
                 store.reindex(str(body.get("collection") or "fabric"))
             except VectorError as exc:
                 return exc.status, {"ok": False, "reason": exc.reason, "detail": exc.detail}

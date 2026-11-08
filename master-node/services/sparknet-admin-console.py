@@ -395,7 +395,7 @@ def dispatch(
     endpoint = target.url.rstrip("/") + ADMIN_PATH_PREFIX + action
     body = json.dumps(signed_request).encode("utf-8")
     request = urllib.request.Request(endpoint, data=body, headers={"Content-Type": "application/json"}, method="POST")
-    open_url = opener or urllib.request.urlopen
+    open_url = opener or urllib.request.build_opener(urllib.request.ProxyHandler({})).open
     try:
         with open_url(request, timeout=timeout) as response:
             raw = response.read().decode("utf-8")

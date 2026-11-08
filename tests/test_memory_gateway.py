@@ -512,3 +512,23 @@ def test_capture_respects_the_grant_scope_and_burns_the_nonce(stack):
             {"title": "outside", "body": "x", "target": "01_Inbox/outside.md"},
         )
     assert replay.value.code == "grant-refused"
+
+
+def test_capture_redacts_secret_shaped_text(stack):
+    role = stack["role"]
+    headers = {"x-sparknet-local-token": "local-token", "x-sparknet-vault-path": str(role)}
+    status, payload = stack["gateway"].handle(
+        "POST",
+        "/v1/vault/capture",
+        headers,
+        {
+            "title": "token sk-abcdefghijklmnopqrstuvwx",
+            "body": "Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456\n",
+        },
+    )
+    assert status == 200 and payload["redacted"] is True
+    text = (role / payload["path"]).read_text()
+    assert "sk-abcdefghijklmnopqrstuvwx" not in text
+    assert "abcdefghijklmnopqrstuvwxyz123456" not in text
+    assert "[redacted key]" in text
+    assert "Bearer [redacted]" in text

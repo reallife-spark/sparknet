@@ -89,6 +89,22 @@ MUTATING = {
     "/v1/delegates/plan",
 }
 ROOM_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+SECRET_PATTERNS = (
+    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"), "[redacted private key]"),
+    (re.compile(r"\bBearer\s+[A-Za-z0-9._~+/-]+=*", re.IGNORECASE), "Bearer [redacted]"),
+    (re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"), "[redacted key]"),
+    (re.compile(r"(?i)\b(api[_-]?key|token|password|secret)\b\s*[:=]\s*[^\s,;]+"), r"\1=[redacted]"),
+)
+
+
+def redact_secrets(text: str) -> tuple[str, bool]:
+    redacted = False
+    for pattern, replacement in SECRET_PATTERNS:
+        text, count = pattern.subn(replacement, text)
+        redacted = redacted or bool(count)
+    return text, redacted
+
+
 GRANT_MUTATING = frozenset(
     {
         "/v1/collab/room",
@@ -753,6 +769,8 @@ class Gateway:
     ) -> dict[str, Any]:
         title = str(body.get("title") or "").strip()
         text = str(body.get("body") or "").strip()
+        title, title_redacted = redact_secrets(title)
+        text, text_redacted = redact_secrets(text)
         if not title or not text:
             raise GatewayError(400, "malformed", "title and body are required")
         target = str(body.get("target") or "").strip()
@@ -799,6 +817,7 @@ class Gateway:
             "path": path.relative_to(Path(vault_path).resolve()).as_posix(),
             "title": title,
             "signed": False,
+            "redacted": bool(title_redacted or text_redacted),
         }
 
     def rfi(self, question: str, scope: list[str]) -> dict[str, Any]:

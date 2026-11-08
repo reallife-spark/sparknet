@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -68,6 +69,8 @@ def main(argv: list[str] | None = None) -> int:
             token = role_root / token
         if not token.is_file():
             raise InstallError(f"console token is missing: {token} (create it at 0600 first)")
+        if stat.S_IMODE(token.stat().st_mode) != 0o600:
+            raise InstallError(f"console token {token} must be mode 0600")
         if args.check:
             print(f"install-console: {UNIT.is_file()} unit, token present, role {args.role}")
             return 0

@@ -113,7 +113,7 @@ def build_dataset(config: dict[str, Any], *, uplift: Path, state: Path) -> dict[
     selected: list[dict[str, Any]] = []
     redactions = 0
     for row in _trace_rows(uplift):
-        if row.get("consent") is False:
+        if row.get("consent") is not True:
             continue
         if teacher and row.get("model_id") != teacher:
             continue

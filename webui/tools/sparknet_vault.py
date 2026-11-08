@@ -9,6 +9,7 @@ and cannot name another user's vault.
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
 from pydantic import BaseModel
@@ -51,7 +52,7 @@ class Tools:
 
     async def vault_list(self, prefix: str = "", __user__: dict[str, Any] | None = None) -> str:
         """List markdown pages in my private vault. ``prefix`` narrows the listing, e.g. ``05_Knowledge``."""
-        return await self._call("GET", f"/v1/vault/list?prefix={prefix}", __user__)
+        return await self._call("GET", "/v1/vault/list?" + urlencode({"prefix": prefix}), __user__)
 
     async def vault_search(self, query: str, top_k: int = 8, __user__: dict[str, Any] | None = None) -> str:
         """Search my private vault for a phrase and return matching paths with a snippet."""
@@ -59,7 +60,7 @@ class Tools:
 
     async def vault_read(self, path: str, __user__: dict[str, Any] | None = None) -> str:
         """Read one page from my private vault by vault-relative path."""
-        return await self._call("GET", f"/v1/vault/read?path={path}", __user__)
+        return await self._call("GET", "/v1/vault/read?" + urlencode({"path": path}), __user__)
 
     async def vault_capture(
         self,

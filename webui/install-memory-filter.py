@@ -45,6 +45,28 @@ def _load_provisioner() -> Any:
     return module
 
 
+def _safe_base(value: str) -> str:
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(value)
+    if parts.scheme not in ("http", "https"):
+        raise SystemExit("webui URL must be http(s)")
+    if parts.scheme == "http" and parts.hostname not in ("127.0.0.1", "localhost", "::1"):
+        raise SystemExit("remote Open WebUI over plain HTTP is refused")
+    return value
+
+
+def _token_file(path: str) -> str:
+    import stat
+
+    candidate = Path(path)
+    if not candidate.is_file():
+        raise SystemExit(f"token file is missing: {candidate}")
+    if stat.S_IMODE(candidate.stat().st_mode) != 0o600:
+        raise SystemExit(f"token file {candidate} must be mode 0600")
+    return candidate.read_text(encoding="utf-8").strip()
+
+
 def _request(base: str, path: str, method: str, token: str, body: Any = None) -> tuple[int, Any]:
     import urllib.error
     import urllib.request
@@ -78,6 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
+    args.webui = _safe_base(args.webui)
 
     content = FUNCTION.read_text(encoding="utf-8")
     payload = {
@@ -99,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     valves = None
     if args.webui_token_file:
-        webui_token = Path(args.webui_token_file).read_text(encoding="utf-8").strip()
+        webui_token = _token_file(str(args.webui_token_file))
         status, valves = _request(
             args.webui,
             f"/api/v1/functions/id/{FUNCTION_ID}/valves/update",

@@ -154,11 +154,12 @@ class Filter:
         }
         try:
             async with httpx.AsyncClient(timeout=self.valves.timeout_seconds) as client:
-                await client.post(
+                response = await client.post(
                     self.valves.gateway_url.rstrip("/") + "/v1/memory/remember",
                     headers=self._headers(__user__),
                     json=record,
                 )
+                response.raise_for_status()
         except Exception as exc:
             print(f"sparknet-memory-filter: capture skipped: {exc}")
         return body
