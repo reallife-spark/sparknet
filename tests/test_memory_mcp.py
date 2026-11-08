@@ -114,3 +114,10 @@ def test_role_configs_use_mcp_and_no_plugin_directory():
         assert not (ROOT / f"{role}-node" / ".opencode" / "plugins").exists(), (
             "a role-local plugin directory reintroduces the opencode 1.18.35 hang"
         )
+
+
+def test_non_object_request_and_malformed_params_do_not_crash():
+    server = mcp.MemoryMCP(Path("/tmp/vault"), "http://127.0.0.1:1", "token-1234567890", "U-1")
+    assert server.handle(["not", "an", "object"])["error"]["code"] == -32600
+    response = server.handle({"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": []})
+    assert response["result"]["isError"] is True

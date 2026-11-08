@@ -113,3 +113,12 @@ def test_bad_oob_is_refused_at_derivation(oob):
         oob.derive_stanza_key("abc", CTX, now=NOW)
     with pytest.raises(oob.StanzaBootstrapError):
         oob.derive_stanza_key("12345", CTX, now=NOW)
+
+
+def test_verify_refuses_malformed_timestamps(oob):
+    env = oob.derive_stanza_key("123456", CTX, now=NOW)
+    env["valid_until"] = "not-a-timestamp"
+    assert oob.verify_stanza(env, CTX, now=NOW) == "malformed_envelope"
+    env = oob.derive_stanza_key("123456", CTX, now=NOW)
+    env["valid_until"] = "2026-10-08T13:00:00"
+    assert oob.verify_stanza(env, CTX, now=NOW) == "ok"

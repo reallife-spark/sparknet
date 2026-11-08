@@ -209,7 +209,9 @@ class MemoryMCP:
             return True, f"unknown tool {name!r}"
         return status >= 400, json.dumps(payload, sort_keys=True)
 
-    def handle(self, request: dict[str, Any]) -> dict[str, Any] | None:
+    def handle(self, request: Any) -> dict[str, Any] | None:
+        if not isinstance(request, dict):
+            return {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "request must be an object"}}
         request_id = request.get("id")
         if request_id is None:
             return None
@@ -226,7 +228,9 @@ class MemoryMCP:
         elif method == "tools/list":
             response["result"] = {"tools": self.tools()}
         elif method == "tools/call":
-            params = request.get("params") or {}
+            params = request.get("params")
+            if not isinstance(params, dict):
+                params = {}
             name = str(params.get("name") or "")
             args = params.get("arguments") or {}
             if not isinstance(args, dict):

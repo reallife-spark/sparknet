@@ -206,6 +206,7 @@ class ContinuousMonitor(Monitor):
     ) -> None:
         super().__init__(*args, **kwargs)
         self.on_round = on_round
+        self.last_error: str | None = None
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -217,9 +218,16 @@ class ContinuousMonitor(Monitor):
 
     def _run(self) -> None:
         while not self._stop.is_set():
-            self.probe_once()
+            try:
+                self.probe_once()
+                self.last_error = None
+            except Exception as exc:  # a probe failure must not kill the monitor
+                self.last_error = str(exc)
             if self.on_round is not None:
-                self.on_round()
+                try:
+                    self.on_round()
+                except Exception as exc:
+                    self.last_error = str(exc)
             self._stop.wait(self.probe_interval)
 
     def stop(self) -> None:

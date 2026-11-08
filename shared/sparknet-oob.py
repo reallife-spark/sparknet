@@ -155,9 +155,14 @@ def verify_stanza(
         return REASON_BAD_SCOPE
     if context_sha != _context_digest(context):
         return REASON_CONTEXT
-    parsed = datetime.fromisoformat(str(valid_until).replace("Z", "+00:00"))
-    if parsed < stamp:
-        return REASON_EXPIRED
+    try:
+        parsed = datetime.fromisoformat(str(valid_until).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        if parsed < stamp:
+            return REASON_EXPIRED
+    except (TypeError, ValueError):
+        return REASON_MALFORMED
     return REASON_OK
 
 
