@@ -174,3 +174,10 @@ def test_validate_catalog_rejects_duplicate_ids() -> None:
     }
     errors = pull.validate_catalog(catalog)
     assert any("duplicate id" in error for error in errors)
+
+
+def test_model_paths_cannot_escape_the_store():
+    for path in ("../escape", "/abs", "a/../../escape", ""):
+        with pytest.raises(pull.PullError):
+            pull.safe_relpath(path)
+    assert pull.safe_relpath("sub/model.gguf") == "sub/model.gguf"

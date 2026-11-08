@@ -95,7 +95,7 @@ verify_bundle() {
   printf 'verifying %s (role %s)\n' "$(basename "$archive")" "$vrole"
   printf '  extracting to %s\n\n' "$work"
 
-  tar -xzf "$archive" -C "$work"
+  python3 "$REPO_ROOT/scripts/sparknet-safe-extract.py" "$archive" "$work"
   root="$work/sparknet-$vrole"
   [ -d "$root" ] || die "archive did not contain sparknet-$vrole/"
 
@@ -379,15 +379,18 @@ if [ -n "$from_git" ]; then
   # cannot start. This is the one place where "Master = peer" costs bytes, and
   # it is not optional — see verify_bundle's parity check.
   for subtree in "$role-node" contracts shared .opencode/skills .opencode/agents scripts; do
-    [ "$role" = "master" ] && [ "$subtree" = master-node ] && subtree=master-node peer-node
+    subtrees=("$subtree")
+    if [ "$role" = "master" ] && [ "$subtree" = "master-node" ]; then
+      subtrees=(master-node peer-node)
+    fi
     git -C "$REPO_ROOT" rev-parse --verify --quiet "$from_git^{commit}" >/dev/null \
       || die "not a commit: $from_git"
-    if git -C "$REPO_ROOT" cat-file -e "$from_git:$subtree" 2>/dev/null; then
-      git -C "$REPO_ROOT" archive --format=tar --prefix="$prefix/" "$from_git" "$subtree" \
+    if git -C "$REPO_ROOT" cat-file -e "$from_git:${subtrees[0]}" 2>/dev/null; then
+      git -C "$REPO_ROOT" archive --format=tar --prefix="$prefix/" "$from_git" "${subtrees[@]}" \
         | tar -xf - -C "$stage"
-      printf '  from-git %-24s %s\n' "$subtree" "$from_git"
+      printf '  from-git %-24s %s\n' "${subtrees[*]}" "$from_git"
     else
-      printf '  from-git %-24s MISSING at %s\n' "$subtree" "$from_git"
+      printf '  from-git %-24s MISSING at %s\n' "${subtrees[*]}" "$from_git"
     fi
   done
   cp "$REPO_ROOT/opencode.json" "$target/opencode.json"

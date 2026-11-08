@@ -138,7 +138,9 @@ def main(argv: list[str] | None = None) -> int:
         default=Path("/tmp/opencode/share-rehearsal"),  # noqa: S108 - fixed rehearsal root
     )
     args = parser.parse_args(argv)
-    work = args.work
+    work = args.work.resolve()
+    if work in {Path("/"), Path.home().resolve(), Path.cwd().resolve()} or work in Path.cwd().resolve().parents:
+        raise SystemExit(f"refusing to remove unsafe rehearsal directory {work}")
     if work.exists():
         shutil.rmtree(work)
     work.mkdir(parents=True)

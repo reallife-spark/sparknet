@@ -62,10 +62,16 @@ def export(
     tensors = [key for key in header if key != "__metadata__"]
     if not tensors:
         raise ValueError("safetensors file has no tensors")
-    raw = source.read_bytes()
-    digest = hashlib.sha256(raw).hexdigest()
+    digest = hashlib.sha256()
+    with source.open("rb") as src:
+        while True:
+            chunk = src.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    digest_hex = digest.hexdigest()
     out.mkdir(parents=True, exist_ok=True, mode=0o700)
-    compressed = out / f"{digest[:16]}.safetensors.gz"
+    compressed = out / f"{digest_hex[:16]}.safetensors.gz"
     with source.open("rb") as src, gzip.open(compressed, "wb", compresslevel=6) as dst:
         while True:
             chunk = src.read(1024 * 1024)
@@ -74,11 +80,11 @@ def export(
             dst.write(chunk)
     manifest = {
         "schema": "sparknet-kv-artifact/1",
-        "artifact_id": digest[:16],
-        "sha256": digest,
-        "source_sha256": digest,
+        "artifact_id": digest_hex[:16],
+        "sha256": digest_hex,
+        "source_sha256": digest_hex,
         "size": compressed.stat().st_size,
-        "source_size": len(raw),
+        "source_size": source.stat().st_size,
         "model_id": model,
         "architecture": architecture,
         "num_layers": layers,
@@ -90,7 +96,9 @@ def export(
         "compression": "gzip",
         "file": compressed.name,
     }
-    (out / f"{digest[:16]}.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    (out / f"{digest_hex[:16]}.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     return manifest
 
 

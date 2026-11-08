@@ -127,11 +127,29 @@ else
     printf 'sparknet-env-init: %s has no VAULT_PATH (empty or truncated); regenerating.\n' "$env_file"
   fi
   # Substitute only the placeholder paths; everything else passes through.
-  sed \
-    -e "s|^VAULT_PATH=.*|VAULT_PATH=\"$target\"|" \
-    -e "s|^VAULT_SOURCES_DIR=.*|VAULT_SOURCES_DIR=\"$raw_dir\"|" \
-    "$example" > "$env_file"
+  # A temp file + Python avoids sed's `&`/backslash expansion and the empty
+  # window created by truncating the destination before substitution.
+  tmp_env="${env_file}.tmp.$$"
+  if ! python3 - "$example" "$tmp_env" "$target" "$raw_dir" <<'PY'
+import sys
+from pathlib import Path
 
+source, dest, target, raw = sys.argv[1:5]
+lines = []
+for line in Path(source).read_text(encoding="utf-8").splitlines(keepends=True):
+    if line.startswith("VAULT_PATH="):
+        line = f'VAULT_PATH="{target}"\n'
+    elif line.startswith("VAULT_SOURCES_DIR="):
+        line = f'VAULT_SOURCES_DIR="{raw}"\n'
+    lines.append(line)
+Path(dest).write_text("".join(lines), encoding="utf-8")
+PY
+  then
+    rm -f "$tmp_env"
+    die "could not generate $env_file from $example"
+  fi
+  chmod 600 "$tmp_env"
+  mv "$tmp_env" "$env_file"
   # Verify the write. A silently empty .env is the worst outcome here: it looks
   # configured, resolves nothing, and sends the next session to the wrong vault.
   if ! grep -q '^VAULT_PATH=' "$env_file"; then
@@ -213,7 +231,7 @@ fi
 printf 'sparknet-env-init: wiki dirs ready (%d created)\n' "$created"
 
 # --- prove the skills will resolve to this vault ------------------------------
-if bash -c "cd '$target' && source '$fabric_root/scripts/sparknet-wiki-env.sh'" >/dev/null; then
+if (cd "$target" && source "$fabric_root/scripts/sparknet-wiki-env.sh") >/dev/null; then
   printf 'sparknet-env-init: wiki preflight passes for role %s\n' "$role"
 else
   printf 'sparknet-env-init: WARNING — wiki preflight did not pass; run it directly:\n' >&2

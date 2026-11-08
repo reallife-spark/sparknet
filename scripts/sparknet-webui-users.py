@@ -226,10 +226,14 @@ def cmd_import_user(args: argparse.Namespace) -> int:
         if read.returncode == 0:
             secret = read.stdout.decode("utf-8", "replace").strip()
     command = ["docker", "exec", "-i"]
+    child_env = dict(os.environ)
     if secret:
-        command += ["-e", f"WEBUI_SECRET_KEY={secret}"]
+        # Pass the name only; docker reads the value from this process's
+        # environment, so it never appears in argv or /proc/<pid>/cmdline.
+        command += ["-e", "WEBUI_SECRET_KEY"]
+        child_env["WEBUI_SECRET_KEY"] = secret
     command += [args.container, "python3", "-c", IMPORT_SNIPPET]
-    completed = subprocess.run(command, input=body, capture_output=True, check=False)
+    completed = subprocess.run(command, input=body, capture_output=True, check=False, env=child_env)
     if completed.returncode != 0:
         raise SystemExit("container import failed: {}".format(completed.stderr.decode("utf-8", "replace")))
     log("imported chats: {}".format(completed.stdout.decode("utf-8", "replace").strip()))

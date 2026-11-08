@@ -87,8 +87,10 @@ def test_live_restore_is_windowed_and_rehearsable(tmp_path: Path):
     recovery.snapshot(_tree(tmp_path), archive)
     target = tmp_path / "target"
     outside = datetime(2026, 11, 1, 0, 0, tzinfo=timezone.utc)
-    with pytest.raises(SystemExit, match="window"):
+    with pytest.raises(SystemExit) as refused:
         recovery.restore(archive, target, confirm=recovery.PHRASE, live=True, now=outside)
+    assert "2026-11-01T03:00" in str(refused.value)
+    assert "2026-11-01T06:00" in str(refused.value)
     inside = datetime(2026, 11, 1, 3, 30, tzinfo=timezone.utc)
     recovery.restore(archive, target, confirm=recovery.PHRASE, live=True, now=inside)
     assert (target / "00_System" / "index.md").read_text() == "index\n"

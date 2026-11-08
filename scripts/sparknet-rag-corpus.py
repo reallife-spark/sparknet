@@ -224,8 +224,17 @@ def build_corpus(vault: Path, out: Path, roots: set[str] | None = None) -> list[
     ``materialized_path``), so they match what lands on disk.
     """
     entries = corpus_entries(vault, roots)
-    if out.exists():
-        shutil.rmtree(out)
+    target = out.resolve()
+    vault_root = vault.resolve()
+    cwd = Path.cwd().resolve()
+    if (
+        target in {Path("/"), Path.home().resolve(), cwd, vault_root}
+        or target in vault_root.parents
+        or target in cwd.parents
+    ):
+        raise SystemExit(f"refusing to remove unsafe corpus output {target}")
+    if target.exists():
+        shutil.rmtree(target)
     written: list[Path] = []
     for rel in entries:
         dest_rel = materialized_path(rel)

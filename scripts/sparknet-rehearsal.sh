@@ -138,7 +138,12 @@ mkdir -p "$WORK"
 for n in "${NODES[@]}"; do
   rm -rf "$WORK/node-$n"
   mkdir -p "$WORK/node-$n"
-  tar -xzf "$TGZ" -C "$WORK/node-$n" --strip-components=1
+  mkdir -p "$WORK/node-$n"
+  python3 /fabric/scripts/sparknet-safe-extract.py "$TGZ" "$WORK/node-$n"
+  if [ -d "$WORK/node-$n/sparknet-peer" ]; then
+    cp -a "$WORK/node-$n/sparknet-peer/." "$WORK/node-$n/"
+    rm -rf "$WORK/node-$n/sparknet-peer"
+  fi
   check "node-$n extracted" test -f "$(node "$n")/master-node/AGENTS.md"
 done
 

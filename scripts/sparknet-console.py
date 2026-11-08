@@ -408,7 +408,7 @@ def api_memory(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
         spool = resolve(role_root, (config.get("paths") or {}).get("telemetry"))
         fleet: dict[str, dict[str, Any]] = {}
         if spool and spool.is_file():
-            for line in read_text(spool, limit=2_000_000).splitlines():
+            for line in (read_text(spool, limit=2_000_000) or "").splitlines():
                 line = line.strip()
                 if not line:
                     continue

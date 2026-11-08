@@ -203,7 +203,10 @@ def restore(archive: Path, target: Path, *, confirm: str, live: bool, now: datet
     if target.resolve() in (Path("/"), Path.home().resolve()):
         raise SystemExit(f"restore: refusing unsafe target {target}")
     if live and not _window_open(now or _utcnow()):
-        raise SystemExit("restore: outside the approved window 2026-11-08 02:00-05:00 CET")
+        raise SystemExit(
+            "restore: outside the approved window "
+            f"{WINDOW_START.isoformat(timespec='minutes')} .. {WINDOW_END.isoformat(timespec='minutes')}"
+        )
     verify(archive)
     _extract(archive, target)
     receipt = {

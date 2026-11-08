@@ -27,7 +27,7 @@ import tempfile
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -195,7 +195,11 @@ def verify_model(store: Path, model_id: str) -> list[str]:
         if not isinstance(row, dict) or not row.get("path"):
             errors.append(f"{model_id}: malformed file row")
             continue
-        path = store / model_id / row["path"]
+        try:
+            path = store / model_id / safe_relpath(row["path"])
+        except PullError as exc:
+            errors.append(f"{model_id}: {exc}")
+            continue
         if not path.is_file():
             errors.append(f"{model_id}: missing {row['path']}")
             continue
@@ -245,6 +249,13 @@ def resolve_revision(repo: str, revision: str, token: str | None, api_base: str)
     return revision
 
 
+def safe_relpath(value: Any) -> str:
+    path = PurePosixPath(str(value).strip())
+    if not path.parts or path.is_absolute() or any(part in ("", "..") for part in path.parts):
+        raise PullError(f"unsafe model file path: {value!r}")
+    return path.as_posix()
+
+
 def resolve_files(model: dict[str, Any], token: str | None, api_base: str) -> list[dict[str, Any]]:
     repo = str(model["repo"])
     revision = str(model.get("revision") or "main")
@@ -263,6 +274,7 @@ def resolve_files(model: dict[str, Any], token: str | None, api_base: str) -> li
         path = str(row.get("path") or "")
         if not path or not any(fnmatch.fnmatch(path, pattern) for pattern in include):
             continue
+        path = safe_relpath(path)
         lfs = row.get("lfs") if isinstance(row.get("lfs"), dict) else {}
         digest = str(lfs.get("oid") or row.get("oid") or "")
         selected.append(
@@ -378,7 +390,12 @@ def pull_model(
 
     completed: list[dict[str, Any]] = []
     for row in files:
-        dest = store / model_id / row["path"]
+        dest = store / model_id / safe_relpath(row["path"])
+        model_root = (store / model_id).resolve()
+        try:
+            dest.resolve().relative_to(model_root)
+        except ValueError as exc:
+            raise PullError(f"{model_id}: unsafe destination {dest}") from exc
         size, digest = download_file(
             repo=str(model["repo"]),
             revision=resolved,

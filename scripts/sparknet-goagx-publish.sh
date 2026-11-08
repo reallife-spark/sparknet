@@ -524,7 +524,7 @@ case "$ACTION" in
       case "$root" in
         *.tar.gz|*.tgz)
           tmp="$(mktemp -d)"
-          tar -xzf "$root" -C "$tmp"
+          python3 "$REPO_ROOT/scripts/sparknet-safe-extract.py" "$root" "$tmp"
           root="$tmp"
           ;;
         *) die "--verify needs a staged directory or a .tar.gz (got: $VERIFY_PATH)" ;;

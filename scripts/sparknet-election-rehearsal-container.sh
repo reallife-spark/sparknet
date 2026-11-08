@@ -58,11 +58,12 @@ TGZ="${SPARKNET_REHEARSAL_TGZ:-}"
 if [ -z "$TGZ" ]; then
   log "building a master worktree bundle (the master bundle is the whole node)"
   make -C "$REPO_ROOT" bundle ROLE=master >/dev/null
-  TGZ="$(ls -t "$REPO_ROOT"/dist/sparknet-master-worktree-*.tar.gz | head -1)"
+  TGZ="$(ls -t "$REPO_ROOT"/dist/sparknet-master-worktree-*.tar.gz 2>/dev/null | head -1 || true)"
   [ -n "$TGZ" ] && [ -f "$TGZ" ] || die "no master bundle produced under dist/"
 fi
 log "bundle: $(basename "$TGZ")"
 
+mkdir -p /tmp/opencode
 OUT="$(mktemp -d /tmp/opencode/spark-election-container-XXXXXX)"
 log "work dir (transcript lands here): $OUT"
 
@@ -99,10 +100,6 @@ if [ "$rc" -eq 0 ]; then
   fi
   exit 0
 fi
-log "rehearsal FAILED inside $IMAGE (rc=$rc)"
-[ -n "$TRANSCRIPT" ] && { log "transcript: $TRANSCRIPT"; tail -30 "$TRANSCRIPT"; }
-log "node trees kept for inspection under $OUT"
-exit "$rc"
 log "rehearsal FAILED inside $IMAGE (rc=$rc)"
 [ -n "$TRANSCRIPT" ] && { log "transcript: $TRANSCRIPT"; tail -30 "$TRANSCRIPT"; }
 log "node trees kept for inspection under $OUT"

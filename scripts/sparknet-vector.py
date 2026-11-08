@@ -996,8 +996,11 @@ def _no_usable_index(scope: str, data_dir: Path, exc: Exception) -> None:
 
 def _reset_index(scope: str, data_dir: Path) -> None:
     """Remove an unusable local index directory; server collections are rebuilt."""
-    if _use_local(data_dir) and data_dir.exists():
-        shutil.rmtree(data_dir, ignore_errors=True)
+    target = data_dir.resolve()
+    if target in {Path("/"), Path.home().resolve(), Path.cwd().resolve()} or target in Path.cwd().resolve().parents:
+        raise SystemExit(f"refusing to remove unsafe index directory {target}")
+    if _use_local(data_dir) and target.exists():
+        shutil.rmtree(target, ignore_errors=True)
     _data_dir(data_dir)
 
 
