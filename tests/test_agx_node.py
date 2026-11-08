@@ -422,7 +422,11 @@ def test_agx_compose_config_resolves():
         proc = subprocess.run(
             ["docker", "compose", *args, "config", "-q"],
             cwd=REPO_ROOT,
-            env={**__import__("os").environ, "SPARKNET_QDRANT_API_KEY": "placeholder"},
+            env={
+                **__import__("os").environ,
+                "SPARKNET_QDRANT_API_KEY": "placeholder",
+                "SPARKNET_SHARED_SECRET": "placeholder",
+            },
             capture_output=True,
             text=True,
             check=False,

@@ -139,7 +139,7 @@ for n in "${NODES[@]}"; do
   rm -rf "$WORK/node-$n"
   mkdir -p "$WORK/node-$n"
   mkdir -p "$WORK/node-$n"
-  python3 /fabric/scripts/sparknet-safe-extract.py "$TGZ" "$WORK/node-$n"
+  python3 "$REPO_ROOT/scripts/sparknet-safe-extract.py" "$TGZ" "$WORK/node-$n"
   if [ -d "$WORK/node-$n/sparknet-peer" ]; then
     cp -a "$WORK/node-$n/sparknet-peer/." "$WORK/node-$n/"
     rm -rf "$WORK/node-$n/sparknet-peer"

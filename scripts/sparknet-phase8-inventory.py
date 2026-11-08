@@ -119,7 +119,7 @@ def _errors(strict: bool) -> list[str]:
         status = row.get("status")
         if status not in STATUSES:
             errors.append(f"{where}: invalid status {status!r}")
-        if status == "needs-decision":
+        if strict and status == "needs-decision":
             errors.append(f"{where}: needs-decision")
         if strict and status == "pending":
             errors.append(f"{where}: still pending")

@@ -381,15 +381,15 @@ services:
         condition: service_started
     environment:
       OPENAI_API_BASE_URL: ${WEBUI_API_BASE:-http://agent:8080/v1}
-      OPENAI_API_KEY: ${SPARKNET_SHARED_SECRET:-sparknet-local}
-      WEBUI_AUTH: ${WEBUI_AUTH:-false}
+      OPENAI_API_KEY: ${SPARKNET_SHARED_SECRET:?set SPARKNET_SHARED_SECRET}
+      WEBUI_AUTH: ${WEBUI_AUTH:-true}
       ENABLE_OLLAMA_API: "false"
     volumes:
       - type: bind
         source: ${SPARKNET_STATE_HOST:-../peer-node/.state}/webui
         target: /app/backend/data
     ports:
-      - "${SPARKNET_BIND_API:-0.0.0.0}:3000:8080"
+      - "${SPARKNET_BIND_WEBUI:-127.0.0.1}:3000:8080"
     restart: unless-stopped
 
   # Qdrant, the node's vector store. Loopback only; the fabric-facing surface

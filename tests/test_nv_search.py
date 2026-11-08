@@ -146,6 +146,7 @@ def test_a_present_key_is_sent_but_never_printed(tmp_path: Path):
         body='{"results":[]}',
     )
     assert result.returncode == 0
-    assert "Authorization: Bearer nvapi-test-secret" in called
+    assert "nvapi-test-secret" not in called
+    assert "-H @/" in called
     assert "nvapi-test-secret" not in result.stdout
     assert "nvapi-test-secret" not in result.stderr

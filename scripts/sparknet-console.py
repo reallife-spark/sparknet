@@ -782,6 +782,7 @@ class Handler(BaseHTTPRequestHandler):
     token: str
     static_dir: Path
     auth_cache: ClassVar[dict[str, tuple[float, str]]] = {}
+    _auth_role: str = ""
 
     def log_message(self, fmt: str, *args: Any) -> None:
         print(f"[console] {self.address_string()} {fmt % args}", file=sys.stderr, flush=True)
@@ -796,6 +797,7 @@ class Handler(BaseHTTPRequestHandler):
                     supplied = value
                     break
         if supplied and hmac.compare_digest(supplied, self.token):
+            self._auth_role = "owner"
             return True
         authorization = self.headers.get("Authorization") or ""
         if authorization.startswith("Bearer "):
@@ -820,6 +822,7 @@ class Handler(BaseHTTPRequestHandler):
             role = str((data or {}).get("role") or "")
             # The console is read-only. Authenticated users may see it on both
             # roles; the Master's Learning snapshot is sanitized and read-only.
+            self._auth_role = role
             allowed = role in ("admin", "user")
         except Exception:
             allowed = False
@@ -845,6 +848,12 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/api/"):
             if not self._authorized():
                 self._json(401, {"ok": False, "error": "console token required"})
+                return
+            if path in {"/api/mesh", "/api/qdrant", "/api/map", "/api/projects"} and self._auth_role not in {
+                "admin",
+                "owner",
+            }:
+                self._json(403, {"ok": False, "error": "admin role required for this surface"})
                 return
             if path == "/api/surface":
                 self._json(200, api_surface(self.config))

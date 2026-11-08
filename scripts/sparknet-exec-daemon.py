@@ -14,9 +14,12 @@ import argparse
 import contextlib
 import json
 import os
+import shutil
+import signal
 import socket
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -75,8 +78,10 @@ def _execute(
     request: dict[str, Any], *, vault_root: Path, max_output_bytes: int = EXEC.MAX_OUTPUT_BYTES
 ) -> dict[str, Any]:
     argv = request["argv"]
-    executable = Path(argv[0]).name.lower()
-    if executable in SHELLS:
+    executable = str(argv[0])
+    if "/" in executable or "\\" in executable:
+        return _refusal("bad-argv", "argv[0] must be a bare binary name")
+    if executable.lower() in SHELLS:
         return _refusal("bad-argv", "a shell binary is not an allowed execution vector")
     cwd = (vault_root / request["cwd"]).resolve()
     try:
@@ -86,32 +91,42 @@ def _execute(
     if not cwd.is_dir():
         return _refusal("bad-cwd", "cwd is not a directory")
     env = {"PATH": "/usr/local/bin:/usr/bin:/bin"}
-    env.update(request.get("env") or {})
+    env.update({key: value for key, value in (request.get("env") or {}).items() if key != "PATH"})
+    resolved = shutil.which(executable, path=env["PATH"])
+    if not resolved:
+        return _refusal("exec-failed", "binary not found on the trusted PATH")
     started = _iso()
-    try:
-        completed = subprocess.run(
-            argv,
-            cwd=str(cwd),
-            env=env,
-            shell=False,
-            capture_output=True,
-            text=True,
-            timeout=request["timeout_seconds"],
-            check=False,
-        )
-        stdout, cut_out = EXEC.truncate_output(completed.stdout.encode("utf-8", "replace"), max_output_bytes)
-        stderr, cut_err = EXEC.truncate_output(completed.stderr.encode("utf-8", "replace"), max_output_bytes)
-        code = completed.returncode
-    except subprocess.TimeoutExpired as exc:
-        raw_stdout = exc.stdout or b""
-        if isinstance(raw_stdout, str):
-            raw_stdout = raw_stdout.encode("utf-8", "replace")
-        stdout, cut_out = EXEC.truncate_output(raw_stdout, max_output_bytes)
-        stderr = f"execution timed out after {request['timeout_seconds']}s"
-        cut_err = False
-        code = 124
-    except OSError as exc:
-        return _refusal("exec-failed", str(exc))
+    stdout = ""
+    stderr = ""
+    cut_out = False
+    cut_err = False
+    code = 0
+    with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+        try:
+            process = subprocess.Popen(
+                [resolved, *argv[1:]],
+                cwd=str(cwd),
+                env=env,
+                shell=False,
+                stdout=out,
+                stderr=err,
+                start_new_session=True,
+            )
+            try:
+                code = process.wait(timeout=request["timeout_seconds"])
+            except subprocess.TimeoutExpired:
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
+                code = 124
+                stderr = f"execution timed out after {request['timeout_seconds']}s"
+            out.seek(0)
+            err.seek(0)
+            stdout, cut_out = EXEC.truncate_output(out.read(max_output_bytes + 1), max_output_bytes)
+            if not stderr:
+                stderr, cut_err = EXEC.truncate_output(err.read(max_output_bytes + 1), max_output_bytes)
+        except OSError as exc:
+            return _refusal("exec-failed", str(exc))
     return {
         "ok": True,
         "exit_code": code,

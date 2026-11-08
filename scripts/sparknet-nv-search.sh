@@ -76,12 +76,21 @@ shift
 
 AUTH=()
 HAVE_KEY=0
+AUTH_HEADER_FILE=""
+cleanup_auth() { [ -z "$AUTH_HEADER_FILE" ] || rm -f "$AUTH_HEADER_FILE"; }
+trap cleanup_auth EXIT
 if [ -f "$KEY_FILE" ]; then
   # The file is runtime state (0600, gitignored), not part of the repository.
   # shellcheck disable=SC1090
   . "$KEY_FILE"
   if [ -n "${BUILD_NVIDIA_API_KEY:-}" ]; then
-    AUTH=(-H "Authorization: Bearer ${BUILD_NVIDIA_API_KEY}")
+    case "$BUILD_NVIDIA_API_KEY" in
+      *$'\n'*|*$'\r'*) printf 'sparknet-nv-search: API key contains a newline\n' >&2; exit 2 ;;
+    esac
+    AUTH_HEADER_FILE="$(mktemp "${TMPDIR:-/tmp}/sparknet-nv-auth.XXXXXX")"
+    chmod 600 "$AUTH_HEADER_FILE"
+    printf 'Authorization: Bearer %s\n' "$BUILD_NVIDIA_API_KEY" > "$AUTH_HEADER_FILE"
+    AUTH=(-H "@$AUTH_HEADER_FILE")
     HAVE_KEY=1
   fi
 fi

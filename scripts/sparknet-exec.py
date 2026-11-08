@@ -19,6 +19,10 @@ def _parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     validate = sub.add_parser("validate", help="validate a request envelope")
     validate.add_argument("--request", required=True, help="JSON file containing the request")
+    validate.add_argument("--node-pubkey", type=Path, default=None, help="verify the request signature with this key")
+    validate.add_argument(
+        "--allow-unverified", action="store_true", help="development only: report an unsigned request without refusing"
+    )
     return parser
 
 
@@ -26,7 +30,20 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         request = json.loads(Path(args.request).read_text(encoding="utf-8"))
-        normalised = EXEC.validate_request(request, verified=True)
+        if args.node_pubkey is not None:
+            authz = load_shared("sparknet-authz.py", "sparknet_exec_authz")
+            public = authz.load_public_key(args.node_pubkey)
+            message = EXEC.request_message(request)
+            if not authz.verify_signature(public, str(request.get("signature_b64") or ""), message):
+                print("sparknet-exec: signature does not verify", file=sys.stderr)
+                return 2
+            normalised = EXEC.validate_request(request, verified=True)
+        elif args.allow_unverified:
+            normalised = EXEC.validate_request(request, verified=False, require_verified=False, require_signature=False)
+            normalised["signature"] = "unverified"
+        else:
+            print("sparknet-exec: --node-pubkey is required (or --allow-unverified in development)", file=sys.stderr)
+            return 2
         print(json.dumps({"ok": True, "executed": False, "request": normalised}, indent=2, sort_keys=True))
         return 0
     except (OSError, ValueError, EXEC.ExecError) as exc:

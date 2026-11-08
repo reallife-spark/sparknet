@@ -448,14 +448,17 @@ def policy_allows(request: Mapping[str, Any], policy: Mapping[str, Any]) -> tupl
     normalised = validate_request(request, require_signature=False, require_verified=False)
     argv = normalised["argv"]
     for entry in policy["allowed_argv"]:
-        if PurePosixPath(argv[0]).name == entry["binary"] and argv[1:] == entry["args"]:
+        if argv[0] == entry["binary"] and argv[1:] == entry["args"]:
             break
     else:
         return False, "not-allowlisted"
     cwd = normalised["cwd"]
     if not any(cwd == root or cwd.startswith(root + "/") for root in policy["cwd_roots"]):
         return False, "cwd-not-allowlisted"
-    if set(normalised.get("env") or {}) - set(policy["env_allow"]):
+    requested_env = set(normalised.get("env") or {})
+    if "PATH" in requested_env:
+        return False, "path-override-refused"
+    if requested_env - set(policy["env_allow"]):
         return False, "env-not-allowlisted"
     if normalised["timeout_seconds"] > policy["max_timeout_seconds"]:
         return False, "timeout-exceeds-policy"

@@ -37,7 +37,7 @@ def request(**overrides):
         "operator_os": OPERATOR,
         "nonce": "nonce-1",
         "cwd": "05_Knowledge",
-        "env": {"PATH": "/usr/bin", "HOME": "/home/user"},
+        "env": {"HOME": "/home/user"},
         "timeout_seconds": 30,
         "capabilities": ["p2p-sync"],
         "signature_b64": "test-signature",
@@ -59,7 +59,7 @@ def test_contract_vocabularies_match_the_module():
 def test_request_is_normalised_and_canonical():
     first = request(operator_os={**OPERATOR, "groups": ["users", "users"]})
     second = request(request_id="req-1")
-    assert first["env"] == {"HOME": "/home/user", "PATH": "/usr/bin"}
+    assert first["env"] == {"HOME": "/home/user"}
     assert exec_rpc.request_message(first) == exec_rpc.request_message(second)
 
 
@@ -183,7 +183,7 @@ def test_policy_allowlist_is_exact_and_fail_closed():
             "schema": "sparknet-exec-policy/1",
             "allowed_argv": [{"binary": "git", "args": ["status", "--short"]}],
             "cwd_roots": ["05_Knowledge"],
-            "env_allow": ["PATH", "HOME"],
+            "env_allow": ["HOME"],
             "max_timeout_seconds": 30,
             "max_output_bytes": 65536,
             "approval_ttl_seconds": 300,
@@ -196,5 +196,5 @@ def test_policy_allowlist_is_exact_and_fail_closed():
     assert allowed is False and reason == "not-allowlisted"
     allowed, reason = exec_rpc.policy_allows(request(cwd="06_Projects"), policy)
     assert allowed is False and reason == "cwd-not-allowlisted"
-    allowed, reason = exec_rpc.policy_allows(request(env={"PATH": "/usr/bin", "TERM": "x"}), policy)
+    allowed, reason = exec_rpc.policy_allows(request(env={"HOME": "/home/user", "TERM": "x"}), policy)
     assert allowed is False and reason == "env-not-allowlisted"

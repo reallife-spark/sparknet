@@ -22,7 +22,6 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
-import shutil
 import socket
 import sys
 import threading
@@ -142,7 +141,9 @@ def main(argv: list[str] | None = None) -> int:
     if work in {Path("/"), Path.home().resolve(), Path.cwd().resolve()} or work in Path.cwd().resolve().parents:
         raise SystemExit(f"refusing to remove unsafe rehearsal directory {work}")
     if work.exists():
-        shutil.rmtree(work)
+        if any(work.iterdir()):
+            raise SystemExit(f"refusing to remove non-empty rehearsal directory {work}")
+        work.rmdir()
     work.mkdir(parents=True)
 
     http = _load("sparknet_http_share_rehearsal", SHARED / "sparknet-http.py")

@@ -129,18 +129,22 @@ else
   # Substitute only the placeholder paths; everything else passes through.
   # A temp file + Python avoids sed's `&`/backslash expansion and the empty
   # window created by truncating the destination before substitution.
-  tmp_env="${env_file}.tmp.$$"
+  tmp_env="$(mktemp "${env_file}.tmp.XXXXXX")"
   if ! python3 - "$example" "$tmp_env" "$target" "$raw_dir" <<'PY'
 import sys
 from pathlib import Path
 
 source, dest, target, raw = sys.argv[1:5]
+
+def quote(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`") + '"'
+
 lines = []
 for line in Path(source).read_text(encoding="utf-8").splitlines(keepends=True):
     if line.startswith("VAULT_PATH="):
-        line = f'VAULT_PATH="{target}"\n'
+        line = f"VAULT_PATH={quote(target)}\n"
     elif line.startswith("VAULT_SOURCES_DIR="):
-        line = f'VAULT_SOURCES_DIR="{raw}"\n'
+        line = f"VAULT_SOURCES_DIR={quote(raw)}\n"
     lines.append(line)
 Path(dest).write_text("".join(lines), encoding="utf-8")
 PY

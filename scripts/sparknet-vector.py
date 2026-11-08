@@ -65,7 +65,6 @@ import json
 import math
 import os
 import re
-import shutil
 import sys
 import time
 import urllib.request
@@ -1000,7 +999,9 @@ def _reset_index(scope: str, data_dir: Path) -> None:
     if target in {Path("/"), Path.home().resolve(), Path.cwd().resolve()} or target in Path.cwd().resolve().parents:
         raise SystemExit(f"refusing to remove unsafe index directory {target}")
     if _use_local(data_dir) and target.exists():
-        shutil.rmtree(target, ignore_errors=True)
+        if any(target.iterdir()):
+            raise SystemExit(f"refusing to remove non-empty index directory {target}; remove it explicitly")
+        target.rmdir()
     _data_dir(data_dir)
 
 

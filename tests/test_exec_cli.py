@@ -45,7 +45,7 @@ def test_exec_cli_help():
 def test_exec_cli_validates_without_executing(tmp_path):
     path = tmp_path / "request.json"
     path.write_text(json.dumps(_request()), encoding="utf-8")
-    result = _run("validate", "--request", str(path))
+    result = _run("validate", "--request", str(path), "--allow-unverified")
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
     assert payload["executed"] is False

@@ -10,13 +10,13 @@
       "language": "sh",
       "area": "goagx",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "goagx/sparknet-audio-shim.py",
@@ -25,13 +25,13 @@
       "language": "py",
       "area": "goagx",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "gospark/cmd/sparknet-agent/main.go",
@@ -40,13 +40,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/cmd/sparknet-backup/main.go",
@@ -55,13 +55,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/cmd/sparknet-control/main.go",
@@ -70,13 +70,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/cmd/sparknet-gpu/main.go",
@@ -85,13 +85,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/cmd/sparknet-ingest/main.go",
@@ -100,13 +100,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/cmd/sparknet-mcp/main.go",
@@ -115,13 +115,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/cmd/sparknet-memory/config.go",
@@ -130,13 +130,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/cmd/sparknet-memory/main.go",
@@ -145,13 +145,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/cmd/sparknet-memory/server.go",
@@ -160,13 +160,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./cmd/sparknet-memory",
+      "test": "go test ./cmd/sparknet-memory",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "semantic scope recheck and lifecycle close"
     },
     {
       "path": "gospark/cmd/sparknet-memory/server_test.go",
@@ -175,13 +175,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/cmd/sparknet-memory/server_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/cmd/sparknetctl/main.go",
@@ -190,13 +190,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/cmd/stub-vllm/main.go",
@@ -205,13 +205,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/cmd/stub-vllm/main_test.go",
@@ -220,13 +220,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/cmd/stub-vllm/main_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/compute/compute_worker.py",
@@ -235,13 +235,13 @@
       "language": "py",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "python3 -m py_compile compute/compute_worker.py",
+      "test": "python3 -m py_compile compute/compute_worker.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "fail-closed secret and parameter caps"
     },
     {
       "path": "gospark/compute/kv_cache_router.py",
@@ -250,13 +250,13 @@
       "language": "py",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/apiv1/canonical.go",
@@ -265,13 +265,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/apiv1/canonical_test.go",
@@ -280,13 +280,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/apiv1/canonical_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/apiv1/types.go",
@@ -295,13 +295,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./internal/authz ./internal/server",
+      "test": "go test ./internal/authz ./internal/server",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "task target audience field"
     },
     {
       "path": "gospark/internal/authz/capabilities.go",
@@ -310,13 +310,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/authz/nonce.go",
@@ -325,13 +325,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/authz/registry.go",
@@ -340,13 +340,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/authz/registry_test.go",
@@ -355,13 +355,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/authz/registry_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/authz/verify.go",
@@ -370,13 +370,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/authz/verify_test.go",
@@ -385,13 +385,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/authz/verify_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/backup/backup.go",
@@ -400,13 +400,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/backup/backup_test.go",
@@ -415,13 +415,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/backup/backup_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/bus/bus.go",
@@ -430,13 +430,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/bus/memory.go",
@@ -445,13 +445,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/bus/memory_test.go",
@@ -460,13 +460,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/bus/memory_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/bus/nats.go",
@@ -475,13 +475,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/bus/nats_integration_test.go",
@@ -490,13 +490,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/bus/nats_integration_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/compute/executor.go",
@@ -505,13 +505,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/compute/executor_test.go",
@@ -520,13 +520,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/compute/executor_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/config/config.go",
@@ -535,13 +535,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/config/config_test.go",
@@ -550,13 +550,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/config/config_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/delegates/broker.go",
@@ -565,13 +565,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./internal/delegates ./cmd/sparknet-memory",
+      "test": "go test ./internal/delegates ./cmd/sparknet-memory",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "service-owned lifecycle, secret env denial, bounded output"
     },
     {
       "path": "gospark/internal/delegates/broker_test.go",
@@ -580,13 +580,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/delegates/broker_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/delegates/store.go",
@@ -595,13 +595,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/delegates/types.go",
@@ -610,13 +610,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./internal/delegates",
+      "test": "go test ./internal/delegates",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "permission declarations retained and enforced where implemented"
     },
     {
       "path": "gospark/internal/embed/embedder.go",
@@ -625,13 +625,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/embed/embedder_test.go",
@@ -640,13 +640,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/embed/embedder_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/gateway/admission_test.go",
@@ -655,13 +655,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/gateway/admission_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/gateway/drain_test.go",
@@ -670,13 +670,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/gateway/drain_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/gateway/gateway.go",
@@ -685,13 +685,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/gateway/gateway_test.go",
@@ -700,13 +700,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/gateway/gateway_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/gateway/limiter.go",
@@ -715,13 +715,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/gateway/limiter_test.go",
@@ -730,13 +730,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/gateway/limiter_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/gputel/dcgm/dcgm_cgo.go",
@@ -745,13 +745,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/gputel/dcgm/dcgm_stub.go",
@@ -760,13 +760,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/gputel/gputel.go",
@@ -775,13 +775,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/gputel/gputel_test.go",
@@ -790,13 +790,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/gputel/gputel_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/gputel/nvml/nvml_cgo.go",
@@ -805,13 +805,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/gputel/nvml/nvml_stub.go",
@@ -820,13 +820,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/gputel/sim/collector.go",
@@ -835,13 +835,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/gputel/sim/collector_test.go",
@@ -850,13 +850,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/gputel/sim/collector_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/gputel/wire.go",
@@ -865,13 +865,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/identity/identity.go",
@@ -880,13 +880,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./internal/identity",
+      "test": "go test ./internal/identity",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "atomic 0600 identity save"
     },
     {
       "path": "gospark/internal/identity/identity_test.go",
@@ -895,13 +895,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/identity/identity_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/identity/json.go",
@@ -910,13 +910,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/ingest/index.go",
@@ -925,13 +925,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/ingest/index_test.go",
@@ -940,13 +940,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/ingest/index_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/ingest/ingest.go",
@@ -955,13 +955,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./internal/ingest",
+      "test": "go test ./internal/ingest",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "skip file symlinks and contain resolved paths"
     },
     {
       "path": "gospark/internal/ingest/ingest_test.go",
@@ -970,13 +970,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/ingest/ingest_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/kvrouter/router.go",
@@ -985,13 +985,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/kvrouter/router_test.go",
@@ -1000,13 +1000,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/kvrouter/router_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/kvtransfer/canonical.go",
@@ -1015,13 +1015,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/kvtransfer/delta.go",
@@ -1030,13 +1030,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/kvtransfer/helpers.go",
@@ -1045,13 +1045,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/kvtransfer/nvfp4.go",
@@ -1060,13 +1060,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/kvtransfer/nvfp4_test.go",
@@ -1075,13 +1075,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/kvtransfer/nvfp4_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/mcp/mcp.go",
@@ -1090,13 +1090,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/mcp/mcp_test.go",
@@ -1105,13 +1105,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/mcp/mcp_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/memory/indexer.go",
@@ -1120,13 +1120,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/memory/indexer_test.go",
@@ -1135,13 +1135,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/memory/indexer_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/memory/redact.go",
@@ -1150,13 +1150,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/memory/retention.go",
@@ -1165,13 +1165,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/memory/semantic.go",
@@ -1180,13 +1180,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./internal/memory ./cmd/sparknet-memory",
+      "test": "go test ./internal/memory ./cmd/sparknet-memory",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "agent scope payload/filter"
     },
     {
       "path": "gospark/internal/memory/semantic_test.go",
@@ -1195,13 +1195,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/memory/semantic_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/memory/store.go",
@@ -1210,13 +1210,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./internal/memory ./cmd/sparknet-memory",
+      "test": "go test ./internal/memory ./cmd/sparknet-memory",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "redact on import"
     },
     {
       "path": "gospark/internal/memory/store_test.go",
@@ -1225,13 +1225,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/memory/store_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/memory/types.go",
@@ -1240,13 +1240,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/mesh/mesh.go",
@@ -1255,13 +1255,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/mesh/mesh_test.go",
@@ -1270,13 +1270,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/mesh/mesh_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/metrics/gateway_test.go",
@@ -1285,13 +1285,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/metrics/gateway_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/metrics/metrics.go",
@@ -1300,13 +1300,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/metrics/metrics_test.go",
@@ -1315,13 +1315,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/metrics/metrics_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/placement/placement.go",
@@ -1330,13 +1330,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/placement/placement_test.go",
@@ -1345,13 +1345,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/placement/placement_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/registryfile/registryfile.go",
@@ -1360,13 +1360,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/registryfile/registryfile_test.go",
@@ -1375,13 +1375,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/registryfile/registryfile_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/router/router.go",
@@ -1390,13 +1390,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/router/router_test.go",
@@ -1405,13 +1405,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/router/router_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/server/admin.go",
@@ -1420,13 +1420,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./internal/server",
+      "test": "go test ./internal/server",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "preserve revocation/department on authorize"
     },
     {
       "path": "gospark/internal/server/admin_test.go",
@@ -1435,13 +1435,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/server/admin_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/server/agent.go",
@@ -1450,13 +1450,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./internal/server",
+      "test": "go test ./internal/server",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "target audience check and copy-on-write adoption"
     },
     {
       "path": "gospark/internal/server/app.go",
@@ -1465,13 +1465,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/server/compute_bridge_test.go",
@@ -1480,13 +1480,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/server/compute_bridge_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/server/control.go",
@@ -1495,13 +1495,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./internal/server",
+      "test": "go test ./internal/server",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "copy-on-write registry and target check"
     },
     {
       "path": "gospark/internal/server/drain.go",
@@ -1510,13 +1510,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/server/drain_test.go",
@@ -1525,13 +1525,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/server/drain_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/server/gpu.go",
@@ -1540,13 +1540,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/server/gpu_test.go",
@@ -1555,13 +1555,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/server/gpu_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/server/health.go",
@@ -1570,13 +1570,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/server/health_test.go",
@@ -1585,13 +1585,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/server/health_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/server/integration_test.go",
@@ -1600,13 +1600,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/server/integration_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/server/kvcache_test.go",
@@ -1615,13 +1615,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/server/kvcache_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/server/metrics.go",
@@ -1630,13 +1630,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/server/metrics_test.go",
@@ -1645,13 +1645,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/server/metrics_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/server/nats_integration_test.go",
@@ -1660,13 +1660,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/server/nats_integration_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/server/ops.go",
@@ -1675,13 +1675,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/server/ops_test.go",
@@ -1690,13 +1690,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/server/ops_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/server/placement.go",
@@ -1705,13 +1705,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/server/placement_test.go",
@@ -1720,13 +1720,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/server/placement_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/server/registry_test.go",
@@ -1735,13 +1735,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/server/registry_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/telemetry/telemetry.go",
@@ -1750,13 +1750,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/telemetry/telemetry_test.go",
@@ -1765,13 +1765,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/telemetry/telemetry_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/internal/testutil/testutil.go",
@@ -1780,13 +1780,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/transport/tls.go",
@@ -1795,13 +1795,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/transport/transport.go",
@@ -1810,13 +1810,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/internal/transport/transport_test.go",
@@ -1825,13 +1825,13 @@
       "language": "go",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./... + race on sensitive packages",
+      "test": "gospark/internal/transport/transport_test.go",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "gospark/proto/sparknet/v1/cluster.proto",
@@ -1840,13 +1840,13 @@
       "language": "proto",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/proto/sparknet/v1/compute.proto",
@@ -1855,13 +1855,13 @@
       "language": "proto",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "gospark/proto/sparknet/v1/control.proto",
@@ -1870,13 +1870,13 @@
       "language": "proto",
       "area": "gospark",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "go test ./...",
+      "test": "go test ./...",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "proto signed fields"
     },
     {
       "path": "gospark/proto/sparknet/v1/kvtransfer.proto",
@@ -1885,13 +1885,13 @@
       "language": "proto",
       "area": "gospark",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "gospark audit 2026-11-08 + go test ./...",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; open-mode legacy posture documented"
     },
     {
       "path": "master-node/configs/train_lora.py",
@@ -4015,13 +4015,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/plugins/kde-notify.ts",
@@ -4030,13 +4030,13 @@
       "language": "ts",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/pre-merge-gate.sh",
@@ -4045,13 +4045,13 @@
       "language": "sh",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-bundle.sh",
@@ -4060,13 +4060,13 @@
       "language": "sh",
       "area": "scripts",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "needs-decision",
       "finding_ids": [],
       "evidence": "",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "requires detached-signature verification / pinned image digests"
     },
     {
       "path": "scripts/sparknet-chroma.py",
@@ -4075,13 +4075,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-console.py",
@@ -4090,13 +4090,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_webui_console.py",
+      "test": "tests/test_webui_console.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "admin-only telemetry/map/projects"
     },
     {
       "path": "scripts/sparknet-context-pack.py",
@@ -4105,13 +4105,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-election-rehearsal-container.sh",
@@ -4120,13 +4120,13 @@
       "language": "sh",
       "area": "scripts",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-env-init.sh",
@@ -4135,13 +4135,13 @@
       "language": "sh",
       "area": "scripts",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_keys.py",
+      "test": "tests/test_keys.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "shell-quoted env values and unique temp"
     },
     {
       "path": "scripts/sparknet-goagx-publish.sh",
@@ -4150,13 +4150,13 @@
       "language": "sh",
       "area": "scripts",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "needs-decision",
       "finding_ids": [],
       "evidence": "",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "requires detached-signature verification / pinned image digests"
     },
     {
       "path": "scripts/sparknet-governance-check.py",
@@ -4165,13 +4165,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-keys-check.sh",
@@ -4180,13 +4180,13 @@
       "language": "sh",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-kv-export.py",
@@ -4195,13 +4195,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-memory-bundle.py",
@@ -4210,13 +4210,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-memory-index.py",
@@ -4225,13 +4225,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-model-bench.py",
@@ -4240,13 +4240,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-model-pull.py",
@@ -4255,13 +4255,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-model-runtime.py",
@@ -4270,13 +4270,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-model-survey.py",
@@ -4285,13 +4285,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-model-update.py",
@@ -4300,13 +4300,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-nv-search.sh",
@@ -4315,13 +4315,13 @@
       "language": "sh",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_nv_search.py",
+      "test": "tests/test_nv_search.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "curl header file, not argv"
     },
     {
       "path": "scripts/sparknet-project.py",
@@ -4330,13 +4330,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-rag-corpus.py",
@@ -4345,13 +4345,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_rag_corpus.py",
+      "test": "tests/test_rag_corpus.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "refuse non-empty corpus output"
     },
     {
       "path": "scripts/sparknet-recovery.py",
@@ -4360,13 +4360,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_recovery.py",
+      "test": "tests/test_recovery.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "refuse non-empty work dir"
     },
     {
       "path": "scripts/sparknet-reflex-eval.py",
@@ -4375,13 +4375,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-reflex-plan-eval.py",
@@ -4390,13 +4390,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-rehearsal.sh",
@@ -4405,13 +4405,13 @@
       "language": "sh",
       "area": "scripts",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_shell.py",
+      "test": "tests/test_shell.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "portable safe-extract path"
     },
     {
       "path": "scripts/sparknet-render.py",
@@ -4420,13 +4420,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-safe-build.sh",
@@ -4435,13 +4435,13 @@
       "language": "sh",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-sbom.py",
@@ -4450,13 +4450,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-share-rehearsal.py",
@@ -4465,13 +4465,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_share_rehearsal.py",
+      "test": "tests/test_share_rehearsal.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "refuse non-empty work dir"
     },
     {
       "path": "scripts/sparknet-share-rehearsal.sh",
@@ -4480,13 +4480,13 @@
       "language": "sh",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-test-report.sh",
@@ -4495,13 +4495,13 @@
       "language": "sh",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-uplift-push.py",
@@ -4510,13 +4510,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-vault-health.py",
@@ -4525,13 +4525,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-vector.py",
@@ -4540,13 +4540,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_vector.py",
+      "test": "tests/test_vector.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "refuse non-empty index reset"
     },
     {
       "path": "scripts/sparknet-verify-plans.py",
@@ -4555,13 +4555,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sparknet-webui-users.py",
@@ -4570,13 +4570,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_webui_console.py",
+      "test": "tests/test_webui_console.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "URL scheme/host and password mode checks"
     },
     {
       "path": "scripts/sparknet-wiki-env.sh",
@@ -4585,13 +4585,13 @@
       "language": "sh",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sync-role-skills.py",
@@ -4600,13 +4600,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "scripts/sync-wiki-skills.py",
@@ -4615,13 +4615,13 @@
       "language": "py",
       "area": "scripts",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "shared/sparknet-authz.py",
@@ -4975,13 +4975,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/conftest.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/contract_helpers.py",
@@ -4990,13 +4990,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/contract_helpers.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_agents.py",
@@ -5005,13 +5005,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_agents.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_agx_node.py",
@@ -5020,13 +5020,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_agx_node.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_authz_golden.py",
@@ -5035,13 +5035,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_authz_golden.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_checkpoint_anchor.py",
@@ -5050,13 +5050,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_checkpoint_anchor.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_checkpoints.py",
@@ -5065,13 +5065,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_checkpoints.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_ci.py",
@@ -5080,13 +5080,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_ci.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_claims.py",
@@ -5095,13 +5095,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_claims.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_cluster.py",
@@ -5110,13 +5110,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_cluster.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_consensus.py",
@@ -5125,13 +5125,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_consensus.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_context_pack.py",
@@ -5140,13 +5140,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_context_pack.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_contracts.py",
@@ -5155,13 +5155,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_contracts.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_cpu_node_smoke.py",
@@ -5170,13 +5170,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_cpu_node_smoke.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_distill_status.py",
@@ -5185,13 +5185,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_distill_status.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_distillation_authz.py",
@@ -5200,13 +5200,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_distillation_authz.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_election.py",
@@ -5215,13 +5215,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_election.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_election_container.py",
@@ -5230,13 +5230,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_election_container.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_election_simulation.py",
@@ -5245,13 +5245,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_election_simulation.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_goagx_repo.py",
@@ -5260,13 +5260,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_goagx_repo.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_gpu_telemetry_hardware_free.py",
@@ -5275,13 +5275,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_gpu_telemetry_hardware_free.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_hardening.py",
@@ -5290,13 +5290,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_hardening.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_http_transport.py",
@@ -5305,13 +5305,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_http_transport.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_identity_pages.py",
@@ -5320,13 +5320,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_identity_pages.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_idle_evidence.py",
@@ -5335,13 +5335,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_idle_evidence.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_keys.py",
@@ -5350,13 +5350,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_keys.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_knowledge_flow.py",
@@ -5365,13 +5365,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_knowledge_flow.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_kv_export.py",
@@ -5380,13 +5380,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_kv_export.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_layout.py",
@@ -5395,13 +5395,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_layout.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_liveness.py",
@@ -5410,13 +5410,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_liveness.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_liveness_service.py",
@@ -5425,13 +5425,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_liveness_service.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_memory_bundle.py",
@@ -5440,13 +5440,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_memory_bundle.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_memory_gateway.py",
@@ -5455,13 +5455,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_memory_gateway.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_memory_index.py",
@@ -5470,13 +5470,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_memory_index.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_memory_mcp.py",
@@ -5485,13 +5485,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_memory_mcp.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_merkle.py",
@@ -5500,13 +5500,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_merkle.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_model_bench.py",
@@ -5515,13 +5515,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_model_bench.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_model_catalog.py",
@@ -5530,13 +5530,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_model_catalog.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_model_pull.py",
@@ -5545,13 +5545,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_model_pull.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_model_runtime.py",
@@ -5560,13 +5560,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_model_runtime.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_model_survey.py",
@@ -5575,13 +5575,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_model_survey.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_model_update.py",
@@ -5590,13 +5590,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_model_update.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_nocturnal.py",
@@ -5605,13 +5605,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_nocturnal.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_node_setup_join.py",
@@ -5620,13 +5620,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_node_setup_join.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_notify.py",
@@ -5635,13 +5635,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_notify.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_nv_search.py",
@@ -5650,13 +5650,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_nv_search.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_oob.py",
@@ -5665,13 +5665,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_oob.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_plugin.py",
@@ -5680,13 +5680,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_plugin.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_precontext.py",
@@ -5695,13 +5695,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_precontext.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_project_script.py",
@@ -5710,13 +5710,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_project_script.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_proposal.py",
@@ -5725,13 +5725,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_proposal.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_provenance.py",
@@ -5740,13 +5740,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_provenance.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_rag_corpus.py",
@@ -5755,13 +5755,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_rag_corpus.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_recovery.py",
@@ -5770,13 +5770,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_recovery.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_reflex_contract.py",
@@ -5785,13 +5785,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_reflex_contract.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_reflex_plan.py",
@@ -5800,13 +5800,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_reflex_plan.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_reflex_rag.py",
@@ -5815,13 +5815,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_reflex_rag.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_registry_crossverify.py",
@@ -5830,13 +5830,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_registry_crossverify.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_release.py",
@@ -5845,13 +5845,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_release.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_render.py",
@@ -5860,13 +5860,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_render.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_role_skills.py",
@@ -5875,13 +5875,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_role_skills.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_service_timeouts.py",
@@ -5890,13 +5890,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_service_timeouts.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_share_rehearsal.py",
@@ -5905,13 +5905,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_share_rehearsal.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_shell.py",
@@ -5920,13 +5920,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_shell.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_shims.py",
@@ -5935,13 +5935,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_shims.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_telemetry_push.py",
@@ -5950,13 +5950,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_telemetry_push.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_vector.py",
@@ -5965,13 +5965,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_vector.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_vector_corpus.py",
@@ -5980,13 +5980,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_vector_corpus.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_webui_console.py",
@@ -5995,13 +5995,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_webui_console.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_webui_engine.py",
@@ -6010,13 +6010,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_webui_engine.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_webui_patch.py",
@@ -6025,13 +6025,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_webui_patch.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "tests/test_wiki_skills.py",
@@ -6040,13 +6040,13 @@
       "language": "py",
       "area": "tests",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make test-all 2026-11-08",
+      "test": "tests/test_wiki_skills.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes"
     },
     {
       "path": "webui/console/app.js",
@@ -6055,13 +6055,13 @@
       "language": "js",
       "area": "webui",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "webui/console/index.html",
@@ -6070,13 +6070,13 @@
       "language": "html",
       "area": "webui",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "webui/console/sparknet-menu.js",
@@ -6085,13 +6085,13 @@
       "language": "js",
       "area": "webui",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "webui/console/style.css",
@@ -6100,13 +6100,13 @@
       "language": "css",
       "area": "webui",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "webui/functions/sparknet_capture.py",
@@ -6115,13 +6115,13 @@
       "language": "py",
       "area": "webui",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "webui/functions/sparknet_memory_filter.py",
@@ -6130,13 +6130,13 @@
       "language": "py",
       "area": "webui",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "webui/install-console.py",
@@ -6145,13 +6145,13 @@
       "language": "py",
       "area": "webui",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "webui/install-memory-filter.py",
@@ -6160,13 +6160,13 @@
       "language": "py",
       "area": "webui",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "webui/patch-openwebui.py",
@@ -6175,13 +6175,13 @@
       "language": "py",
       "area": "webui",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "webui/tools/sparknet_memory.py",
@@ -6190,13 +6190,13 @@
       "language": "py",
       "area": "webui",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "webui/tools/sparknet_rfi.py",
@@ -6205,13 +6205,13 @@
       "language": "py",
       "area": "webui",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "webui/tools/sparknet_status.py",
@@ -6220,13 +6220,13 @@
       "language": "py",
       "area": "webui",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "webui/tools/sparknet_vault.py",
@@ -6235,13 +6235,13 @@
       "language": "py",
       "area": "webui",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "scripts/webui/goagx audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     }
   ]
 }

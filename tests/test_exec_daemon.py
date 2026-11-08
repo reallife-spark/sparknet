@@ -41,7 +41,7 @@ def _request(private_key, *, argv=None, signature=None):
         user_id="user-1",
         argv=argv or ["pwd"],
         cwd="sub",
-        env={"PATH": "/usr/bin:/bin"},
+        env={"HOME": "/home/raxxar"},
         timeout_seconds=10,
         operator_os={
             "uid": os.getuid(),
@@ -87,7 +87,7 @@ def _start_daemon(tmp_path, node_pub, daemon_key, *, allow_exec=True):
                     "schema": "sparknet-exec-policy/1",
                     "allowed_argv": [{"binary": "pwd", "args": []}],
                     "cwd_roots": ["sub"],
-                    "env_allow": ["PATH"],
+                    "env_allow": ["HOME"],
                     "max_timeout_seconds": 30,
                     "max_output_bytes": 65536,
                     "approval_ttl_seconds": 300,

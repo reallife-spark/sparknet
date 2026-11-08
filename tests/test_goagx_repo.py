@@ -242,6 +242,7 @@ def test_staged_verify_mode_passes(staged: Path) -> None:
         text=True,
         check=False,
         timeout=180,
+        env={**__import__("os").environ, "SPARKNET_SHARED_SECRET": "placeholder"},
     )
     assert proc.returncode == 0, f"verify failed:\n{proc.stdout}{proc.stderr}"
 

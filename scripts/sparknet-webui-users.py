@@ -45,6 +45,26 @@ def log(message: str) -> None:
     print("[{}] {}".format(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), message), flush=True)
 
 
+def _safe_base(value: str) -> str:
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(value)
+    if parts.scheme not in ("http", "https"):
+        raise SystemExit("webui URL must be http(s)")
+    if parts.scheme == "http" and parts.hostname not in ("127.0.0.1", "localhost", "::1"):
+        raise SystemExit("remote Open WebUI over plain HTTP is refused")
+    return value
+
+
+def _password(path: str) -> str:
+    import stat
+
+    candidate = Path(path)
+    if stat.S_IMODE(candidate.stat().st_mode) != 0o600:
+        raise SystemExit(f"password file {candidate} must be mode 0600")
+    return candidate.read_text(encoding="utf-8").strip()
+
+
 def _request(base: str, path: str, method: str, token: str = "", body: Any = None) -> tuple[int, Any]:
     data = json.dumps(body).encode("utf-8") if body is not None else None
     request = urllib.request.Request(base.rstrip("/") + path, data=data, method=method)
@@ -114,7 +134,7 @@ def _full_chat(base: str, token: str, chat_id: str) -> dict[str, Any] | None:
 
 
 def cmd_audit(args: argparse.Namespace) -> int:
-    token = _signin(args.webui, args.admin_email, Path(args.password_file).read_text().strip())
+    token = _signin(args.webui, args.admin_email, _password(args.password_file))
     users = _users(args.webui, token)
     rows = []
     for user in users:
@@ -133,7 +153,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
 
 def cmd_export_user(args: argparse.Namespace) -> int:
-    token = _signin(args.webui, args.admin_email, Path(args.password_file).read_text().strip())
+    token = _signin(args.webui, args.admin_email, _password(args.password_file))
     user = _find_user(_users(args.webui, token), args.user_email)
     user_id = str(user["id"])
     out = Path(args.out).resolve()
@@ -188,7 +208,7 @@ asyncio.run(main())
 
 
 def cmd_import_user(args: argparse.Namespace) -> int:
-    token = _signin(args.webui, args.admin_email, Path(args.password_file).read_text().strip())
+    token = _signin(args.webui, args.admin_email, _password(args.password_file))
     user = _find_user(_users(args.webui, token), args.user_email)
     user_id = str(user["id"])
     export_path = Path(args.dir).resolve() / "user-export.json"
@@ -256,7 +276,7 @@ def cmd_import_user(args: argparse.Namespace) -> int:
 
 
 def cmd_enforce_master(args: argparse.Namespace) -> int:
-    token = _signin(args.webui, args.admin_email, Path(args.password_file).read_text().strip())
+    token = _signin(args.webui, args.admin_email, _password(args.password_file))
     users = _users(args.webui, token)
     admin = [u for u in users if str(u.get("email") or "").lower() == args.admin_email.lower()]
     if len(admin) != 1:
@@ -322,6 +342,7 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if not args.password_file:
         raise SystemExit("--password-file is required")
+    args.webui = _safe_base(args.webui)
     if args.command == "audit":
         return cmd_audit(args)
     if args.command == "export-user":

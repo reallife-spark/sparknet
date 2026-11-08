@@ -25,7 +25,6 @@ import hashlib
 import json
 import os
 import posixpath
-import shutil
 import tarfile
 import tempfile
 from datetime import datetime, timezone
@@ -176,7 +175,9 @@ def _extract(archive: Path, target: Path) -> None:
 def rehearse(archive: Path, work: Path) -> dict[str, Any]:
     manifest = verify(archive)
     if work.exists():
-        shutil.rmtree(work)
+        if any(work.iterdir()):
+            raise SystemExit(f"refusing to remove non-empty rehearsal directory {work}")
+        work.rmdir()
     target = work / "restored"
     _extract(archive, target)
     sample = next(iter(manifest.get("files") or {}), None)
