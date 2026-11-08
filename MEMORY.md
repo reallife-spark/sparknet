@@ -12,6 +12,7 @@ Updated: 2026-11-07
 - **Package distribution live 2026-11-07:** signed index/package fetch over 4221 and verified install into a staging path; executable mode preserved. Demo package removed after the test.
 - **Agent bus/orchestrator live 2026-11-08:** one live NATS task routed from the Master orchestrator to the agx32 engineering agent and returned an engineering result; test processes stopped afterwards.
 - **O1→O2→O5 live 2026-11-08:** a signed O1 probe produced a signed O2 append and a signed, explicitly promoted O5 page; probe artifacts removed afterwards.
+- **Persistent agents live 2026-11-08:** agx32 runs engineering/cyber agent units; agx64 runs the orchestrator unit. Persistent routing returned `engineering.result` with `summary=OK`.
 - **Self-improvement live 2026-11-08:** worktree benchmark/promotion ran on agx64 with the Firecracker fallback; signed run record and commit promotion verified. Temporary repo removed.
 - **Signed Master write live 2026-11-08:** lake-intake action signed/verified/applied on agx64 against a temp state root; test state removed.
 ## Live fabric

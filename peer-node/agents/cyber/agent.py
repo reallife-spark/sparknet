@@ -16,6 +16,19 @@ from sparknet_loader import load_shared  # noqa: E402 - shared/ is added by path
 AGENT = load_shared("sparknet-agent-bus.py", "sparknet_cyber_agent")
 
 
+def _token() -> str:
+    token = os.environ.get("SPARKNET_AGENT_TOKEN", "")
+    if token:
+        return token
+    path = os.environ.get("SPARKNET_AGENT_TOKEN_FILE", "")
+    if path:
+        try:
+            return Path(path).read_text(encoding="utf-8").strip()
+        except OSError:
+            return ""
+    return ""
+
+
 def handle(payload, event):
     if str(payload.get("mode") or "defensive") != "defensive":
         raise AGENT.AgentBusError("offensive-out-of-scope", "the default cyber agent is defensive-only")
@@ -26,7 +39,7 @@ def handle(payload, event):
         prompt=prompt,
         url=os.environ.get("SPARKNET_AGENT_MODEL_URL", "http://127.0.0.1:4204/v1"),
         model=os.environ.get("SPARKNET_AGENT_MODEL", "sparknet-chat"),
-        token=os.environ.get("SPARKNET_AGENT_TOKEN", ""),
+        token=_token(),
         user=os.environ.get("SPARKNET_AGENT_USER", "agent-cyber"),
         timeout=float(os.environ.get("SPARKNET_AGENT_MODEL_TIMEOUT", "120")),
         max_tokens=int(os.environ.get("SPARKNET_AGENT_MAX_TOKENS", "512")),
