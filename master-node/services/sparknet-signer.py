@@ -437,6 +437,11 @@ def _atomic_write(path: Path, content: str, mode: int) -> None:
     tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
     try:
+        if os.geteuid() == 0:
+            # Keep the ledger readable by the group that runs the read-only
+            # verifier even when the parent directory is not setgid.
+            with contextlib.suppress(OSError):
+                os.chown(tmp, -1, path.parent.stat().st_gid)
         with os.fdopen(fd, "w") as handle:
             handle.write(content)
             handle.flush()

@@ -32,7 +32,8 @@ generic; a deployment adds the group and mode locally.
 - `sparknet-signer` group; peer user added to it.
 - `StateDirectory` is not needed for the signer itself.
 - Ledger file root:sparknet-signer 0640 so the peer's read-only ledger unit can
-  verify it.
+  verify it. The signer also assigns a new ledger file the directory's group;
+  set the directory setgid (`2775`) as a belt-and-braces measure.
 
 ## Optional dedicated uid
 
