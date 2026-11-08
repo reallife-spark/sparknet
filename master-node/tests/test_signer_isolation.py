@@ -1845,3 +1845,49 @@ def test_ledger_pin_allows_forward_key_rotation_but_not_rollback(tmp_path, authz
     ok, detail = ledger_module.verify_chain(ledger, new_public)
     assert not ok
     assert "returns to an old key" in detail
+
+
+def test_serve_one_refuses_a_disallowed_caller_before_parsing(signer_module):
+    """The allowlist check runs before the request is parsed or handled."""
+
+    class FakeSigner:
+        def __init__(self):
+            self.calls = 0
+
+        def handle(self, request):
+            self.calls += 1
+            return {"ok": True, "request": request}
+
+    fake = FakeSigner()
+    left, right = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        thread = threading.Thread(
+            target=signer_module._serve_one,
+            args=(fake, left, 1 << 20, 1.0, threading.Lock(), (str(Path(sys.executable).resolve()),)),
+        )
+        thread.start()
+        right.sendall(b'{"op":"capabilities"}\n')
+        allowed = json.loads(right.makefile("rb").readline())
+        thread.join(timeout=2)
+        assert allowed["request"] == {"op": "capabilities"}
+        assert fake.calls == 1
+    finally:
+        left.close()
+        right.close()
+
+    fake = FakeSigner()
+    left, right = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        thread = threading.Thread(
+            target=signer_module._serve_one,
+            args=(fake, left, 1 << 20, 1.0, threading.Lock(), ("/definitely/not/this/process.py",)),
+        )
+        thread.start()
+        right.sendall(b'{"op":"capabilities"}\n')
+        refused = json.loads(right.makefile("rb").readline())
+        thread.join(timeout=2)
+        assert refused == {"ok": False, "error": "caller-not-allowed"}
+        assert fake.calls == 0
+    finally:
+        left.close()
+        right.close()

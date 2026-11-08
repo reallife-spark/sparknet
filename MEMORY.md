@@ -5,7 +5,7 @@
 Updated: 2026-11-08
 ## Plan cursor
 - `PLAN.md` — `current: 89`; Step 88 closed. Step 89 implementation is live; Phase 8 rewrite is in progress.
-- Critical open items: full 416-file rewrite and Step 89 closure. Signer caller allowlist, ledger key pinning and transport mTLS are implemented; deployment still needs an exact caller list and a dedicated signer uid for full isolation.
+- Critical open items: full 416-file rewrite and Step 89 closure (89H private container registry/GitFlow and final 89I confirmations). Signer allowlist, ledger key pinning and transport mTLS are implemented and live for the signer.
 - Phase 8: Waves A–F have targeted rewrites and tests; Wave G test coverage is green. The rewrite register is not fully closed.
 ## Live fabric
 - **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`). Peer egress only to Master.
@@ -25,9 +25,9 @@ Updated: 2026-11-08
 - Live fleet uses iptables and userspace WireGuard.
 - Registry ships empty; fresh nodes grant nothing.
 ## Security hardening 2026-11-08
-- Signer: optional exact caller allowlist (`--allow-caller`, `SO_PEERCRED`); verifies ledger against the pinned operational key before signing.
+- Signer: exact caller allowlist (`--allow-caller`, `SO_PEERCRED` plus bounded ancestor walk) is **live on agx64**; probe script succeeds, direct `python3 -c` is refused. Verifies ledger against the pinned operational key before signing.
 - Ledger: `verify_chain(..., expected_pubkey_b64)`; CLI pins from `--pubkey` or the trust root. Forward key rotation is accepted; a return to an old key after the current key took over is refused. Live 54-block ledger verified 2026-11-08.
-- goSpark: pinned mutual TLS (`Server.ClientFingerprint`, `DialOptions.ClientCertificate`), 64 incoming QUIC streams per connection; `sparknetctl send-block` requires `-pin`.
+- goSpark: pinned mutual TLS (`Server.ClientFingerprint`, `DialOptions.ClientCertificate`), 64 incoming QUIC streams per connection; `sparknetctl send-block` requires `-pin`. Admin listener requires `GOSPARK_ADMIN_TOKEN` and fails closed without it; `sparknetctl`/MCP send the bearer token.
 ## Phase 8 state
 - Wave A: shared boundary/fail-closed fixes, live-deployed to memory gateway.
 - Wave B: scripts/goagx targeted rewrites, including safe tar extraction and master from-git bundle fix.

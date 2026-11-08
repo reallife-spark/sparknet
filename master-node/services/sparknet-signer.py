@@ -999,19 +999,8 @@ def _peer_pid(connection: socket.socket) -> int | None:
         return None
 
 
-def _caller_allowed(connection: socket.socket, allow_callers: tuple[str, ...]) -> bool:
-    """Check the peer process against an exact executable/script allowlist.
-
-    Match any command-line token or the resolved executable, not a substring:
-    ``/tmp/sparknet-admin-console.py`` must not pass as the real service path.
-    An allowlist entry is resolved too, so a symlink under the state directory
-    cannot be swapped for another binary after the unit starts.
-    """
-    if not allow_callers:
-        return True
-    pid = _peer_pid(connection)
-    if pid is None:
-        return False
+def _process_candidates(pid: int) -> set[str]:
+    """Resolved executable, script arguments and cwd for one process."""
     candidates: set[str] = set()
     with contextlib.suppress(OSError):
         candidates.add(str(Path(os.readlink(f"/proc/{pid}/exe")).resolve()))
@@ -1019,7 +1008,7 @@ def _caller_allowed(connection: socket.socket, allow_callers: tuple[str, ...]) -
         cwd = Path(os.readlink(f"/proc/{pid}/cwd"))
         raw = Path(f"/proc/{pid}/cmdline").read_bytes()
     except OSError:
-        return False
+        return candidates
     for token in raw.split(b"\0"):
         if not token:
             continue
@@ -1030,6 +1019,45 @@ def _caller_allowed(connection: socket.socket, allow_callers: tuple[str, ...]) -
             candidates.add(str(candidate.resolve()))
         except (OSError, ValueError):
             continue
+    return candidates
+
+
+def _ancestor_pids(pid: int, depth: int = 3) -> list[int]:
+    """The peer and a few ancestors, bounded so a long shell chain is not a bypass."""
+    chain: list[int] = []
+    current = pid
+    for _ in range(depth + 1):
+        if current <= 1 or current in chain:
+            break
+        chain.append(current)
+        try:
+            stat = Path(f"/proc/{current}/stat").read_text()
+            current = int(stat.rsplit(")", 1)[1].split()[1])
+        except (OSError, ValueError, IndexError):
+            break
+    return chain
+
+
+def _caller_allowed(connection: socket.socket, allow_callers: tuple[str, ...]) -> bool:
+    """Check the peer process and its immediate ancestors against an exact allowlist.
+
+    Matching any command-line token or the resolved executable, not a substring:
+    ``/tmp/sparknet-admin-console.py`` must not pass as the real service path.
+    Ancestors are included because the operator scripts hand Python a here-doc
+    (``python -``); the Python process names no script, while its parent bash
+    process names the trusted script. The walk is bounded to three levels.
+
+    An allowlist entry is resolved too, so a symlink under the state directory
+    cannot be swapped for another binary after the unit starts.
+    """
+    if not allow_callers:
+        return True
+    pid = _peer_pid(connection)
+    if pid is None:
+        return False
+    candidates: set[str] = set()
+    for ancestor in _ancestor_pids(pid):
+        candidates |= _process_candidates(ancestor)
     allowed = {str(Path(value).resolve()) for value in allow_callers}
     return bool(candidates & allowed)
 
@@ -1138,6 +1166,9 @@ def _serve_one(
     connected-but-silent client would hold this thread's slot forever.
     """
     with connection:
+        if not _caller_allowed(connection, allow_callers):
+            _send(connection, {"ok": False, "error": "caller-not-allowed"})
+            return
         try:
             line = _read_line(connection, max_request_bytes, read_timeout)
         except _ReadTimeout:
