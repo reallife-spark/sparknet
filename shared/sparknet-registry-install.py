@@ -70,14 +70,32 @@ def pinned_key_path(vault_root: Path) -> Path:
 
 
 def load_pinned_key(vault_root: Path, authz: Any) -> Any | None:
-    """The Master key this node trusts, or None when nothing is pinned."""
-    path = pinned_key_path(vault_root)
-    if not path.is_file():
-        return None
-    try:
-        return authz.load_public_key(path)
-    except Exception:
-        return None
+    """The Master key this node trusts, or None when no safe pin is present.
+
+    A key in the peer vault is writable by the peer user, so an operator pin at
+    ``SPARKNET_MASTER_PUBKEY`` or the root-owned system path wins. The vault
+    fallback is for a development checkout. A symlink or a group/other-writable
+    key is refused rather than loaded.
+    """
+    import os
+    import stat
+
+    candidates = []
+    configured = os.environ.get("SPARKNET_MASTER_PUBKEY", "").strip()
+    if configured:
+        candidates.append(Path(configured))
+    candidates.append(Path("/etc/sparknet/keys/master-ed25519.pub.b64"))
+    candidates.append(pinned_key_path(vault_root))
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            if path.is_symlink() or path.stat().st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+                continue
+            return authz.load_public_key(path)
+        except Exception:  # noqa: S112 - try the next pin location
+            continue
+    return None
 
 
 def installation_record(vault_root: Path) -> dict[str, Any]:

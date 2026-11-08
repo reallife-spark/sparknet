@@ -233,6 +233,8 @@ class ModelProxyHandler(BaseHTTPRequestHandler):
 
     protocol_version = "HTTP/1.1"
     server_version = "sparknet-model-proxy/1"
+    timeout = 30
+    max_body_bytes = 16 << 20
     upstream = "http://127.0.0.1:11434"
     allowed_subnet = ""
     allowed_paths = DEFAULT_PROXY_PATH_ALLOW
@@ -260,7 +262,14 @@ class ModelProxyHandler(BaseHTTPRequestHandler):
         if not self._path_allowed():
             self.send_error(403, "model API path only")
             return
-        length = int(self.headers.get("Content-Length") or 0)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            self.send_error(400, "invalid content length")
+            return
+        if length < 0 or length > self.max_body_bytes:
+            self.send_error(413, "request body too large")
+            return
         body = self.rfile.read(length) if length else None
         host, port = _http_json_url(self.upstream)
         headers = {}
@@ -268,7 +277,7 @@ class ModelProxyHandler(BaseHTTPRequestHandler):
             if key.lower() in HOP_HEADERS or key.lower() == "host":
                 continue
             headers[key] = value
-        connection = http.client.HTTPConnection(host, port, timeout=600)
+        connection = http.client.HTTPConnection(host, port, timeout=120)
         try:
             connection.request(self.command, self.path, body=body, headers=headers)
             response = connection.getresponse()
@@ -396,12 +405,18 @@ class SandboxManager:
     def _own_path(self, path: Path, recursive: bool = False) -> None:
         if os.geteuid() != 0:
             return
+        # Never follow a sandbox-created symlink: chowning /etc/shadow through a
+        # symlink in the vault would hand the sandbox a host file it did not own.
+        if path.is_symlink():
+            return
         try:
-            os.chown(path, SANDBOX_UID, SANDBOX_GID)
+            os.chown(path, SANDBOX_UID, SANDBOX_GID, follow_symlinks=False)
             if recursive and path.is_dir():
                 for child in path.rglob("*"):
+                    if child.is_symlink():
+                        continue
                     try:
-                        os.chown(child, SANDBOX_UID, SANDBOX_GID)
+                        os.chown(child, SANDBOX_UID, SANDBOX_GID, follow_symlinks=False)
                     except OSError:
                         pass
         except OSError:
@@ -1338,6 +1353,14 @@ class StreamingHandler(BaseHTTPRequestHandler):
         try:
             client.prompt(session_id, text)
             self.engine._consume_events(client, session_id, events, emit)
+        except (BrokenPipeError, ConnectionResetError):
+            # A closed chat must stop the turn; otherwise tool calls keep
+            # mutating the vault after the user is gone.
+            try:
+                client.abort(session_id)
+            except Exception:
+                pass
+            raise
         finally:
             stop.set()
             thread.join(timeout=3)

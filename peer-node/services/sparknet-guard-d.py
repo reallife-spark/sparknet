@@ -43,6 +43,7 @@ import hashlib
 import json
 import os
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -321,6 +322,8 @@ def apply_patch(path: Path, content: bytes, *, dry_run: bool = False) -> None:
     if not path.exists():
         raise Refusal(404, "target_missing", f"{path} does not exist")
 
+    original = path.read_bytes()
+    mode = stat.S_IMODE(path.stat().st_mode) or 0o644
     had_immutable = False
     try:
         _run(["chattr", "-i", str(path)], dry_run=False)
@@ -336,7 +339,12 @@ def apply_patch(path: Path, content: bytes, *, dry_run: bool = False) -> None:
                 tmp.write(content)
                 tmp.flush()
                 os.fsync(tmp.fileno())
-            os.chmod(tmp.name, 0o644)
+            os.chmod(tmp.name, mode)
+            # Prove the filesystem can lock the staged file before replacing the
+            # target. Otherwise a filesystem without chattr support would take
+            # the write and only then fail to restore immutability.
+            _run(["chattr", "+i", tmp.name], dry_run=False)
+            _run(["chattr", "-i", tmp.name], dry_run=False)
             os.replace(tmp.name, path)
         except Exception:
             with contextlib.suppress(FileNotFoundError):
@@ -344,7 +352,7 @@ def apply_patch(path: Path, content: bytes, *, dry_run: bool = False) -> None:
             raise
 
         _run(["chown", "root:root", str(path)], dry_run=False)
-        _run(["chmod", "644", str(path)], dry_run=False)
+        _run(["chmod", str(mode), str(path)], dry_run=False)
     except Refusal:
         raise
     except OSError as exc:
@@ -358,11 +366,28 @@ def apply_patch(path: Path, content: bytes, *, dry_run: bool = False) -> None:
         _run(["chattr", "+i", str(path)], dry_run=False)
     except Refusal as exc:
         if _is_immutable(path) is not True:
+            # Never leave a partial write. Restore the exact prior bytes and mode
+            # (still unlocked, because the filesystem refused the lock) and report
+            # the failed transaction.
+            restore = tempfile.NamedTemporaryFile(
+                "wb", dir=path.parent, prefix=f".{path.name}.", suffix=".restore", delete=False
+            )
+            try:
+                with restore:
+                    restore.write(original)
+                    restore.flush()
+                    os.fsync(restore.fileno())
+                os.chmod(restore.name, mode)
+                os.replace(restore.name, path)
+                _run(["chown", "root:root", str(path)], dry_run=False)
+            except OSError:
+                with contextlib.suppress(FileNotFoundError):
+                    os.unlink(restore.name)
             raise Refusal(
                 500,
                 "immutability_not_restored",
                 f"patched {path} but could not re-lock it: {exc.detail or exc.code}. "
-                f"The file is modified and no longer immutable.",
+                f"The file was restored and is no longer immutable.",
             ) from exc
 
     print(f"[guard] patched and re-locked {path} (was_immutable={had_immutable})")
@@ -549,6 +574,37 @@ def _load_http_module():
 # --- guard -------------------------------------------------------------------
 
 
+def load_master_pubkey(vault_root: Path) -> Ed25519PublicKey:
+    """Load the Master pin from a non-writable, non-symlink location.
+
+    A pin stored in the peer vault is writable by the peer's own user. Anyone
+    who can write it can substitute their own key and forge approvals or
+    registry publications. The loader prefers an operator-provided root-owned
+    path, then the system path, and only falls back to the vault for a
+    development checkout. Group/other write bits and symlinks are refused.
+    """
+    import base64
+
+    candidates = []
+    configured = os.environ.get("SPARKNET_MASTER_PUBKEY", "").strip()
+    if configured:
+        candidates.append(Path(configured))
+    candidates.append(Path("/etc/sparknet/keys/master-ed25519.pub.b64"))
+    candidates.append(vault_root / "manifests" / "keys" / "master-ed25519.pub.b64")
+    for path in candidates:
+        if not path.is_file():
+            continue
+        if path.is_symlink():
+            raise ValueError(f"master pin {path} is a symlink")
+        if path.stat().st_mode & 0o022:
+            raise ValueError(f"master pin {path} is group/other writable")
+        raw = base64.b64decode(path.read_text().strip(), validate=True)
+        if len(raw) != 32:
+            raise ValueError(f"master pin {path} is not a 32-byte Ed25519 key")
+        return Ed25519PublicKey.from_public_bytes(raw)
+    raise FileNotFoundError("no master pin at SPARKNET_MASTER_PUBKEY, /etc/sparknet/keys, or the vault")
+
+
 class Guard:
     def __init__(
         self,
@@ -565,7 +621,14 @@ class Guard:
         self.dry_run = dry_run
         self.replay = replay or ReplayGuard(store_path=vault_root / ".state" / "guard-replay.json")
         self.master_pubkey = master_pubkey
-        self.ledger = ledger or AuditLedger(vault_root / "blockchain" / "guard-audit.json")
+        configured_audit = os.environ.get("SPARKNET_GUARD_AUDIT", "").strip()
+        if configured_audit:
+            audit_path = Path(configured_audit)
+        elif os.geteuid() == 0 and Path("/var/lib/sparknet").is_dir():
+            audit_path = Path("/var/lib/sparknet/guard-audit.json")
+        else:
+            audit_path = vault_root / "blockchain" / "guard-audit.json"
+        self.ledger = ledger or AuditLedger(audit_path)
         # One apply at a time: ThreadingHTTPServer hands each request its own
         # thread, and verification, replay bookkeeping, ledger appends and the
         # privileged write must never interleave.
@@ -593,13 +656,12 @@ class Guard:
             return []
         identity_path = self.vault_root / "manifests" / "node-identity.json"
         registry_path = self.vault_root / "manifests" / "node-authorizations.json"
-        pubkey_path = self.vault_root / "manifests" / "keys" / "master-ed25519.pub.b64"
-        if not (identity_path.is_file() and registry_path.is_file() and pubkey_path.is_file()):
+        if not (identity_path.is_file() and registry_path.is_file()):
             return []
         try:
             identity = json.loads(identity_path.read_text())
             registry = json.loads(registry_path.read_text())
-            pubkey = sparknet_authz.load_public_key(pubkey_path)
+            pubkey = load_master_pubkey(self.vault_root)
         except Exception:
             return []
         decision = sparknet_authz.evaluate(identity, registry, pubkey)
@@ -1209,18 +1271,11 @@ def main(argv: list[str] | None = None) -> int:
         else Path(os.environ.get("SPARKNET_VAULT_ROOT") or DEFAULT_VAULT_ROOT).resolve()
     )
 
-    master_pubkey = None
-    pubkey_path = vault_root / "manifests" / "keys" / "master-ed25519.pub.b64"
-    if pubkey_path.is_file():
-        import base64
-
-        try:
-            master_pubkey = Ed25519PublicKey.from_public_bytes(
-                base64.b64decode(pubkey_path.read_text().strip(), validate=True)
-            )
-        except Exception as exc:
-            print(f"[guard] ERROR: master public key unusable: {exc}", file=sys.stderr)
-            return 1
+    try:
+        master_pubkey = load_master_pubkey(vault_root)
+    except (OSError, ValueError, TypeError) as exc:
+        print(f"[guard] ERROR: master public key unusable: {exc}", file=sys.stderr)
+        return 1
 
     guard = Guard(vault_root, apply_enabled=args.apply_enabled, master_pubkey=master_pubkey, dry_run=args.dry_run)
 

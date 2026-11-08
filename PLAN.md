@@ -566,24 +566,13 @@ current: done
     rehearsals for every new channel; run all gates; roll out in the order
     Master contracts/registry → Master services → peer services → event bus →
     model plane → collaboration → execution → self-improvement → dashboard.
-  - **Status 2026-11-07:** 89A/89B Python foundations are in place and hardened:
-    `abac`, `event`, `graph`, `hybrid`, `exec`, `collab` and `package`
-    contracts, modules and tests; the goSpark canonicalizer and shared vectors
-    pin the bytes. 89C adds the NATS client/CLI and is live-verified over the
-    overlay; 89D adds authority/scope filtering and graph/hybrid routes; 89E adds
-    a read-only foundations API; 89F adds collab and exec-validation routes; 89G
-    adds the signed argv-only daemon; 89H adds the package CLI and grant nonce
-    replay. O1 now records classification/department and graph/hybrid read it;
-    graph/hybrid and the foundations API are live on agx32/agx64. The exec
-    daemon is live with an exact allowlist and audit; collab writes are live;
-    package distribution is live. Separately, the OpenCode runtime pin
-    is `2.2.5`; the engine adapter is on v2 `/api/*` with per-sandbox auth and the sandbox is live on agx64/agx32 (2026-11-06).
+  - **Status 2026-11-07:** 89A/89B foundations are hardened; 89C–89H are
+    implemented, with graph/hybrid, exec, collab, package and the OpenCode
+    sandbox live on agx32/agx64. The OpenCode runtime pin is `2.2.5`.
   - **Status 2026-11-08 — CLOSED.** 89H added the private loopback OCI
-    registry, GitFlow promotion policy, explicit self-improvement promotion and
-    rollback path; signed package distribution is live. 89I added the registry
-    matrix row and live loopback probe (401 without token, 200 with token,
-    manifest digest and blob), and all gates are green. The persistent registry
-    unit remains staged; the live leg is a loopback service check.
+    registry, GitFlow policy and self-improvement promotion/rollback; 89I added
+    the matrix row and live loopback probe (401/200, manifest digest and blob).
+    The persistent registry unit is staged; all gates are green.
   - **DoD**: every new channel has a contract row, a canonical envelope, a
     refusal test and a loopback rehearsal; no channel carries authority and
     knowledge together; no personal page enters a shared corpus; `make

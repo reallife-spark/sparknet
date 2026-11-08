@@ -108,6 +108,7 @@ def peer_vault(tmp_path: Path, master_state) -> Path:
         json.dumps({"wireguard": {"master_anchor_ip": "10.100.0.1"}}, indent=2) + "\n"
     )
     (vault / "manifests" / "keys" / "master-ed25519.pub.b64").write_text(_public_b64(key) + "\n")
+    (vault / "manifests" / "keys" / "master-ed25519.pub.b64").chmod(0o600)
     return vault
 
 

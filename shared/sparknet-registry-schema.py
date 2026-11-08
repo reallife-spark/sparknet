@@ -357,6 +357,8 @@ def check_entry_semantics(entry: dict, index: int, authz, capabilities: set[str]
         # document peers must install to learn about a revocation un-installable.
         if not granted and not entry.get("revoked"):
             problems.append(f"{where}.capabilities: an authorizing entry must grant at least one capability")
+        if granted and entry.get("revoked"):
+            problems.append(f"{where}.capabilities: a revoked entry must carry an empty capability list")
 
     return problems
 
@@ -422,8 +424,22 @@ def validate_document(
     if isinstance(entries, list):
         _check_array_items(entries, {"items": "entry"}, "registry.authorizations", problems, schema)
         capabilities = set(getattr(authz, "KNOWN_CAPABILITIES", ()))
+        seen_ids: set[str] = set()
+        seen_fps: set[str] = set()
         for index, entry in enumerate(entries):
             if isinstance(entry, dict):
+                node_id = (
+                    (entry.get("identity") or {}).get("node_id") if isinstance(entry.get("identity"), dict) else None
+                )
+                if isinstance(node_id, str):
+                    if node_id in seen_ids:
+                        problems.append(f"authorizations[{index}].identity.node_id: duplicate node id {node_id!r}")
+                    seen_ids.add(node_id)
+                fp = entry.get("fingerprint")
+                if isinstance(fp, str):
+                    if fp in seen_fps:
+                        problems.append(f"authorizations[{index}].fingerprint: duplicate fingerprint {fp!r}")
+                    seen_fps.add(fp)
                 problems.extend(check_entry_semantics(entry, index, authz, capabilities))
 
     if verify_signatures and isinstance(entries, list):

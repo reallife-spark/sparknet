@@ -803,6 +803,7 @@ def _cluster_registry(ctx: dict, *, capabilities: list[str] | None = None) -> st
     key_path = ctx["vault"] / "manifests" / "keys" / "master-ed25519.pub.b64"
     key_path.parent.mkdir(parents=True, exist_ok=True)
     key_path.write_text(_master_pub_b64(ctx["master_key"]) + "\n")
+    key_path.chmod(0o600)
     return node_pub
 
 

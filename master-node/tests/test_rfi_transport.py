@@ -138,6 +138,7 @@ def peer_vault(tmp_path: Path, master_state, monkeypatch: pytest.MonkeyPatch) ->
         json.dumps({"wireguard": {"master_anchor_ip": "10.100.0.1"}}, indent=2) + "\n"
     )
     (vault / "manifests" / "keys" / "master-ed25519.pub.b64").write_text(_public_b64(master_key) + "\n")
+    (vault / "manifests" / "keys" / "master-ed25519.pub.b64").chmod(0o600)
 
     # user_init writes the user key into SPARKNET_STATE_DIR; point it at the peer's.
     monkeypatch.setenv("SPARKNET_STATE_DIR", str(state))
@@ -774,6 +775,7 @@ def test_a_vault_with_no_user_record_refuses_cleanly_before_writing(master_state
         json.dumps({"wireguard": {"master_anchor_ip": "10.100.0.1"}}, indent=2) + "\n"
     )
     (vault / "manifests" / "keys" / "master-ed25519.pub.b64").write_text(_public_b64(master_key) + "\n")
+    (vault / "manifests" / "keys" / "master-ed25519.pub.b64").chmod(0o600)
 
     state = tmp_path / "bare-state"
     state.mkdir()

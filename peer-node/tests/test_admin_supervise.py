@@ -181,6 +181,7 @@ def ctx(tmp_path: Path, master_key: Ed25519PrivateKey, monkeypatch: pytest.Monke
     pub_manifest = vault / "manifests" / "keys" / "master-ed25519.pub.b64"
     pub_manifest.parent.mkdir(parents=True, exist_ok=True)
     pub_manifest.write_text(base64.b64encode(raw).decode("ascii") + "\n")
+    pub_manifest.chmod(0o600)
 
     identity = json.loads((vault / "manifests" / "node-identity.json").read_text())
     registry = {

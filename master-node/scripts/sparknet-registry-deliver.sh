@@ -217,19 +217,34 @@ for entry in targets:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
+    class _NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
+            return None
+
+    # A proxy or a 302 would let a third party answer "200" without the guard
+    # ever installing the publication.
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            body = response.read().decode("utf-8", "replace")
+        with opener.open(request, timeout=timeout) as response:
+            body = response.read(65536).decode("utf-8", "replace")
             record["status"] = response.status
             record["response"] = body
-            record["delivered"] = True
+            try:
+                result = json.loads(body)
+            except json.JSONDecodeError:
+                result = {}
+            if result.get("status") not in {"REGISTRY_INSTALLED", "REGISTRY_ALREADY_INSTALLED"}:
+                record["error"] = "peer did not confirm registry installation"
+                exit_code = 1
+            else:
+                record["delivered"] = True
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", "replace")
         record["status"] = exc.code
         record["response"] = body
         record["error"] = f"the peer refused the publication (HTTP {exc.code})"
         exit_code = 1
-    except (urllib.error.URLError, OSError) as exc:
+    except (urllib.error.URLError, OSError, http.client.HTTPException, ValueError) as exc:
         record["error"] = f"could not reach the peer: {exc}"
         exit_code = 1
     records.append(record)

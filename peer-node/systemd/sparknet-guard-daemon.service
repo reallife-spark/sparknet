@@ -12,6 +12,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
+StateDirectory=sparknet
+StateDirectoryMode=0700
 # No WorkingDirectory and no vault path: the generated shim resolves the vault.
 # --apply-enabled is deliberately absent, so the daemon starts in verify-and-audit
 # mode. Arming is an explicit operator decision, because applying means lifting
