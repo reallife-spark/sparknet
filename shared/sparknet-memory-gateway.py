@@ -27,7 +27,9 @@ import hmac
 import json
 import os
 import re
+import stat
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -143,7 +145,24 @@ def _read_token(path: Path) -> str:
         raise GatewayError(503, "token-unavailable", f"cannot read {path}") from exc
     if len(value) < 16:
         raise GatewayError(503, "token-invalid", f"{path} is too short")
+    try:
+        if stat.S_IMODE(path.stat().st_mode) & 0o077:
+            raise GatewayError(503, "token-mode", f"{path} must not be group/other readable")
+    except OSError as exc:
+        raise GatewayError(503, "token-unavailable", f"cannot stat {path}") from exc
     return value
+
+
+def _walk_vault_files(root: Path, base: Path | None = None):
+    """Yield regular files without following directory symlinks."""
+    start = base or root
+    for dirpath, dirnames, filenames in os.walk(start, followlinks=False):
+        directory = Path(dirpath)
+        dirnames[:] = [name for name in dirnames if not (directory / name).is_symlink()]
+        for name in filenames:
+            path = directory / name
+            if not path.is_symlink() and path.is_file():
+                yield path
 
 
 class Gateway:
@@ -427,11 +446,9 @@ class Gateway:
         return candidate
 
     def _vault_files(self, vault_path: str) -> list[Path]:
-        root = Path(vault_path)
+        root = Path(vault_path).resolve()
         files = []
-        for path in root.rglob("*"):
-            if not path.is_file() or path.is_symlink():
-                continue
+        for path in _walk_vault_files(root):
             rel = path.relative_to(root)
             if any(part in VAULT_SKIP_PARTS for part in rel.parts):
                 continue
@@ -521,10 +538,18 @@ class Gateway:
     @staticmethod
     def _write_json_atomic(path: Path, value: dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        temp = path.with_name(path.name + ".tmp")
-        temp.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        os.chmod(temp, 0o600)
-        os.replace(temp, path)
+        fd, temp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
+        try:
+            os.fchmod(fd, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(json.dumps(value, indent=2, sort_keys=True) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp_name, path)
+        except Exception:
+            with contextlib.suppress(OSError):
+                os.unlink(temp_name)
+            raise
 
     def _collab_root(self, vault_path: str) -> Path:
         root = Path(vault_path).resolve()
@@ -608,7 +633,7 @@ class Gateway:
     def collab_list_messages(self, vault_path: str, room_id: str) -> dict[str, Any]:
         if not room_id:
             raise GatewayError(400, "malformed", "room_id is required")
-        room_file = self._collab_root(vault_path) / room_id / "room.json"
+        room_file = self._room_path(vault_path, room_id) / "room.json"
         try:
             room = COLLAB.validate_room(json.loads(room_file.read_text(encoding="utf-8")))
         except (OSError, ValueError, COLLAB.CollabError) as exc:
@@ -689,11 +714,10 @@ class Gateway:
     ) -> dict[str, Any]:
         base = self._vault_candidate(vault_path, prefix)
         rows = []
+        root = Path(vault_path).resolve()
         if base.is_dir():
-            for path in sorted(base.rglob("*")):
-                if not path.is_file() or path.is_symlink():
-                    continue
-                rel = path.relative_to(Path(vault_path).resolve()).as_posix()
+            for path in sorted(_walk_vault_files(root, base)):
+                rel = path.relative_to(root).as_posix()
                 if any(part in VAULT_SKIP_PARTS for part in Path(rel).parts):
                     continue
                 if path.name in VAULT_SKIP_NAMES:

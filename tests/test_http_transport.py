@@ -443,3 +443,7 @@ def test_a_keyring_reports_which_peer_key_verified(http, authz, keypair) -> None
         server.shutdown()
         server.server_close()
         thread.join(timeout=3)
+
+
+def test_loopback_policy_ignores_the_query_string(http):
+    assert http.check_source_policy("/internal?x=1", "overlay", ("/internal",)) == "not-loopback"

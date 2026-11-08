@@ -1722,6 +1722,8 @@ def verify_rfi_answer(
         answered = datetime.fromisoformat(str(answer["answered_at"]).replace("Z", "+00:00"))
     except ValueError:
         return False, REASON_RFI_EXPIRED, b""
+    if answered.tzinfo is None:
+        answered = answered.replace(tzinfo=timezone.utc)
     moment = now or datetime.now(timezone.utc)
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=timezone.utc)

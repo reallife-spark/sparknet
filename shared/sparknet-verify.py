@@ -172,9 +172,7 @@ def _probabilities(answer: Any, required: set[str], allowed: set[str], choice: s
             return None
         probs[str(key)] = number
     total = sum(probs.values())
-    if total <= 0.0:
-        return None
-    if not required <= keys and total < 0.99:
+    if total <= 0.0 or total < 0.99 or total > 1.01:
         return None
     for missing in required - keys:
         probs[missing] = 0.0

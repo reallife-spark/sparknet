@@ -108,14 +108,15 @@ def installation_record(vault_root: Path) -> dict[str, Any]:
         raise InstallError(409, "installation-record-corrupt", f"{path} is unreadable: {exc}") from exc
     if not isinstance(data, dict):
         raise InstallError(409, "installation-record-corrupt", f"{path} is not an object")
+    if "sequence" in data:
+        sequence = data["sequence"]
+        if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence < 0:
+            raise InstallError(409, "installation-record-corrupt", f"{path} has a malformed sequence")
     return data
 
 
 def installed_sequence(vault_root: Path) -> int:
-    try:
-        return int(installation_record(vault_root).get("sequence") or 0)
-    except (TypeError, ValueError):
-        return 0
+    return int(installation_record(vault_root).get("sequence") or 0)
 
 
 def verify_publication(publication: Any, public_key: Any, authz: Any, schema: Any) -> dict[str, Any]:
@@ -221,10 +222,7 @@ def accept_publication(
     """
     verified = verify_publication(publication, public_key, authz, schema)
     previous = installation_record(vault_root)
-    try:
-        previous_sequence = int(previous.get("sequence") or 0)
-    except (TypeError, ValueError):
-        previous_sequence = 0
+    previous_sequence = int(previous.get("sequence") or 0)
     result = {
         "sequence": verified["sequence"],
         "published_at": verified["published_at"],

@@ -181,7 +181,8 @@ def check_source_policy(path: str, source: str, loopback_only_routes: tuple[str,
         return None
     if source == "loopback":
         return None
-    if any(path == prefix or path.startswith(prefix.rstrip("/") + "/") for prefix in loopback_only_routes):
+    route = path.split("?", 1)[0]
+    if any(route == prefix or route.startswith(prefix.rstrip("/") + "/") for prefix in loopback_only_routes):
         return "not-loopback"
     return None
 

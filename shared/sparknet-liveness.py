@@ -93,6 +93,7 @@ class Monitor:
         self.activity_grace = activity_grace
         self.full_dark_rounds = 0
         self._probe_count = 0
+        self._lock = threading.RLock()
 
     # --- observation ----------------------------------------------------------
 
@@ -102,12 +103,13 @@ class Monitor:
         A busy node is the least likely to answer an announcement, so activity
         trumps eviction: the missed-probe count drops back to zero.
         """
-        peer = self.peers.get(name)
-        if peer is None:
-            return
-        peer.last_activity = at or self.clock()
-        peer.missed_probes = 0
-        peer.alive = True
+        with self._lock:
+            peer = self.peers.get(name)
+            if peer is None:
+                return
+            peer.last_activity = at or self.clock()
+            peer.missed_probes = 0
+            peer.alive = True
 
     def probe_once(self, at: datetime | None = None) -> dict[str, bool]:
         """One probe round across every watched peer.
@@ -116,31 +118,33 @@ class Monitor:
         dark is a full-dark round: the fault is the monitor's own link, so it
         records the flag and evicts nothing.
         """
-        results: dict[str, bool] = {}
+        with self._lock:
+            results: dict[str, bool] = {}
+            for name in list(self.peers):
+                address = self.resolve(name)
+                if address is None:
+                    results[name] = False
+                    continue
+                results[name] = self.probe(address)
 
-        for name in self.peers:
-            address = self.resolve(name)
-            if address is None:
-                results[name] = False
-                continue
-            results[name] = self.probe(address)
-
-        self._probe_count += 1
-        authors = list(results.values())
-        if authors and not any(authors):
-            self.full_dark_rounds += 1
-        else:
-            self.full_dark_rounds = 0
-
-        for name, alive in results.items():
-            peer = self.peers[name]
-            peer.alive = alive
-            if alive:
-                peer.missed_probes = 0
-                peer.evicted = False
+            self._probe_count += 1
+            authors = list(results.values())
+            if authors and not any(authors):
+                self.full_dark_rounds += 1
             else:
-                peer.missed_probes += 1
-        return results
+                self.full_dark_rounds = 0
+
+            for name, alive in results.items():
+                peer = self.peers.get(name)
+                if peer is None:
+                    continue
+                peer.alive = alive
+                if alive:
+                    peer.missed_probes = 0
+                    peer.evicted = False
+                else:
+                    peer.missed_probes += 1
+            return results
 
     # --- eviction -------------------------------------------------------------
 
@@ -151,24 +155,26 @@ class Monitor:
         full-dark, they have been quiet past the grace, and they have missed
         probes up to the threshold.
         """
-        stamp = at or self.clock()
-        if self.full_dark_rounds > 0:
-            return []
-        return [
-            name
-            for name, peer in self.peers.items()
-            if peer.quiet_for(stamp) and peer.missed_probes >= self.eviction_threshold
-        ]
+        with self._lock:
+            stamp = at or self.clock()
+            if self.full_dark_rounds > 0:
+                return []
+            return [
+                name
+                for name, peer in self.peers.items()
+                if peer.quiet_for(stamp) and peer.missed_probes >= self.eviction_threshold
+            ]
 
     def evict(self, name: str, at: datetime | None = None) -> bool:
         """Evict ``name`` from this monitor's view. Local and reversible."""
-        if name not in self.eviction_candidates(at):
-            return False
-        peer = self.peers[name]
-        peer.evicted = True
-        peer.alive = False
-        del self.peers[name]
-        return True
+        with self._lock:
+            if name not in self.eviction_candidates(at):
+                return False
+            peer = self.peers[name]
+            peer.evicted = True
+            peer.alive = False
+            del self.peers[name]
+            return True
 
     # --- claims ---------------------------------------------------------------
 
@@ -181,18 +187,19 @@ class Monitor:
         attributes it by the authenticated source address
         (``contracts/health-protocol.md``).
         """
-        stamp = at or self.clock()
-        peer = self.peers.get(name)
-        if peer is None:
-            return {"node": name, "alive": False, "reported_at": stamp.isoformat()}
-        return {
-            "node": name,
-            "alive": peer.alive,
-            "missed_probes": peer.missed_probes,
-            "full_dark_rounds": self.full_dark_rounds,
-            "probe_count": self._probe_count,
-            "reported_at": stamp.isoformat(),
-        }
+        with self._lock:
+            stamp = at or self.clock()
+            peer = self.peers.get(name)
+            if peer is None:
+                return {"node": name, "alive": False, "reported_at": stamp.isoformat()}
+            return {
+                "node": name,
+                "alive": peer.alive,
+                "missed_probes": peer.missed_probes,
+                "full_dark_rounds": self.full_dark_rounds,
+                "probe_count": self._probe_count,
+                "reported_at": stamp.isoformat(),
+            }
 
 
 class ContinuousMonitor(Monitor):

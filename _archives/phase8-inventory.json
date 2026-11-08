@@ -4630,13 +4630,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
-      "commit": "",
+      "evidence": "tests/test_contracts.py::test_a_naive_rfi_timestamp_is_treated_as_utc",
+      "test": "tests/test_contracts.py",
+      "commit": "pending",
       "reviewer": "",
-      "notes": ""
+      "notes": "naive RFI timestamp treated as UTC"
     },
     {
       "path": "shared/sparknet-cluster.py",
@@ -4645,13 +4645,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "tests/ shared audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence defect in the Step 90B audit"
     },
     {
       "path": "shared/sparknet-consensus.py",
@@ -4660,13 +4660,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
-      "commit": "",
+      "evidence": "tests/test_consensus.py",
+      "test": "tests/test_consensus.py",
+      "commit": "pending",
       "reviewer": "",
-      "notes": ""
+      "notes": "no change; chained identity re-description remains intentional and tested"
     },
     {
       "path": "shared/sparknet-election.py",
@@ -4675,13 +4675,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
-      "commit": "",
+      "evidence": "tests/test_election.py::test_sign_root_refuses_a_substituted_operational_key; tests/test_election.py::test_accept_root_refuses_a_rollback_without_trust_evidence",
+      "test": "tests/test_election.py",
+      "commit": "pending",
       "reviewer": "",
-      "notes": ""
+      "notes": "operational-key binding + trust-root rollback guard"
     },
     {
       "path": "shared/sparknet-http.py",
@@ -4690,13 +4690,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
-      "commit": "",
+      "evidence": "tests/test_http_transport.py::test_loopback_policy_ignores_the_query_string",
+      "test": "tests/test_http_transport.py",
+      "commit": "pending",
       "reviewer": "",
-      "notes": ""
+      "notes": "query-string stripped before loopback policy match"
     },
     {
       "path": "shared/sparknet-idle.py",
@@ -4705,13 +4705,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "tests/ shared audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence defect in the Step 90B audit"
     },
     {
       "path": "shared/sparknet-liveness.py",
@@ -4720,13 +4720,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
-      "commit": "",
+      "evidence": "tests/test_liveness_service.py",
+      "test": "tests/test_liveness_service.py",
+      "commit": "pending",
       "reviewer": "",
-      "notes": ""
+      "notes": "monitor mutators serialized"
     },
     {
       "path": "shared/sparknet-memory-filter.py",
@@ -4735,13 +4735,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "tests/ shared audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence defect in the Step 90B audit"
     },
     {
       "path": "shared/sparknet-memory-gateway.py",
@@ -4750,13 +4750,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
-      "commit": "",
+      "evidence": "tests/test_memory_gateway.py::test_vault_walk_does_not_follow_directory_symlinks; tests/test_memory_gateway.py::test_collab_list_messages_rejects_room_traversal",
+      "test": "tests/test_memory_gateway.py",
+      "commit": "pending",
       "reviewer": "",
-      "notes": ""
+      "notes": "collab room validation, symlink-safe walk, atomic writes, token mode"
     },
     {
       "path": "shared/sparknet-memory-mcp.py",
@@ -4765,13 +4765,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "tests/ shared audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence defect in the Step 90B audit"
     },
     {
       "path": "shared/sparknet-merkle.py",
@@ -4780,13 +4780,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "tests/ shared audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence defect in the Step 90B audit"
     },
     {
       "path": "shared/sparknet-nocturnal.py",
@@ -4795,13 +4795,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "tests/ shared audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence defect in the Step 90B audit"
     },
     {
       "path": "shared/sparknet-notify.py",
@@ -4810,13 +4810,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "tests/ shared audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence defect in the Step 90B audit"
     },
     {
       "path": "shared/sparknet-oob.py",
@@ -4825,13 +4825,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "tests/ shared audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence defect in the Step 90B audit"
     },
     {
       "path": "shared/sparknet-proposal.py",
@@ -4840,13 +4840,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "tests/ shared audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence defect in the Step 90B audit"
     },
     {
       "path": "shared/sparknet-provenance.py",
@@ -4855,13 +4855,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
-      "commit": "",
+      "evidence": "tests/test_provenance.py::test_concurrent_appends_do_not_lose_blocks",
+      "test": "tests/test_provenance.py",
+      "commit": "pending",
       "reviewer": "",
-      "notes": ""
+      "notes": "ledger flock, unique temp, quarantine grant-id validation"
     },
     {
       "path": "shared/sparknet-reflex.py",
@@ -4870,13 +4870,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
-      "commit": "",
+      "evidence": "tests/test_reflex_plan.py",
+      "test": "tests/test_reflex_plan.py",
+      "commit": "pending",
       "reviewer": "",
-      "notes": ""
+      "notes": "bounded daemon consult slots"
     },
     {
       "path": "shared/sparknet-registry-install.py",
@@ -4885,13 +4885,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
-      "commit": "",
+      "evidence": "tests/test_registry_install_record.py::test_malformed_sequence_is_refused_not_treated_as_zero",
+      "test": "tests/test_registry_install_record.py",
+      "commit": "pending",
       "reviewer": "",
-      "notes": ""
+      "notes": "malformed sequence fails closed"
     },
     {
       "path": "shared/sparknet-registry-schema.py",
@@ -4900,13 +4900,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
-      "commit": "",
+      "evidence": "tests/test_registry_schema.py",
+      "test": "master-node/tests/test_registry_schema.py",
+      "commit": "pending",
       "reviewer": "",
-      "notes": ""
+      "notes": "duplicate identity and revoked-capability checks"
     },
     {
       "path": "shared/sparknet-rfi-install.py",
@@ -4915,13 +4915,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
-      "commit": "",
+      "evidence": "tests/test_provenance.py",
+      "test": "tests/test_provenance.py",
+      "commit": "pending",
       "reviewer": "",
-      "notes": ""
+      "notes": "acceptance block before install record"
     },
     {
       "path": "shared/sparknet-verify.py",
@@ -4930,13 +4930,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
-      "commit": "",
+      "evidence": "tests/test_reflex_plan.py::test_truncated_choice_distribution_is_refused",
+      "test": "tests/test_reflex_plan.py",
+      "commit": "pending",
       "reviewer": "",
-      "notes": ""
+      "notes": "truncated distributions refused"
     },
     {
       "path": "shared/sparknet-yaml.py",
@@ -4945,13 +4945,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "tests/ shared audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence defect in the Step 90B audit"
     },
     {
       "path": "shared/sparknet_loader.py",
@@ -4960,13 +4960,13 @@
       "language": "py",
       "area": "shared",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "tests/ shared audit 2026-11-08",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence defect in the Step 90B audit"
     },
     {
       "path": "tests/conftest.py",

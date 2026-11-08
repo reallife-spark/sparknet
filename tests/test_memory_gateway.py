@@ -532,3 +532,26 @@ def test_capture_redacts_secret_shaped_text(stack):
     assert "abcdefghijklmnopqrstuvwxyz123456" not in text
     assert "[redacted key]" in text
     assert "Bearer [redacted]" in text
+
+
+def test_collab_list_messages_rejects_room_traversal(stack):
+    role = stack["role"]
+    with pytest.raises(gateway_mod.GatewayError) as refused:
+        stack["gateway"].handle(
+            "GET",
+            "/v1/collab/messages",
+            {"x-sparknet-local-token": "local-token", "x-sparknet-vault-path": str(role)},
+            {"room_id": "../../peer-user-1/01_Inbox/collab/room"},
+        )
+    assert refused.value.code == "bad-room-id"
+
+
+def test_vault_walk_does_not_follow_directory_symlinks(stack):
+    role = stack["role"]
+    victim = stack["knowledge"] / "peer-user-1" / "05_Knowledge"
+    victim.mkdir(parents=True, exist_ok=True)
+    (victim / "secret.md").write_text("# another user's page\n", encoding="utf-8")
+    (role / "05_Knowledge").mkdir()
+    (role / "05_Knowledge" / "leak").symlink_to(victim, target_is_directory=True)
+    listed = stack["gateway"].vault_list(str(role), prefix="05_Knowledge")
+    assert listed["paths"] == []

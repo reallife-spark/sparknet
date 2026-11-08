@@ -144,6 +144,16 @@ def accept_answer(
     _atomic_write(target, content)
     _adopt_vault_owner(target, vault_root)
 
+    block = provenance.build_inbox_acceptance(
+        vault_root,
+        item=f"01_Inbox/{item_name}",
+        source="master-node",
+        decision="accepted",
+        note_refs=[f"01_Inbox/{item_name}"],
+        record=user_record,
+        clock=(lambda: now) if now else None,
+    )
+    provenance.append_block(vault_root, block)
     ids = [str(x) for x in record.get("request_ids") or []]
     if request_id not in ids:
         ids.append(request_id)
@@ -160,17 +170,6 @@ def accept_answer(
     record_path = vault_root / INSTALL_RECORD_RELPATH
     _atomic_write(record_path, (json.dumps(record, indent=2, sort_keys=True) + "\n").encode("utf-8"))
     _adopt_vault_owner(record_path, vault_root)
-
-    block = provenance.build_inbox_acceptance(
-        vault_root,
-        item=f"01_Inbox/{item_name}",
-        source="master-node",
-        decision="accepted",
-        note_refs=[f"01_Inbox/{item_name}"],
-        record=user_record,
-        clock=(lambda: now) if now else None,
-    )
-    provenance.append_block(vault_root, block)
     return {
         "status": "installed",
         "reason": "",

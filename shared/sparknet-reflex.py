@@ -16,14 +16,14 @@ import hashlib
 import json
 import os
 import re
+import threading
 import time
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass
 from typing import Any
 
 SCHEMA_VERSION = "1.0"
+_REFLEX_SLOTS = threading.BoundedSemaphore(4)
 QUESTION_CLASSES = ("rag.relevance", "intent.route", "input.injection", "tool.risk", "output.grounded", "plan.select")
 QUESTION_TYPES = ("noul", "choice", "score")
 VERDICTS = ("accept", "reject", "abstain")
@@ -433,21 +433,31 @@ def consult(
             decision["latency_ms"] = latency_ms
         return decision
 
-    executor = ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(call, request)
-    try:
-        answer = future.result(timeout=timeout_s)
-    except FuturesTimeoutError:
-        future.cancel()
+    if not _REFLEX_SLOTS.acquire(blocking=False):
+        return finish_abstain("busy")
+    box: dict[str, Any] = {}
+
+    def _run_backend() -> None:
+        try:
+            box["answer"] = call(request)
+        except BaseException as exc:
+            box["error"] = exc
+        finally:
+            _REFLEX_SLOTS.release()
+
+    backend_thread = threading.Thread(target=_run_backend, name="reflex-consult", daemon=True)
+    backend_thread.start()
+    backend_thread.join(timeout_s)
+    if backend_thread.is_alive():
         return finish_abstain("timeout")
-    except ReflexBudgetExhausted:
-        return finish_abstain("budget-exhausted")
-    except ReflexNoSignal:
-        return finish_abstain("low-signal")
-    except Exception:
+    if "error" in box:
+        error = box["error"]
+        if isinstance(error, ReflexBudgetExhausted):
+            return finish_abstain("budget-exhausted")
+        if isinstance(error, ReflexNoSignal):
+            return finish_abstain("low-signal")
         return finish_abstain("backend-error")
-    finally:
-        executor.shutdown(wait=False, cancel_futures=True)
+    answer = box.get("answer")
 
     if budget is not None:
         budget.charge()

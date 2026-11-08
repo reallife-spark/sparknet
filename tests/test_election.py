@@ -1502,3 +1502,42 @@ def test_internal_errors_do_not_leak_internals(election, live, monkeypatch, caps
     assert payload["ok"] is False
     assert "SECRET_ELECTION_DETAIL" not in str(payload)
     assert "SECRET_ELECTION_DETAIL" in capsys.readouterr().err
+
+
+def test_sign_root_refuses_a_substituted_operational_key(election, cluster, keydirs, monkeypatch):
+    """The elected node's co-signature must bind its own operational key, not just its id."""
+    root = {
+        "version": "1.1",
+        "nonce": "substitution",
+        "formed_at": "2026-11-08T00:00:00Z",
+        "members": cluster["members"],
+        "master_node_id": WINNER,
+        "master_pubkey": cluster["operational"]["alpha"],
+        "previous_root_id": "",
+        "signatures": {},
+    }
+    monkeypatch.setattr(election, "status_of", lambda *_args, **_kwargs: {"root": root})
+    monkeypatch.setattr(election, "_call", lambda *_args, **_kwargs: {"ok": True})
+    (keydirs[WINNER] / "operational.ed25519").write_text(cluster["operational_private"][WINNER] + "\n")
+    with pytest.raises(election.ElectionError) as exc:
+        election.sign_root("http://unused", WINNER, WINNER, election.DEFAULT_ELECTION_ID, keydirs[WINNER])
+    _raise_reason(pytest, exc, "root_unusable")
+    assert "operational public key" in str(exc.value)
+
+
+def test_accept_root_refuses_a_rollback_without_trust_evidence(election, consensus, cluster, keydirs, tmp_path):
+    first, _ = _formed(election, consensus, cluster)
+    identity = (
+        json.loads((tmp_path / "node-identity.json").read_text())
+        if (tmp_path / "node-identity.json").is_file()
+        else {
+            "node_id": WINNER,
+            "trust_root": {"root_id": "root-held"},
+        }
+    )
+    identity["trust_root"] = {"root_id": "root-held"}
+    path = tmp_path / "identity.json"
+    path.write_text(json.dumps(identity))
+    with pytest.raises(election.ElectionError) as exc:
+        election.accept_root(first.status()["root"], path)
+    _raise_reason(pytest, exc, "unchained_root")

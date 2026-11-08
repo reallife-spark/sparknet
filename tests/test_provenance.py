@@ -18,6 +18,7 @@ import importlib.util
 import json
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import ModuleType
 
@@ -1255,3 +1256,19 @@ def test_a_corrupt_install_record_refuses_a_replay(rfi: dict) -> None:
 def test_flow_lists_round_trip_ambiguous_strings(provenance: ModuleType):
     value = {"tags": ["a,b", 'a"b', "a[b]", "x: y", "#hash"]}
     assert provenance.parse_yaml_subset(provenance.emit_yaml(value)) == value
+
+
+def test_concurrent_appends_do_not_lose_blocks(vault: Path, provenance: ModuleType) -> None:
+    """The ledger's read-modify-write must be one critical section."""
+
+    def append(index: int):
+        return provenance.append_block(vault, {"event": "grant_use", "nonce": f"n-{index}", "session": f"s-{index}"})
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        blocks = list(pool.map(append, range(2)))
+    ledger = provenance.load_ledger(vault / "blockchain" / "ledger.json")
+    assert len(ledger["blocks"]) == 2
+    assert {block["block_id"] for block in ledger["blocks"]} == {"00000000", "00000001"}
+    assert {block["data"]["nonce"] for block in blocks} == {"n-0", "n-1"}
+    ok, detail = provenance.verify_chain(ledger)
+    assert ok, detail

@@ -2275,3 +2275,14 @@ def test_every_telemetry_refusal_is_a_reason_the_verifier_or_gate_produces(
     }
     for code in telemetry_schema["refusals"]:
         assert code == "off_overlay" or code in produced, f"the contract names {code!r}, which nothing produces"
+
+
+def test_a_naive_rfi_timestamp_is_treated_as_utc(authz: ModuleType) -> None:
+    """A timestamp without an offset must not raise a TypeError out of the verifier."""
+    from datetime import datetime
+
+    key = _rfi_key()
+    answer = _answer(authz, key, now=datetime.now())
+    ok, reason, content = authz.verify_rfi_answer(answer, master_public_key=key.public_key(), peer_fingerprint="a" * 64)
+    assert ok is True, reason
+    assert content == b"# the answer\n"

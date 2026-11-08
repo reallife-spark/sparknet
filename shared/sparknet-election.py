@@ -986,13 +986,21 @@ def sign_root(
             REASON_UNEXPECTED_MASTER,
             f"root names {root.get('master_node_id')!r} but this member voted for {candidate!r}; refusing to co-sign",
         )
+    authz = load_authz(shared_dir)
+    if node_id == candidate:
+        _, operational_public = read_keypair(key_dir, "operational", authz)
+        if root.get("master_pubkey") != operational_public:
+            raise ElectionError(
+                REASON_ROOT_UNUSABLE,
+                "root names the elected master but not this node's operational public key; "
+                "refusing to co-sign a key substitution",
+            )
     try:
         consensus.canonical_root(root)
     except consensus.ConsensusError as exc:
         raise ElectionError(REASON_ROOT_UNUSABLE, str(exc)) from exc
     if node_id in (root.get("signatures") or {}):
         return status  # already co-signed: idempotent
-    authz = load_authz(shared_dir)
     cluster_private, _ = read_keypair(key_dir, "cluster", authz)
     try:
         signature_map = consensus.sign_root(root, node_id, cluster_private)
@@ -1016,6 +1024,7 @@ def accept_root(
     trust_root: dict[str, Any] | None = None,
     root_out: Path | None = None,
     root_doc: Path | None = None,
+    key_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Install an elected root on this node — or leave the node a peer.
 
@@ -1034,6 +1043,18 @@ def accept_root(
     except (OSError, json.JSONDecodeError) as exc:
         raise ElectionError(REASON_MALFORMED, f"identity unreadable: {exc}") from exc
 
+    incoming_root_id = consensus.root_id(root)
+    held_projection = identity.get("trust_root")
+    if isinstance(held_projection, dict) and held_projection.get("root_id"):
+        held_root_id = str(held_projection["root_id"])
+        if trust_root is None and incoming_root_id != held_root_id:
+            raise ElectionError(
+                getattr(consensus, "REASON_UNCHAINED", "unchained"),
+                "This node already holds a trust root; accepting a different root requires the held "
+                "root document as trust evidence (a rollback is not a re-formation).",
+            )
+        if trust_root is None and incoming_root_id == held_root_id:
+            trust_root = None  # idempotent same-root acceptance
     ok, detail = consensus.verify_root(root, trust=trust_root)
     if not ok:
         raise ElectionError(REASON_ROOT_UNUSABLE, detail)
@@ -1047,7 +1068,16 @@ def accept_root(
     if node_id not in members:
         raise ElectionError(REASON_NOT_A_MEMBER, f"{node_id} is not named by this root")
 
-    root_id = consensus.root_id(root)
+    if node_id == root["master_node_id"] and key_dir is not None:
+        _, operational_public = read_keypair(key_dir, "operational", authz)
+        if root["master_pubkey"] != operational_public:
+            raise ElectionError(
+                REASON_ROOT_UNUSABLE,
+                "root names this node as master but not this node's operational public key; "
+                "refusing to install a substituted key",
+            )
+
+    root_id = incoming_root_id
     if node_id != root["master_node_id"]:
         # Correct outcome for the two members that stayed peers: verify and
         # report, change nothing, do not fail the ceremony.
@@ -1181,7 +1211,7 @@ def run_member(
         held = json.loads(root_doc.read_text()).get("root")
         if isinstance(held, dict) and held.get("nonce") != root.get("nonce"):
             trust = held  # a held root of a different nonce: supersession rules
-    out["accept"] = accept_root(root, identity_path, shared_dir, trust, root_out, root_doc)
+    out["accept"] = accept_root(root, identity_path, shared_dir, trust, root_out, root_doc, key_dir)
     return out
 
 
@@ -1263,6 +1293,7 @@ def _main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("accept", help="install a formed root on this node")
     p.add_argument("--root", type=Path, required=True)
     p.add_argument("--identity", type=Path, required=True)
+    p.add_argument("--key-dir", type=Path, default=None)
     p.add_argument("--trust", type=Path, default=None)
     p.add_argument("--root-out", type=Path, default=None)
     p.add_argument("--root-doc", type=Path, default=None)
@@ -1336,6 +1367,7 @@ def _main(argv: list[str] | None = None) -> int:
                 trust,
                 args.root_out,
                 args.root_doc,
+                args.key_dir,
             )
         else:  # member
             payload = run_member(

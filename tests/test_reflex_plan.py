@@ -298,3 +298,16 @@ def test_the_committed_golden_set_is_valid(eval_mod: ModuleType, verify: ModuleT
     golden = eval_mod.load_golden(GOLDEN_PATH, verify)
     assert len(golden["cases"]) >= 12
     assert any(case["expected"] == "none" for case in golden["cases"])
+
+
+def test_truncated_choice_distribution_is_refused(verify: ModuleType) -> None:
+    """A 0.5-mass answer must abstain, not be renormalised into confidence."""
+    assert (
+        verify._probabilities(
+            {"type": "choice", "probabilities": {"local": 0.4, "cloud": 0.1}},
+            {"local", "cloud"},
+            {"local", "cloud"},
+            "local",
+        )
+        is None
+    )
