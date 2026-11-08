@@ -1891,3 +1891,14 @@ def test_serve_one_refuses_a_disallowed_caller_before_parsing(signer_module):
     finally:
         left.close()
         right.close()
+
+
+def test_caller_allowlist_can_use_a_dedicated_signer_uid(signer_module):
+    """With a dedicated signer user, the uid is the boundary, not /proc paths."""
+    left, right = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        assert signer_module._caller_allowed(left, (), (os.getuid(),))
+        assert not signer_module._caller_allowed(left, (), (os.getuid() + 1,))
+    finally:
+        left.close()
+        right.close()

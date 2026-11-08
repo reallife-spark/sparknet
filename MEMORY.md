@@ -26,9 +26,9 @@ Updated: 2026-11-08
 - Live fleet uses iptables and userspace WireGuard.
 - Registry ships empty; fresh nodes grant nothing.
 ## Security hardening 2026-11-08
-- Signer: exact caller allowlist (`--allow-caller`, `SO_PEERCRED` plus bounded ancestor walk) is **live on agx64**; probe script succeeds, direct `python3 -c` is refused. Verifies ledger against the pinned operational key before signing.
+- Signer: **live on agx64** as root with a root-owned 0600 operational key, socket group `sparknet-signer` at 0660, and the exact caller allowlist; probe succeeds, direct `python3 -c` is refused. Verifies ledger against the pinned operational key before signing. See `master-node/docs/signer-isolation.md`.
 - Ledger: `verify_chain(..., expected_pubkey_b64)`; CLI pins from `--pubkey` or the trust root. Forward key rotation is accepted; a return to an old key after the current key took over is refused. Live 54-block ledger verified 2026-11-08.
-- goSpark: pinned mutual TLS (`Server.ClientFingerprint`, `DialOptions.ClientCertificate`), 64 incoming QUIC streams per connection; `sparknetctl send-block` requires `-pin`. Admin listener requires `GOSPARK_ADMIN_TOKEN` and fails closed without it; `sparknetctl`/MCP send the bearer token.
+- goSpark: pinned mutual TLS (`Server.ClientFingerprint`, `DialOptions.ClientCertificate`), cert→node origin binding, 64 incoming QUIC streams per connection; `sparknetctl send-block` requires `-pin`. Admin listener requires `GOSPARK_ADMIN_TOKEN` and fails closed without it; `sparknetctl`/MCP send the bearer token.
 ## Phase 8 state
 - Wave A: shared boundary/fail-closed fixes, live-deployed to memory gateway.
 - Wave B: scripts/goagx targeted rewrites, including safe tar extraction and master from-git bundle fix.

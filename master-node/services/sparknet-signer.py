@@ -429,7 +429,7 @@ def record_event(
     block["signature"] = authz.sign_bytes(private_key, authz.ledger_block_signable(block))
     block["hash"] = _block_hash(block, authz)
     blocks.append(block)
-    _atomic_write(ledger_path, json.dumps(ledger, indent=2) + "\n", mode=0o600)
+    _atomic_write(ledger_path, json.dumps(ledger, indent=2) + "\n", mode=0o640)
     return block
 
 
@@ -1038,7 +1038,24 @@ def _ancestor_pids(pid: int, depth: int = 3) -> list[int]:
     return chain
 
 
-def _caller_allowed(connection: socket.socket, allow_callers: tuple[str, ...]) -> bool:
+def _peer_uid(connection: socket.socket) -> int | None:
+    """Return the Linux peer uid for a unix connection, or ``None``."""
+    option = getattr(socket, "SO_PEERCRED", None)
+    if option is None:
+        return None
+    try:
+        raw = connection.getsockopt(socket.SOL_SOCKET, option, struct.calcsize("3i"))
+        _pid, uid, _gid = struct.unpack("3i", raw)
+        return uid
+    except OSError:
+        return None
+
+
+def _caller_allowed(
+    connection: socket.socket,
+    allow_callers: tuple[str, ...],
+    allow_uids: tuple[int, ...] = (),
+) -> bool:
     """Check the peer process and its immediate ancestors against an exact allowlist.
 
     Matching any command-line token or the resolved executable, not a substring:
@@ -1050,8 +1067,13 @@ def _caller_allowed(connection: socket.socket, allow_callers: tuple[str, ...]) -
     An allowlist entry is resolved too, so a symlink under the state directory
     cannot be swapped for another binary after the unit starts.
     """
-    if not allow_callers:
+    if not allow_callers and not allow_uids:
         return True
+    uid = _peer_uid(connection)
+    if uid is not None and uid in allow_uids:
+        return True
+    if not allow_callers:
+        return False
     pid = _peer_pid(connection)
     if pid is None:
         return False
@@ -1068,6 +1090,8 @@ def serve(
     max_request_bytes: int = 1 << 20,
     read_timeout: float = REQUEST_READ_TIMEOUT_SECONDS,
     allow_callers: tuple[str, ...] = (),
+    allow_uids: tuple[int, ...] = (),
+    socket_mode: int = 0o600,
 ) -> None:
     """One JSON object per line; each connection served on its own thread.
 
@@ -1101,13 +1125,13 @@ def serve(
         server.bind(str(socket_path))
         # 0600 on the socket itself: the peer surface runs as the same uid on most
         # nodes, so directory permissions alone would not keep it out.
-        os.chmod(socket_path, 0o600)
+        os.chmod(socket_path, socket_mode)
         server.listen(8)
         while True:
             connection, _ = server.accept()
             threading.Thread(
                 target=_serve_one,
-                args=(signer, connection, max_request_bytes, read_timeout, sign_lock, allow_callers),
+                args=(signer, connection, max_request_bytes, read_timeout, sign_lock, allow_callers, allow_uids),
                 name="signer-client",
                 daemon=True,
             ).start()
@@ -1157,6 +1181,7 @@ def _serve_one(
     read_timeout: float,
     sign_lock: threading.Lock,
     allow_callers: tuple[str, ...] = (),
+    allow_uids: tuple[int, ...] = (),
 ) -> None:
     """Read one line, answer once, close. Runs in a per-connection thread.
 
@@ -1166,7 +1191,7 @@ def _serve_one(
     connected-but-silent client would hold this thread's slot forever.
     """
     with connection:
-        if not _caller_allowed(connection, allow_callers):
+        if not _caller_allowed(connection, allow_callers, allow_uids):
             _send(connection, {"ok": False, "error": "caller-not-allowed"})
             return
         try:
@@ -1217,6 +1242,19 @@ def main(argv: list[str] | None = None) -> int:
     # Path() collapses "tcp://host:port" to "tcp:/host:port" and the check that
     # exists to catch exactly that input would miss it.
     parser.add_argument("--socket", default=str(DEFAULT_STATE_DIR / "signer" / "signer.sock"))
+    parser.add_argument(
+        "--allow-uid",
+        action="append",
+        type=int,
+        default=[],
+        metavar="UID",
+        help="allow this numeric uid (repeatable); useful when the signer runs as a dedicated user",
+    )
+    parser.add_argument(
+        "--socket-mode",
+        default="0600",
+        help="socket permission mode (default 0600; use 0660 with a dedicated signer group)",
+    )
     parser.add_argument(
         "--allow-caller",
         action="append",
@@ -1279,7 +1317,16 @@ def main(argv: list[str] | None = None) -> int:
         file=sys.stderr,
     )
     try:
-        serve(signer, args.socket, allow_callers=tuple(args.allow_caller))
+        mode = int(args.socket_mode, 8)
+        if mode & 0o007:
+            raise SignerError("socket mode must not be world-accessible")
+        serve(
+            signer,
+            args.socket,
+            allow_callers=tuple(args.allow_caller),
+            allow_uids=tuple(args.allow_uid),
+            socket_mode=mode,
+        )
     except KeyboardInterrupt:
         return 0
     except OSError as exc:
