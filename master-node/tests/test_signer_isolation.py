@@ -1783,4 +1783,65 @@ def test_ledger_verification_pins_the_operational_key(signer, signer_module, aut
     other_public = _keypair("a-different-operational-key")[1]
     ok, detail = ledger_module.verify_chain(ledger, other_public)
     assert not ok
-    assert "unexpected key" in detail
+    assert "no block is signed by the trusted operational key" in detail
+
+
+def test_ledger_pin_allows_forward_key_rotation_but_not_rollback(tmp_path, authz, signer_module):
+    """A rotated ledger is accepted only through the forward edge.
+
+    The live ledger legitimately contains blocks under the old operational key
+    and later blocks under the new one. Pinning must accept that history and still
+    refuse a chain that returns to the old key after the new key took over.
+    """
+    old_private, old_public = _keypair("old-operational-key")
+    new_private, new_public = _keypair("new-operational-key")
+    old_key = authz.private_key_from_b64(old_private)
+    new_key = authz.private_key_from_b64(new_private)
+    ledger_path = tmp_path / "ledger.json"
+
+    signer_module.record_event(
+        ledger_path,
+        MASTER,
+        "trust_root_formed",
+        {"master_pubkey": old_public},
+        "root-old",
+        authz=authz,
+        private_key=old_key,
+        node_pubkey_b64=old_public,
+        clock=lambda: CLOCK,
+    )
+    signer_module.record_event(
+        ledger_path,
+        MASTER,
+        "trust_root_reformed",
+        {"master_pubkey": new_public, "previous_root_id": "root-old"},
+        "root-new",
+        authz=authz,
+        private_key=new_key,
+        node_pubkey_b64=new_public,
+        clock=lambda: CLOCK,
+    )
+
+    ledger = json.loads(ledger_path.read_text())
+    spec = importlib.util.spec_from_file_location("ledger_for_rotation", ROLE_ROOT / "services" / "sparknet-ledger.py")
+    ledger_module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(ledger_module)
+    ok, detail = ledger_module.verify_chain(ledger, new_public)
+    assert ok, detail
+
+    signer_module.record_event(
+        ledger_path,
+        MASTER,
+        "signature_issued",
+        {"operation": "old-key-after-rotation"},
+        "root-old",
+        authz=authz,
+        private_key=old_key,
+        node_pubkey_b64=old_public,
+        clock=lambda: CLOCK,
+    )
+    ledger = json.loads(ledger_path.read_text())
+    ok, detail = ledger_module.verify_chain(ledger, new_public)
+    assert not ok
+    assert "returns to an old key" in detail

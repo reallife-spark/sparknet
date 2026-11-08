@@ -136,6 +136,7 @@ def verify_chain(ledger: dict[str, Any], expected_pubkey_b64: str | None = None)
     if not isinstance(blocks, list):
         return False, "ledger has no blocks array"
     previous = str(ledger.get("genesis_hash", ""))
+    seen_expected = False
     for index, block in enumerate(blocks):
         if not isinstance(block, dict):
             return False, f"block {index} is not an object"
@@ -154,11 +155,14 @@ def verify_chain(ledger: dict[str, Any], expected_pubkey_b64: str | None = None)
             return False, (
                 f"block {index} ({block['block_id']}) links to {block['prev_hash']!r}, expected {previous!r}"
             )
-        if expected_pubkey_b64 and block["node_pubkey_b64"] != expected_pubkey_b64:
-            return False, (
-                f"block {index} ({block['block_id']}) is signed by an unexpected key; "
-                "the ledger does not descend from the trusted operational key"
-            )
+        if expected_pubkey_b64:
+            if block["node_pubkey_b64"] == expected_pubkey_b64:
+                seen_expected = True
+            elif seen_expected:
+                return False, (
+                    f"block {index} ({block['block_id']}) returns to an old key after the "
+                    "trusted operational key took over"
+                )
         try:
             node_pub = authz.public_key_from_b64(str(block["node_pubkey_b64"] or ""))
         except Exception as exc:
@@ -173,6 +177,8 @@ def verify_chain(ledger: dict[str, Any], expected_pubkey_b64: str | None = None)
                 f"block {index} ({block['block_id']}) has been altered: its contents do not hash to its recorded hash"
             )
         previous = block["hash"] if "hash" in block else block_hash(block)
+    if expected_pubkey_b64 and not seen_expected:
+        return False, "no block is signed by the trusted operational key"
     return True, f"{len(blocks)} block(s), chain intact"
 
 

@@ -26,7 +26,7 @@ Updated: 2026-11-08
 - Registry ships empty; fresh nodes grant nothing.
 ## Security hardening 2026-11-08
 - Signer: optional exact caller allowlist (`--allow-caller`, `SO_PEERCRED`); verifies ledger against the pinned operational key before signing.
-- Ledger: `verify_chain(..., expected_pubkey_b64)`; CLI pins from `--pubkey` or the trust root.
+- Ledger: `verify_chain(..., expected_pubkey_b64)`; CLI pins from `--pubkey` or the trust root. Forward key rotation is accepted; a return to an old key after the current key took over is refused. Live 54-block ledger verified 2026-11-08.
 - goSpark: pinned mutual TLS (`Server.ClientFingerprint`, `DialOptions.ClientCertificate`), 64 incoming QUIC streams per connection; `sparknetctl send-block` requires `-pin`.
 ## Phase 8 state
 - Wave A: shared boundary/fail-closed fixes, live-deployed to memory gateway.

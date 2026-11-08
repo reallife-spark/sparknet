@@ -315,8 +315,18 @@ def check_not_reverted(
 
     verifier = _load("sparknet_signer_ledger", ROLE_ROOT / "services" / "sparknet-ledger.py")
     ok, detail = verifier.verify_chain(ledger, expected_pubkey_b64)
+    pre_rotation = False
     if not ok:
-        raise SignerError(f"ledger failed verification before signing: {detail}")
+        if "no block is signed by the trusted operational key" not in detail:
+            raise SignerError(f"ledger failed verification before signing: {detail}")
+        # A ledger written entirely under the previous operational key is not a
+        # rollback if this root descends from the root in force. The transition
+        # block is appended below with the new key, and the self-signed chain
+        # still has to be intact.
+        ok, detail = verifier.verify_chain(ledger)
+        if not ok:
+            raise SignerError(f"ledger failed verification before signing: {detail}")
+        pre_rotation = True
 
     incoming = consensus.root_id(root)
     ledgers = [block.get("data", {}).get("root_id") for block in ledger.get("blocks", []) if isinstance(block, dict)]
@@ -325,6 +335,10 @@ def check_not_reverted(
         return
     in_force = ledgers[-1]
     if incoming == in_force:
+        if pre_rotation:
+            raise SignerError(
+                "the ledger is signed only by a previous operational key, but the root in force did not change"
+            )
         return
     if not allow_requalification and consensus.canonical_root(root).get("previous_root_id", "") == in_force:
         # Chained re-formation, policy B: this root names the ledger's root in
