@@ -134,22 +134,24 @@
     {
       "id": "release",
       "contract": "release-schema.json",
-      "module": null,
+      "module": "sparknet-release.py",
       "tests": [
+        "tests/test_release_manifest.py",
         "tests/test_step89_contracts.py"
       ],
-      "state": "contract",
-      "live": "not yet"
+      "state": "implemented",
+      "live": "loopback"
     },
     {
       "id": "data-lake",
       "contract": "data-lake-schema.json",
-      "module": null,
+      "module": "sparknet-data-lake.py",
       "tests": [
+        "tests/test_data_lake.py",
         "tests/test_step89_contracts.py"
       ],
-      "state": "contract",
-      "live": "not yet"
+      "state": "implemented",
+      "live": "loopback"
     }
   ],
   "rules": [

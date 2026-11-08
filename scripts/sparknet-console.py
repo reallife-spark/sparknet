@@ -264,6 +264,8 @@ def api_foundations(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
         "sparknet-pipeline.py",
         "sparknet-event-bus.py",
         "sparknet-self-improve.py",
+        "sparknet-release.py",
+        "sparknet-data-lake.py",
     )
     contract_state = {name: (contracts / name).is_file() for name in contract_names}
     module_state = {name: (shared / name).is_file() for name in module_names}
