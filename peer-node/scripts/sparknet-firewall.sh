@@ -63,7 +63,10 @@ need_root() {
 ensure_chain() {
   local family="$1" table="$2" chain="$3"
   "${family}" -t "${table}" -N "${chain}" 2>/dev/null || true
-  "${family}" -t "${table}" -F "${chain}"
+  # DOCKER-USER belongs to Docker and the operator; never flush it.
+  if [[ "${chain}" != "DOCKER-USER" ]]; then
+    "${family}" -t "${table}" -F "${chain}"
+  fi
 }
 
 rebuild_chain() {

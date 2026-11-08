@@ -1699,6 +1699,23 @@ def _safe_rel(raw: str) -> PurePosixPath:
     return path
 
 
+def safe_vault_target(vault: Path, rel: str) -> Path:
+    """Resolve a vault-relative target without following a symlink component."""
+    root = Path(vault).resolve()
+    target_rel = _safe_rel(rel)
+    target = (root / target_rel).resolve(strict=False)
+    try:
+        target.relative_to(root)
+    except ValueError as exc:
+        raise ProvenanceError(f"target escapes the vault: {rel!r}") from exc
+    cursor = root
+    for part in target_rel.parts:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise ProvenanceError(f"target path contains a symlink: {rel!r}")
+    return target
+
+
 def grant_scope_allows(scope: list[str], target_rel: str) -> bool:
     """Is this vault-relative write inside the grant's scope?
 
@@ -2010,7 +2027,7 @@ def write_granted_note(
         outcome = "quarantined"
         note_rel = quarantine_rel(vault, str(grant["grant_id"]), rel.name)
 
-    note_path = vault / note_rel
+    note_path = safe_vault_target(vault, note_rel)
     if note_path.exists():
         raise ProvenanceError(f"{note_rel} already exists — refusing to overwrite a vault note")
 
@@ -2234,7 +2251,7 @@ def patch_granted_note(
     )
     rel = _safe_rel(target)
     _target_within_scope(rel, grant, "patch")
-    note_path = vault / rel
+    note_path = safe_vault_target(vault, rel)
     if not note_path.is_file():
         raise ProvenanceError(f"patch target does not exist: {rel!s}")
     if not isinstance(patch, dict) or not isinstance(patch.get("old"), str) or not isinstance(patch.get("new"), str):
@@ -2276,10 +2293,17 @@ def note_paths(vault: Path) -> list[Path]:
     skip = {"__pycache__", ".git", ".state", ".cache", "_staging"}
     paths: list[Path] = []
     for name in dirs:
-        for path in sorted((vault / name).rglob("*.md")):
-            if skip & set(path.parts) or path.name == ".gitkeep":
-                continue
-            paths.append(path)
+        base = vault / name
+        for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
+            directory = Path(dirpath)
+            dirnames[:] = sorted(child for child in dirnames if not (directory / child).is_symlink())
+            for filename in sorted(filenames):
+                if not filename.endswith(".md"):
+                    continue
+                path = directory / filename
+                if path.is_symlink() or skip & set(path.parts) or path.name == ".gitkeep":
+                    continue
+                paths.append(path)
     return paths
 
 

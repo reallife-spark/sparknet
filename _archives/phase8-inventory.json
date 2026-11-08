@@ -2890,13 +2890,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/agents/engineering/agent.py",
@@ -2905,13 +2905,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/agents/vault-curator/agent.py",
@@ -2920,13 +2920,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/configs/opencode-runtime/unix-proxy.py",
@@ -2935,13 +2935,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/container/anchor/entrypoint.sh",
@@ -2950,13 +2950,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/container/entrypoint.sh",
@@ -2965,13 +2965,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/container/healthcheck.sh",
@@ -2980,13 +2980,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-chattr-preflight.sh",
@@ -2995,13 +2995,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-election-request.sh",
@@ -3010,13 +3010,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-env.sh",
@@ -3025,13 +3025,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-firewall.sh",
@@ -3040,13 +3040,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests/test_firewall.py + peer suite",
+      "test": "peer-node/tests/test_firewall.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "DOCKER-USER is not flushed"
     },
     {
       "path": "peer-node/scripts/sparknet-identity-capture.sh",
@@ -3055,13 +3055,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-install-config.sh",
@@ -3070,13 +3070,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-install-units.sh",
@@ -3085,13 +3085,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests/test_scripts.py + peer suite",
+      "test": "peer-node/tests/test_scripts.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "root-owned env installation"
     },
     {
       "path": "peer-node/scripts/sparknet-keygen.sh",
@@ -3100,13 +3100,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-lockdown.sh",
@@ -3115,13 +3115,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-masterspike.py",
@@ -3130,13 +3130,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-node-containment.sh",
@@ -3145,13 +3145,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-provision.sh",
@@ -3160,13 +3160,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-registry-fetch.sh",
@@ -3175,13 +3175,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-registry-verify-peer.sh",
@@ -3190,13 +3190,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-sharectl.py",
@@ -3205,13 +3205,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-sync.sh",
@@ -3220,13 +3220,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-validate.sh",
@@ -3235,13 +3235,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-vllm-kv-dump.py",
@@ -3250,13 +3250,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-vllm-kv-patch.sh",
@@ -3265,13 +3265,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-webui-workspace.py",
@@ -3280,13 +3280,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-wg-bringup.sh",
@@ -3295,13 +3295,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-wg-render-peer.sh",
@@ -3310,13 +3310,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-wireguard-anchor.sh",
@@ -3325,13 +3325,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-wireguard-render.sh",
@@ -3340,13 +3340,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/scripts/sparknet-wlan-guard.sh",
@@ -3355,13 +3355,13 @@
       "language": "sh",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/services/sparknet-admin-agent.py",
@@ -3370,13 +3370,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/services/sparknet-checkpoint-anchor.py",
@@ -3385,13 +3385,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/services/sparknet-dispatch-bridge.py",
@@ -3400,13 +3400,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests/test_bridge.py + peer suite",
+      "test": "peer-node/tests/test_bridge.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "safe vault target, pinned key, Master-only polling, job-id validation, bounded admin events"
     },
     {
       "path": "peer-node/services/sparknet-guard-d.py",
@@ -3415,13 +3415,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests/test_guard.py + peer suite",
+      "test": "peer-node/tests/test_guard.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "root replay store, corrupt-store refusal, manifest/policy from /etc, relock on failure"
     },
     {
       "path": "peer-node/services/sparknet-inventory-agent.py",
@@ -3430,13 +3430,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests/test_inventory_agent.py + peer suite",
+      "test": "peer-node/tests/test_inventory_agent.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "identity-derived node id and endpoint"
     },
     {
       "path": "peer-node/services/sparknet-liveness-monitor.py",
@@ -3445,13 +3445,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/services/sparknet-opencode-engine.py",
@@ -3460,13 +3460,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests/test_services.py + peer suite",
+      "test": "peer-node/tests/test_services.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "root env separation, absolute docker, symlink-safe chown"
     },
     {
       "path": "peer-node/services/sparknet-proposal-exchange.py",
@@ -3475,13 +3475,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/services/sparknet-registry-client.py",
@@ -3490,13 +3490,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/services/sparknet-rfi-client.py",
@@ -3505,13 +3505,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/services/sparknet-share-regime.py",
@@ -3520,13 +3520,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests/test_share_serve.py + peer suite",
+      "test": "peer-node/tests/test_share_serve.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "inbound share-id validation"
     },
     {
       "path": "peer-node/services/sparknet-share-serve.py",
@@ -3535,13 +3535,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests/test_share_serve.py::test_delivery_rejects_a_share_id_that_escapes_the_inbox + peer suite",
+      "test": "peer-node/tests/test_share_serve.py::test_delivery_rejects_a_share_id_that_escapes_the_inbox",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "share-id and inbox containment"
     },
     {
       "path": "peer-node/services/sparknet-telemetry-push.py",
@@ -3550,13 +3550,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/services/sparknet-vault-provisioner.py",
@@ -3565,13 +3565,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "peer audit 2026-11-08 + peer-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect; local-only webhook risk documented"
     },
     {
       "path": "peer-node/tests/conftest.py",
@@ -3580,13 +3580,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/conftest.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_admin_agent.py",
@@ -3595,13 +3595,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_admin_agent.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_admin_supervise.py",
@@ -3610,13 +3610,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_admin_supervise.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_authz.py",
@@ -3625,13 +3625,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_authz.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_bridge.py",
@@ -3640,13 +3640,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_bridge.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_containment.py",
@@ -3655,13 +3655,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_containment.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_conversation_passing.py",
@@ -3670,13 +3670,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_conversation_passing.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_env.py",
@@ -3685,13 +3685,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_env.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_firewall.py",
@@ -3700,13 +3700,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_firewall.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_grants.py",
@@ -3715,13 +3715,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_grants.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_guard.py",
@@ -3730,13 +3730,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_guard.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_inventory_agent.py",
@@ -3745,13 +3745,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_inventory_agent.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_manifests.py",
@@ -3760,13 +3760,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_manifests.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_masterspike.py",
@@ -3775,13 +3775,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_masterspike.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_node_ai_stack.py",
@@ -3790,13 +3790,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_node_ai_stack.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_node_container.py",
@@ -3805,13 +3805,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_node_container.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_proposal_exchange.py",
@@ -3820,13 +3820,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_proposal_exchange.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_reflex_surface.py",
@@ -3835,13 +3835,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_reflex_surface.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_rfi_client.py",
@@ -3850,13 +3850,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_rfi_client.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_scripts.py",
@@ -3865,13 +3865,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_scripts.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_services.py",
@@ -3880,13 +3880,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_services.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_share_regime.py",
@@ -3895,13 +3895,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_share_regime.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_share_serve.py",
@@ -3910,13 +3910,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_share_serve.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_vault_curator.py",
@@ -3925,13 +3925,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_vault_curator.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_vault_health.py",
@@ -3940,13 +3940,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_vault_health.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_vault_provisioner.py",
@@ -3955,13 +3955,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_vault_provisioner.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_webui_surface.py",
@@ -3970,13 +3970,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_webui_surface.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_webui_workspace.py",
@@ -3985,13 +3985,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_webui_workspace.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "peer-node/tests/test_wireguard.py",
@@ -4000,13 +4000,13 @@
       "language": "py",
       "area": "peer-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "peer-node/tests suite 2026-11-08",
+      "test": "peer-node/tests/test_wireguard.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated for registry validity where required"
     },
     {
       "path": "scripts/make-gpu-fixture.py",

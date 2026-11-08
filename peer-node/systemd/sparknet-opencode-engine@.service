@@ -12,7 +12,7 @@ User=root
 # The role env file is written by sparknet-node-setup / the deploy step. It
 # carries no signing key and no master credential: a model token, a sandbox
 # state path, a pinned runtime image and the local model upstream.
-EnvironmentFile=/home/raxxar/sparknet/%i-node/.state/opencode-engine.env
+EnvironmentFile=/etc/sparknet/opencode-engine-%i.env
 ExecStart=/usr/local/libexec/sparknet/sparknet-opencode-engine --role %i
 Restart=on-failure
 RestartSec=10

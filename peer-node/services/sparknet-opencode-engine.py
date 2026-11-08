@@ -1384,7 +1384,8 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--token-file", default=os.environ.get("SPARKNET_OPENCODE_ENGINE_TOKEN_FILE", ""))
     p.add_argument("--token", default=os.environ.get("SPARKNET_OPENCODE_ENGINE_TOKEN", ""))
     p.add_argument("--image", default=os.environ.get("SPARKNET_OPENCODE_IMAGE", "sparknet-opencode-runtime:2.2.5"))
-    p.add_argument("--docker", default=os.environ.get("SPARKNET_DOCKER", "docker"))
+    default_docker = "/usr/bin/docker" if os.geteuid() == 0 else os.environ.get("SPARKNET_DOCKER", "docker")
+    p.add_argument("--docker", default=default_docker)
     p.add_argument(
         "--port-base", type=int, default=int(os.environ.get("SPARKNET_OPENCODE_PORT_BASE", DEFAULT_PORT_BASE))
     )

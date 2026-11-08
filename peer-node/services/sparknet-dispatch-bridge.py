@@ -42,6 +42,7 @@ the branch, and the `share` verbs declare a session-view/session-handoff share
 from __future__ import annotations
 
 import argparse
+import collections
 import hashlib
 import importlib.util
 import json
@@ -456,6 +457,11 @@ class Bridge:
         self.http = _load_http()
         self.authz = self.http._load_authz()
         self.prov = _load_provenance()
+        self.registry_install = _load_shared(
+            "sparknet-registry-install",
+            "sparknet_registry_install_bridge",
+            ("sparknet-authz.py", "sparknet-registry-install.py"),
+        )
         self.cluster = _load_shared("sparknet-cluster", "sparknet_cluster_bridge", ("sparknet-cluster.py",))
         self.nocturnal = _load_shared(
             "sparknet-nocturnal",
@@ -756,6 +762,8 @@ class Bridge:
         if not isinstance(lease_id, str) or not lease_id.strip():
             raise _HttpRequestError(400, "bad-job", "cluster job body requires lease_id")
         job_id = job["job_id"]
+        if not isinstance(job_id, str) or not JOB_ID_RE.fullmatch(job_id):
+            raise _HttpRequestError(400, "bad-job", "job_id must be a safe identifier")
         own_id = str(self.node_identity().get("node_id") or "")
         assigned = [item for item in job["subtasks"] if item["node_id"] == own_id]
         if not assigned:
@@ -1314,7 +1322,10 @@ class Bridge:
     def vault_cat(self, params: dict[str, str], grant: dict[str, Any]) -> dict[str, Any]:
         rel = _rel_of(str(params.get("path") or ""))
         self._scope_guard(list(grant.get("vault_scope") or []), str(rel))
-        note = self.vault_root / rel
+        try:
+            note = self.prov.safe_vault_target(self.vault_root, str(rel))
+        except self.prov.ProvenanceError as exc:
+            raise _HttpRequestError(400, "bad-path", str(exc)) from exc
         if not note.is_file():
             raise _HttpRequestError(404, "no-note", f"{rel} does not exist")
         content = note.read_bytes().decode("utf-8", "replace")
@@ -1447,11 +1458,8 @@ class Bridge:
         Recomputed per request, never cached: this is the key the guard trusts,
         and a stale cached key would outlive a re-formed root.
         """
-        key_path = self.vault_root / "manifests" / "keys" / "master-ed25519.pub.b64"
-        if not key_path.is_file():
-            return None
         try:
-            return self.authz.load_public_key(key_path)
+            return self.registry_install.load_pinned_key(self.vault_root, self.authz)
         except Exception:
             return None
 
@@ -1509,26 +1517,26 @@ class Bridge:
         the agent's own reader does, so one bad line cannot blind the console.
         """
         path = _state_dir(self.vault_root) / "admin-events" / "events.jsonl"
-        events: list[dict[str, Any]] = []
+        events: collections.deque[dict[str, Any]] = collections.deque(maxlen=ADMIN_EVENTS_MAX)
+        total = 0
         if path.exists():
-            for line in path.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    row = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if isinstance(row, dict):
-                    events.append(row)
-        total = len(events)
+            with path.open(encoding="utf-8", errors="replace") as handle:
+                for line in handle:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        row = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(row, dict):
+                        events.append(row)
+                        total += 1
         truncated = total > ADMIN_EVENTS_MAX
-        if truncated:
-            events = events[-ADMIN_EVENTS_MAX:]
         return {
             "ok": True,
             "action": "list_events",
-            "events": events,
+            "events": list(events),
             "count": len(events),
             "total": total,
             "truncated": truncated,
@@ -2044,9 +2052,16 @@ def _make_handler(bridge: Bridge, states: list[str], signed_router: Callable) ->
                     return
                 if path.startswith("/v1/cluster/"):
                     # Cluster jobs carry their own signed envelope and are
-                    # checked against the registry in handle_cluster. They do
-                    # not use a Bearer session grant: the Master dispatches
-                    # work, not a user session.
+                    # checked against the registry in handle_cluster. Polling is
+                    # Master-only: the job id is not a bearer credential.
+                    if method == "GET" and not path.startswith(("/v1/cluster/status/", "/v1/cluster/result/")):
+                        raise _HttpRequestError(404, "not-found", "unknown cluster route")
+                    if (
+                        method == "GET"
+                        and source != "loopback"
+                        and self.client_address[0] != os.environ.get("SPARKNET_MASTER_OVERLAY", "10.100.0.1")
+                    ):
+                        raise _HttpRequestError(403, "master-only", "cluster status/result is Master-only")
                     code, payload = bridge.handle_cluster(method, path, body)
                     self._send(code, payload)
                     return

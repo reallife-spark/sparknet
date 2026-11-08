@@ -1081,3 +1081,11 @@ def test_group_writable_master_pin_is_refused(tmp_path: Path, master_key: Ed2551
         guardmod.load_master_pubkey(tmp_path / "vault")
     path.chmod(0o600)
     assert guardmod.load_master_pubkey(tmp_path / "vault")
+
+
+def test_a_corrupt_replay_store_refuses_to_start(tmp_path: Path):
+    path = tmp_path / "replay.json"
+    path.write_text("{not-json")
+    with pytest.raises(guardmod.Refusal) as exc:
+        guardmod.ReplayGuard(store_path=path)
+    assert exc.value.code == "replay_store_corrupt"

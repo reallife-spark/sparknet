@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 
 try:  # Python 3.9+
     from collections.abc import Callable
@@ -539,6 +540,8 @@ class Regime:
     # -- receiving side ---------------------------------------------------------
 
     def _mirror_offer(self, message: dict) -> list[dict]:
+        if not re.fullmatch(r"share-[A-Za-z0-9][A-Za-z0-9._-]{0,127}", str(message.get("share_id") or "")):
+            raise ShareError(400, "bad-share-id", "share_id is not a safe identifier")
         kind = message.get("kind")
         if kind not in self.share_types:
             raise ShareError(400, "unknown-kind", f"{kind} is not a share type in capabilities.json")

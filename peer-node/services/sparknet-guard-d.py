@@ -238,11 +238,7 @@ class ReplayGuard:
                 str(key): float(value) for key, value in raw.get("seen", {}).items() if float(value) >= cutoff
             }
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
-            # A corrupt store must not silently reset replay protection, but it
-            # also cannot be trusted; warn loudly and start empty so the daemon
-            # still comes up.
-            print(f"[guard] WARNING: replay store unreadable ({exc}); starting empty", file=sys.stderr)
-            self._seen = {}
+            raise Refusal(500, "replay_store_corrupt", f"replay store is unreadable: {exc}") from exc
 
     def _save(self) -> None:
         if self.store_path is None:
@@ -354,8 +350,14 @@ def apply_patch(path: Path, content: bytes, *, dry_run: bool = False) -> None:
         _run(["chown", "root:root", str(path)], dry_run=False)
         _run(["chmod", str(mode), str(path)], dry_run=False)
     except Refusal:
+        if had_immutable:
+            with contextlib.suppress(Refusal):
+                _run(["chattr", "+i", str(path)], dry_run=False)
         raise
     except OSError as exc:
+        if had_immutable:
+            with contextlib.suppress(Refusal):
+                _run(["chattr", "+i", str(path)], dry_run=False)
         raise Refusal(500, "write_failed", str(exc)) from exc
 
     # The write succeeded, so the path must end locked. A silent failure here
@@ -587,7 +589,7 @@ def load_master_pubkey(vault_root: Path) -> Ed25519PublicKey:
 
     candidates = []
     configured = os.environ.get("SPARKNET_MASTER_PUBKEY", "").strip()
-    if configured:
+    if configured and os.geteuid() != 0:
         candidates.append(Path(configured))
     candidates.append(Path("/etc/sparknet/keys/master-ed25519.pub.b64"))
     candidates.append(vault_root / "manifests" / "keys" / "master-ed25519.pub.b64")
@@ -619,7 +621,12 @@ class Guard:
         self.vault_root = vault_root
         self.apply_enabled = apply_enabled
         self.dry_run = dry_run
-        self.replay = replay or ReplayGuard(store_path=vault_root / ".state" / "guard-replay.json")
+        replay_path = (
+            Path("/var/lib/sparknet/guard-replay.json")
+            if os.geteuid() == 0 and Path("/var/lib/sparknet").is_dir()
+            else vault_root / ".state" / "guard-replay.json"
+        )
+        self.replay = replay or ReplayGuard(store_path=replay_path)
         self.master_pubkey = master_pubkey
         configured_audit = os.environ.get("SPARKNET_GUARD_AUDIT", "").strip()
         if configured_audit:
@@ -637,13 +644,18 @@ class Guard:
     # -- configuration ------------------------------------------------------
 
     def manifest(self) -> dict[str, Any]:
-        return json.loads((self.vault_root / "manifests" / "critical-manifest.json").read_text())
+        path = self.vault_root / "manifests" / "critical-manifest.json"
+        if os.geteuid() == 0 and Path("/etc/sparknet/critical-manifest.json").is_file():
+            path = Path("/etc/sparknet/critical-manifest.json")
+        return json.loads(path.read_text())
 
     def protected_paths(self) -> list[str]:
         return list(self.manifest().get("protected_paths", []))
 
     def policies(self) -> dict[str, Any]:
         path = self.vault_root / "manifests" / "security-policies.json"
+        if os.geteuid() == 0 and Path("/etc/sparknet/security-policies.json").is_file():
+            path = Path("/etc/sparknet/security-policies.json")
         try:
             return json.loads(path.read_text())
         except (OSError, json.JSONDecodeError):

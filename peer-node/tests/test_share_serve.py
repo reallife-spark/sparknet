@@ -425,3 +425,11 @@ def test_the_control_socket_creates_and_reports_a_share(share: Any, pair: Any, t
     finally:
         stopping.set()
         thread.join(timeout=3)
+
+
+def test_delivery_rejects_a_share_id_that_escapes_the_inbox(pair: Any):
+    _a, b = pair
+    with pytest.raises(Exception) as exc:
+        b.deliver("../../manifests", {"x.md": "no"})
+    assert getattr(exc.value, "reason", "") == "bad-share-id"
+    assert not (Path(b.vault_root) / "x.md").exists()

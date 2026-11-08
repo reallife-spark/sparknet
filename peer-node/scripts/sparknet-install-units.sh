@@ -161,6 +161,18 @@ for unit in "${USER_UNITS[@]}"; do
   fi
 done
 
+if [[ "$APPLY" -eq 1 ]]; then
+  install -d -m 0755 -o root -g root /etc/sparknet
+  if [[ -f "$SPARKNET_VAULT_ROOT/.env" ]]; then
+    install -m 0600 -o root -g root "$SPARKNET_VAULT_ROOT/.env" /etc/sparknet/peer.env
+    note "installed root-owned /etc/sparknet/peer.env"
+  fi
+  if [[ -f "$SPARKNET_VAULT_ROOT/.state/opencode-engine.env" ]]; then
+    install -m 0600 -o root -g root "$SPARKNET_VAULT_ROOT/.state/opencode-engine.env" "/etc/sparknet/opencode-engine-${SPARKNET_ROLE:-peer}.env"
+    note "installed root-owned OpenCode engine env"
+  fi
+fi
+
 echo
 if [[ "$APPLY" -eq 1 ]]; then
   note "Reloading systemd (skipped automatically if systemd is unavailable)."

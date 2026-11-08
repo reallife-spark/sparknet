@@ -65,7 +65,22 @@ def state_dir() -> Path:
 
 
 def node_id() -> str:
-    return os.environ.get("SPARKNET_NODE_ID", "").strip() or "sparknet-node-unknown"
+    configured = os.environ.get("SPARKNET_NODE_ID", "").strip()
+    if configured:
+        return configured
+    identity_path = ROLE_ROOT / "manifests" / "node-identity.json"
+    try:
+        identity = json.loads(identity_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        identity = {}
+    value = str(identity.get("node_id") or "").strip()
+    if not value:
+        raise SystemExit(f"sparknet-inventory: no node_id in SPARKNET_NODE_ID or {identity_path}")
+    return value
+
+
+def uplift_endpoint() -> str:
+    return os.environ.get("SPARKNET_UPLIFT_ENDPOINT", "").strip() or DEFAULT_UPLIFT
 
 
 def _load(name: str, path: Path) -> Any:
@@ -331,7 +346,8 @@ def spool(records: list[dict[str, Any]]) -> Path:
     return path
 
 
-def push(records: list[dict[str, Any]], *, endpoint: str = DEFAULT_UPLIFT) -> tuple[bool, str]:
+def push(records: list[dict[str, Any]], *, endpoint: str | None = None) -> tuple[bool, str]:
+    endpoint = endpoint or uplift_endpoint()
     authz = load_authz()
     http = load_http()
     if authz is None or http is None:
@@ -385,7 +401,8 @@ def push(records: list[dict[str, Any]], *, endpoint: str = DEFAULT_UPLIFT) -> tu
         return False, f"transport-error: {exc}"
 
 
-def drain_outbox(endpoint: str = DEFAULT_UPLIFT) -> int:
+def drain_outbox(endpoint: str | None = None) -> int:
+    endpoint = endpoint or uplift_endpoint()
     pushed = 0
     if not outbox_dir().is_dir():
         return 0

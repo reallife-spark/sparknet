@@ -25,6 +25,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import signal
 import socket
 import sys
@@ -372,6 +373,8 @@ class ShareService:
         inbox review path; conflicts are reported and nothing is overwritten.
         Only an open ``kb-share``/``session-handoff``/``full`` share may arrive.
         """
+        if not re.fullmatch(r"share-[A-Za-z0-9][A-Za-z0-9._-]{0,127}", str(share_id)):
+            raise ShareServeError(400, "bad-share-id", "share_id is not a safe identifier")
         if not isinstance(files, dict) or not files or len(files) > 200:
             raise ShareServeError(400, "malformed", "files must be a non-empty mapping of at most 200 entries")
         with self._lock:
@@ -404,9 +407,18 @@ class ShareService:
             else:
                 additions = set(hashes)
                 conflicts = []
-            inbox = self.vault_root / "01_Inbox" / f"share-{share_id}"
+            inbox_root = (self.vault_root / "01_Inbox").resolve()
+            inbox = (inbox_root / f"share-{share_id}").resolve()
+            try:
+                inbox.relative_to(inbox_root)
+            except ValueError as exc:
+                raise ShareServeError(400, "unsafe-path", "share inbox escapes 01_Inbox") from exc
             for relative in sorted(additions):
-                destination = inbox / PurePosixPath(relative)
+                destination = (inbox / PurePosixPath(relative)).resolve()
+                try:
+                    destination.relative_to(inbox)
+                except ValueError as exc:
+                    raise ShareServeError(400, "unsafe-path", "share file escapes its inbox") from exc
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 fd, temporary = tempfile.mkstemp(prefix=".share.", dir=destination.parent)
                 try:
