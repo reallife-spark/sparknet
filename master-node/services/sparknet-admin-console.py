@@ -67,6 +67,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, NamedTuple
 
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_NO_REDIRECT_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
+
 ROLE_ROOT = Path(__file__).resolve().parent.parent
 
 #: The peer bridge's admin HTTP port (contracts/ports.json). Loopback today;
@@ -395,7 +403,7 @@ def dispatch(
     endpoint = target.url.rstrip("/") + ADMIN_PATH_PREFIX + action
     body = json.dumps(signed_request).encode("utf-8")
     request = urllib.request.Request(endpoint, data=body, headers={"Content-Type": "application/json"}, method="POST")
-    open_url = opener or urllib.request.build_opener(urllib.request.ProxyHandler({})).open
+    open_url = opener or _NO_REDIRECT_OPENER.open
     try:
         with open_url(request, timeout=timeout) as response:
             raw = response.read().decode("utf-8")

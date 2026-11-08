@@ -20,7 +20,7 @@ Type=simple
 EnvironmentFile=-%h/.env
 Environment=SPARKNET_RFI_REQUEST_DIR=/mnt/log/sparknet-rfi-requests
 Environment=SPARKNET_RFI_PROCESSED_DIR=/mnt/log/sparknet-rfi-requests/processed
-ExecStart=/usr/bin/env python3 %h/services/sparknet-rfi-responder.py --watch --interval 30
+ExecStart=/usr/bin/env python3 %h/services/sparknet-rfi-responder.py --watch --interval 30 --registry %h/manifests/node-authorizations.json
 Restart=on-failure
 RestartSec=10
 NoNewPrivileges=yes

@@ -108,7 +108,16 @@ class Registry:
         self.path = Path(path)
         self.entries: list[dict[str, Any]] = []
         self.master_key = None
+        self._mtime_ns = 0
         self.reload()
+
+    def refresh(self) -> None:
+        try:
+            mtime = self.path.stat().st_mtime_ns
+        except OSError as exc:
+            raise Refusal(503, "registry-unavailable", str(exc)) from exc
+        if mtime != self._mtime_ns:
+            self.reload()
 
     def reload(self) -> None:
         data = json.loads(self.path.read_text(encoding="utf-8"))
@@ -116,6 +125,7 @@ class Registry:
         if not isinstance(entries, list):
             raise Refusal(503, "registry-invalid", "registry has no authorizations[]")
         self.entries = [entry for entry in entries if isinstance(entry, dict)]
+        self._mtime_ns = self.path.stat().st_mtime_ns
         authz = load_authz()
         try:
             self.master_key = authz.public_key_from_b64(str(data.get("master_public_key_b64") or ""))
@@ -148,7 +158,7 @@ def _trusted_keys(values: list[str]) -> dict[str, Any]:
     return keys
 
 
-def _message_sha(method: str, path: str, body_sha: str, timestamp: str) -> bytes:
+def _message_sha(method: str, path: str, body_sha: str, timestamp: str, nonce: str, node_id: str) -> bytes:
     return (
         b"sparknet-http/1\n"
         + method.upper().encode()
@@ -158,6 +168,10 @@ def _message_sha(method: str, path: str, body_sha: str, timestamp: str) -> bytes
         + body_sha.encode()
         + b"\n"
         + timestamp.encode()
+        + b"\n"
+        + nonce.encode()
+        + b"\n"
+        + node_id.encode()
     )
 
 
@@ -187,11 +201,10 @@ class Intake:
         while len(self.seen_nonces) > 10000:
             self.seen_nonces.popitem(last=False)
 
-    def authorize(
-        self, *, source: str, node_id: str, timestamp: str, body_sha: str, path: str, method: str, nonce: str
-    ) -> dict[str, Any]:
+    def authorize(self, *, source: str, node_id: str, timestamp: str, nonce: str) -> dict[str, Any]:
         if not isinstance(node_id, str) or not NODE_ID_RE.fullmatch(node_id):
             raise Refusal(403, "bad-node-id", "node_id must be a single safe identifier")
+        self.registry.refresh()
         entry = self.registry.by_source(source)
         if entry is None:
             raise Refusal(403, "off_overlay", "source is not a registered peer")
@@ -209,6 +222,20 @@ class Intake:
             raise Refusal(403, "unsigned-entry", f"registry entry is not verifiable: {exc}") from exc
         if entry.get("revoked"):
             raise Refusal(403, "revoked")
+        try:
+            issued = datetime.fromisoformat(str(entry.get("issued_at") or "").replace("Z", "+00:00"))
+            expires = datetime.fromisoformat(str(entry.get("expires_at") or "").replace("Z", "+00:00"))
+            if issued.tzinfo is None:
+                issued = issued.replace(tzinfo=timezone.utc)
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=timezone.utc)
+            now = _now()
+            if now < issued:
+                raise Refusal(403, "not_yet_valid")
+            if now >= expires:
+                raise Refusal(403, "expired")
+        except ValueError as exc:
+            raise Refusal(403, "malformed", "registry entry has malformed validity") from exc
         identity = entry.get("identity") if isinstance(entry.get("identity"), dict) else {}
         if str(identity.get("node_id") or "") != node_id:
             raise Refusal(403, "wrong_peer", "signature key does not match the overlay source")
@@ -231,12 +258,14 @@ class Intake:
         return entry
 
     def verify_signature(
-        self, *, method: str, path: str, body_sha: str, timestamp: str, node_id: str, signature: str
+        self, *, method: str, path: str, body_sha: str, timestamp: str, node_id: str, nonce: str, signature: str
     ) -> None:
         key = self.keys.get(node_id)
         if key is None:
             raise Refusal(403, "no-key")
-        if not self.authz.verify_signature(key, signature, _message_sha(method, path, body_sha, timestamp)):
+        if not self.authz.verify_signature(
+            key, signature, _message_sha(method, path, body_sha, timestamp, nonce, node_id)
+        ):
             raise Refusal(401, "bad-signature")
 
     def _write_jsonl(self, path: Path, rows: list[Any]) -> None:
@@ -413,27 +442,26 @@ def _handler(intake: Intake):
                 raise Refusal(401, "unsigned", "node id, timestamp, nonce and signature are required")
             return node_id, timestamp, signature, nonce, body_sha
 
-        def _authorize(self, *, body_sha: str) -> str:
-            node_id, timestamp, signature, nonce, sha = self._identity(body_sha)
-            source = self.client_address[0]
+        def _preauthorize(self) -> tuple[str, str, str, str]:
+            node_id, timestamp, signature, nonce, _sha = self._identity("")
             intake.authorize(
-                source=source,
+                source=self.client_address[0],
                 node_id=node_id,
                 timestamp=timestamp,
-                body_sha=sha,
-                path=self.path,
-                method=self.command,
                 nonce=nonce,
             )
+            return node_id, timestamp, signature, nonce
+
+        def _authorize(self, *, body_sha: str, node_id: str, timestamp: str, signature: str, nonce: str) -> None:
             intake.verify_signature(
                 method=self.command,
                 path=self.path,
-                body_sha=sha,
+                body_sha=body_sha,
                 timestamp=timestamp,
                 node_id=node_id,
+                nonce=nonce,
                 signature=signature,
             )
-            return node_id
 
         def _read(self, limit: int) -> tuple[bytes, str]:
             try:
@@ -456,26 +484,30 @@ def _handler(intake: Intake):
         def do_POST(self) -> None:
             try:
                 if self.path == "/api/v1/inventory":
+                    node_id, stamp, signature, nonce = self._preauthorize()
                     body, digest = self._read(MAX_JSON)
-                    node_id = self._authorize(body_sha=digest)
+                    self._authorize(body_sha=digest, node_id=node_id, timestamp=stamp, signature=signature, nonce=nonce)
                     payload = json.loads(body.decode("utf-8"))
                     if not isinstance(payload, dict):
                         raise Refusal(400, "malformed", "body is not a JSON object")
                     result = intake.inventory(node_id=node_id, body=payload, source=self.client_address[0])
                 elif self.path == "/api/v1/trace-batch":
+                    node_id, stamp, signature, nonce = self._preauthorize()
                     body, digest = self._read(MAX_JSON)
-                    node_id = self._authorize(body_sha=digest)
+                    self._authorize(body_sha=digest, node_id=node_id, timestamp=stamp, signature=signature, nonce=nonce)
                     payload = json.loads(body.decode("utf-8"))
                     result = intake.trace_batch(node_id=node_id, body=payload, source=self.client_address[0])
                 elif self.path == "/api/v1/vector-snapshot":
+                    node_id, stamp, signature, nonce = self._preauthorize()
                     body, digest = self._read(MAX_ARTIFACT)
-                    node_id = self._authorize(body_sha=digest)
+                    self._authorize(body_sha=digest, node_id=node_id, timestamp=stamp, signature=signature, nonce=nonce)
                     result = intake.artifact(
                         node_id=node_id, kind="snapshot", body=body, headers=self.headers, source=self.client_address[0]
                     )
                 elif self.path == "/api/v1/kv-artifact":
+                    node_id, stamp, signature, nonce = self._preauthorize()
                     body, digest = self._read(MAX_ARTIFACT)
-                    node_id = self._authorize(body_sha=digest)
+                    self._authorize(body_sha=digest, node_id=node_id, timestamp=stamp, signature=signature, nonce=nonce)
                     result = intake.artifact(
                         node_id=node_id, kind="kv", body=body, headers=self.headers, source=self.client_address[0]
                     )

@@ -707,7 +707,12 @@ def test_dispatch_verifies_results_and_writes_the_aggregate(tmp_path: Path, monk
     state_dir.mkdir()
     state = scheduler.default_state()
     state["state"] = "ARMED"
-    state["lease"] = {"lease_id": "lease-1"}
+    loaded = scheduler.load_registry(registry_path, now=now)
+    state["lease"] = {
+        "lease_id": "lease-1",
+        "expires_at": "2026-11-04T03:00:00Z",
+        "roster_digest": scheduler.roster_digest(loaded["nodes"]),
+    }
     scheduler.save_state(state_dir, state, now)
     args = type(
         "Args",

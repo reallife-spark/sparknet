@@ -1900,13 +1900,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/scripts/sparknet-approval-deliver.sh",
@@ -1915,13 +1915,13 @@
       "language": "sh",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_master_scripts.py + master suite",
+      "test": "tests/test_master_scripts.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no-proxy/no-redirect delivery"
     },
     {
       "path": "master-node/scripts/sparknet-approval-issue.sh",
@@ -1930,13 +1930,13 @@
       "language": "sh",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/scripts/sparknet-approval-sign-socket.sh",
@@ -1945,13 +1945,13 @@
       "language": "sh",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/scripts/sparknet-distill-trainer.sh",
@@ -1960,13 +1960,13 @@
       "language": "sh",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/scripts/sparknet-election-approve.sh",
@@ -1975,13 +1975,13 @@
       "language": "sh",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/scripts/sparknet-killswitch.sh",
@@ -1990,13 +1990,13 @@
       "language": "sh",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/scripts/sparknet-master-env.sh",
@@ -2005,13 +2005,13 @@
       "language": "sh",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/scripts/sparknet-master-keygen.sh",
@@ -2020,13 +2020,13 @@
       "language": "sh",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/scripts/sparknet-master-wireguard-anchor.sh",
@@ -2035,13 +2035,13 @@
       "language": "sh",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/scripts/sparknet-registry-deliver.sh",
@@ -2050,13 +2050,13 @@
       "language": "sh",
       "area": "master-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/scripts/sparknet-registry-publish.sh",
@@ -2065,13 +2065,13 @@
       "language": "sh",
       "area": "master-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/scripts/sparknet-registry-revoke.sh",
@@ -2080,13 +2080,13 @@
       "language": "sh",
       "area": "master-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/scripts/sparknet-registry-sign-socket.sh",
@@ -2095,13 +2095,13 @@
       "language": "sh",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/scripts/sparknet-registry-sign.sh",
@@ -2110,13 +2110,13 @@
       "language": "sh",
       "area": "master-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/scripts/sparknet-registry-verify.sh",
@@ -2125,13 +2125,13 @@
       "language": "sh",
       "area": "master-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/scripts/sparknet-rfi-answer.sh",
@@ -2140,13 +2140,13 @@
       "language": "sh",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_master_scripts.py + master suite",
+      "test": "tests/test_master_scripts.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no-proxy/no-redirect delivery"
     },
     {
       "path": "master-node/scripts/sparknet-share-ratify-unit.sh",
@@ -2155,13 +2155,13 @@
       "language": "sh",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/scripts/sparknet-wg-render-master.sh",
@@ -2170,13 +2170,13 @@
       "language": "sh",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_wg_render.py::test_registry_and_out_paths_cannot_inject_python + master suite",
+      "test": "tests/test_wg_render.py::test_registry_and_out_paths_cannot_inject_python",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "env-based renderer, no Python interpolation"
     },
     {
       "path": "master-node/services/sparknet-admin-console.py",
@@ -2185,13 +2185,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_admin_console.py + master suite",
+      "test": "tests/test_admin_console.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no-proxy/no-redirect delivery"
     },
     {
       "path": "master-node/services/sparknet-distill-status.py",
@@ -2200,13 +2200,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/services/sparknet-distill.py",
@@ -2215,13 +2215,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_distill.py::test_redaction_masks_the_value_not_only_the_keyword + master suite",
+      "test": "tests/test_distill.py::test_redaction_masks_the_value_not_only_the_keyword",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "whole-value redaction and trainer student binding"
     },
     {
       "path": "master-node/services/sparknet-evidence-capture.py",
@@ -2230,13 +2230,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/services/sparknet-file-share.py",
@@ -2245,13 +2245,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/services/sparknet-killswitch.py",
@@ -2260,13 +2260,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/services/sparknet-ledger.py",
@@ -2275,13 +2275,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_signer_isolation.py + master suite",
+      "test": "tests/test_signer_isolation.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "unpinned non-empty ledger refused"
     },
     {
       "path": "master-node/services/sparknet-nat-status.py",
@@ -2290,13 +2290,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/services/sparknet-parity.py",
@@ -2305,13 +2305,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/services/sparknet-peer-intake.py",
@@ -2320,13 +2320,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_peer_intake.py + master suite",
+      "test": "tests/test_peer_intake.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "registry reload + expiry window"
     },
     {
       "path": "master-node/services/sparknet-reflex-broker.py",
@@ -2335,13 +2335,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/services/sparknet-review-agents.py",
@@ -2350,13 +2350,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/services/sparknet-rfi-responder.py",
@@ -2365,13 +2365,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_rfi_responder.py + master suite",
+      "test": "tests/test_rfi_responder.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "registered/revoked/expiry gate"
     },
     {
       "path": "master-node/services/sparknet-scheduler.py",
@@ -2380,13 +2380,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_scheduler.py + master suite",
+      "test": "tests/test_scheduler.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "lease expiry and roster binding"
     },
     {
       "path": "master-node/services/sparknet-share-ratify.py",
@@ -2395,13 +2395,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_share_ratify.py + master suite",
+      "test": "tests/test_share_ratify.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "grant nonce consumption and queue bound"
     },
     {
       "path": "master-node/services/sparknet-signer.py",
@@ -2410,13 +2410,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/services/sparknet-uplift-intake.py",
@@ -2425,13 +2425,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "tests/test_uplift_intake.py + master suite",
+      "test": "tests/test_uplift_intake.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "signed nonce, pre-auth body gate, registry reload"
     },
     {
       "path": "master-node/services/sparknet-vector-serve.py",
@@ -2440,13 +2440,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/services/sparknet-wg-observer.py",
@@ -2455,13 +2455,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "reviewed-clean",
       "finding_ids": [],
-      "evidence": "",
+      "evidence": "master audit 2026-11-08 + master-node/tests",
       "test": "",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "no high-confidence remaining defect"
     },
     {
       "path": "master-node/tests/conftest.py",
@@ -2470,13 +2470,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/conftest.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_admin_console.py",
@@ -2485,13 +2485,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_admin_console.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_admin_services.py",
@@ -2500,13 +2500,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_admin_services.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_admin_surface.py",
@@ -2515,13 +2515,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_admin_surface.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_approval.py",
@@ -2530,13 +2530,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_approval.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_distill.py",
@@ -2545,13 +2545,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_distill.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_evidence_and_review.py",
@@ -2560,13 +2560,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_evidence_and_review.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_killswitch.py",
@@ -2575,13 +2575,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_killswitch.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_master_parity.py",
@@ -2590,13 +2590,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_master_parity.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_master_scripts.py",
@@ -2605,13 +2605,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_master_scripts.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_master_spec.py",
@@ -2620,13 +2620,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_master_spec.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_peer_intake.py",
@@ -2635,13 +2635,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_peer_intake.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_reflex_broker.py",
@@ -2650,13 +2650,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_reflex_broker.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_registry_cli.py",
@@ -2665,13 +2665,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_registry_cli.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_registry_cli_step3.py",
@@ -2680,13 +2680,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_registry_cli_step3.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_registry_dist.py",
@@ -2695,13 +2695,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_registry_dist.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_registry_schema.py",
@@ -2710,13 +2710,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_registry_schema.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_rfi_responder.py",
@@ -2725,13 +2725,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_rfi_responder.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_rfi_transport.py",
@@ -2740,13 +2740,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_rfi_transport.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_scheduler.py",
@@ -2755,13 +2755,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_scheduler.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_share_ratify.py",
@@ -2770,13 +2770,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_share_ratify.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_signer_isolation.py",
@@ -2785,13 +2785,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "rewrite",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_signer_isolation.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_step1_keypair.py",
@@ -2800,13 +2800,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_step1_keypair.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_uplift_intake.py",
@@ -2815,13 +2815,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_uplift_intake.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_vector_serve.py",
@@ -2830,13 +2830,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_vector_serve.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_wg_anchor.py",
@@ -2845,13 +2845,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_wg_anchor.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_wg_observer.py",
@@ -2860,13 +2860,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_wg_observer.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "master-node/tests/test_wg_render.py",
@@ -2875,13 +2875,13 @@
       "language": "py",
       "area": "master-node",
       "prior_disposition": "retain",
-      "status": "pending",
+      "status": "test-verified",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "master-node/tests suite 2026-11-08",
+      "test": "master-node/tests/test_wg_render.py",
       "commit": "",
       "reviewer": "",
-      "notes": ""
+      "notes": "suite passes; fixtures updated where registry validity is required"
     },
     {
       "path": "peer-node/agents/cyber/agent.py",

@@ -5,7 +5,7 @@
 Updated: 2026-11-08
 ## Plan cursor
 - `PLAN.md` — `current: 90`; Step 90 is the 416-file Phase 8 remediation. Step 89 is archived in `_archives/PLAN_FULL_2026-11-08.md`.
-- Critical open items: Step 90 is active; shared rows are 11 fixed / 12 reviewed-clean, 393 rows pending. `make phase8-closure-check` must pass before closure.
+- Critical open items: Step 90 is active; shared + Master rows are 22 fixed / 39 reviewed-clean / 28 test-verified, 327 rows pending. `make phase8-closure-check` must pass before closure.
 - Phase 8: closed 2026-11-08. All 416 files are dispositioned; high-risk audit findings (registry replay, signer/verifier asymmetry, script injection, peer pin, patch mode, WG injection, proxy bounds, guard audit, WLAN) are fixed.
 - 89H/89I: private loopback OCI registry (`master-node/services/sparknet-container-registry.py`, port 5000, staged unit), GitFlow policy (`shared/sparknet-gitflow.py`), self-improvement source/target branches, signed package distribution. Registry live loopback probe passed on agx64 2026-11-08.
 ## Live fabric

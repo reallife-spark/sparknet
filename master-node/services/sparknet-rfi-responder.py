@@ -225,6 +225,46 @@ def compose(
     }
 
 
+def _registered_fingerprint(registry: str | None, fingerprint: str) -> str:
+    """Resolve the requester in the current signed registry, when one is supplied."""
+    if not registry:
+        return fingerprint
+    path = Path(registry)
+    if not path.is_file():
+        raise ValueError("registry is not a local signed file")
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict):
+        raise ValueError("registry is not an object")
+    authz_impl = authz()
+    try:
+        master_key = authz_impl.public_key_from_b64(str(document.get("master_public_key_b64") or ""))
+    except Exception as exc:
+        raise ValueError(f"registry master key is unusable: {exc}") from exc
+    now = datetime.now(timezone.utc)
+    for entry in document.get("authorizations") or []:
+        if not isinstance(entry, dict) or entry.get("fingerprint") != fingerprint:
+            continue
+        if not authz_impl.verify_signature(
+            master_key, str(entry.get("signature_b64") or ""), authz_impl.authorization_message(entry)
+        ):
+            raise ValueError("registry entry signature does not verify")
+        if entry.get("revoked"):
+            raise ValueError("requesting peer is revoked")
+        try:
+            issued = datetime.fromisoformat(str(entry.get("issued_at") or "").replace("Z", "+00:00"))
+            expires = datetime.fromisoformat(str(entry.get("expires_at") or "").replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("registry entry has malformed validity") from exc
+        if issued.tzinfo is None:
+            issued = issued.replace(tzinfo=timezone.utc)
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if now < issued or now >= expires:
+            raise ValueError("requesting peer is outside its authorization window")
+        return fingerprint
+    raise ValueError("requesting peer is not in the registry")
+
+
 def process_once(
     *,
     request_dir: Path,
@@ -242,9 +282,10 @@ def process_once(
     for path in sorted(request_dir.glob("*.json"))[:limit]:
         try:
             request = load_request(path)
+            expected = _registered_fingerprint(registry, str(request.get("peer_fingerprint") or ""))
             ok, reason = authz().verify_rfi_request(
                 request,
-                expected_fingerprint=str(request.get("peer_fingerprint") or ""),
+                expected_fingerprint=expected,
                 seen_nonces=(),
             )
             if not ok:

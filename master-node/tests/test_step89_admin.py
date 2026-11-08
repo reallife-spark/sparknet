@@ -138,3 +138,14 @@ def test_package_index_is_signed_and_verifiable(tmp_path):
     assert _run(role, state, key, "package-index", "--payload", payload, "--confirm") == 0
     index = json.loads((state / "share" / "packages" / "index.json").read_text())
     assert package.verify_index_signature(index, authz.public_key_from_b64(public)) is True
+
+
+def test_collab_and_schedule_ids_cannot_escape_their_roots(tmp_path):
+    role, state, key, _ = _setup(tmp_path)
+    room = _payload(tmp_path, {"owner_node_id": "owner-1", "room_id": "../../escape", "classification": "internal"})
+    assert _run(role, state, key, "collab-room", "--payload", room, "--confirm") != 0
+    assert not (role.parent / "escape").exists()
+    when = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    schedule = _payload(tmp_path, {"run_at": when, "schedule_id": "../../escape", "config": "configs/distill.json"})
+    assert _run(role, state, key, "distill-schedule", "--payload", schedule, "--confirm") != 0
+    assert not (state.parent / "escape.json").exists()

@@ -34,6 +34,7 @@ from sparknet_loader import load_shared  # noqa: E402 - import after the loader 
 
 DEFAULT_REGISTRY = ROLE_ROOT / "manifests" / "node-authorizations.json"
 DEFAULT_DEADLINE_SECONDS = 2 * 60 * 60
+MAX_PENDING = 256
 DECISIONS = ("approve", "approved", "ratify", "ratified", "refuse", "refused")
 
 
@@ -89,6 +90,7 @@ class ShareRatifier:
         self._lock = threading.RLock()
         self.pending: dict[str, dict[str, Any]] = {}
         self.ratifications: dict[str, dict[str, Any]] = {}
+        self.consumed_nonces: set[str] = set()
         self._load_state()
 
     def _load_state(self) -> None:
@@ -102,6 +104,7 @@ class ShareRatifier:
             raise ShareRatifyError("state-corrupt", f"{self.state_path} is not a ratification queue")
         self.pending = {str(k): v for k, v in (state.get("pending") or {}).items() if isinstance(v, dict)}
         self.ratifications = {str(k): v for k, v in (state.get("ratifications") or {}).items() if isinstance(v, dict)}
+        self.consumed_nonces = {str(value) for value in (state.get("consumed_nonces") or []) if str(value)}
 
     def _save_state(self) -> None:
         if self.state_path is None:
@@ -116,6 +119,7 @@ class ShareRatifier:
                         "saved_at": _iso(self.clock()),
                         "pending": self.pending,
                         "ratifications": self.ratifications,
+                        "consumed_nonces": sorted(self.consumed_nonces),
                     },
                     handle,
                     indent=2,
@@ -177,7 +181,7 @@ class ShareRatifier:
             master_public_key=self._master_key(registry),
             registry=registry,
             node_identity=entry.get("identity"),
-            consumed_nonces=set(),
+            consumed_nonces=self.consumed_nonces,
             now=now,
         )
         if not decision.allowed:
@@ -208,6 +212,11 @@ class ShareRatifier:
             share_id = f"shr-{verified['node_id']}-{int(now.timestamp())}"
         if share_id in self.pending or share_id in self.ratifications:
             raise ShareRatifyError("duplicate-share", f"share {share_id} was already accepted")
+        if len(self.pending) >= MAX_PENDING:
+            raise ShareRatifyError("queue-full", "the pending ratification queue is full")
+        nonce = str(verified["grant"].get("nonce") or "")
+        if not nonce or nonce in self.consumed_nonces:
+            raise ShareRatifyError("replayed-grant", "this grant nonce was already consumed")
         deadline = accepted_at + timedelta(seconds=self.deadline_seconds)
         record = {
             "share_id": share_id,
@@ -221,6 +230,7 @@ class ShareRatifier:
             "status": "pending",
             "flag_retained": True,
         }
+        self.consumed_nonces.add(nonce)
         self.pending[share_id] = record
         self._save_state()
         return {"ok": True, "share_id": share_id, "status": "pending", "deadline": record["deadline"]}

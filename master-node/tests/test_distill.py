@@ -71,3 +71,17 @@ def test_eval_rejects_below_threshold(tmp_path: Path):
     )
     assert result["approved"] is False
     assert result["failures"]
+
+
+def test_redaction_masks_the_value_not_only_the_keyword(tmp_path: Path):
+    _trace(
+        tmp_path / "uplift",
+        prompt="password: hunter2",
+        response="-----BEGIN " + "PRIVATE KEY-----\nsecret\n-----END " + "PRIVATE KEY-----",
+    )
+    config = {"teacher_model_id": "teacher", "family": "qwen", "data_window_days": 3650}
+    manifest = distill.build_dataset(config, uplift=tmp_path / "uplift", state=tmp_path / "state")
+    train = (tmp_path / "state" / "datasets" / manifest["dataset_id"] / "train.jsonl").read_text()
+    assert "hunter2" not in train
+    assert "secret" not in train
+    assert "[REDACTED PRIVATE KEY]" in train or "[REDACTED]" in train

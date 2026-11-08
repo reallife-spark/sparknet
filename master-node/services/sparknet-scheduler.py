@@ -934,12 +934,20 @@ def _dispatch(args: argparse.Namespace, now: datetime) -> int:
     if state.get("state") != "ARMED" or not isinstance(state.get("lease"), dict):
         raise SchedulerError("no_active_lease")
     lease = state["lease"]
-    lease_id = args.lease_id or str(lease.get("lease_id") or "")
-    if not lease_id:
+    active_lease_id = str(lease.get("lease_id") or "")
+    if not active_lease_id:
         raise SchedulerError("lease_id_missing")
+    if args.lease_id and args.lease_id != active_lease_id:
+        raise SchedulerError("lease_id_mismatch")
+    lease_expires = parse_ts(lease.get("expires_at"))
+    if lease_expires is None or now >= lease_expires:
+        raise SchedulerError("lease_expired")
+    lease_id = active_lease_id
     registry = load_registry(Path(args.registry), now=now)
     nodes = registry["nodes"]
     master_id = _master_node_id()
+    if lease.get("roster_digest") != roster_digest(nodes):
+        raise SchedulerError("roster_changed")
     roster = sorted({master_id, *[str(node["node_id"]) for node in nodes]})
     governance = "peer_pair" if len(roster) == 2 else "master_governed"
     cluster = _cluster()

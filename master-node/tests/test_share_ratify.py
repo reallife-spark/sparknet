@@ -199,10 +199,10 @@ def test_a_duplicate_share_id_is_refused(
     ratify: ModuleType, authz: ModuleType, master_key: Ed25519PrivateKey, tmp_path: Path
 ) -> None:
     service = _ratifier(ratify, authz, _registry(tmp_path, authz, master_key), master_key)
-    request = _request(authz, master_key)
-    service.accept_share_request(request)
+    service.accept_share_request(_request(authz, master_key))
+    second = _request(authz, master_key, grant=_grant(authz, master_key, nonce="n2"))
     with pytest.raises(ratify.ShareRatifyError, match="duplicate-share"):
-        service.accept_share_request(request)
+        service.accept_share_request(second)
 
 
 def test_a_share_can_only_be_decided_once(
@@ -317,3 +317,13 @@ def test_the_rendered_4203_unit_queues_but_never_signs() -> None:
     assert "4203" in unit and "--serve" in unit
     assert "--trusted-key-dir" in unit and "--state" in unit
     assert "--approve" not in unit and "--signer-socket" not in unit
+
+
+def test_a_consumed_grant_nonce_cannot_create_a_second_share(
+    ratify: ModuleType, authz: ModuleType, master_key: Ed25519PrivateKey, tmp_path: Path
+) -> None:
+    service = _ratifier(ratify, authz, _registry(tmp_path, authz, master_key), master_key)
+    grant = _grant(authz, master_key)
+    service.accept_share_request(_request(authz, master_key, grant=grant))
+    with pytest.raises(ratify.ShareRatifyError, match="grant_nonce_reused"):
+        service.accept_share_request(_request(authz, master_key, share_id="share-2", grant=grant))

@@ -65,7 +65,11 @@ def _registry(tmp_path: Path, authz, *, capabilities: list[str] | None = None, o
         "requested_capabilities": ["model-uplift"] if capabilities is None else capabilities,
     }
     entry = authz.sign_authorization(
-        identity, master, ["model-uplift"] if capabilities is None else capabilities, ttl_days=1, now=NOW
+        identity,
+        master,
+        ["model-uplift"] if capabilities is None else capabilities,
+        ttl_days=1,
+        now=datetime.now(timezone.utc),
     )
     path = tmp_path / "registry.json"
     path.write_text(

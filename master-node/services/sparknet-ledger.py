@@ -216,8 +216,20 @@ def main(argv: list[str] | None = None) -> int:
     if command not in {"verify", "describe"}:
         print(f"[ledger] unknown command {command!r}; expected verify or describe", file=sys.stderr)
         return 2
+    expected_pubkey_b64 = expected_pubkey_b64 or trusted_pubkey_from_state()
+    if expected_pubkey_b64 is None:
+        try:
+            existing = load_ledger()
+        except (FileNotFoundError, ValueError):
+            existing = {"blocks": []}
+        if existing.get("blocks"):
+            print(
+                "[ledger] no pinned operational key and the ledger is non-empty; refusing an unpinned verify",
+                file=sys.stderr,
+            )
+            return 2
     try:
-        report = describe(expected_pubkey_b64=expected_pubkey_b64 or trusted_pubkey_from_state())
+        report = describe(expected_pubkey_b64=expected_pubkey_b64)
     except (FileNotFoundError, ValueError) as exc:
         print(f"[ledger] {exc}", file=sys.stderr)
         return 1

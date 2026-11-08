@@ -130,10 +130,17 @@ def _load_authz(shared_dir: Path | None = None) -> Any:
 # --- request message ---------------------------------------------------------
 
 
-def request_message(method: str, path: str, body: bytes, timestamp: str) -> bytes:
-    """The canonical bytes a signature covers. See the module docstring."""
+def request_message(
+    method: str, path: str, body: bytes, timestamp: str, *, nonce: str = "", node_id: str = ""
+) -> bytes:
+    """The canonical bytes a signature covers. See the module docstring.
+
+    ``nonce`` and ``node_id`` are optional so the original transport stays
+    byte-compatible. The uplift intake passes both, making its replay nonce part
+    of the signed request instead of an unsigned header an attacker can swap.
+    """
     body_sha256 = hashlib.sha256(body).hexdigest()
-    return (
+    message = (
         VERSION_PREFIX
         + b"\n"
         + method.upper().encode("ascii")
@@ -144,6 +151,9 @@ def request_message(method: str, path: str, body: bytes, timestamp: str) -> byte
         + b"\n"
         + timestamp.encode("ascii")
     )
+    if nonce or node_id:
+        message += b"\n" + nonce.encode("utf-8") + b"\n" + node_id.encode("utf-8")
+    return message
 
 
 def _utc_now() -> str:

@@ -113,7 +113,9 @@ def _headers(path: str, body: bytes, extra: dict[str, str] | None = None) -> dic
     impl = authz()
     stamp = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     nonce = uuid.uuid4().hex
-    signature = impl.sign_bytes(_key(), http().request_message("POST", path, body, stamp))
+    signature = impl.sign_bytes(
+        _key(), http().request_message("POST", path, body, stamp, nonce=nonce, node_id=node_id())
+    )
     headers = {
         "Content-Type": "application/octet-stream",
         "X-Sparknet-Node-Id": node_id(),

@@ -358,7 +358,9 @@ def push(records: list[dict[str, Any]], *, endpoint: str = DEFAULT_UPLIFT) -> tu
     body = json.dumps(payload, sort_keys=True).encode("utf-8")
     stamp = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     nonce = uuid.uuid4().hex
-    signature = authz.sign_bytes(private_key, http.request_message("POST", "/api/v1/inventory", body, stamp))
+    signature = authz.sign_bytes(
+        private_key, http.request_message("POST", "/api/v1/inventory", body, stamp, nonce=nonce, node_id=node_id())
+    )
     request = urllib.request.Request(
         endpoint.rstrip("/") + "/api/v1/inventory",
         data=body,

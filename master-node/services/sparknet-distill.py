@@ -44,7 +44,11 @@ FABRIC_ROOT = ROLE_ROOT.parent
 DEFAULT_CONFIG = ROLE_ROOT / "configs" / "distill.json"
 DEFAULT_STATE = Path(os.environ.get("SPARKNET_DISTILL_STATE", "/srv/sparknet/distill"))
 DEFAULT_UPLIFT = Path(os.environ.get("SPARKNET_UPLIFT_STATE", "/srv/sparknet/uplift"))
-SECRET_PATTERNS = re.compile(r"(?i)(api[_-]?key|secret|token|password|BEGIN [A-Z ]*PRIVATE KEY)")
+SECRET_ASSIGNMENT = re.compile(
+    r"(?i)((?:api[_-]?key|secret|token|password|passwd|private[_-]?key)\s*[:=]\s*)([^\s,;]+)"
+)
+PRIVATE_KEY_BLOCK = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.S)
+SECRET_PATTERNS = re.compile(r"(?i)(api[_-]?key|secret|token|password|passwd|private[_-]?key|BEGIN [A-Z ]*PRIVATE KEY)")
 
 
 def _load(name: str, path: Path) -> Any:
@@ -100,9 +104,10 @@ def _trace_rows(uplift: Path) -> list[dict[str, Any]]:
 
 
 def _redact(text: str) -> tuple[str, bool]:
-    if SECRET_PATTERNS.search(text):
-        return SECRET_PATTERNS.sub("[REDACTED]", text), True
-    return text, False
+    redacted = PRIVATE_KEY_BLOCK.sub("[REDACTED PRIVATE KEY]", text)
+    redacted = SECRET_ASSIGNMENT.sub(r"\1[REDACTED]", redacted)
+    changed = redacted != text or bool(SECRET_PATTERNS.search(redacted))
+    return redacted, changed
 
 
 def build_dataset(config: dict[str, Any], *, uplift: Path, state: Path) -> dict[str, Any]:
@@ -286,6 +291,10 @@ def run(config: dict[str, Any], *, uplift: Path, state: Path, execute: bool, sig
     env["SPARKNET_DISTILL_RUN"] = run_id
     env["SPARKNET_DISTILL_DATASET"] = str(state / "datasets" / manifest["dataset_id"])
     env["SPARKNET_DISTILL_CONFIG"] = json.dumps(config, sort_keys=True)
+    student = str(config.get("student_base_model") or "").strip()
+    if not student:
+        raise SystemExit("distill: student_base_model is required to bind the trainer to the signed run")
+    env["SPARKNET_DISTILL_STUDENT"] = student
     result = subprocess.run(shlex.split(trainer), env=env, cwd=str(root))
     artifact = root / "artifact"
     artifact_sha = ""

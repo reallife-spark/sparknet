@@ -98,7 +98,15 @@ def _fixture_vault(
 
 def _intake_server(fingerprint: str, spool: Path) -> tuple[Any, str]:
     directory = intake.PeerDirectory(
-        [{"fingerprint": fingerprint, "overlay_ipv4": "127.0.0.1/32", "capabilities": ["telemetry"]}]
+        [
+            {
+                "fingerprint": fingerprint,
+                "overlay_ipv4": "127.0.0.1/32",
+                "capabilities": ["telemetry"],
+                "issued_at": "2020-01-01T00:00:00Z",
+                "expires_at": "2099-01-01T00:00:00Z",
+            }
+        ]
     )
     server = intake.ThreadingHTTPServer(("127.0.0.1", 0), intake._Handler)
     server.directory = directory

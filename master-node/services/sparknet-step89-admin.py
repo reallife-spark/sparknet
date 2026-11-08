@@ -135,19 +135,32 @@ def _apply_lake(state_root: Path, payload: dict[str, Any]) -> dict[str, Any]:
     return {"records": str(target), "kind": payload.get("kind")}
 
 
+COMPONENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
 def _apply_collab(role_root: Path, payload: dict[str, Any]) -> dict[str, Any]:
     owner = str(payload.get("owner_node_id") or "").strip()
     if not owner:
         raise AdminError("malformed-room", "owner_node_id is required")
+    if not COMPONENT_RE.fullmatch(owner):
+        raise AdminError("malformed-room", "owner_node_id is not a safe identifier")
+    requested_room = str(payload.get("room_id") or uuid.uuid4().hex)
+    if not COMPONENT_RE.fullmatch(requested_room):
+        raise AdminError("malformed-room", "room_id must be a single safe path component")
     room = COLLAB.make_room(
         owner_node_id=owner,
         participants=payload.get("participants") or [],
         classification=str(payload.get("classification") or "internal"),
         department=payload.get("department"),
-        room_id=payload.get("room_id"),
+        room_id=requested_room,
         verified=True,
     )
-    target = role_root / "01_Inbox" / "collab" / room["room_id"] / "room.json"
+    collab_root = (role_root / "01_Inbox" / "collab").resolve()
+    target = collab_root / room["room_id"] / "room.json"
+    try:
+        target.resolve().relative_to(collab_root)
+    except ValueError as exc:
+        raise AdminError("malformed-room", "room path escapes the collaboration root") from exc
     target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     target.write_text(json.dumps(room, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     os.chmod(target, 0o600)
@@ -168,7 +181,14 @@ def _apply_distill(state_root: Path, payload: dict[str, Any]) -> dict[str, Any]:
         raise AdminError("malformed-schedule", "run_at must be in the future")
     root = state_root / "distill" / "schedule"
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
-    target = root / (str(payload.get("schedule_id") or "schedule-" + uuid.uuid4().hex) + ".json")
+    schedule_id = str(payload.get("schedule_id") or "schedule-" + uuid.uuid4().hex)
+    if not COMPONENT_RE.fullmatch(schedule_id):
+        raise AdminError("malformed-schedule", "schedule_id must be a single safe path component")
+    target = root / (schedule_id + ".json")
+    try:
+        target.resolve().relative_to(root.resolve())
+    except ValueError as exc:
+        raise AdminError("malformed-schedule", "schedule path escapes the schedule root") from exc
     record = {"schema": "sparknet-distill-schedule/1", "status": "scheduled", **payload}
     target.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     os.chmod(target, 0o600)
