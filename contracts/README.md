@@ -52,6 +52,7 @@ the tests then prove both roles still agree.
 | `self-improvement-schema.json` | bounded mutation/benchmark runs, deterministic thresholds, promotion/rollback and the worktree fallback |
 | `release-schema.json` | signed release manifests, immutable artifacts, package-index binding and the 4221 distribution/install rules |
 | `data-lake-schema.json` | consented Master-side uplift/trace/artifact intake; training and backup evidence that is never served as knowledge |
+| `container-registry-schema.json` | private loopback OCI distribution: token gate, content-addressed manifests/blobs, read-only and non-knowledge |
 | `pipeline-schema.json` | O1→O2→O5 eligibility, daily-log append, staged O5 candidate and explicit human promotion |
 | `step89-admin-schema.json` | signed Master-side lake, collaboration, distill-schedule and package-index envelopes; provenance, never authority |
 | `step89-matrix.json` | the Step 89 channel matrix: contract, implementation, tests and live state per channel |

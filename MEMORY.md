@@ -4,9 +4,10 @@
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
 Updated: 2026-11-08
 ## Plan cursor
-- `PLAN.md` — `current: 89`; Step 88 closed. Step 89 implementation is live; Phase 8 rewrite is in progress.
-- Critical open items: full 416-file rewrite and Step 89 closure (89H private container registry/GitFlow and final 89I confirmations). Signer allowlist, ledger key pinning and transport mTLS are implemented and live for the signer.
+- `PLAN.md` — `current: done`; Step 89 closed 2026-11-08. Remaining work is the Phase 8 rewrite register and a new plan step for any later work.
+- Critical open items: full 416-file Phase 8 rewrite. Signer allowlist, ledger key pinning, transport mTLS and private registry are implemented.
 - Phase 8: Waves A–F have targeted rewrites and tests; Wave G test coverage is green. The rewrite register is not fully closed.
+- 89H/89I: private loopback OCI registry (`master-node/services/sparknet-container-registry.py`, port 5000, staged unit), GitFlow policy (`shared/sparknet-gitflow.py`), self-improvement source/target branches, signed package distribution. Registry live loopback probe passed on agx64 2026-11-08.
 ## Live fabric
 - **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`). Peer egress only to Master.
 - Master: signer/ledger/parity, 8088 admin, 8098 console, 8090/8091 intake, 4220–4223, 4201/4202 share, 4204 engine, Qdrant 6333, teacher.

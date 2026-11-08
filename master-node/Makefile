@@ -220,6 +220,9 @@ REGISTRY_TIMER := sparknet-registry-deliver.timer
 # The task orchestrator is staged but not enabled: it is a new event-plane
 # service and goes live only in the Step 89 rollout window.
 ORCHESTRATOR_UNIT := sparknet-orchestrator.service
+# The private image registry is staged, not enabled: it needs an operator-created
+# token and is loopback-only.
+CONTAINER_REGISTRY_UNIT := sparknet-container-registry.service
 UNIT_DIR ?= /etc/systemd/system
 # The overlay anchor and the firewall run as root and need a stable absolute path
 # to the vault, so they are launched through generated shims (same convention as
@@ -273,6 +276,11 @@ signer: ## Print the signer's isolation posture (no key, no root, no socket)
 
 signer-unit: ## Stage the signer unit ONLY (does not enable it; election does that)
 	@install -Dm644 "$(VAULT_ROOT)/systemd/$(SIGNER_UNIT)" "$(UNIT_DIR)/$(SIGNER_UNIT)"
+
+container-registry-unit: ## Stage the private registry unit ONLY (does not enable it)
+	@install -Dm644 "$(VAULT_ROOT)/systemd/$(CONTAINER_REGISTRY_UNIT)" "$(UNIT_DIR)/$(CONTAINER_REGISTRY_UNIT)"
+	@echo "  ✓ staged $(CONTAINER_REGISTRY_UNIT) into $(UNIT_DIR) — not enabled."
+	@echo "    Create \$$SPARKNET_STATE_DIR/registry-token (0600) before starting it."
 
 reflex-unit: ## Stage the reflex broker unit ONLY (does not enable it; 64F does)
 	@install -Dm644 "$(VAULT_ROOT)/systemd/$(REFLEX_UNIT)" "$(UNIT_DIR)/$(REFLEX_UNIT)"

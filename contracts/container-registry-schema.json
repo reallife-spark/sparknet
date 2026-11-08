@@ -1,0 +1,44 @@
+{
+  "contract": "container-registry-schema",
+  "schema_version": "1.0",
+  "description": "A private, token-gated OCI distribution surface for signed release artifacts. It serves content that an operator placed under a content-addressed root; it never builds, signs, deploys or executes an image.",
+  "surface": {
+    "implementation": "master-node/services/sparknet-container-registry.py",
+    "protocol": "Docker Registry HTTP API v2, read-only subset",
+    "binding": "loopback only (127.0.0.1 / ::1); a private registry is not an overlay service",
+    "auth": "constant-time bearer token; the token file must be mode 0600 and at least 16 characters",
+    "storage": {
+      "blobs": "blobs/sha256/<64 lowercase hex>",
+      "manifests": "manifests/<repository>/<tag-or-sha256>.json",
+      "addressing": "repository names, tags and digests are parsed by closed regular expressions; raw request paths are never joined to the root"
+    }
+  },
+  "endpoints": [
+    "GET /v2/ — service identity",
+    "GET /v2/_catalog — repository names",
+    "GET|HEAD /v2/<name>/manifests/<reference> — OCI manifest plus Docker-Content-Digest",
+    "GET|HEAD /v2/<name>/blobs/<digest> — blob bytes, verified against the digest",
+    "GET /v2/<name>/tags/list — tags"
+  ],
+  "rules": [
+    "No token, no response: the auth check runs before path parsing, including for /v2/.",
+    "No push route, no build route and no deploy route: this is a distribution surface, not an image factory.",
+    "A manifest digest reference must match the manifest bytes; a blob digest must match the blob bytes.",
+    "An image digest named by a release is installed only by the explicit package operator action.",
+    "The registry carries executable content, so it is not a knowledge channel and never enters a vault, RFI answer or AI context.",
+    "Loopback plus bearer token is the boundary; enabling it on an overlay address is refused."
+  ],
+  "refusal_codes": [
+    "token-required",
+    "token-mode",
+    "name-invalid",
+    "reference-invalid",
+    "digest-invalid",
+    "manifest-unknown",
+    "manifest-digest-mismatch",
+    "manifest-too-large",
+    "blob-unknown",
+    "blob-corrupt",
+    "not-found"
+  ]
+}

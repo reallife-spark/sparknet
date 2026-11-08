@@ -99,6 +99,19 @@ def validate_run(record: Mapping[str, Any]) -> dict[str, Any]:
         "bad-digest",
         "mutation_sha256 must be 64 lowercase hex",
     )
+    for field in ("source_branch", "target_branch"):
+        value = record.get(field)
+        if value is not None:
+            _require(
+                isinstance(value, str)
+                and bool(value.strip())
+                and not value.startswith("/")
+                and not value.endswith("/")
+                and ".." not in value
+                and not any(ch.isspace() for ch in value),
+                "bad-branch",
+                f"{field} is invalid",
+            )
     _require(isinstance(record.get("metrics"), Mapping), "benchmark-missing", "metrics must be an object")
     _require(isinstance(record.get("thresholds"), Mapping), "benchmark-missing", "thresholds must be an object")
     signature = record.get("signature_b64")

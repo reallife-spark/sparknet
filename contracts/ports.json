@@ -452,6 +452,18 @@
       "runtime_why": "master-node/services/sparknet-reflex-broker.py implements the listener and master-node/systemd/sparknet-reflex-broker.service stages it. The hosted cloud backend was removed in Step 65, so no credential is provisioned or needed; the unit is emitter-gated and remains staged/not enabled.",
       "service": "reflex-broker"
     },
+    "5000": {
+      "binds_to": "127.0.0.1",
+      "bound_by": "master",
+      "implementation_state": "implemented",
+      "note": "The private OCI distribution surface for signed release images. Read-only, bearer-token gated and loopback-only: a registry that any local process can write is a distribution path for unsigned executable content.",
+      "overlay_only": false,
+      "protocol": "tcp/http",
+      "runtime": "not-listening",
+      "runtime_why": "master-node/services/sparknet-container-registry.py implements the read-only Registry v2 subset and master-node/systemd/sparknet-container-registry.service stages it. The unit is not enabled by `make units`; bringing it up is an operator decision and requires the token file at ${SPARKNET_STATE_DIR}/registry-token.",
+      "service": "container-registry",
+      "status": "LIVE LOOPBACK 2026-11-08 — agx64 served /v2/ 401 without a token, 200 with the token, and returned a manifest digest plus its blob over 127.0.0.1:15000. The persistent unit remains staged."
+    },
     "51820": {
       "bound_by": "both",
       "implementation_state": "implemented",

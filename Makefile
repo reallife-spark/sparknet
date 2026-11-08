@@ -482,6 +482,9 @@ bundle-verify: ## Extract the newest bundle and prove it runs standalone
 self-improve: ## Run a bounded worktree benchmark candidate (ARGS=...)
 	@$(PY) scripts/sparknet-self-improve.py $(ARGS)
 
+gitflow-check: ## Check SOURCE -> TARGET against the GitFlow policy
+	@$(PY) scripts/sparknet-gitflow.py "$(SOURCE)" "$(TARGET)"
+
 package-install: ## Verify and install a signed package (ARGS=...)
 	@$(PY) scripts/sparknet-package.py install $(ARGS)
 

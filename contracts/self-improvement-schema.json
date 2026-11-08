@@ -16,7 +16,9 @@
       "thresholds",
       "decision",
       "created_at",
-      "signature_b64"
+      "signature_b64",
+      "source_branch",
+      "target_branch"
     ],
     "required": [
       "schema_version",
@@ -65,7 +67,8 @@
       "explicit operator action"
     ],
     "action": "Commit the candidate to Git, then fast-forward the managed branch.",
-    "rollback": "Hard reset to base_commit and remove the worktree; no partial merge."
+    "rollback": "Hard reset to base_commit and remove the worktree; no partial merge.",
+    "gitflow": "feature/* -> develop; release/* or hotfix/* -> main/master; same-branch fast-forward allowed. The source/target branches are recorded in the run."
   },
   "fallback": {
     "when": "Firecracker or KVM is unavailable on the host",

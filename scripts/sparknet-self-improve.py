@@ -21,6 +21,7 @@ from sparknet_loader import load_shared  # noqa: E402 - shared/ is added by path
 
 IMPROVE = load_shared("sparknet-self-improve.py", "sparknet_self_improve_cli")
 AUTHZ = load_shared("sparknet-authz.py", "sparknet_self_improve_authz")
+GITFLOW = load_shared("sparknet-gitflow.py", "sparknet_self_improve_gitflow")
 
 
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -59,6 +60,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--state-dir", default=os.environ.get("SPARKNET_SELF_IMPROVE_STATE", ""))
     parser.add_argument("--key-file", default="")
     parser.add_argument("--promote", action="store_true", help="fast-forward the managed repo only on pass")
+    parser.add_argument("--source-branch", default="", help="source branch for the GitFlow edge (default: current)")
+    parser.add_argument("--target-branch", default="", help="target branch for the GitFlow edge (default: current)")
     parser.add_argument("--timeout", type=int, default=900)
     args = parser.parse_args(argv)
 
@@ -80,6 +83,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         base = _git(repo, "rev-parse", args.base_ref).stdout.strip()
+        current_branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+        source_branch = GITFLOW.validate_branch(args.source_branch or current_branch)
+        target_branch = GITFLOW.validate_branch(args.target_branch or current_branch)
         worktree.parent.mkdir(parents=True, exist_ok=True)
         _git(repo, "worktree", "add", "--detach", str(worktree), base)
         _git(worktree, "apply", "--whitespace=nowarn", str(patch))
@@ -105,6 +111,7 @@ def main(argv: list[str] | None = None) -> int:
         decision = "pending" if verdict["decision"] == "promote" and not args.promote else verdict["decision"]
         promoted = None
         if decision == "promote":
+            GITFLOW.require_promotion(source_branch, target_branch)
             _git(worktree, "add", "-A")
             _git(
                 worktree,
@@ -117,7 +124,15 @@ def main(argv: list[str] | None = None) -> int:
                 f"self-improve: {run_id}",
             )
             promoted = _git(worktree, "rev-parse", "HEAD").stdout.strip()
-            _git(repo, "merge", "--ff-only", promoted)
+            restore = False
+            if target_branch != current_branch:
+                _git(repo, "checkout", target_branch)
+                restore = True
+            try:
+                _git(repo, "merge", "--ff-only", promoted)
+            finally:
+                if restore:
+                    _git(repo, "checkout", current_branch)
         if decision == "rollback" or promoted:
             _cleanup(repo, worktree)
         record = {
@@ -131,6 +146,8 @@ def main(argv: list[str] | None = None) -> int:
             "metrics": metrics,
             "thresholds": thresholds,
             "decision": decision,
+            "source_branch": source_branch,
+            "target_branch": target_branch,
             "created_at": IMPROVE.now_iso(),
         }
         key_file = Path(args.key_file) if args.key_file else state / "keys" / "ed25519-node.key.b64"

@@ -26,6 +26,12 @@
       "sha256": "bf52ac17f1ec683a1b5325b660bec842c6248eeb135ed8cc42b28967dd0814e6"
     },
     {
+      "contract": "container-registry-schema",
+      "file": "container-registry-schema.json",
+      "schema_version": "1.0",
+      "sha256": "dd7ce446f472711542c6f93472e8b4a8719c2c629db155b55f7ab7b3da69a264"
+    },
+    {
       "contract": "data-lake-schema",
       "file": "data-lake-schema.json",
       "schema_version": "1.0",
@@ -119,7 +125,7 @@
       "contract": "ports",
       "file": "ports.json",
       "schema_version": "2.0",
-      "sha256": "b45966cbf3455d1b9c4b20e08134197f0a10060daf899b2b056e5bfbdbb999bb"
+      "sha256": "f97c9dca2babf139d29f9c9440c31ce5a5526736cd37459d0cde4c2872639c1a"
     },
     {
       "contract": "proposal-schema",
@@ -161,7 +167,7 @@
       "contract": "self-improvement-schema",
       "file": "self-improvement-schema.json",
       "schema_version": "1.0",
-      "sha256": "ce15154b95f1e89ebb92a7ed19e6a7d7436bd01e95c47285420e93f825f80055"
+      "sha256": "8be1e8f681630a7e1757d3db372f8e64a93abb8b6e75a71890f4cbb0c3fb6d2e"
     },
     {
       "contract": "step89-admin-schema",
@@ -173,7 +179,7 @@
       "contract": "step89-matrix",
       "file": "step89-matrix.json",
       "schema_version": "1.0",
-      "sha256": "89b279fd0c8be89ecd49c1b80f0ad363cc5788a4aae28edf9ba8efaa2cd1a732"
+      "sha256": "5da3ca3ea89e2bcca64b9b12280a18b16204196bddfe64d553f454992d01f785"
     },
     {
       "contract": "telemetry-schema",
@@ -428,6 +434,12 @@
       "implementation_state": "implemented",
       "runtime": "not-verifiable-here",
       "service": "reflex-broker"
+    },
+    "5000": {
+      "bound_by": "master",
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "container-registry"
     },
     "51820": {
       "bound_by": "both",

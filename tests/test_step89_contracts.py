@@ -28,6 +28,8 @@ def test_self_improvement_contract_requires_benchmarks_and_rollback():
     assert "no benchmark, no promotion" in text
     assert "no auto-merge" in text
     assert schema["fallback"]["mode"] == "worktree"
+    assert "feature/* -> develop" in schema["promotion"]["gitflow"]
+    assert "source_branch" in schema["run"]["fields"]
 
 
 def test_release_contract_binds_artifacts_to_the_package_index():
@@ -69,3 +71,12 @@ def test_pipeline_contract_requires_confirmation_and_inheritance():
     assert "never deleted" in text
     assert "human action" in text
     assert "not authority" in text
+
+
+def test_container_registry_is_private_and_read_only():
+    schema = load("container-registry-schema.json")
+    assert schema["surface"]["binding"].startswith("loopback only")
+    text = " ".join(schema["rules"]).lower()
+    assert "no push route" in text
+    assert "no token, no response" in text
+    assert "not a knowledge channel" in text

@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
 updated: 2026-11-06
-current: 89
+current: done
 ---
 
 # sparknet — Active Plan
@@ -526,43 +526,43 @@ current: 89
 
 ## Step 89 — Gemini sovereign-cluster blueprint adoption
 
-- [ ] **Step 89** — Adopt the Gemini “Distributed Sovereign AI Cluster”
+- [x] **Step 89** — Adopt the Gemini “Distributed Sovereign AI Cluster”
   blueprint on the inverted pair, under the accepted D1–D4 guardrails:
   signed supervision (not arbitrary Master control), NATS/JetStream plus a
   derived graph projection, and guarded data lakes/execution/Firecracker.
-  - [ ] **89A — Contracts.** Add event-bus, agent, ABAC, collaboration,
+  - [x] **89A — Contracts.** Add event-bus, agent, ABAC, collaboration,
     execution-daemon, self-improvement, package, release, graph-memory,
     retrieval, realtime-distillation and data-lake contracts; extend
     capabilities, ports, overlay, knowledge-flow, memory, RFI, share, uplift,
     telemetry, provenance and identity-grant schemas; add canonical envelopes
     and golden vectors.
-  - [ ] **89B — Shared foundations.** Add `sparknet-abac.py`,
+  - [x] **89B — Shared foundations.** Add `sparknet-abac.py`,
     `sparknet-event.py`, `sparknet-hybrid.py`, `sparknet-graph.py`,
     `sparknet-exec-rpc.py`, `sparknet-collab.py` and `sparknet-package.py`;
     mirror the canonical forms in goSpark and pin cross-language vectors.
-  - [ ] **89C — Event bus and sub-agents.** Put NATS/JetStream on the overlay,
+  - [x] **89C — Event bus and sub-agents.** Put NATS/JetStream on the overlay,
     add the Master orchestrator and peer agent bus, implement real engineering/
     cyber/vault-curator agents, and prove topic/ABAC routing on loopback.
-  - [ ] **89D — ABAC, memory, graph and hybrid retrieval.** Classify at O1
+  - [x] **89D — ABAC, memory, graph and hybrid retrieval.** Classify at O1
     ingestion, enforce ABAC in the memory gateway/store, add document links,
     the O1→O2→O5 pipeline, the derived graph and the semantic+agentic hybrid
     response that gives both result sets to the agent.
-  - [ ] **89E — Master surfaces.** Add dashboard APIs for nodes/queue/KB/users/
+  - [x] **89E — Master surfaces.** Add dashboard APIs for nodes/queue/KB/users/
     lake/distill/events/ABAC/collab; add consented lake intake, collaboration
     broker, online distillation scheduler and signed package index; writes stay
     signed admin requests.
-  - [ ] **89F — Peer surfaces.** Add bridge routes for events/collab/exec/hybrid/
+  - [x] **89F — Peer surfaces.** Add bridge routes for events/collab/exec/hybrid/
     graph; add the user-privileged execution daemon, collaboration client,
     self-improvement loop, package CLI, trace tap and dual teacher/student
     response.
-  - [ ] **89G — Collaboration and execution.** Implement cross-department live
+  - [x] **89G — Collaboration and execution.** Implement cross-department live
     collaboration with personal agents, ABAC filtering and audit; implement the
     argv-only execution daemon with pairing, signed JSON-RPC, user OS caps and
     no `shell=True`.
-  - [ ] **89H — Self-improvement and packaging.** Add the Firecracker/worktree
+  - [x] **89H — Self-improvement and packaging.** Add the Firecracker/worktree
     mutation loop, deterministic benchmarks, Git promotion/rollback, private
     container registry, GitFlow and signed package distribution.
-  - [ ] **89I — Verify and roll out.** Add the test matrix and loopback
+  - [x] **89I — Verify and roll out.** Add the test matrix and loopback
     rehearsals for every new channel; run all gates; roll out in the order
     Master contracts/registry → Master services → peer services → event bus →
     model plane → collaboration → execution → self-improvement → dashboard.
@@ -578,6 +578,12 @@ current: 89
     daemon is live with an exact allowlist and audit; collab writes are live;
     package distribution is live. Separately, the OpenCode runtime pin
     is `2.2.5`; the engine adapter is on v2 `/api/*` with per-sandbox auth and the sandbox is live on agx64/agx32 (2026-11-06).
+  - **Status 2026-11-08 — CLOSED.** 89H added the private loopback OCI
+    registry, GitFlow promotion policy, explicit self-improvement promotion and
+    rollback path; signed package distribution is live. 89I added the registry
+    matrix row and live loopback probe (401 without token, 200 with token,
+    manifest digest and blob), and all gates are green. The persistent registry
+    unit remains staged; the live leg is a loopback service check.
   - **DoD**: every new channel has a contract row, a canonical envelope, a
     refusal test and a loopback rehearsal; no channel carries authority and
     knowledge together; no personal page enters a shared corpus; `make

@@ -98,6 +98,7 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/self-improvement-schema.json` | mutation/benchmark runs, deterministic thresholds, promotion/rollback and the worktree fallback |
 | `contracts/release-schema.json` | signed release manifests, immutable artifacts, package-index binding and 4221 distribution |
 | `contracts/data-lake-schema.json` | consented Master-side uplift/trace/artifact intake; training evidence that is never served |
+| `contracts/container-registry-schema.json` | private loopback OCI distribution; token-gated, content-addressed, read-only |
 | `contracts/pipeline-schema.json` | O1→O2→O5 eligibility, daily-log append, staged O5 candidate and explicit human promotion |
 | `contracts/step89-admin-schema.json` | signed Master-side lake, collaboration, distill-schedule and package-index envelopes |
 | `contracts/step89-matrix.json` | the Step 89 channel matrix: contract, implementation, tests and live state per channel |

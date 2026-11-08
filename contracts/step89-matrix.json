@@ -152,6 +152,16 @@
       ],
       "state": "implemented",
       "live": "loopback"
+    },
+    {
+      "id": "container-registry",
+      "contract": "container-registry-schema.json",
+      "module": null,
+      "tests": [
+        "master-node/tests/test_container_registry.py"
+      ],
+      "state": "implemented",
+      "live": "agx64 loopback 2026-11-08"
     }
   ],
   "rules": [
