@@ -61,18 +61,22 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+import threading
+import time
 
 try:  # Python 3.9+
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping, Sequence
 except ImportError:  # pragma: no cover - Python 3.8
-    from typing import Callable  # noqa: UP035
+    from typing import Callable, Mapping, Sequence  # noqa: UP035
 
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib import request as urlrequest
 from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qs, urlparse
 
 # --- the one by-path loader (D10) --------------------------------------------
 # `shared/` is not on sys.path, so this module's own directory is added before
@@ -285,6 +289,56 @@ class RequestError(Exception):
         self.detail = detail
 
 
+@dataclass(frozen=True)
+class Route:
+    """One listener route: where it answers, who may call it, and how it authenticates.
+
+    ``auth`` is explicit because the wrong default is a security bug: a plain
+    route must never become reachable from the overlay just because a caller
+    forgot a flag. ``source`` is the personality class; ``allowed_sources`` is
+    the narrower address allowlist the guard needs. ``verify`` is for a surface
+    whose envelope is not the shared signed transport (the intake nonce
+    envelope); it returns an identity dict or raises ``RequestError``.
+    """
+
+    path: str
+    handler: Callable[[Request], Response | tuple[int, Any]]
+    method: str = "*"
+    auth: str = "plain"
+    source: str = "any"
+    allowed_sources: Callable[[], set[str]] | frozenset[str] | None = None
+    verify: Callable[[Request], dict[str, Any]] | None = None
+    max_body: int = 1_048_576
+    parse_json: bool = True
+    prefix: bool = False
+
+
+@dataclass
+class Request:
+    """Everything a route handler needs; the transport hides the rest."""
+
+    method: str
+    path: str
+    query: dict[str, list[str]]
+    headers: Mapping[str, str]
+    body: bytes
+    json: Any
+    source: str
+    client: tuple[str, int]
+    identity: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class Response:
+    """A route result. A plain ``(status, payload)`` tuple also works."""
+
+    status: int = 200
+    payload: Any = None
+    headers: dict[str, str] = field(default_factory=dict)
+    raw: bytes | None = None
+    content_type: str = "application/json"
+
+
 class TimeoutHandler(BaseHTTPRequestHandler):
     """A request handler whose reads are bounded by a socket timeout.
 
@@ -326,7 +380,7 @@ class _Handler(TimeoutHandler):
     def log_message(self, fmt: str, *args: Any) -> None:
         return  # loopback service; keep the log quiet
 
-    def _read_body(self, *, allow_empty: bool = False) -> bytes:
+    def _read_body(self, *, allow_empty: bool = False, max_body: int = 1_048_576) -> bytes:
         try:
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError as exc:
@@ -335,18 +389,29 @@ class _Handler(TimeoutHandler):
             if allow_empty:
                 return b"{}"
             raise RequestError(400, "malformed", "empty or oversized body")
-        if length > 1_048_576:
-            raise RequestError(400, "malformed", "empty or oversized body")
+        if length > max_body:
+            raise RequestError(400, "malformed", f"body exceeds {max_body} bytes")
         return self.rfile.read(length)
 
-    def _send(self, code: int, payload: dict[str, Any]) -> None:
-        body = json.dumps(payload, sort_keys=True).encode("utf-8")
+    def _send(
+        self,
+        code: int,
+        payload: dict[str, Any],
+        *,
+        headers: Mapping[str, str] | None = None,
+        body: bool = True,
+    ) -> None:
+        blob = json.dumps(payload, sort_keys=True).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Length", str(len(blob)))
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
+        if not body:
+            return
         try:
-            self.wfile.write(body)
+            self.wfile.write(blob)
         except (BrokenPipeError, ConnectionResetError):
             self.log_error("client closed before response was written")
 
@@ -498,6 +563,361 @@ def serve(
     if ready is not None:
         ready()
     return server
+
+
+# --- the route-table listener -------------------------------------------------
+
+
+class _ListenerServer(ThreadingHTTPServer):
+    """The one server class every route-table listener uses."""
+
+    daemon_threads = True
+    allow_reuse_address = True
+
+
+def _route_lookup(routes: Sequence[Route], method: str, path: str) -> tuple[Route | None, bool]:
+    """Return ``(route, path_matched)``. Exact routes win; prefixes are longest-first."""
+    exact = [r for r in routes if not r.prefix and r.path == path]
+    for route in exact:
+        if route.method in ("*", method.upper()):
+            return route, True
+    if exact:
+        return None, True
+    prefixes = [r for r in routes if r.prefix and (path == r.path or path.startswith(r.path.rstrip("/") + "/"))]
+    prefixes.sort(key=lambda r: len(r.path), reverse=True)
+    for route in prefixes:
+        if route.method in ("*", method.upper()):
+            return route, True
+    return None, bool(prefixes)
+
+
+class _RouteHandler(_Handler):
+    """Dispatch one request through the route table with an explicit policy."""
+
+    server_version = "sparknet-listener/1"
+
+    def log_message(self, fmt: str, *args: Any) -> None:
+        name = getattr(self.server, "name", "sparknet")
+        print(f"[{name}] {self.address_string()} {fmt % args}", file=sys.stderr)
+
+    def _source(self) -> str:
+        return source_kind(self.client_address)
+
+    def _policy_refusal(self, route: Route) -> RequestError | None:
+        source = self._source()
+        if route.source == "loopback" and source != "loopback":
+            return RequestError(403, "not-loopback", "this route is loopback-only")
+        if route.source == "overlay" and source == "loopback":
+            return RequestError(403, "not-overlay", "this route is overlay-only")
+        allowed = route.allowed_sources() if callable(route.allowed_sources) else route.allowed_sources
+        if allowed is not None and self.client_address[0] not in allowed:
+            return RequestError(403, "source-refused", "the caller is not in this route's source allowlist")
+        legacy = getattr(self.server, "loopback_only_routes", ())
+        reason = check_source_policy(self.path, source, legacy)
+        if reason is not None:
+            return RequestError(403, reason, "this route class is loopback-only")
+        return None
+
+    def _request(
+        self,
+        route: Route,
+        method: str,
+        parsed: Any,
+        raw: bytes,
+        identity: dict[str, Any],
+        body: Any,
+    ) -> Request:
+        return Request(
+            method=method,
+            path=parsed.path,
+            query=parse_qs(parsed.query),
+            headers={key: value for key, value in self.headers.items()},
+            body=raw,
+            json=body,
+            source=self._source(),
+            client=self.client_address,
+            identity=identity,
+        )
+
+    def _parse_body(self, route: Route, raw: bytes) -> Any:
+        if not route.parse_json:
+            return None
+        try:
+            body = json.loads(raw.decode("utf-8")) if raw else {}
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RequestError(400, "malformed", f"body is not JSON: {exc}") from exc
+        if route.auth == "signed" and not isinstance(body, dict):
+            raise RequestError(400, "malformed", "signed body must be a JSON object")
+        return body
+
+    def _send_raw(self, status: int, raw: bytes, content_type: str, headers: Mapping[str, str], *, body: bool) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(raw)))
+        for name, value in headers.items():
+            self.send_header(name, value)
+        self.end_headers()
+        if body:
+            try:
+                self.wfile.write(raw)
+            except (BrokenPipeError, ConnectionResetError):
+                self.log_error("client closed before response was written")
+
+    def _respond(self, result: Response | tuple[int, Any], *, head: bool) -> None:
+        if isinstance(result, Response):
+            if result.raw is not None:
+                self._send_raw(result.status, result.raw, result.content_type, result.headers, body=not head)
+                return
+            payload = result.payload if isinstance(result.payload, dict) else {"ok": True, "result": result.payload}
+            self._send(result.status, payload, headers=result.headers, body=not head)
+            return
+        if isinstance(result, dict):
+            status, payload = 200, result
+        elif isinstance(result, tuple) and len(result) == 2:
+            status, payload = result
+        else:
+            status, payload = 200, result
+        if isinstance(payload, bytes):
+            self._send_raw(status, payload, "application/octet-stream", {}, body=not head)
+        elif isinstance(payload, dict):
+            self._send(status, payload, body=not head)
+        else:
+            self._send(status, {"ok": True, "result": payload}, body=not head)
+
+    def _refuse_any(self, exc: BaseException) -> None:
+        refusal = getattr(self.server, "refusal", None)
+        if refusal is not None:
+            status, payload = refusal(exc)
+            self._send(status, payload)
+            return
+        if isinstance(exc, RequestError):
+            self._refuse(exc)
+            return
+        print(f"[sparknet-listener] refused {self.command} {self.path}: {exc!r}", file=sys.stderr)
+        self._send(500, {"ok": False, "reason": "internal"})
+
+    def _dispatch(self, method: str) -> None:
+        parsed = urlparse(self.path)
+        route, path_matched = self.server.lookup(method, parsed.path)  # type: ignore[attr-defined]
+        if route is None:
+            if path_matched:
+                self._send(405, {"ok": False, "reason": "method-not-allowed"})
+            else:
+                self._send(404, {"ok": False, "reason": "not-found"})
+            return
+        refusal = self._policy_refusal(route)
+        if refusal is not None:
+            self._refuse_any(refusal)
+            return
+        allow_empty = method.upper() in {"GET", "HEAD", "DELETE"}
+        try:
+            raw = self._read_body(allow_empty=allow_empty, max_body=route.max_body)
+        except RequestError as exc:
+            self._refuse(exc)
+            return
+        identity: dict[str, Any] = {}
+        try:
+            if route.auth == "signed":
+                identity = self._verify(raw)
+            elif route.auth == "custom":
+                if route.verify is None:
+                    raise RequestError(500, "no-verifier", "custom route has no verifier")
+                identity = route.verify(self._request(route, method, parsed, raw, {}, None)) or {}
+            elif route.auth != "plain":
+                raise RequestError(500, "bad-auth-policy", f"unknown auth policy: {route.auth}")
+            body = self._parse_body(route, raw)
+            request = self._request(route, method, parsed, raw, identity, body)
+            result = route.handler(request)
+        except RequestError as exc:
+            self._refuse(exc)
+            return
+        except getattr(self.server, "refusal_errors", ()) as exc:  # type: ignore[misc]
+            self._refuse_any(exc)
+            return
+        except Exception as exc:
+            print(f"[sparknet-listener] internal error on {self.command} {self.path}: {exc!r}", file=sys.stderr)
+            self._send(500, {"ok": False, "reason": "internal"})
+            return
+        self._respond(result, head=method.upper() == "HEAD")
+
+    def do_GET(self) -> None:
+        self._dispatch("GET")
+
+    def do_POST(self) -> None:
+        self._dispatch("POST")
+
+    def do_DELETE(self) -> None:
+        self._dispatch("DELETE")
+
+    def do_HEAD(self) -> None:
+        self._dispatch("HEAD")
+
+    def do_PUT(self) -> None:
+        self._dispatch("PUT")
+
+
+class Listener:
+    """A bound route-table listener with an explicit start/stop lifecycle."""
+
+    def __init__(
+        self,
+        routes: Sequence[Route],
+        *,
+        name: str = "sparknet",
+        bind: str | Sequence[str] = DEFAULT_BIND,
+        port: int,
+        public_key: Any | None = None,
+        public_keys: dict[str, Any] | None = None,
+        max_age_seconds: int = DEFAULT_MAX_AGE_SECONDS,
+        now: Callable[[], datetime] | None = None,
+        ready: Callable[[], None] | None = None,
+        loopback_only_routes: tuple[str, ...] = (),
+        health: bool | Callable[[], Response | tuple[int, Any]] = True,
+        refusal: Callable[[BaseException], tuple[int, dict[str, Any]]] | None = None,
+        refusal_errors: tuple[type[BaseException], ...] = (RequestError,),
+        handler_class: type[_RouteHandler] | None = None,
+    ) -> None:
+        self.routes = list(routes)
+        self.name = name
+        self.binds = (bind,) if isinstance(bind, str) else tuple(bind)
+        self.port = port
+        self.public_key = public_key
+        self.public_keys = dict(public_keys) if public_keys else {}
+        self.max_age_seconds = max_age_seconds
+        self.now = now
+        self.ready = ready
+        self.loopback_only_routes = loopback_only_routes
+        self.refusal = refusal
+        self.refusal_errors = refusal_errors
+        self.handler_class = handler_class or _RouteHandler
+        self.servers: list[_ListenerServer] = []
+        self._threads: list[threading.Thread] = []
+        self._validate()
+        if health and not any(route.path == "/healthz" for route in self.routes):
+            handler = health if callable(health) else self._default_health
+            self.routes.insert(0, Route("/healthz", handler, auth="plain", source="any", parse_json=False, max_body=0))
+
+    def _validate(self) -> None:
+        for route in self.routes:
+            if route.auth not in {"plain", "signed", "custom"}:
+                raise ValueError(f"unknown route auth policy: {route.auth!r}")
+            if route.source not in {"any", "loopback", "overlay"}:
+                raise ValueError(f"unknown route source policy: {route.source!r}")
+            if route.auth == "custom" and route.verify is None:
+                raise ValueError(f"custom route {route.path!r} needs a verifier")
+        if any(route.auth == "signed" for route in self.routes) and (self.public_key is None) == (not self.public_keys):
+            raise ValueError("signed routes need exactly one of public_key or public_keys")
+
+    def _default_health(self, request: Request | None = None) -> Response:
+        return Response(200, {"ok": True, "service": self.name})
+
+    def bind(self) -> Listener:
+        for address in self.binds:
+            server = _ListenerServer((address, self.port), self.handler_class)
+            server.name = self.name  # type: ignore[attr-defined]
+            server.routes = self.routes  # type: ignore[attr-defined]
+            server.lookup = lambda method, path: _route_lookup(self.routes, method, path)  # type: ignore[attr-defined]
+            server.public_key = self.public_key  # type: ignore[attr-defined]
+            server.public_keys = self.public_keys  # type: ignore[attr-defined]
+            server.clock = self.now  # type: ignore[attr-defined]
+            server.max_age_seconds = self.max_age_seconds  # type: ignore[attr-defined]
+            server.loopback_only_routes = self.loopback_only_routes  # type: ignore[attr-defined]
+            server.refusal = self.refusal  # type: ignore[attr-defined]
+            server.refusal_errors = self.refusal_errors  # type: ignore[attr-defined]
+            self.servers.append(server)
+        if self.ready is not None:
+            self.ready()
+        return self
+
+    def start(self) -> Listener:
+        if not self.servers:
+            self.bind()
+        for server in self.servers:
+            thread = threading.Thread(
+                target=server.serve_forever, kwargs={"poll_interval": 0.2}, daemon=True, name=f"{self.name}-listener"
+            )
+            thread.start()
+            self._threads.append(thread)
+        return self
+
+    def stop(self) -> None:
+        for server in self.servers:
+            if self._threads:
+                server.shutdown()
+            server.server_close()
+        for thread in self._threads:
+            thread.join(timeout=2.0)
+        self.servers.clear()
+        self._threads.clear()
+
+    def wait(self) -> None:
+        if not self._threads:
+            self.start()
+        try:
+            while any(thread.is_alive() for thread in self._threads):
+                time.sleep(0.2)
+        except KeyboardInterrupt:
+            self.stop()
+
+    # Compatibility names for callers that used the raw ThreadingHTTPServer.
+    def shutdown(self) -> None:
+        self.stop()
+
+    def server_close(self) -> None:
+        return
+
+    def join(self, timeout: float | None = None) -> None:
+        for thread in self._threads:
+            thread.join(timeout=timeout)
+
+    def __enter__(self) -> Listener:
+        return self.start()
+
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+        self.stop()
+
+
+def listen(
+    routes: Sequence[Route],
+    *,
+    name: str = "sparknet",
+    bind: str | Sequence[str] = DEFAULT_BIND,
+    port: int,
+    public_key: Any | None = None,
+    public_keys: dict[str, Any] | None = None,
+    max_age_seconds: int = DEFAULT_MAX_AGE_SECONDS,
+    now: Callable[[], datetime] | None = None,
+    ready: Callable[[], None] | None = None,
+    loopback_only_routes: tuple[str, ...] = (),
+    health: bool | Callable[[], Response | tuple[int, Any]] = True,
+    refusal: Callable[[BaseException], tuple[int, dict[str, Any]]] | None = None,
+    refusal_errors: tuple[type[BaseException], ...] = (RequestError,),
+    handler_class: type[_RouteHandler] | None = None,
+) -> Listener:
+    """Bind a route-table listener and return it ready to start.
+
+    Every route declares its auth and source policy. Signed routes reuse the
+    same canonical envelope and verifier as ``serve``; plain and custom routes
+    skip the signed check but cannot opt into a weaker source policy by
+    accident. The caller owns the handlers and their authority checks.
+    """
+    listener = Listener(
+        routes,
+        name=name,
+        bind=bind,
+        port=port,
+        public_key=public_key,
+        public_keys=public_keys,
+        max_age_seconds=max_age_seconds,
+        now=now,
+        ready=ready,
+        loopback_only_routes=loopback_only_routes,
+        health=health,
+        refusal=refusal,
+        refusal_errors=refusal_errors,
+        handler_class=handler_class,
+    )
+    return listener.bind()
 
 
 # --- helpers -----------------------------------------------------------------

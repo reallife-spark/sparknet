@@ -45,7 +45,10 @@ def guard_handler(http, tmp_path_factory):
     """The guard's handler *class*, built exactly as the daemon builds it."""
     module = _load("sparknet_guard_d", PEER_SERVICE)
     vault = tmp_path_factory.mktemp("guard-timeout-drift")
-    return module._make_handler(module.Guard(vault), "timeout-drift")
+    listener = module.build_listener(module.Guard(vault), "timeout-drift", bind="127.0.0.1", port=0)
+    handler = listener.servers[0].RequestHandlerClass
+    listener.stop()
+    return handler
 
 
 def test_the_shared_constant_is_a_sane_bound(http) -> None:

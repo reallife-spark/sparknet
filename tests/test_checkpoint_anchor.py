@@ -97,14 +97,9 @@ def _intake_server(fingerprint: str, spool: Path) -> tuple[Any, str]:
             }
         ]
     )
-    server = intake.ThreadingHTTPServer(("127.0.0.1", 0), intake._Handler)
-    server.directory = directory
-    server.spool = spool
-    server.seen_nonces = set()
-    import threading
-
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    return server, f"http://127.0.0.1:{server.server_address[1]}"
+    listener = intake.build_listener(bind="127.0.0.1", port=0, directory=directory, spool=spool)
+    listener.start()
+    return listener, f"http://127.0.0.1:{listener.servers[0].server_address[1]}"
 
 
 def _run(vault: Path, endpoint: str, *extra: str) -> subprocess.CompletedProcess[str]:

@@ -25,3 +25,7 @@
   role bundle or the goagx distribution) from the working tree or a git ref,
   writes its `SHA256SUMS`, and verifies those checksums and the detached
   signature. It is not a runtime module and not a knowledge channel.
+- **listener** — the shared HTTP surface in `shared/sparknet-http.py` that
+  owns request parsing, route auth and source policy, refusals, health and
+  lifecycle for a role module. A route handler owns the service behaviour; the
+  listener owns the transport.

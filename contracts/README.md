@@ -20,7 +20,10 @@ the tests then prove both roles still agree.
 | `guard-protocol.md` | the Master↔peer approval conversation |
 | `guard-approval.json` | the approval envelope itself: the eight signed fields, the canonicalisation rule, where the capability comes from, and the transport (route, port, envelope fields) |
 | `health-protocol.md` | peer liveness and eviction: probe rhythm, activity-trumps-eviction, the full-dark rule, no-authority guarantee |
+| `service-health.md` | the one data-plane service health route (`/healthz`): plain by default, minimal payload, source policy inherited from the listener, never authority or knowledge |
 | `telemetry-schema.json` | peer→Master observability evidence (Phase 4): overlay-attributed, unsigned, `kind`-tagged reports the Master records and acts on nothing — no authority on the telemetry path. Envelope, the 8090 peer intake (telemetry + RFI request routes), the peer pusher and the per-kind consumers are built (Step 70) |
+| `issue-schema.json` | the local markdown work-item tracker and the signed peer→Master issue report on 8090: identity, redaction, the `issue-report` capability, refusals and the store. An issue is work, never knowledge and never authority (Step 91) |
+| `understand-schema.json` | the derived code-understanding graph under `.ua/`: 27 node types, 38 edge types in 10 families, aliases, metadata, incremental fingerprints and the node-local console transport. A build artifact, never knowledge and never authority (Step 91) |
 | `share-protocol.md` | the peer↔peer sharing regime: offers, share types, the four clocks, trust levels, isolation, evidence |
 | `consensus-protocol.md` | how the members (a pair or a trio) agree on who holds the signing key: election, the cluster trust root, re-formation |
 | `phase9-recovery-runbook.md` | the approved destructive recovery exercise: snapshot, off-host archive, peer restore proof, Master restore, verification and rollback |
