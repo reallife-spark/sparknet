@@ -409,17 +409,20 @@ if [ -n "$from_git" ]; then
     fi
     git -C "$REPO_ROOT" rev-parse --verify --quiet "$from_git^{commit}" >/dev/null \
       || die "not a commit: $from_git"
-    if git -C "$REPO_ROOT" cat-file -e "$from_git:${subtrees[0]}" 2>/dev/null; then
-      for sub in "${subtrees[@]}"; do
-        case "$sub" in
-          peer-node|master-node) export_git_submodule "$from_git" "$sub" ;;
-          *) git -C "$REPO_ROOT" archive --format=tar --prefix="$prefix/" "$from_git" "$sub" | tar -xf - -C "$stage" ;;
-        esac
-      done
-      printf '  from-git %-24s %s\n' "${subtrees[*]}" "$from_git"
-    else
-      printf '  from-git %-24s MISSING at %s\n' "${subtrees[*]}" "$from_git"
+    if ! git -C "$REPO_ROOT" ls-tree "$from_git" -- "${subtrees[0]}" | grep -q .; then
+      die "subtree missing at $from_git: ${subtrees[0]}"
     fi
+    for sub in "${subtrees[@]}"; do
+      case "$sub" in
+        peer-node|master-node) export_git_submodule "$from_git" "$sub" ;;
+        *)
+          git -C "$REPO_ROOT" ls-tree "$from_git" -- "$sub" | grep -q . \
+            || die "subtree missing at $from_git: $sub"
+          git -C "$REPO_ROOT" archive --format=tar --prefix="$prefix/" "$from_git" "$sub" | tar -xf - -C "$stage"
+          ;;
+      esac
+    done
+    printf '  from-git %-24s %s\n' "${subtrees[*]}" "$from_git"
   done
   cp "$REPO_ROOT/opencode.json" "$target/opencode.json"
   cp "$REPO_ROOT/requirements.txt" "$target/requirements.txt"
