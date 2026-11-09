@@ -60,9 +60,14 @@ function metric(label, value) {
 }
 
 function initTabs() {
-  const menus = new Set(state.surface.menus || []);
-  for (const link of document.querySelectorAll("#tabs a")) {
-    if (!menus.has(link.dataset.tab)) link.hidden = true;
+  const items = Array.isArray(state.surface.menu_items)
+    ? state.surface.menu_items
+    : (state.surface.menus || []).map((id) => ({ id, label: id, href: `#${id}` }));
+  const menus = new Set(items.map((item) => item.id));
+  const nav = $("tabs");
+  clear(nav);
+  for (const item of items) {
+    nav.append(el("a", { href: item.href || `#${item.id}`, "data-tab": item.id, text: item.label || item.id }));
   }
   const route = () => {
     const tab = (location.hash || "#mesh").slice(1);
@@ -74,6 +79,8 @@ function initTabs() {
     if (allowed === "memory") loadMemory();
     if (allowed === "projects") loadProjects();
     if (allowed === "learning") loadLearning();
+    if (allowed === "understand") loadUnderstand();
+    if (allowed === "issues") loadIssues();
   };
   addEventListener("hashchange", route);
   route();
@@ -535,6 +542,364 @@ async function loadLearning() {
       ]));
     }
     for (const error of data.errors || []) showError(error);
+  } catch (error) { showError(error.message); }
+}
+
+/* --- Understand tab -------------------------------------------------------
+   HTML/CSS-first: the panels, lists and details are ordinary HTML. The SVG is
+   inline and rendered by this small module; no graph library and no Node build.
+   The graph is derived data, never instructions and never authority. */
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+const U = { graph: null, nodes: [], edges: [], byId: new Map(), layerOf: new Map(), layer: "", query: "", zoom: 100, bound: false };
+
+function svgEl(tag, attrs = {}) {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  return node;
+}
+
+function understandNodeMatches(node) {
+  if (!U.query) return true;
+  const haystack = [node.id, node.name, node.summary, node.filePath, ...(node.tags || [])].join(" ").toLowerCase();
+  return U.query.split(/\s+/).filter(Boolean).every((term) => haystack.includes(term));
+}
+
+async function loadUnderstand() {
+  try {
+    const data = await api("api/understand");
+    U.graph = data.graph || null;
+    U.nodes = (data.graph && data.graph.nodes) || [];
+    U.edges = (data.graph && data.graph.edges) || [];
+    U.byId = new Map(U.nodes.map((node) => [node.id, node]));
+    U.layerOf = new Map();
+    for (const layer of (data.graph && data.graph.layers) || []) {
+      for (const id of layer.nodeIds || []) U.layerOf.set(id, layer.id);
+    }
+    U.layer = "";
+    U.query = "";
+    $("understand-search").value = "";
+    $("understand-zoom").value = "100";
+    U.zoom = 100;
+    bindUnderstandControls();
+    if (!data.available || !U.graph) {
+      $("understand-status").textContent = "no graph";
+      $("understand-note").textContent = data.error || "Run /understand to build the code-understanding graph.";
+      clear($("understand-cards"));
+      clear($("understand-detail"));
+      $("understand-detail").append(el("p", { class: "empty", text: "No graph yet." }));
+      clear($("understand-layers").querySelector("div"));
+      clear($("understand-tour").querySelector("ol"));
+      clear($("understand-nodes"));
+      $("understand-graph").replaceChildren();
+      clear($("understand-legend"));
+      return;
+    }
+    renderUnderstandSummary(data);
+    renderUnderstandLayers();
+    renderUnderstandTour();
+    renderUnderstandNodes();
+    renderUnderstandGraph();
+    renderUnderstandDetail(null);
+  } catch (error) { showError(error.message); }
+}
+
+function renderUnderstandSummary(data) {
+  const graph = U.graph;
+  const project = graph.project || {};
+  const cards = $("understand-cards");
+  clear(cards);
+  cards.append(
+    metric("Nodes", U.nodes.length),
+    metric("Edges", U.edges.length),
+    metric("Layers", (graph.layers || []).length),
+    metric("Tour steps", (graph.tour || []).length),
+    metric("Languages", (project.languages || []).join(", ") || "—"),
+    metric("Commit", String(project.gitCommitHash || "").slice(0, 12) || "—"),
+  );
+  $("understand-status").textContent = project.name || "graph";
+  const built = project.analyzedAt || "—";
+  $("understand-note").textContent = `Built ${built} · ${graph.kind || "codebase"} · ${data.path}`;
+  const legend = $("understand-legend");
+  clear(legend);
+  const types = [
+    ["file", "#5eead4"], ["class", "#a78bfa"], ["function", "#22d3ee"],
+    ["endpoint", "#f59e0b"], ["module", "#94a3b8"], ["other", "#64748b"],
+  ];
+  for (const [name, color] of types) {
+    legend.append(el("span", {}, [el("i", { class: "u-dot", style: `background:${color}` }), name]));
+  }
+}
+
+function bindUnderstandControls() {
+  if (U.bound) return;
+  U.bound = true;
+  $("understand-search").addEventListener("input", (event) => {
+    U.query = event.target.value.trim().toLowerCase();
+    renderUnderstandGraph();
+  });
+  $("understand-layer").addEventListener("change", (event) => {
+    U.layer = event.target.value;
+    renderUnderstandGraph();
+  });
+  $("understand-zoom").addEventListener("input", (event) => {
+    U.zoom = Number(event.target.value) || 100;
+    applyUnderstandZoom();
+  });
+  $("understand-graph").addEventListener("click", (event) => {
+    const group = event.target.closest(".u-node");
+    if (group) selectUnderstandNode(group.dataset.id);
+  });
+}
+
+function renderUnderstandLayers() {
+  const select = $("understand-layer");
+  const previous = U.layer;
+  clear(select);
+  select.append(el("option", { value: "", text: "All layers" }));
+  const container = $("understand-layers").querySelector("div");
+  clear(container);
+  for (const layer of U.graph.layers || []) {
+    select.append(el("option", { value: layer.id, text: `${layer.name} (${(layer.nodeIds || []).length})` }));
+    const button = el("button", { type: "button", text: `${layer.name} · ${(layer.nodeIds || []).length}` });
+    button.addEventListener("click", () => {
+      U.layer = layer.id;
+      select.value = layer.id;
+      renderUnderstandGraph();
+    });
+    container.append(el("div", { class: "row" }, [button]));
+  }
+  if (previous) select.value = previous;
+}
+
+function renderUnderstandTour() {
+  const list = $("understand-tour").querySelector("ol");
+  clear(list);
+  for (const step of U.graph.tour || []) {
+    const item = el("li", { text: `${step.order}. ${step.title}` });
+    item.title = step.description || "";
+    item.addEventListener("click", () => {
+      if (step.nodeIds && step.nodeIds.length) selectUnderstandNode(step.nodeIds[0]);
+    });
+    list.append(item);
+  }
+  if (!list.children.length) list.append(el("li", { class: "muted", text: "No tour steps in this graph." }));
+}
+
+function renderUnderstandNodes() {
+  const container = $("understand-nodes");
+  clear(container);
+  const nodes = [...U.nodes].sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id))).slice(0, 300);
+  for (const node of nodes) {
+    const row = el("div", { class: "row understand-node-row", "data-id": node.id }, [
+      el("span", { text: node.name || node.id }),
+      el("span", { class: "tag", text: node.type || "node" }),
+    ]);
+    row.addEventListener("click", () => selectUnderstandNode(node.id));
+    container.append(row);
+  }
+  if (U.nodes.length > nodes.length) {
+    container.append(el("p", { class: "empty", text: `Showing ${nodes.length} of ${U.nodes.length} nodes; use search or the layer filter.` }));
+  }
+}
+
+function renderUnderstandGraph() {
+  const svg = $("understand-graph");
+  clear(svg);
+  if (!U.graph) return;
+  const degree = new Map();
+  for (const edge of U.edges) {
+    degree.set(edge.source, (degree.get(edge.source) || 0) + 1);
+    degree.set(edge.target, (degree.get(edge.target) || 0) + 1);
+  }
+  let candidates = U.nodes.filter((node) => ["file", "class", "function", "module", "endpoint", "concept", "document"].includes(node.type));
+  if (U.layer) candidates = candidates.filter((node) => U.layerOf.get(node.id) === U.layer);
+  if (U.query) candidates = candidates.filter(understandNodeMatches);
+  if (!U.query) {
+    candidates.sort((a, b) => (degree.get(b.id) || 0) - (degree.get(a.id) || 0) || String(a.id).localeCompare(String(b.id)));
+    candidates = candidates.slice(0, 260);
+  }
+  if (!candidates.length) {
+    svg.append(svgEl("text", { x: 20, y: 30, fill: "#8792a6", "font-size": 13 }));
+    svg.lastChild.textContent = "No nodes match the current filter.";
+    svg.setAttribute("viewBox", "0 0 600 80");
+    svg.dataset.baseWidth = "600";
+    svg.dataset.baseHeight = "80";
+    applyUnderstandZoom();
+    return;
+  }
+  const drawn = new Map(candidates.map((node) => [node.id, node]));
+  const layers = (U.graph.layers || []).map((layer) => layer.id);
+  const groups = new Map();
+  for (const node of candidates) {
+    const layer = U.layerOf.get(node.id) || "layer:other";
+    if (!groups.has(layer)) groups.set(layer, []);
+    groups.get(layer).push(node);
+  }
+  const order = [...groups.keys()].sort((a, b) => {
+    const ai = layers.indexOf(a);
+    const bi = layers.indexOf(b);
+    return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi) || a.localeCompare(b);
+  });
+  const nodeWidth = 200;
+  const nodeHeight = 22;
+  const column = 236;
+  const row = 28;
+  const originX = 30;
+  const originY = 40;
+  const positions = new Map();
+  let maxRows = 0;
+  order.forEach((layer, columnIndex) => {
+    const rowNodes = groups.get(layer) || [];
+    maxRows = Math.max(maxRows, rowNodes.length);
+    rowNodes.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
+    rowNodes.forEach((node, rowIndex) => {
+      positions.set(node.id, { x: originX + columnIndex * column, y: originY + rowIndex * row });
+    });
+  });
+  const width = Math.max(780, originX * 2 + order.length * column);
+  const height = Math.max(420, originY * 2 + maxRows * row);
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  svg.dataset.baseWidth = String(width);
+  svg.dataset.baseHeight = String(height);
+  for (const edge of U.edges) {
+    const source = positions.get(edge.source);
+    const target = positions.get(edge.target);
+    if (!source || !target || !drawn.has(edge.source) || !drawn.has(edge.target)) continue;
+    const line = svgEl("line", {
+      x1: source.x + nodeWidth, y1: source.y + nodeHeight / 2,
+      x2: target.x, y2: target.y + nodeHeight / 2,
+      class: `u-edge u-edge-${edge.type}`,
+      "data-source": edge.source, "data-target": edge.target,
+    });
+    line.append(svgEl("title"));
+    line.lastChild.textContent = edge.type;
+    svg.append(line);
+  }
+  for (const [id, node] of drawn) {
+    const position = positions.get(id);
+    if (!position) continue;
+    const group = svgEl("g", { class: `u-node u-node-${node.type}`, "data-id": id, transform: `translate(${position.x},${position.y})` });
+    group.append(svgEl("rect", { width: nodeWidth, height: nodeHeight, rx: 4 }));
+    const text = svgEl("text", { x: 6, y: 14 });
+    text.textContent = String(node.name || node.id).slice(0, 32);
+    group.append(text);
+    const title = svgEl("title");
+    title.textContent = `${node.type || "node"}: ${node.name || node.id}\n${node.summary || ""}`;
+    group.append(title);
+    svg.append(group);
+  }
+  applyUnderstandZoom();
+}
+
+function applyUnderstandZoom() {
+  const svg = $("understand-graph");
+  const baseWidth = Number(svg.dataset.baseWidth || 780);
+  const baseHeight = Number(svg.dataset.baseHeight || 420);
+  svg.style.width = `${Math.round((baseWidth * U.zoom) / 100)}px`;
+  svg.style.height = `${Math.round((baseHeight * U.zoom) / 100)}px`;
+}
+
+function renderUnderstandDetail(node) {
+  const detail = $("understand-detail");
+  clear(detail);
+  if (!node) {
+    detail.append(el("p", { class: "empty", text: "Select a node in the graph or the list." }));
+    return;
+  }
+  const incoming = U.edges.filter((edge) => edge.target === node.id);
+  const outgoing = U.edges.filter((edge) => edge.source === node.id);
+  detail.append(
+    el("div", {}, [
+      el("strong", { text: node.name || node.id }),
+      el("div", { class: "muted", text: `${node.type || "node"} · ${node.complexity || "moderate"}` }),
+    ]),
+    el("p", { class: "muted", text: node.summary || "No summary." }),
+    el("dl", { class: "kv" }, [
+      el("dt", { text: "File" }), el("dd", { text: node.filePath || "—" }),
+      el("dt", { text: "Lines" }), el("dd", { text: (node.lineRange || []).join("–") || "—" }),
+      el("dt", { text: "Tags" }), el("dd", { text: (node.tags || []).join(", ") || "—" }),
+    ]),
+  );
+  if (incoming.length || outgoing.length) {
+    const list = el("div", { class: "list" });
+    for (const edge of [...outgoing, ...incoming].slice(0, 40)) {
+      const otherId = edge.source === node.id ? edge.target : edge.source;
+      const other = U.byId.get(otherId);
+      const arrow = edge.source === node.id ? "→" : "←";
+      const row = el("div", { class: "row" }, [
+        el("span", { text: `${arrow} ${edge.type}` }),
+        el("span", { text: other ? (other.name || other.id) : otherId }),
+      ]);
+      row.addEventListener("click", () => selectUnderstandNode(otherId));
+      list.append(row);
+    }
+    detail.append(el("h3", { text: "Edges" }), list);
+  }
+}
+
+function selectUnderstandNode(id) {
+  const node = U.byId.get(id);
+  if (!node) return;
+  renderUnderstandDetail(node);
+  const connected = new Set([id]);
+  for (const edge of U.edges) {
+    if (edge.source === id) connected.add(edge.target);
+    if (edge.target === id) connected.add(edge.source);
+  }
+  for (const group of document.querySelectorAll("#understand-graph .u-node")) {
+    group.classList.toggle("selected", group.dataset.id === id);
+    group.classList.toggle("dim", !connected.has(group.dataset.id));
+  }
+  for (const line of document.querySelectorAll("#understand-graph .u-edge")) {
+    line.classList.toggle("dim", line.dataset.source !== id && line.dataset.target !== id);
+  }
+  for (const row of document.querySelectorAll(".understand-node-row")) {
+    row.classList.toggle("active", row.dataset.id === id);
+  }
+}
+
+async function loadIssues() {
+  try {
+    const data = await api("api/issues");
+    $("issues-status").textContent = data.ok ? `${data.counts?.total ?? 0} recorded` : "Master only";
+    const cards = $("issues-cards");
+    clear(cards);
+    if (!data.ok) {
+      cards.append(metric("Status", data.error || "unavailable"));
+      return;
+    }
+    cards.append(
+      metric("Total", data.counts?.total ?? 0),
+      metric("Open", data.counts?.open ?? 0),
+      metric("Needs triage", data.counts?.needs_triage ?? 0),
+      metric("Ready for agent", data.counts?.ready_for_agent ?? 0),
+    );
+    const wrap = $("issues-list");
+    clear(wrap);
+    if (!data.issues?.length) {
+      wrap.append(el("p", { class: "empty", text: "No peer work items recorded yet." }));
+      return;
+    }
+    const table = el("table");
+    table.append(el("thead", {}, [el("tr", {}, ["Node", "Issue", "Title", "Status", "Labels", "Updated"].map((h) => el("th", { text: h })))]));
+    const body = el("tbody");
+    for (const issue of data.issues) {
+      const detail = el("details", {}, [
+        el("summary", { text: issue.title || issue.issue_id }),
+        el("p", { class: "muted", text: issue.body || "No body." }),
+      ]);
+      body.append(el("tr", {}, [
+        el("td", { text: issue.node_id || "—" }),
+        el("td", { text: issue.issue_id || "—" }),
+        el("td", {}, [detail]),
+        el("td", { text: issue.status || "—" }),
+        el("td", { text: (issue.labels || []).join(", ") || "—" }),
+        el("td", { text: issue.updated_at || issue.received_at || "—" }),
+      ]));
+    }
+    table.append(body);
+    wrap.append(table);
   } catch (error) { showError(error.message); }
 }
 

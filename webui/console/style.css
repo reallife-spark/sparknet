@@ -72,3 +72,43 @@ canvas:active { cursor: grabbing; }
 .kv { display: grid; grid-template-columns: 150px 1fr; gap: 5px 10px; font-size: 13px; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; overflow-wrap: anywhere; }
+
+/* Understand tab: HTML/CSS layout with a small inline-SVG renderer. */
+.understand-toolbar { display: flex; align-items: end; gap: 14px; flex-wrap: wrap; }
+.understand-toolbar label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.understand-toolbar input[type="search"], .understand-toolbar select {
+  min-width: 190px; border: 1px solid var(--line); background: var(--panel); color: var(--text);
+  border-radius: 9px; padding: 7px 10px; font: inherit; text-transform: none; letter-spacing: 0;
+}
+.understand-toolbar input[type="range"] { width: 150px; accent-color: var(--accent); }
+.understand-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(260px, .8fr); gap: 16px; }
+.understand-canvas-card { min-width: 0; }
+.understand-canvas-wrap { overflow: auto; max-height: 70vh; border: 1px solid var(--line); border-radius: 12px; background: radial-gradient(circle at 35% 20%, #111827, #070a0f 72%); }
+#understand-graph { display: block; min-width: 100%; }
+#understand-graph .u-edge { stroke: #334155; stroke-width: 1; vector-effect: non-scaling-stroke; }
+#understand-graph .u-edge.u-edge-calls, #understand-graph .u-edge.u-edge-imports { stroke: #475569; }
+#understand-graph .u-edge.u-edge-inherits, #understand-graph .u-edge.u-edge-implements { stroke: #a78bfa; }
+#understand-graph .u-edge.u-edge-routes, #understand-graph .u-edge.u-edge-serves { stroke: #22d3ee; }
+#understand-graph .u-edge.u-edge-tested_by { stroke: #f59e0b; stroke-dasharray: 3 3; }
+#understand-graph .u-node { cursor: pointer; }
+#understand-graph .u-node rect { fill: #151b25; stroke: #334155; stroke-width: 1; rx: 4; }
+#understand-graph .u-node text { fill: #cbd5e1; font-size: 10px; pointer-events: none; }
+#understand-graph .u-node.u-node-file rect { stroke: #5eead4; }
+#understand-graph .u-node.u-node-class rect { stroke: #a78bfa; }
+#understand-graph .u-node.u-node-function rect { stroke: #22d3ee; }
+#understand-graph .u-node.u-node-endpoint rect { stroke: #f59e0b; }
+#understand-graph .u-node.u-node-module rect { stroke: #94a3b8; }
+#understand-graph .u-node:hover rect, #understand-graph .u-node.selected rect { stroke: #fff; stroke-width: 2; }
+#understand-graph .u-node.dim { opacity: .22; }
+#understand-graph .u-edge.dim { opacity: .08; }
+.understand-details { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 10px; }
+.understand-details summary { cursor: pointer; color: #cbd5e1; font-size: 13px; }
+.understand-details .list { margin-top: 8px; max-height: 220px; overflow: auto; }
+.understand-tour { margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 13px; }
+.understand-tour li { margin: 5px 0; cursor: pointer; }
+.understand-tour li:hover { color: var(--accent); }
+.understand-node-row { cursor: pointer; }
+.understand-node-row:hover { border-color: var(--accent); }
+.understand-node-row.active { border-color: var(--accent); color: var(--accent); }
+.legend .u-dot { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-right: 5px; }
+@media (max-width: 1100px) { .understand-grid { grid-template-columns: 1fr; } }

@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Read-only Sparknet WebUI console.
 
-Serves the Mesh, Vectors and Learning pages behind the Open WebUI
-origin. On a peer, Learning is a signed read-only fetch of the Master's
-sanitized snapshot over 4221. It is a view over existing state: it does not
-sign, grant, train or write. The browser never receives the console token or the Qdrant API key; the
-same-origin proxy injects the token header.
+Serves the read-only console surfaces behind the Open WebUI origin. Dispatch,
+auth and menu metadata come from one `SURFACES` table; `/api/surface` derives
+`menus` and `menu_items` from it. On a peer, Learning is a signed read-only
+fetch of the Master's sanitized snapshot over 4221. The console is a view over
+existing state: it does not sign, grant, train or write. The browser never
+receives the console token or the Qdrant API key; the same-origin proxy injects
+the token header.
 
 Usage::
 
@@ -27,6 +29,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -223,12 +227,14 @@ def api_surface(config: dict[str, Any]) -> dict[str, Any]:
             for model in catalog.get("models", [])
             if model.get("status") == "active"
         ]
+    configured = _configured_menu_surfaces(config)
     return {
         "ok": True,
         "role": config.get("role"),
         "node": config.get("node"),
         "title": config.get("title"),
-        "menus": config.get("menus", []),
+        "menus": [surface.name for surface in configured],
+        "menu_items": [_menu_item(surface) for surface in configured],
         "read_only": True,
         "models": models,
     }
@@ -764,6 +770,266 @@ def api_learning(config: dict[str, Any], role_root: Path) -> tuple[int, dict[str
     }
 
 
+UNDERSTAND_MAX_BYTES = 20_000_000
+
+
+def _understand_candidates(config: dict[str, Any], role_root: Path) -> list[Path]:
+    configured = (config.get("paths") or {}).get("understand")
+    candidates: list[Path] = []
+    if configured:
+        resolved = resolve(role_root, configured)
+        if resolved:
+            candidates.append(resolved)
+    for base in (role_root, role_root.parent):
+        candidates.append(base / ".understand-anything" / "knowledge-graph.json")
+        candidates.append(base / ".ua" / "knowledge-graph.json")
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for candidate in candidates:
+        if candidate not in seen:
+            unique.append(candidate)
+            seen.add(candidate)
+    return unique
+
+
+def api_issues(config: dict[str, Any], role_root: Path) -> tuple[int, dict[str, Any]]:
+    """Read the Master's recorded peer work items. Master-only, read-only."""
+    if config.get("role") != "master":
+        return 403, {"ok": False, "error": "Issues are Master-only"}
+    configured = (config.get("paths") or {}).get("issues")
+    path = resolve(role_root, configured) if configured else Path("/mnt/log/sparknet-issues.jsonl")
+    rows: dict[tuple[str, str], dict[str, Any]] = {}
+    if path and path.is_file():
+        text = read_text(path, limit=4_000_000) or ""
+        for line in text.splitlines():
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(row, dict):
+                continue
+            key = (str(row.get("node_id") or ""), str(row.get("issue_id") or ""))
+            if not all(key):
+                continue
+            current = rows.get(key)
+            if current is None or str(row.get("updated_at") or "") >= str(current.get("updated_at") or ""):
+                rows[key] = row
+    triage_path = role_root / ".state" / "issues" / "triage.json"
+    triage = read_json(triage_path)
+    if not isinstance(triage, dict):
+        triage = {}
+    issues = []
+    for row in sorted(
+        rows.values(), key=lambda item: (str(item.get("node_id") or ""), str(item.get("issue_id") or ""))
+    ):
+        key = f"{row.get('node_id')}:{row.get('issue_id')}"
+        item = dict(row)
+        item["body"] = str(item.get("body") or "")[:4000]
+        item["triage"] = triage.get(key, {}) if isinstance(triage.get(key), dict) else {}
+        issues.append(item)
+    counts = {
+        "total": len(issues),
+        "open": sum(1 for item in issues if item.get("status") not in {"done", "wontfix"}),
+        "needs_triage": sum(1 for item in issues if "needs-triage" in (item.get("labels") or [])),
+        "ready_for_agent": sum(1 for item in issues if "ready-for-agent" in (item.get("labels") or [])),
+    }
+    return 200, {
+        "ok": True,
+        "store": str(path) if path else "",
+        "issues": issues,
+        "counts": counts,
+        "read_only": True,
+        "note": "Operational work items, not knowledge and not authority.",
+    }
+
+
+def api_understand(config: dict[str, Any], role_root: Path, *, summary: bool = False) -> tuple[int, dict[str, Any]]:
+    """Read the derived graph from the role or fabric root.
+
+    The graph is a build artifact, not knowledge and not authority. The route
+    is read-only, capped and path-controlled by the console config; it never
+    accepts a caller-supplied path.
+    """
+    candidates = _understand_candidates(config, role_root)
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            if path.stat().st_size > UNDERSTAND_MAX_BYTES:
+                return 413, {"ok": False, "error": "graph is larger than the read cap", "path": str(path)}
+            graph = read_json(path)
+        except OSError as exc:
+            return 422, {"ok": False, "error": f"cannot read graph: {exc}", "path": str(path)}
+        if graph is None:
+            return 422, {"ok": False, "error": "cannot read graph", "path": str(path)}
+        if (
+            not isinstance(graph, dict)
+            or not isinstance(graph.get("nodes"), list)
+            or not isinstance(graph.get("edges"), list)
+        ):
+            return 422, {"ok": False, "error": "graph has no nodes/edges arrays", "path": str(path)}
+        try:
+            label = path.relative_to(role_root).as_posix()
+        except ValueError:
+            label = str(path)
+        if summary:
+            return 200, {
+                "ok": True,
+                "available": True,
+                "path": label,
+                "project": graph.get("project"),
+                "counts": {
+                    "nodes": len(graph["nodes"]),
+                    "edges": len(graph["edges"]),
+                    "layers": len(graph.get("layers") or []),
+                    "tour": len(graph.get("tour") or []),
+                },
+            }
+        return 200, {"ok": True, "available": True, "path": label, "graph": graph}
+    return 200, {
+        "ok": True,
+        "available": False,
+        "path": str(candidates[0]) if candidates else "",
+        "error": "no graph found; run /understand to build it",
+    }
+
+
+@dataclass(frozen=True)
+class Endpoint:
+    path: str
+    handler: Callable[[dict[str, Any], Path, dict[str, list[str]]], Any]
+    auth: str = "session"
+
+
+@dataclass(frozen=True)
+class MenuSpec:
+    label: str
+    href: str
+    icon: str
+
+
+@dataclass(frozen=True)
+class Surface:
+    name: str
+    endpoints: tuple[Endpoint, ...]
+    menu: MenuSpec | None = None
+
+
+def _bind(
+    handler: Callable[[dict[str, Any], Path], Any],
+) -> Callable[[dict[str, Any], Path, dict[str, list[str]]], Any]:
+    def call(config: dict[str, Any], role_root: Path, query: dict[str, list[str]]) -> Any:
+        return handler(config, role_root)
+
+    return call
+
+
+def _bound_map(config: dict[str, Any], role_root: Path, query: dict[str, list[str]]) -> Any:
+    return api_map(config, role_root, (query.get("collection") or [None])[0])
+
+
+def _bound_understand(config: dict[str, Any], role_root: Path, query: dict[str, list[str]]) -> Any:
+    return api_understand(config, role_root, summary=(query.get("summary") or [""])[0] == "1")
+
+
+def _bound_surface(config: dict[str, Any], role_root: Path, query: dict[str, list[str]]) -> Any:
+    return api_surface(config)
+
+
+def _step89(
+    handler: Callable[[dict[str, Any], Path], Any],
+) -> Callable[[dict[str, Any], Path, dict[str, list[str]]], Any]:
+    def call(config: dict[str, Any], role_root: Path, query: dict[str, list[str]]) -> Any:
+        return handler(config, role_root)
+
+    return call
+
+
+#: The one console surface table. A surface may expose several endpoints; its
+#: menu metadata is declared once. Every API path is an Endpoint row, so adding
+#: a route cannot bypass the auth check or the menu source.
+SURFACES: tuple[Surface, ...] = (
+    Surface("surface", (Endpoint("/api/surface", _bound_surface),)),
+    Surface("foundations", (Endpoint("/api/foundations", _bind(api_foundations)),)),
+    Surface(
+        "mesh",
+        (Endpoint("/api/mesh", _bind(api_mesh), auth="admin"),),
+        MenuSpec("Mesh", "#mesh", "mesh"),
+    ),
+    Surface(
+        "vectors",
+        (
+            Endpoint("/api/qdrant", _bind(api_qdrant), auth="admin"),
+            Endpoint("/api/map", _bound_map, auth="admin"),
+        ),
+        MenuSpec("Vectors", "#vectors", "vectors"),
+    ),
+    Surface(
+        "learning", (Endpoint("/api/learning", _bind(api_learning)),), MenuSpec("Learning", "#learning", "learning")
+    ),
+    Surface("memory", (Endpoint("/api/memory", _bind(api_memory)),), MenuSpec("Memory", "#memory", "memory")),
+    Surface(
+        "projects",
+        (Endpoint("/api/projects", _bind(api_projects), auth="admin"),),
+        MenuSpec("Projects", "#projects", "projects"),
+    ),
+    Surface(
+        "understand",
+        (Endpoint("/api/understand", _bound_understand),),
+        MenuSpec("Understand", "#understand", "understand"),
+    ),
+    Surface(
+        "issues",
+        (Endpoint("/api/issues", _bind(api_issues), auth="admin"),),
+        MenuSpec("Issues", "#issues", "issues"),
+    ),
+    Surface(
+        "step89",
+        (
+            Endpoint("/api/step89", _step89(api_step89)),
+            Endpoint("/api/nodes", _step89(_step89_nodes)),
+            Endpoint("/api/queue", _step89(_step89_queue)),
+            Endpoint("/api/kb", _step89(_step89_kb)),
+            Endpoint("/api/users", _step89(_step89_users)),
+            Endpoint("/api/lake", _step89(_step89_lake)),
+            Endpoint("/api/distill", _step89(_step89_distill)),
+            Endpoint("/api/events", _step89(_step89_events)),
+            Endpoint("/api/abac", _step89(_step89_abac)),
+            Endpoint("/api/collab", _step89(_step89_collab)),
+        ),
+    ),
+)
+
+MENU_SURFACES = tuple(surface for surface in SURFACES if surface.menu is not None)
+API_BY_PATH = {endpoint.path: endpoint for surface in SURFACES for endpoint in surface.endpoints}
+PAGE_PATHS = {"", "/"} | {"/" + surface.name for surface in MENU_SURFACES}
+
+
+def _configured_menu_surfaces(config: dict[str, Any]) -> list[Surface]:
+    configured = config.get("menus")
+    if configured is None:
+        return list(MENU_SURFACES)
+    if not isinstance(configured, list) or not all(isinstance(name, str) for name in configured):
+        raise ConsoleError("console menus must be a list of surface names")
+    known = {surface.name for surface in MENU_SURFACES}
+    unknown = sorted(set(configured) - known)
+    if unknown:
+        raise ConsoleError(f"unknown console menu(s): {', '.join(unknown)}")
+    wanted = set(configured)
+    return [surface for surface in MENU_SURFACES if surface.name in wanted]
+
+
+def _menu_item(surface: Surface) -> dict[str, str]:
+    if surface.menu is None:
+        raise ConsoleError(f"surface {surface.name} has no menu metadata")
+    return {
+        "id": surface.name,
+        "label": surface.menu.label,
+        "href": surface.menu.href,
+        "icon": surface.menu.icon,
+    }
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "sparknet-console/1"
     config: dict[str, Any]
@@ -835,65 +1101,24 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         if path.startswith("/api/"):
+            endpoint = API_BY_PATH.get(path)
+            if endpoint is None:
+                self._json(404, {"ok": False, "error": "unknown API path"})
+                return
             if not self._authorized():
                 self._json(401, {"ok": False, "error": "console token required"})
                 return
-            if path in {"/api/mesh", "/api/qdrant", "/api/map", "/api/projects"} and self._auth_role not in {
-                "admin",
-                "owner",
-            }:
+            if endpoint.auth == "admin" and self._auth_role not in {"admin", "owner"}:
                 self._json(403, {"ok": False, "error": "admin role required for this surface"})
                 return
-            if path == "/api/surface":
-                self._json(200, api_surface(self.config))
-            elif path == "/api/mesh":
-                self._json(200, api_mesh(self.config, self.role_root))
-            elif path == "/api/qdrant":
-                self._json(200, api_qdrant(self.config, self.role_root))
-            elif path == "/api/map":
-                params = urllib.parse.parse_qs(parsed.query)
-                collection = (params.get("collection") or [None])[0]
-                status, payload = api_map(self.config, self.role_root, collection)
-                self._json(status, payload)
-            elif path == "/api/learning":
-                status, payload = api_learning(self.config, self.role_root)
-                self._json(status, payload)
-            elif path == "/api/memory":
-                self._json(200, api_memory(self.config, self.role_root))
-            elif path == "/api/foundations":
-                self._json(200, api_foundations(self.config, self.role_root))
-            elif path == "/api/projects":
-                self._json(200, api_projects(self.config, self.role_root))
-            elif path == "/api/step89":
-                self._json(200, api_step89(self.config, self.role_root))
-            elif path in (
-                "/api/nodes",
-                "/api/queue",
-                "/api/kb",
-                "/api/users",
-                "/api/lake",
-                "/api/distill",
-                "/api/events",
-                "/api/abac",
-                "/api/collab",
-            ):
-                key = path.removeprefix("/api/")
-                view = {
-                    "nodes": _step89_nodes,
-                    "queue": _step89_queue,
-                    "kb": _step89_kb,
-                    "users": _step89_users,
-                    "lake": _step89_lake,
-                    "distill": _step89_distill,
-                    "events": _step89_events,
-                    "abac": _step89_abac,
-                    "collab": _step89_collab,
-                }[key](self.config, self.role_root)
-                self._json(200, view)
+            result = endpoint.handler(self.config, self.role_root, urllib.parse.parse_qs(parsed.query))
+            if isinstance(result, tuple):
+                status, payload = result
             else:
-                self._json(404, {"ok": False, "error": "unknown API path"})
+                status, payload = 200, result
+            self._json(status, payload)
             return
-        if path in ("", "/", "/mesh", "/vectors", "/learning", "/memory", "/projects"):
+        if path in PAGE_PATHS:
             target = self.static_dir / "index.html"
         else:
             target = (self.static_dir / path.lstrip("/")).resolve()
@@ -913,9 +1138,19 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, target.read_bytes(), content_type)
 
 
+def _validate_surfaces(config: dict[str, Any]) -> None:
+    if len(API_BY_PATH) != sum(len(surface.endpoints) for surface in SURFACES):
+        raise ConsoleError("duplicate API path in the console surface table")
+    for endpoint in API_BY_PATH.values():
+        if endpoint.auth not in {"session", "admin"}:
+            raise ConsoleError(f"unknown auth class for {endpoint.path}: {endpoint.auth!r}")
+    _configured_menu_surfaces(config)
+
+
 def make_server(
     config: dict[str, Any], role_root: Path, token: str, static_dir: Path, bind: str, port: int
 ) -> ThreadingHTTPServer:
+    _validate_surfaces(config)
     handler = type(
         "ConsoleHandler",
         (Handler,),

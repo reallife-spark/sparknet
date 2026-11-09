@@ -177,6 +177,7 @@ def _config(tmp_path: Path, role: str, qdrant_url: str, openwebui_url: str) -> t
     (tmp_path / "telemetry.jsonl").write_text('{"kind":"status"}\n')
     config["paths"]["rfi_dir"] = str(path / "rfi-requests")
     config["paths"]["admin_events"] = str(path / "admin-events" / "events.jsonl")
+    config["paths"]["issues"] = str(tmp_path / "issues.jsonl")
     if role == "master":
         (role_root / "configs" / "distill.json").write_text(
             json.dumps({"teacher_model_id": "t", "student_base_model": "s"})
@@ -221,11 +222,88 @@ def test_static_index_and_auth(tmp_path: Path, qdrant: str, openwebui: str) -> N
         status, body = _get(server.server_port, "/api/surface", "console-token-1234567890")
         assert status == 200
         surface = json.loads(body)
-        assert surface["menus"] == ["mesh", "vectors", "learning", "memory", "projects"]
+        assert surface["menus"] == ["mesh", "vectors", "learning", "memory", "projects", "understand"]
         assert surface["read_only"] is True
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_understand_route_reads_the_role_graph(tmp_path: Path, qdrant: str, openwebui: str) -> None:
+    config, role_root = _config(tmp_path, "peer", qdrant, openwebui)
+    server = _serve(config, role_root)
+    try:
+        status, body = _get(server.server_port, "/api/understand", "console-token-1234567890")
+        assert status == 200
+        assert json.loads(body)["available"] is False
+        (role_root / ".ua").mkdir()
+        graph = {
+            "version": "1.0",
+            "kind": "codebase",
+            "project": {"name": "demo", "languages": ["python"]},
+            "nodes": [
+                {"id": "file:a.py", "type": "file", "name": "a.py", "summary": "a", "tags": [], "complexity": "simple"}
+            ],
+            "edges": [],
+            "layers": [],
+            "tour": [],
+        }
+        (role_root / ".ua" / "knowledge-graph.json").write_text(json.dumps(graph))
+        status, body = _get(server.server_port, "/api/understand", "console-token-1234567890")
+        assert status == 200
+        payload = json.loads(body)
+        assert payload["available"] is True
+        assert payload["graph"]["nodes"][0]["id"] == "file:a.py"
+        status, body = _get(server.server_port, "/api/understand?summary=1", "console-token-1234567890")
+        assert status == 200
+        assert json.loads(body)["counts"]["nodes"] == 1
+        status, body = _get(server.server_port, "/understand", "console-token-1234567890")
+        assert status == 200 and b"Sparknet Console" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_master_issues_route_is_read_only_and_master_only(tmp_path: Path, qdrant: str, openwebui: str) -> None:
+    config, role_root = _config(tmp_path, "master", qdrant, openwebui)
+    store = tmp_path / "issues.jsonl"
+    store.write_text(
+        json.dumps(
+            {
+                "received_at": "2026-11-09T10:00:00Z",
+                "received_from": "10.100.0.2",
+                "schema": "sparknet-issue/1",
+                "issue_id": "fix-token",
+                "node_id": "sparknet-node-0002",
+                "title": "Console token",
+                "body": "401",
+                "status": "open",
+                "labels": ["needs-triage"],
+                "updated_at": "2026-11-09T10:00:00Z",
+            }
+        )
+        + "\n"
+    )
+    server = _serve(config, role_root)
+    try:
+        status, body = _get(server.server_port, "/api/issues", "console-token-1234567890")
+        assert status == 200
+        payload = json.loads(body)
+        assert payload["ok"] is True and payload["counts"]["total"] == 1
+        assert payload["read_only"] is True
+        assert payload["issues"][0]["issue_id"] == "fix-token"
+    finally:
+        server.shutdown()
+        server.server_close()
+    peer_config, peer_root = _config(tmp_path, "peer", qdrant, openwebui)
+    peer = _serve(peer_config, peer_root)
+    try:
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            _get(peer.server_port, "/api/issues", "console-token-1234567890")
+        assert exc.value.code == 403
+    finally:
+        peer.shutdown()
+        peer.server_close()
 
 
 def test_peer_user_session_is_accepted_but_master_requires_admin(tmp_path: Path, qdrant: str, openwebui: str) -> None:
@@ -448,3 +526,72 @@ def test_step89_dashboard_apis_are_authenticated_and_read_only(tmp_path: Path, q
     finally:
         server.shutdown()
         server.server_close()
+
+
+# --- the one console surface table -------------------------------------------
+
+
+def test_surface_table_is_the_dispatch_and_menu_source() -> None:
+    paths = [endpoint.path for surface in console.SURFACES for endpoint in surface.endpoints]
+    assert len(paths) == len(set(paths)), "duplicate API path in the surface table"
+    assert set(console.API_BY_PATH) == set(paths)
+    assert all(endpoint.auth in {"session", "admin"} for endpoint in console.API_BY_PATH.values())
+    assert [surface.name for surface in console.MENU_SURFACES] == [
+        "mesh",
+        "vectors",
+        "learning",
+        "memory",
+        "projects",
+        "understand",
+        "issues",
+    ]
+    for surface in console.MENU_SURFACES:
+        assert surface.menu is not None
+        assert surface.menu.label and surface.menu.href.startswith("#") and surface.menu.icon
+
+
+def test_surface_menus_and_menu_items_are_derived_from_the_table(tmp_path: Path, qdrant: str, openwebui: str) -> None:
+    config, _role_root = _config(tmp_path, "peer", qdrant, openwebui)
+    surface = console.api_surface(config)
+    assert surface["menus"] == ["mesh", "vectors", "learning", "memory", "projects", "understand"]
+    assert [item["id"] for item in surface["menu_items"]] == surface["menus"]
+    assert surface["menu_items"][0] == {"id": "mesh", "label": "Mesh", "href": "#mesh", "icon": "mesh"}
+
+
+def test_unknown_configured_menu_is_refused(tmp_path: Path, qdrant: str, openwebui: str) -> None:
+    config, _role_root = _config(tmp_path, "peer", qdrant, openwebui)
+    config["menus"] = [*config["menus"], "not-a-surface"]
+    with pytest.raises(console.ConsoleError, match="unknown console menu"):
+        console.api_surface(config)
+
+
+def test_table_admin_routes_refuse_a_user_session(tmp_path: Path, qdrant: str, openwebui: str) -> None:
+    import urllib.request
+
+    config, role_root = _config(tmp_path, "peer", qdrant, openwebui)
+    server = _serve(config, role_root)
+    try:
+
+        def get(path: str, token: str):
+            request = urllib.request.Request(f"http://127.0.0.1:{server.server_port}{path}")
+            request.add_header("Authorization", f"Bearer {token}")
+            with urllib.request.urlopen(request, timeout=10) as response:
+                return response.status
+
+        assert get("/api/surface", "user-token") == 200
+        assert get("/api/learning", "user-token") == 200
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            get("/api/mesh", "user-token")
+        assert exc.value.code == 403
+        assert get("/api/mesh", "admin-token") == 200
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_sidebar_and_tabs_use_menu_items() -> None:
+    sidebar = (STATIC / "sparknet-menu.js").read_text()
+    app = (STATIC / "app.js").read_text()
+    assert "menu_items" in sidebar and "var ITEMS =" not in sidebar
+    assert "menu_items" in app
+    assert 'id="tabs"' in (STATIC / "index.html").read_text()

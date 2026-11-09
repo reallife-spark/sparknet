@@ -34,3 +34,6 @@
 - **envelope catalog** — the `SPECS` table mapping every envelope kind to its
   fields, signed projection, signer and verifier. Named `*_message`/`sign_*`/
   `verify_*` functions are adapters over it.
+- **console surface** — one read-only view exposed by
+  `scripts/sparknet-console.py`: its endpoints, `session`/`admin` auth class
+  and optional menu metadata in the one `SURFACES` table.

@@ -11,12 +11,6 @@
   if (location.pathname.startsWith("/sparknet-console")) return;
   var BASE = "/sparknet-console/";
   var GROUP_ID = "sparknet-menu-group";
-  var ITEMS = [
-    { id: "mesh", label: "Mesh", href: BASE + "#mesh" },
-    { id: "vectors", label: "Vectors", href: BASE + "#vectors" },
-    { id: "learning", label: "Learning", href: BASE + "#learning" }
-  ];
-
   var ICONS = {
     mesh:
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" class="size-4"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="18" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="M10.7 6.8 6.2 15.8M13.3 6.8l4.5 9M7.2 18h9.6"/></svg>',
@@ -37,12 +31,12 @@
     var wrap = el("div", "px-1 flex justify-center text-gray-700 dark:text-gray-300");
     wrap.dataset.sparknet = item.id;
     var link = el("a", "grow flex items-center space-x-2 rounded-xl px-2 py-1.5 transition hover:bg-gray-100 dark:hover:bg-gray-900");
-    link.href = item.href;
+    link.href = item.href && item.href.charAt(0) === "#" ? BASE + item.href : item.href;
     link.draggable = false;
     link.setAttribute("aria-label", item.label);
-    var icon = el("div", "self-center flex size-4 shrink-0 items-center justify-center", ICONS[item.id]);
+    var icon = el("div", "self-center flex size-4 shrink-0 items-center justify-center", ICONS[item.icon || item.id] || "");
     var label = el("div", "flex self-center translate-y-[0.5px]");
-    label.appendChild(el("div", "self-center text-[0.8125rem] leading-5", item.label));
+    label.appendChild(el("div", "self-center text-[0.8125rem] leading-5", item.label || item.id));
     link.appendChild(icon);
     link.appendChild(label);
     wrap.appendChild(link);
@@ -62,7 +56,6 @@
       )
     );
     group.appendChild(heading);
-    for (var i = 0; i < ITEMS.length; i++) group.appendChild(row(ITEMS[i]));
     return group;
   }
 
@@ -72,9 +65,11 @@
     fetch(BASE + "api/surface", { headers: { Authorization: "Bearer " + token, Accept: "application/json" } })
       .then(function (response) { return response.ok ? response.json() : null; })
       .then(function (surface) {
-        if (!surface || !Array.isArray(surface.menus)) return;
-        var learning = group.querySelector('[data-sparknet="learning"]');
-        if (learning && surface.menus.indexOf("learning") === -1) learning.remove();
+        if (!surface) return;
+        var items = Array.isArray(surface.menu_items)
+          ? surface.menu_items
+          : (surface.menus || []).map(function (id) { return { id: id, label: id, href: "#" + id, icon: id }; });
+        for (var i = 0; i < items.length; i++) group.appendChild(row(items[i]));
       })
       .catch(function () {});
   }

@@ -16,13 +16,7 @@
         </div>
       </div>
       <div class="nav-wrap">
-        <nav id="tabs" class="tabs" aria-label="Sparknet sections">
-          <a href="#mesh" data-tab="mesh">Mesh</a>
-          <a href="#vectors" data-tab="vectors">Vectors</a>
-          <a href="#memory" data-tab="memory">Memory</a>
-          <a href="#projects" data-tab="projects">Projects</a>
-          <a href="#learning" data-tab="learning">Learning</a>
-        </nav>
+        <nav id="tabs" class="tabs" aria-label="Sparknet sections"></nav>
         <a class="back" href="/">Open WebUI</a>
       </div>
     </header>
@@ -131,6 +125,61 @@
             <div id="learning-models" class="list"></div>
           </article>
         </div>
+      </section>
+
+      <section id="understand" class="panel" hidden>
+        <div class="section-head">
+          <h2>Understand</h2>
+          <span class="pill" id="understand-status">—</span>
+        </div>
+        <div id="understand-cards" class="card-grid"></div>
+        <div class="understand-toolbar" aria-label="Graph controls">
+          <label>Search <input id="understand-search" type="search" placeholder="node, file, tag" autocomplete="off" /></label>
+          <label>Layer <select id="understand-layer"><option value="">All layers</option></select></label>
+          <label>Zoom <input id="understand-zoom" type="range" min="50" max="200" step="10" value="100" /></label>
+        </div>
+        <div class="understand-grid">
+          <article class="card understand-canvas-card">
+            <h3>Architecture graph</h3>
+            <p class="muted" id="understand-note">Run /understand to build the code-understanding graph.</p>
+            <div class="understand-canvas-wrap">
+              <svg id="understand-graph" role="img" aria-label="Code-understanding graph"></svg>
+            </div>
+            <div class="legend" id="understand-legend" aria-label="Node type legend"></div>
+          </article>
+          <aside class="card">
+            <h3>Node detail</h3>
+            <div id="understand-detail" class="list"><p class="empty">Select a node.</p></div>
+            <details id="understand-layers" class="understand-details">
+              <summary>Layers</summary>
+              <div class="list"></div>
+            </details>
+            <details id="understand-tour" class="understand-details">
+              <summary>Tour</summary>
+              <ol class="understand-tour"></ol>
+            </details>
+            <details class="understand-details">
+              <summary>All nodes</summary>
+              <div id="understand-nodes" class="list"></div>
+            </details>
+          </aside>
+        </div>
+        <noscript>
+          <p class="muted">The interactive graph needs JavaScript. The JSON is available at <code>GET /api/understand</code>.</p>
+        </noscript>
+      </section>
+
+      <section id="issues" class="panel" hidden>
+        <div class="section-head">
+          <h2>Issues</h2>
+          <span class="pill" id="issues-status">Master only</span>
+        </div>
+        <div id="issues-cards" class="card-grid"></div>
+        <article class="card">
+          <h3>Peer work items</h3>
+          <div id="issues-list" class="table-wrap"></div>
+        </article>
+        <p class="muted">Issues are operational work: not knowledge, not authority. This console is read-only.</p>
       </section>
     </main>
 

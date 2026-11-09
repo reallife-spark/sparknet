@@ -10,13 +10,20 @@ The fabric has two Open WebUI surfaces, not one:
 
 | Surface | Host | Menus | Scope |
 |---|---|---|---|
-| Peer — **Sparknet Node** | `agx64`, 64 GB | Mesh, Vectors, Learning (read-only Master snapshot), Memory, Projects | The owner, the owner's node, the owner's Qdrant, per-vault memory and the Master's sanitized Learning status |
-| Master — **Sparknet Master** | `agx32`, 32 GB | Mesh, Vectors, Learning, Memory, Projects | All registered nodes, users, departments, vectors, distillation runs and memory metadata |
+| Peer — **Sparknet Node** | `agx64`, 64 GB | Mesh, Vectors, Learning (read-only Master snapshot), Memory, Projects, Understand | The owner, the owner's node, the owner's Qdrant, per-vault memory and the Master's sanitized Learning status |
+| Master — **Sparknet Master** | `agx32`, 32 GB | Mesh, Vectors, Learning, Memory, Projects, Understand, Issues | All registered nodes, users, departments, vectors, distillation runs and memory metadata |
 
 Open WebUI remains the chat, account and model surface. The Sparknet pages are
 a separate console served by `scripts/sparknet-console.py` and reached through
 the same origin as Open WebUI. The console is read-only in this step: it shows
 state and evidence. It never signs, grants, revokes, trains or writes a registry.
+
+The console's dispatch, auth and menu source is the `SURFACES` table in
+`scripts/sparknet-console.py`. Each surface declares its endpoints, `session` or
+`admin` auth and optional menu metadata. `/api/surface` returns `menus` (names)
+and `menu_items` (id, label, href, icon); the sidebar and tabs read
+`menu_items`. A menu named in a role config that is not a table surface is
+refused rather than silently ignored.
 
 ## User policy
 
@@ -143,6 +150,18 @@ The Learning screen is read-only on both roles. A control action requires the
 distillation service and the isolated signer; it is not a button that writes a
 file or starts training from the browser. The peer link is a signed `4221` file
 fetch, not a second authority or knowledge channel.
+
+### Understand
+
+Both roles: the derived `.ua/knowledge-graph.json` for the selected role root or
+the fabric root, read-only, capped and path-controlled by the console config.
+The graph is a build artifact, not knowledge and not authority.
+
+### Issues
+
+Master only: the signed peer work items recorded by the 8090 intake, read-only.
+An issue is operational work, never knowledge and never authority. The peer
+console has no Issues menu and answers 403 for the route.
 
 ## Boundaries
 
