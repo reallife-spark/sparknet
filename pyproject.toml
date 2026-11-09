@@ -30,6 +30,14 @@ dev = [
 vector = [
     "qdrant-client[fastembed]>=1.12,<2",
 ]
+# Opt-in via `pip install -e .[understand]`. The Understand core runs on the
+# standard library; this extra enables the generic tree-sitter extractors for
+# languages that have no native extractor. It is not a runtime dependency of the
+# fabric, so the `cryptography`-only allow-list is unchanged.
+understand = [
+    "tree-sitter>=0.21",
+    "tree-sitter-language-pack>=0.7",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

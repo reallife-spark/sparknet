@@ -35,6 +35,11 @@ __pycache__/
 .state/
 .cache/
 
+# Local issue tracker (Matt Pocock engineering skills); machine-local.
+.scratch/
+.ua/
+.understand-anything/
+
 # Distribution archives
 dist/
 

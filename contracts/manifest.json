@@ -17,7 +17,7 @@
       "contract": "capabilities",
       "file": "capabilities.json",
       "schema_version": "1.0",
-      "sha256": "e3ff2d9ab5e6807bbe6d6c7638a3107f4b0ab607538fc29677012f0db2ae93cd"
+      "sha256": "cc3124423ae83892625d71e227a21fdc505e0501fd0bafaa01a907442719caa6"
     },
     {
       "contract": "collab-schema",
@@ -86,6 +86,12 @@
       "sha256": "992e96bac463ccedc0363e593fb43a4a41cbaf368826b558734dd5c0888b3c72"
     },
     {
+      "contract": "issue-schema",
+      "file": "issue-schema.json",
+      "schema_version": 1,
+      "sha256": "d934c8ed1e8678a8a5df83887768a43d0b05ce7f515694211a7eaec09c0138b7"
+    },
+    {
       "contract": "memory-schema",
       "file": "memory-schema.json",
       "schema_version": 1,
@@ -125,7 +131,7 @@
       "contract": "ports",
       "file": "ports.json",
       "schema_version": "2.0",
-      "sha256": "f97c9dca2babf139d29f9c9440c31ce5a5526736cd37459d0cde4c2872639c1a"
+      "sha256": "c5b09d3e2700e98177d426c7987a6b1c8dcc59efc0b98b87cd4a81a34c0e88e7"
     },
     {
       "contract": "proposal-schema",
@@ -191,7 +197,13 @@
       "contract": "tracking-schema",
       "file": "tracking-schema.json",
       "schema_version": 1,
-      "sha256": "400a834928bfb40450661121e1fe3a134c92903f775d9399aab0684aa9068d07"
+      "sha256": "9bb8d0a602c91b7053db27eab21256f745b5c57749906b84a4903d1fcfdcd8b4"
+    },
+    {
+      "contract": "understand-schema",
+      "file": "understand-schema.json",
+      "schema_version": 1,
+      "sha256": "ef45970e281a3def4d203e50ec8c0e063c51ad809e137f2e4d8637b133b1a9c5"
     },
     {
       "contract": "uplift-schema",
@@ -209,6 +221,7 @@
     "cluster-vote",
     "cross-department-share",
     "guard-apply",
+    "issue-report",
     "memory-supervise",
     "model-uplift",
     "p2p-sync",

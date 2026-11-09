@@ -13,7 +13,8 @@
     "admin-supervise",
     "cross-department-share",
     "model-uplift",
-    "memory-supervise"
+    "memory-supervise",
+    "issue-report"
   ],
   "definitions": {
     "telemetry": {
@@ -78,6 +79,12 @@
       "holder": "master",
       "sensitive": true,
       "note": "Sensitive in the confidentiality direction. The peer applies the request to its local memory service and audits it; the Master stores no permanent mirror. It grants no write to the user's vault and never becomes an answer corpus. The Master AI must not ingest the returned content."
+    },
+    "issue-report": {
+      "grants": "Push redacted local work items to the Master for tracking.",
+      "holder": "peer",
+      "sensitive": false,
+      "note": "Work items are operational data, not knowledge and not authority. The grant lets a peer send a title, body, status, labels and links over the signed 8090 issue route; it opens no vault, copies no page and lets the Master issue no command. The Master records and triages; it never acts on an issue as a capability. See contracts/issue-schema.json."
     }
   },
   "master_capabilities": {

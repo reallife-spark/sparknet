@@ -61,6 +61,8 @@ EXPECTED_TOP_LEVEL = {
     "INTENT.md",
     "PLAN.md",
     "README.md",
+    "GLOSSARY.md",
+    "docs",
     "log.md",
     "Makefile",
     "pyproject.toml",
@@ -163,6 +165,10 @@ UNTRACKED_TOP_LEVEL = {
     # It is machine-local state (the volatile files are gitignored, the rest is
     # never tracked), not part of the fabric's design.
     ".obsidian",
+    # Local issue tracker and graph build directories; gitignored by design.
+    ".scratch",
+    ".ua",
+    ".understand-anything",
 }
 
 # Files that record what one machine looked like, rather than describing the

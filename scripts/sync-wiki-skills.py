@@ -290,6 +290,41 @@ def skill_dirs_on_disk() -> list[Path]:
     return sorted(p for p in DEST.iterdir() if p.is_dir())
 
 
+FAMILIES_STATE = DEST / ".families.json"
+
+
+def family_manifests() -> list[Path]:
+    """Manifests owned by other vendored families (Understand, Matt Pocock).
+
+    The wiki suite is no longer the only family in `.opencode/skills`. A family
+    registry keeps the wiki pruner from deleting a sibling family's skills and
+    keeps the host-path scan from judging files this suite does not own.
+    """
+    if not FAMILIES_STATE.is_file():
+        return []
+    try:
+        data = json.loads(FAMILIES_STATE.read_text())
+    except (OSError, json.JSONDecodeError):
+        return []
+    names = data.get("manifests", []) if isinstance(data, dict) else []
+    return [DEST / name for name in names if isinstance(name, str) and name != SYNC_STATE.name]
+
+
+def other_family_skills() -> set[str]:
+    names: set[str] = set()
+    for manifest in family_manifests():
+        if not manifest.is_file():
+            continue
+        try:
+            state = json.loads(manifest.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        skills = state.get("skills", {})
+        if isinstance(skills, dict):
+            names.update(str(name) for name in skills)
+    return names
+
+
 def find_host_paths() -> list[str]:
     """Report vendored SKILL CONTENT that still names a host absolute path.
 
@@ -299,7 +334,10 @@ def find_host_paths() -> list[str]:
     unsatisfiable — it would also hide a real hit among the noise.
     """
     hits: list[str] = []
+    protected = other_family_skills()
     for skill_root in skill_dirs_on_disk():
+        if skill_root.name in protected:
+            continue
         paths = sorted(skill_root.rglob("*"))
         for path in paths:
             if not path.is_file():
@@ -381,8 +419,9 @@ def apply_mode() -> None:
     # removed skill cannot linger and keep registering. Compare against the
     # on-disk (post-rename) names.
     dest_names = {RENAMES.get(n, n) for n in included}
+    protected = other_family_skills()
     for child in sorted(DEST.iterdir()):
-        if child.is_dir() and child.name not in dest_names:
+        if child.is_dir() and child.name not in dest_names and child.name not in protected:
             shutil.rmtree(child)
             print(f"  pruned  {child.name}")
 
@@ -422,7 +461,7 @@ def check_mode() -> int:
     present = {p.name for p in DEST.iterdir() if p.is_dir()}
     for missing in sorted(set(recorded) - present):
         problems.append(f"{missing}: vendored copy is gone")
-    for extra in sorted(present - set(recorded)):
+    for extra in sorted(present - set(recorded) - other_family_skills()):
         problems.append(f"{extra}: vendored but not in .sync.json (prune it)")
 
     for name, meta in sorted(recorded.items()):  # type: ignore[union-attr]

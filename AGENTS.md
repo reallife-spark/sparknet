@@ -109,6 +109,11 @@ Run everything through `make`. `scripts/sparknet` is the unified CLI;
 `SPARKNET_DRY=1` prints the invocation. `make nv-search q="…"` is the
 resource-first check before building a container or model.
 
+## Agent skills
+Issues: `.scratch/issues/` (`sparknet-issue/1`); see `docs/agents/issue-tracker.md`.
+Triage: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`.
+Domain docs: `GLOSSARY.md`, `docs/adr/`; see `docs/agents/domain.md`.
+
 ## Work discipline
 
 `STYLE_GUIDE.md` is the standing convention: Python, shell, Makefiles, commits,

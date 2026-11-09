@@ -1,0 +1,64 @@
+{
+  "license": "MIT",
+  "note": "Authored translation of the upstream workflows; helper commands call shared/sparknet-understand.py and the Go service.",
+  "schema": "sparknet-skill-family/1",
+  "skills": {
+    "understand": {
+      "files": {
+        "SKILL.md": "32e891d410182af60cb4af93e71abcacda1a711ee0beb5e3918e64cd3956ab89"
+      },
+      "sha256": "e2c4af2162f9e7a6195a83029df72035a40065f535f47b7545bf593178020953"
+    },
+    "understand-chat": {
+      "files": {
+        "SKILL.md": "2a1130c974a8ec2eea4450f1469de8a7538197fcfc4ac0cea0dd6cf6f3179856"
+      },
+      "sha256": "f51a4746eca816ca2d719cd9f12a38a793d6e25dee60ef96685a227391d0a2f4"
+    },
+    "understand-dashboard": {
+      "files": {
+        "SKILL.md": "a1bded729bfb5bb072b7a9132afc5ba5cdc44ee4fed8970f975337845f82780b"
+      },
+      "sha256": "c1da695c15637c117a8f8b43a1fc3917b72206b27445654cd87fedddae84a9cd"
+    },
+    "understand-diff": {
+      "files": {
+        "SKILL.md": "c25d8414f7958d354aff46d843bb6ecd01a655274b61ac46ae48aad1e7569b7a"
+      },
+      "sha256": "ee449db2509e832895e2d647c5faae1f0e4f8679e1831bbc9e5d160d86678be2"
+    },
+    "understand-domain": {
+      "files": {
+        "SKILL.md": "37d97768cb3e5ff8ffeba84da4c818958023e9412699c16084cbcbf0a0409ffe"
+      },
+      "sha256": "a2959b67787219a6a0eafe0d8543f8c03157d22afe19c0176d6de81635478ceb"
+    },
+    "understand-explain": {
+      "files": {
+        "SKILL.md": "74e92403877f2ed8d47432976d1678f462b1cd7a7e2a89a19bcbca28bc19643b"
+      },
+      "sha256": "c23ccd6b539c24f6c5084b482fae467e62859a92c7f6c3d55ad805c153355c33"
+    },
+    "understand-figma": {
+      "files": {
+        "SKILL.md": "a6da9aa6904e07270e1eea4edd86fd455ea8d08aacc3f60bc0563ec92a55dceb"
+      },
+      "sha256": "afca5537a4f38e0c52166b23dbdda9466f8b58ddd0afa924fa2eb059484b455b"
+    },
+    "understand-knowledge": {
+      "files": {
+        "SKILL.md": "97d9e5d19cd6064e375109f06e9f0616f5740c3977ae445a86068472e6f6d146"
+      },
+      "sha256": "9c1928a00e093e7153fa367fdc5dc0bd02442c408934278cec11be153d87107f"
+    },
+    "understand-onboard": {
+      "files": {
+        "SKILL.md": "faa2b4b9746d4a769247dc5898767081ab9c0254d704582137172aa235eed393"
+      },
+      "sha256": "b9f9ad3fa46d8dbaaba5068732538e88c9a82a67d44ef943702504f29a0f560c"
+    }
+  },
+  "upstream": "https://github.com/Egonex-AI/Understand-Anything",
+  "upstream_commit": "a6ea4024767df85ce4f99140d4f12ecfc5a81eb6",
+  "upstream_version": "2.9.8"
+}

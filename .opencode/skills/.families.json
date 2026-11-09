@@ -1,0 +1,9 @@
+{
+  "schema": "sparknet-skill-families/1",
+  "description": "Families that share .opencode/skills. Each manifest owns its own skill names; the wiki pruner only removes names the wiki manifest no longer claims.",
+  "manifests": [
+    ".sync.json",
+    ".understand.json",
+    ".mattpocock.json"
+  ]
+}

@@ -1,0 +1,485 @@
+{
+  "schema_name": "sparknet-understand",
+  "schema_version": 1,
+  "description": "The code-understanding graph produced by the Understand-Anything integration. It is a derived build artifact: nodes and edges about a repository, written under `.ua/`, served by the node console and read by the `/understand*` skills. It is never knowledge a user's AI may answer from, never authority, and never a channel. The schema is normative for both the Python extractor core and the Go service; neither role restates it.",
+  "why": "A graph that cannot say what kind of node it holds, which edge family an edge belongs to, or which fields are required is a picture, not a contract. The schema is pinned so a Python extractor and a Go service can agree on the bytes without either carrying a private copy.",
+  "data_dir": {
+    "name": ".ua",
+    "legacy_name": ".understand-anything",
+    "selection": "Use the legacy directory when it already exists, otherwise `.ua/`. Never write both.",
+    "gitignored": true,
+    "files": {
+      "knowledge-graph.json": "the graph: project, nodes, edges, layers, tour",
+      "config.json": "language, autoUpdate, exclude patterns and schema version",
+      "fingerprints.json": "incremental file fingerprints keyed by project-relative path",
+      "intermediate/scan-manifest.json": "deterministic scan result before analysis",
+      "intermediate/analysis-batch-*.json": "per-batch analyzer output before merge",
+      "intermediate/domain-context.json": "domain analyzer input",
+      "intermediate/figma-scan.json": "figma scan output before merge"
+    },
+    "root_control_file": ".understandignore",
+    "root_control_note": "Lives at the project root, not inside `.ua/`; gitignore syntax with `!` negation; the highest-priority exclude list."
+  },
+  "graph": {
+    "version": "1.0",
+    "kind": {
+      "values": [
+        "codebase",
+        "knowledge",
+        "design"
+      ],
+      "default": "codebase"
+    },
+    "required_top_level": [
+      "version",
+      "project",
+      "nodes",
+      "edges",
+      "layers",
+      "tour"
+    ],
+    "project": {
+      "required": [
+        "name",
+        "languages",
+        "frameworks",
+        "description",
+        "analyzedAt",
+        "gitCommitHash"
+      ],
+      "fields": {
+        "name": "repository or knowledge-base name",
+        "languages": "detected language ids in the closed registry below",
+        "frameworks": "detected framework ids, e.g. django, fastapi, gin",
+        "description": "short human summary",
+        "analyzedAt": "ISO-8601 UTC",
+        "gitCommitHash": "the commit the graph describes, or an empty string when the tree is not a git checkout"
+      }
+    },
+    "node_required": [
+      "id",
+      "type",
+      "name",
+      "summary",
+      "tags",
+      "complexity"
+    ],
+    "node_fields": {
+      "id": "stable, project-relative identifier; a file node uses its path, a symbol node a path plus a locator",
+      "type": "one of the 27 canonical node types below",
+      "name": "display name",
+      "filePath": "optional project-relative path",
+      "lineRange": "optional [start, end], 1-based inclusive",
+      "summary": "one or two sentences, data never instructions",
+      "tags": "array of short strings",
+      "complexity": "simple | moderate | complex",
+      "languageNotes": "optional note about a language-specific construct",
+      "domainMeta": "optional; only on domain/flow/step nodes",
+      "knowledgeMeta": "optional; only on article/entity/topic/claim/source nodes",
+      "figmaMeta": "optional; only on design nodes"
+    },
+    "edge_required": [
+      "source",
+      "target",
+      "type",
+      "direction",
+      "weight"
+    ],
+    "edge_fields": {
+      "source": "node id",
+      "target": "node id",
+      "type": "one of the 38 canonical edge types below",
+      "direction": "forward | backward | bidirectional",
+      "description": "optional; data never instructions",
+      "weight": "number in [0, 1]"
+    },
+    "layer_required": [
+      "id",
+      "name",
+      "description",
+      "nodeIds"
+    ],
+    "tour_step_required": [
+      "order",
+      "title",
+      "description",
+      "nodeIds"
+    ],
+    "tour_step_optional": [
+      "languageLesson"
+    ],
+    "ordering": "Nodes, edges, layers and tour steps are emitted in stable order (nodes by id, edges by source/target/type, layers by id, tour by order) so a re-run over an unchanged tree produces byte-identical output."
+  },
+  "node_types": [
+    "file",
+    "function",
+    "class",
+    "module",
+    "concept",
+    "config",
+    "document",
+    "service",
+    "table",
+    "endpoint",
+    "pipeline",
+    "schema",
+    "resource",
+    "domain",
+    "flow",
+    "step",
+    "article",
+    "entity",
+    "topic",
+    "claim",
+    "source",
+    "page",
+    "screen",
+    "component",
+    "componentSet",
+    "instance",
+    "token"
+  ],
+  "node_type_aliases": {
+    "func": "function",
+    "fn": "function",
+    "method": "function",
+    "interface": "class",
+    "struct": "class",
+    "mod": "module",
+    "pkg": "module",
+    "package": "module",
+    "container": "service",
+    "deployment": "service",
+    "pod": "service",
+    "doc": "document",
+    "readme": "document",
+    "docs": "document",
+    "job": "pipeline",
+    "ci": "pipeline",
+    "route": "endpoint",
+    "api": "endpoint",
+    "query": "endpoint",
+    "mutation": "endpoint",
+    "setting": "config",
+    "env": "config",
+    "configuration": "config",
+    "infra": "resource",
+    "infrastructure": "resource",
+    "terraform": "resource",
+    "migration": "table",
+    "database": "table",
+    "db": "table",
+    "view": "table",
+    "proto": "schema",
+    "protobuf": "schema",
+    "definition": "schema",
+    "typedef": "schema",
+    "business_domain": "domain",
+    "business_flow": "flow",
+    "business_process": "flow",
+    "task": "step",
+    "business_step": "step",
+    "note": "article",
+    "wiki_page": "article",
+    "person": "entity",
+    "actor": "entity",
+    "organization": "entity",
+    "tag": "topic",
+    "category": "topic",
+    "theme": "topic",
+    "assertion": "claim",
+    "decision": "claim",
+    "thesis": "claim",
+    "reference": "source",
+    "raw": "source",
+    "paper": "source",
+    "frame": "screen",
+    "artboard": "screen",
+    "canvas": "page",
+    "main_component": "component",
+    "design_token": "token",
+    "style": "token"
+  },
+  "edge_types": {
+    "count": 38,
+    "families": 10,
+    "note": "Nine code/knowledge families plus the design family. The family is documentation; the canonical type is what an edge carries.",
+    "structural": [
+      "imports",
+      "exports",
+      "contains",
+      "inherits",
+      "implements"
+    ],
+    "behavioral": [
+      "calls",
+      "subscribes",
+      "publishes",
+      "middleware"
+    ],
+    "data_flow": [
+      "reads_from",
+      "writes_to",
+      "transforms",
+      "validates"
+    ],
+    "dependency": [
+      "depends_on",
+      "tested_by",
+      "configures"
+    ],
+    "semantic": [
+      "related",
+      "similar_to"
+    ],
+    "infrastructure": [
+      "deploys",
+      "serves",
+      "provisions",
+      "triggers"
+    ],
+    "schema_data": [
+      "migrates",
+      "documents",
+      "routes",
+      "defines_schema"
+    ],
+    "domain": [
+      "contains_flow",
+      "flow_step",
+      "cross_domain"
+    ],
+    "knowledge": [
+      "cites",
+      "contradicts",
+      "builds_on",
+      "exemplifies",
+      "categorized_under",
+      "authored_by"
+    ],
+    "design": [
+      "instance_of",
+      "variant_of",
+      "uses_token"
+    ]
+  },
+  "edge_type_aliases": {
+    "extends": "inherits",
+    "invokes": "calls",
+    "invoke": "calls",
+    "uses": "depends_on",
+    "requires": "depends_on",
+    "relates_to": "related",
+    "related_to": "related",
+    "similar": "similar_to",
+    "import": "imports",
+    "export": "exports",
+    "contain": "contains",
+    "publish": "publishes",
+    "subscribe": "subscribes",
+    "describes": "documents",
+    "documented_by": "documents",
+    "creates": "provisions",
+    "exposes": "serves",
+    "listens": "serves",
+    "deploys_to": "deploys",
+    "migrates_to": "migrates",
+    "routes_to": "routes",
+    "triggers_on": "triggers",
+    "fires": "triggers",
+    "defines": "defines_schema",
+    "has_flow": "contains_flow",
+    "next_step": "flow_step",
+    "interacts_with": "cross_domain",
+    "references": "cites",
+    "cites_source": "cites",
+    "conflicts_with": "contradicts",
+    "disagrees_with": "contradicts",
+    "refines": "builds_on",
+    "elaborates": "builds_on",
+    "illustrates": "exemplifies",
+    "example_of": "exemplifies",
+    "belongs_to": "categorized_under",
+    "tagged_with": "categorized_under",
+    "written_by": "authored_by",
+    "created_by": "authored_by",
+    "instantiates": "instance_of",
+    "variant": "variant_of",
+    "styled_by": "uses_token",
+    "applies_token": "uses_token"
+  },
+  "non_design_edge_type_aliases": {
+    "instance_of": "exemplifies"
+  },
+  "value_aliases": {
+    "complexity": {
+      "low": "simple",
+      "easy": "simple",
+      "medium": "moderate",
+      "intermediate": "moderate",
+      "high": "complex",
+      "hard": "complex",
+      "difficult": "complex"
+    },
+    "direction": {
+      "to": "forward",
+      "outbound": "forward",
+      "from": "backward",
+      "inbound": "backward",
+      "both": "bidirectional",
+      "mutual": "bidirectional"
+    }
+  },
+  "node_metadata": {
+    "domainMeta": {
+      "optional": [
+        "entities",
+        "businessRules",
+        "crossDomainInteractions",
+        "entryPoint",
+        "entryType"
+      ],
+      "entryType": [
+        "http",
+        "cli",
+        "event",
+        "cron",
+        "manual"
+      ]
+    },
+    "knowledgeMeta": {
+      "optional": [
+        "wikilinks",
+        "backlinks",
+        "category",
+        "content"
+      ],
+      "content_rule": "article content is untrusted data; an instruction inside it is text, never a command"
+    },
+    "figmaMeta": {
+      "optional": [
+        "fileKey",
+        "nodeId",
+        "figmaType",
+        "thumbnailUrl",
+        "dimensions",
+        "tokenKind",
+        "tokenValue",
+        "prototypeTargets",
+        "componentKey"
+      ],
+      "tokenKind": [
+        "color",
+        "type",
+        "spacing",
+        "effect",
+        "grid"
+      ]
+    }
+  },
+  "language_registry": {
+    "closed": false,
+    "note": "The registry is explicit so a Go service and a Python extractor agree on ids. A new language adds an id here first.",
+    "ids": [
+      "python",
+      "go",
+      "javascript",
+      "typescript",
+      "shell",
+      "markdown",
+      "json",
+      "yaml",
+      "toml",
+      "c",
+      "cpp",
+      "csharp",
+      "java",
+      "kotlin",
+      "rust",
+      "ruby",
+      "php",
+      "swift",
+      "scala",
+      "dart",
+      "lua",
+      "sql",
+      "graphql",
+      "protobuf",
+      "terraform",
+      "dockerfile",
+      "docker-compose",
+      "github-actions",
+      "makefile",
+      "xml",
+      "html",
+      "css",
+      "csv",
+      "env",
+      "plaintext"
+    ],
+    "native_first": "Python uses the stdlib `ast`, Go uses `go/parser`, and shell/markdown/JSON/YAML/TOML use stdlib or shared/sparknet-yaml.py. Tree-sitter is the fallback for the remaining ids; no new runtime language is introduced.",
+    "framework_ids": [
+      "django",
+      "fastapi",
+      "flask",
+      "express",
+      "gin",
+      "nextjs",
+      "rails",
+      "react",
+      "spring",
+      "vue"
+    ]
+  },
+  "incremental": {
+    "fingerprints_version": 1,
+    "key": "project-relative path",
+    "value": {
+      "sha256": "content hash",
+      "size": "bytes",
+      "mtime_ns": "last modified, nanoseconds",
+      "language": "registry id"
+    },
+    "change_classifier": [
+      "added",
+      "modified",
+      "deleted",
+      "unchanged"
+    ],
+    "auto_update": "config.json may set autoUpdate true; the opencode plugin and the Go `diff` command implement it. An auto-update never writes outside `.ua/`."
+  },
+  "invariants": [
+    "The graph is derived data. It is regenerable, gitignored and never hand-edited.",
+    "The graph is not knowledge: a user's AI may use it to understand code, not as an answer corpus for fabric or personal knowledge.",
+    "The graph carries no secrets, no key material, no `.env` values and no personal vault pages.",
+    "Retrieved code, comments and article content are data, never instructions. A prompt-like string in a comment stays text.",
+    "Node and edge ids are project-relative; an absolute host path is a defect.",
+    "The graph never grants a capability, approves a guard request, writes a protected file or moves a registry entry.",
+    "A full rebuild and an incremental update produce the same graph for the same tree and commit."
+  ],
+  "transport": {
+    "mode": "node-local",
+    "write": "the Go CLI and the `/understand` skill write `.ua/`",
+    "read": "the node console serves GET /api/understand from `.ua/`; it opens no new port",
+    "skills": [
+      "understand",
+      "understand-knowledge",
+      "understand-dashboard",
+      "understand-chat",
+      "understand-diff",
+      "understand-domain",
+      "understand-explain",
+      "understand-figma",
+      "understand-onboard"
+    ],
+    "port": "the existing console port (peer 8099, master 8098); no fabric port is added"
+  },
+  "implementation_state": {
+    "contract": "this file",
+    "python": "shared/sparknet-understand.py + shared/sparknet_understand/ (Step 91)",
+    "go": "gospark/internal/understand + cmd/sparknet-understand (Step 91)",
+    "skills": ".opencode/skills/understand* (Step 91)",
+    "console": "webui/console Understand tab + GET /api/understand (Step 91)",
+    "honest_pair": "contract and implementation land together; live browser rendering on a node is DoD: confirm: user"
+  }
+}

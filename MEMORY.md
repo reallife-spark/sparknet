@@ -2,12 +2,12 @@
 > Standing state only. Read at session start; **replace, never append**.
 > History belongs in `log.md` and `sessions/YYYY-MM-DD.md`; pre-2026-10-31
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
-Updated: 2026-11-08
+Updated: 2026-11-09
 ## Plan cursor
-- `PLAN.md` — `current: done`; Step 90 closed 2026-11-08. Step 89 is archived in `_archives/PLAN_FULL_2026-11-08.md`.
-- Critical open items: none from Phase 8. All 416 rows are terminal: 54 fixed, 186 reviewed-clean, 176 test-verified.
-- Phase 8: closed 2026-11-08; register and machine-readable inventory are in `_archives/`.
-- 89H/89I: private loopback OCI registry (`master-node/services/sparknet-container-registry.py`, port 5000, staged unit), GitFlow policy (`shared/sparknet-gitflow.py`), self-improvement source/target branches, signed package distribution. Registry live loopback probe passed on agx64 2026-11-08.
+- `PLAN.md` — `current: 91`; 91A–91G implemented and `make ci` green. 91H is local-only: peer/master bundles verified, goagx staged/verified/copied; `make drift-check` waits on `make goagx-publish`.
+- Peer Step 19 and Master Step 28 are open on their live-leg confirmations.
+- Critical open items: publish the goagx release; confirm live issue delivery and live browser surfaces on the pair.
+- Phase 8 remains closed: 54 fixed, 186 reviewed-clean, 176 test-verified; register and inventory in `_archives/`.
 ## Live fabric
 - **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`). Peer egress only to Master.
 - Master: signer/ledger/parity, 8088 admin, 8098 console, 8090/8091 intake, 4220–4223, 4201/4202 share, 4204 engine, Qdrant 6333, teacher.
@@ -25,6 +25,8 @@ Updated: 2026-11-08
 - Keys live in `$SPARKNET_STATE_DIR` at 0700/0600; never in git or a vault.
 - Live fleet uses iptables and userspace WireGuard.
 - Registry ships empty; fresh nodes grant nothing.
+- Understand graph is a build artifact (`.ua/`); issues are work items (`.scratch/issues/`). Neither is knowledge or authority.
+- Base skill tree: 80 skills (33 wiki, 9 understand, 38 mattpocock); role catalogs peer 125 / master 1614.
 ## Security hardening 2026-11-08
 - Signer: **live on agx64** as root with a root-owned 0600 operational key, socket group `sparknet-signer` at 0660, and the exact caller allowlist; probe succeeds, direct `python3 -c` is refused. Verifies ledger against the pinned operational key before signing. See `master-node/docs/signer-isolation.md`.
 - Ledger: `verify_chain(..., expected_pubkey_b64)`; CLI pins from `--pubkey` or the trust root. Forward key rotation is accepted; a return to an old key after the current key took over is refused. Live 54-block ledger verified 2026-11-08.

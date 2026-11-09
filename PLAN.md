@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
-updated: 2026-11-08
-current: done
+updated: 2026-11-09
+current: 91
 ---
 
 # sparknet — Active Plan
@@ -61,6 +61,55 @@ current: done
     186 reviewed-clean and 176 test-verified. `make phase8-closure-check`,
     `make test-all`, `make ci`, signed bundle verification, signed goagx
     verification and `make drift-check` are green.
+
+## Step 91 — Understand-Anything + Matt Pocock integration
+
+- [ ] **Step 91** — Port Understand-Anything to Python/Go, add its skills and
+  console surface, and integrate the Matt Pocock engineering skills with a
+  local issue tracker whose work items reach the Master over a signed route.
+  - [x] **91A — Contracts and provenance.** Add `contracts/understand-schema.json`
+    and `contracts/issue-schema.json`; add the peer-held `issue-report`
+    capability; add the knowledge-flow rows; name the `/api/v1/issues` route on
+    8090; record `.scratch/issues` as local work items; update the contract
+    manifest and README.
+  - [x] **91B — Python core.** Native-first extractors (`ast`, `go/parser`,
+    shell, markdown, JSON/YAML/TOML) plus the tree-sitter fallback; graph
+    normalize/merge/validate; knowledge, domain, figma and incremental
+    analyzers; the JSON stdin/stdout parser seam. Tests and golden graphs.
+  - [x] **91C — Go service.** `internal/understand` walk/ignore/fingerprint/
+    batch/store/query/diff/export and `cmd/sparknet-understand`; no cgo, no
+    duplicate parser; ADR 0005. Tests.
+  - [x] **91D — Skills and plugin.** Vendor the nine `/understand*` skills,
+    rewrite helpers to call the Go/Python CLI, and port the auto-update and
+    stale-check hooks to `.opencode/plugin/understand-anything.ts`.
+  - [x] **91E — Console.** Add the Understand tab to `webui/console` as
+    server-rendered HTML/CSS with a small vanilla-JS graph module; add
+    `GET /api/understand` and `/understand`; enable it in both role configs.
+  - [x] **91F — Matt Pocock skills.** Add the pinned vendor family and
+    `.families.json`; teach `sync-wiki-skills.py` not to prune it; add the
+    engineering set to `PEER_SKILLS`; run `setup-matt-pocock-skills` in the
+    root, peer and master workspaces with the local markdown tracker.
+  - [x] **91G — Issue flow.** Peer pusher, Master `POST /api/v1/issues`
+    listener, redaction, store, triage state and the Master Issues tab. Signed
+    round-trip and refusal tests.
+  - [ ] **91H — Bundle and gates.** Regenerate goagx (never hand-edit), update
+    SBOM/notices and `.gitignore`, run the full gate suite.
+  - **DoD**: `make validate`, `make contract-test`, `make render-check`,
+    `make test-all`, `make ci`, `make lint`, `make shellcheck`,
+    `make role-skills-check`, `make wiki-verify`, `make sbom-check`,
+    `make drift-check` and `make bundle-verify` are green; the three workspaces
+    load the skills and the issue tracker; the console renders the graph; the
+    signed issue round-trip passes locally. Live cross-node and live browser
+    legs are `DoD: confirm: user`.
+
+  - **Status 2026-11-09 — 91A–91G verified; 91H local-only.** Contracts,
+    Python core, Go service, `/understand*` skills, HTML/CSS console tab,
+    Matt Pocock family and the signed issue round-trip are implemented and
+    covered by `make ci`. Peer and master bundles were rebuilt and verified;
+    the goagx tree was staged, verified and copied into the submodule. The
+    published goagx remote still needs `make goagx-publish`, so
+    `make drift-check` is red until that operator action; live cross-node and
+    live browser legs remain `DoD: confirm: user`.
 
 ## Standing verification rules
 

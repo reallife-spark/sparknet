@@ -471,5 +471,13 @@
     "authorised_senders": "recorded in 00_System/user.md (the record is the operator's, and who may push work onto this node is an operator decision)",
     "transport": "the RFI answer leg is built \u2014 a Master-signed answer arrives on POST /api/v1/rfi (guard, 9090) and is installed into 01_Inbox with an inbox_acceptance record (see phase_boundary and rfi-schema.json). The request leg, the email service and the dispatch bridge as a server are not built.",
     "notification": "an item that lands in 01_Inbox over the transport is notified to the human, because acceptance is a human act and an unnoticed item is an unaccepted one. The node's own mechanism is shared/sparknet-notify.py: a durable arrival spool (<state-dir>/notifications/arrivals.jsonl, 0600) plus a best-effort KDE Connect ping. The fabric-root plugin (scripts/plugins/kde-notify.ts) is deliberately not bundled into nodes, so this is the node-local path, and the Master console's ping delegates to the same module rather than keeping a second copy. It never blocks or undoes the install, and it is the alert, not the audit trail \u2014 the signed inbox_acceptance block is the record. Real-time push to a remote operator from a headless peer is not this: a peer egresses only to the Master, so that rides Phase 4 telemetry, and a peer with no kdeconnect-cli honestly no-ops the ping while still leaving the spool row."
+  },
+  "local_work_items": {
+    "purpose": "The Matt Pocock engineering skills write work items under `.scratch/issues/`; those files are operational tracker entries, not vault notes.",
+    "location": ".scratch/issues/<id>.md",
+    "not_a_vault_dir": "`.scratch/` is gitignored, machine-local and outside the numbered layout. It is not indexed by the memory gateway, not served by the knowledge graph, and not an answer corpus.",
+    "frontmatter": "`sparknet-issue/1`, defined normatively in contracts/issue-schema.json; a vault tracking block never applies to a `.scratch` file.",
+    "transport": "An issue reaches the Master as a signed, redacted work-item report on POST /api/v1/issues (8090) under the peer-held `issue-report` capability. It never enters 01_Inbox and never becomes knowledge.",
+    "redaction": "No secret value, key, token, password, personal page or private conversation may appear in a title, body or link. The peer refuses before send; the Master refuses before store."
   }
 }

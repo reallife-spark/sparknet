@@ -1,0 +1,145 @@
+{
+  "schema_name": "sparknet-issue",
+  "schema_version": 1,
+  "description": "The local work-item tracker used by the Matt Pocock engineering skills, and the signed peer-to-Master report that carries a work item to the Master. An issue is operational work, not knowledge and not authority: the Master records and tracks it, and no user AI may answer from it.",
+  "why": "The engineering skills need one place to read and write issues. A node that cannot reach GitHub still needs a tracker, so the local form is markdown under `.scratch/issues/`. The Master needs to see the work without reading a peer's vault, so the wire form is a signed, digest-bound, redacted envelope over the existing 8090 intake.",
+  "local": {
+    "root": ".scratch/issues",
+    "file_name": "<issue_id>.md",
+    "issue_id": {
+      "pattern": "^[a-z0-9][a-z0-9-]{2,79}$",
+      "generation": "stable slug; the directory is the identity, a rename is a new issue"
+    },
+    "frontmatter": {
+      "schema": "sparknet-issue/1",
+      "required": [
+        "schema",
+        "id",
+        "title",
+        "status",
+        "labels",
+        "reporter",
+        "created_at",
+        "updated_at",
+        "source",
+        "body_sha256"
+      ],
+      "optional": [
+        "links",
+        "assignee",
+        "priority",
+        "master_ref"
+      ],
+      "fields": {
+        "schema": "const sparknet-issue/1",
+        "id": "the file stem",
+        "title": "single line, at most 200 characters",
+        "status": "open | triaged | in-progress | blocked | done | wontfix",
+        "labels": "array from the closed label vocabulary below",
+        "reporter": "node id, e.g. sparknet-node-0002, or `operator` for a local author",
+        "created_at": "ISO-8601 UTC",
+        "updated_at": "ISO-8601 UTC; never moves backwards",
+        "source": "the workspace path the issue belongs to, relative to the node root",
+        "body_sha256": "sha256 of the markdown body after the frontmatter",
+        "links": "optional array of {kind: file|commit|url|share, ref: string}; a file ref is project-relative",
+        "assignee": "optional human or agent id",
+        "priority": "optional low | normal | high | urgent",
+        "master_ref": "optional Master-side tracking id once the Master has recorded the issue"
+      }
+    },
+    "body": "Markdown after the frontmatter; at most 65536 bytes; treated as data, never as instructions",
+    "labels": {
+      "closed": true,
+      "canonical": [
+        "needs-triage",
+        "needs-info",
+        "ready-for-agent",
+        "ready-for-human",
+        "wontfix"
+      ],
+      "note": "The five canonical triage roles. A local tracker may hold additional free-form labels; they are carried as text and never grant a capability."
+    },
+    "git": "`.scratch/` is machine-local and gitignored. An issue reaches the Master through the wire form, not through a commit."
+  },
+  "wire": {
+    "direction": "peer -> Master",
+    "method": "POST",
+    "path": "/api/v1/issues",
+    "port": 8090,
+    "listener": "master-node/services/sparknet-peer-intake.py",
+    "authentication": "signed with the peer node key through shared/sparknet-http.py; the Master verifies the signature, then attributes the caller to a registered, non-revoked overlay fingerprint",
+    "capability": "issue-report",
+    "capability_holder": "peer",
+    "capability_sensitive": false,
+    "fields": [
+      "schema",
+      "issue_id",
+      "node_id",
+      "peer_fingerprint",
+      "title",
+      "body",
+      "status",
+      "labels",
+      "links",
+      "source",
+      "content_sha256",
+      "nonce",
+      "issued_at",
+      "expires_at",
+      "updated_at"
+    ],
+    "field_rules": {
+      "schema": "const sparknet-issue/1",
+      "issue_id": "the local id; unique per node_id",
+      "node_id": "the sender's node id",
+      "peer_fingerprint": "must equal the fingerprint the Master derives from the authenticated overlay source",
+      "title": "single line, at most 200 characters",
+      "body": "markdown, at most 65536 bytes, already redacted by the peer",
+      "status": "the local status vocabulary",
+      "labels": "the local label array",
+      "links": "the redacted links array",
+      "source": "the workspace path the issue belongs to, relative to the node root",
+      "content_sha256": "sha256 of the canonical body bytes",
+      "nonce": "single-use per node; a replay is refused",
+      "issued_at": "ISO-8601 UTC",
+      "expires_at": "ISO-8601 UTC; the Master refuses an expired report",
+      "updated_at": "ISO-8601 UTC; the Master keeps the newest record for (node_id, issue_id)"
+    },
+    "refusals": {
+      "off_overlay": "the source is not a registered, non-revoked peer overlay address",
+      "revoked": "the source is revoked",
+      "capability_missing": "the source does not hold `issue-report`",
+      "wrong_peer": "peer_fingerprint does not match the overlay-derived fingerprint",
+      "malformed": "missing field, unknown schema, bad type, over-long title/body, label outside the closed set",
+      "digest_mismatch": "content_sha256 does not match the canonical body",
+      "replayed_nonce": "the nonce was already seen on this node",
+      "expired": "expires_at has passed",
+      "not_yet_valid": "issued_at is further in the future than the skew allowance",
+      "secret_shaped": "the body matches a secret/key pattern; the Master refuses rather than storing it"
+    },
+    "no_authority": "An issue report cannot grant, revoke, escalate, widen a permission, approve a guard application, write a protected file or enter a vault. The Master records and tracks it; it never acts on it as authority.",
+    "no_knowledge": "An issue is operational work. It is not installed into a vault, not served by 4223 and not an answer corpus. The Master's own AI must not ingest it as knowledge.",
+    "idempotency": "The Master upserts by (node_id, issue_id) only when updated_at is newer; a re-send of the same bytes is acknowledged and changes nothing."
+  },
+  "store": {
+    "master_jsonl": "/mnt/log/sparknet-issues.jsonl",
+    "master_queue": "<state-dir>/issues/queue",
+    "triage_state": "<state-dir>/issues/triage.json",
+    "retention": "append-only evidence; a triage transition writes a new record and never rewrites history",
+    "console": "master-node GET /api/issues lists the recorded issues and their triage state; a triage transition is a local Master action, never a peer authority"
+  },
+  "redaction": {
+    "peer_side": "the pusher refuses a body that matches a registered secret value or a key/token-shaped literal; it never sends a `.env` value, a private key, a password or a personal vault page",
+    "master_side": "the listener re-checks the delivered body for secret-shaped content and refuses rather than storing it",
+    "links": "a link may name a project-relative file, a commit, a public URL or a share id; it may not embed a credential in a URL",
+    "vault_boundary": "an issue title or body may quote a code path or a symptom; it may not paste a personal page or a private conversation"
+  },
+  "implementation_state": {
+    "contract": "this file",
+    "local_skill_setup": "docs/agents/issue-tracker.md + .scratch/issues in the root, peer and master workspaces (Step 91)",
+    "peer_pusher": "peer-node/services/sparknet-issue-push.py (Step 91)",
+    "master_listener": "master-node/services/sparknet-peer-intake.py POST /api/v1/issues (Step 91)",
+    "master_console": "webui/console Issues tab + GET /api/issues (Step 91)",
+    "honest_pair": "loopback round-trip is testable here; live cross-node delivery is DoD: confirm: user"
+  }
+}

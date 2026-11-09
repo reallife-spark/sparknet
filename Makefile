@@ -83,7 +83,7 @@ layout: ## Show the repository layout
 	  "├── webui/               read-only Sparknet console, Caddyfile and Open WebUI patch" \
 	  "├── tests/               fabric + vendored-skill tests" \
 	  "├── sbom/                generated CycloneDX SBOM" \
-	  "└── .opencode/skills/    vendored wiki suite (33 skills: 32 vendored + 1 local)"
+	  "└── .opencode/skills/    base skills (80: wiki suite + understand + mattpocock)"
 
 share-rehearsal: ## Three-node loopback share rehearsal (offer, payload, 4203 queue, signed lift)
 	@scripts/sparknet-share-rehearsal.sh $(if $(WORK),--work "$(WORK)")
@@ -468,11 +468,27 @@ env-init: ## Write every vault's .env + wiki dirs from its .env.example
 
 wiki-sync: ## Re-vendor .opencode/skills from the farm, applying local patches
 	@$(PY) scripts/sync-wiki-skills.py --apply
+	@$(PY) scripts/sync-understand-skills.py --apply
+	@$(PY) scripts/sync-mattpocock-skills.py --apply
 	@echo
 	@$(MAKE) --no-print-directory wiki-verify
 
 wiki-verify: ## Fail if the vendored suite drifted from its pinned source
 	@$(PY) scripts/sync-wiki-skills.py --check
+	@$(PY) scripts/sync-understand-skills.py --check
+	@$(PY) scripts/sync-mattpocock-skills.py --check
+
+understand-skills-sync: ## Re-pin the authored /understand* skill family
+	@$(PY) scripts/sync-understand-skills.py --apply
+
+understand-skills-check: ## Verify the authored /understand* skill family
+	@$(PY) scripts/sync-understand-skills.py --check
+
+mattpocock-sync: ## Re-vendor the Matt Pocock engineering skill family
+	@$(PY) scripts/sync-mattpocock-skills.py --apply
+
+mattpocock-check: ## Verify the Matt Pocock engineering skill family
+	@$(PY) scripts/sync-mattpocock-skills.py --check
 
 wiki-preflight: ## Prove the vendored skills resolve the vault you are standing in
 	@source "$(VAULT_ROOT)/scripts/sparknet-wiki-env.sh"

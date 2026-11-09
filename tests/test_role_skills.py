@@ -35,10 +35,10 @@ def test_sync_check_passes():
     assert result.returncode == 0, result.stderr
 
 
-def test_peer_catalog_is_the_expected_90():
+def test_peer_catalog_is_the_expected_set():
     sync = load_sync()
     data = manifest(PEER)
-    assert data["counts"]["skills"] == 90
+    assert data["counts"]["skills"] == len(sync.PEER_SKILLS)
     assert set(data["skills"]) == set(sync.PEER_SKILLS)
 
 
