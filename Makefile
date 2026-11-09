@@ -236,7 +236,7 @@ shellcheck: ## shellcheck tracked scripts (provisions the pinned binary, then ru
 	@set -e; \
 	$(shellcheck-resolve); \
 	echo "shellcheck: $$("$$sc" --version | awk 'NR==2 {print $$2}') ($$sc)"; \
-	files="$$( { git -C "$(VAULT_ROOT)" ls-files '*.sh' | grep -v '/\.opencode/skills/' || true; \
+	files="$$( { git -C "$(VAULT_ROOT)" ls-files '*.sh' | grep -v '\.opencode/skills/' || true; \
 		if [ -f "$(VAULT_ROOT)/scripts/sparknet" ]; then echo scripts/sparknet; fi; } | sort -u )"; \
 	if [ -z "$$files" ]; then echo "shellcheck: no tracked shell scripts"; exit 0; fi; \
 	printf '%s\n' "$$files" | xargs "$$sc"
