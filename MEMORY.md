@@ -4,9 +4,9 @@
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
 Updated: 2026-11-09
 ## Plan cursor
-- `PLAN.md` — `current: 91`; 91A–91G implemented and `make ci` green. 91H is local-only: peer/master bundles verified, goagx staged/verified/copied; `make drift-check` waits on `make goagx-publish`.
-- Peer Step 19 and Master Step 28 are open on their live-leg confirmations.
-- Critical open items: publish the goagx release; confirm live issue delivery and live browser surfaces on the pair.
+- `PLAN.md` — `current: 91`; 91A–91H complete locally and `make ci`/`drift-check` green. goagx `fd0e573` is published and pinned. Live issue delivery and live browser surfaces remain `DoD: confirm: user`.
+- Peer Step 19 and Master Step 28 are open only on their live-leg confirmations; their code is committed and pinned.
+- Critical open items: confirm live issue delivery and live browser surfaces on the pair; role precommit still reports the pre-existing invalid `peer-node/02_Daily/2026-11-02.md` daily note.
 - Phase 8 remains closed: 54 fixed, 186 reviewed-clean, 176 test-verified; register and inventory in `_archives/`.
 ## Live fabric
 - **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`). Peer egress only to Master.

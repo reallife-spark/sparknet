@@ -92,7 +92,7 @@ current: 91
   - [x] **91G — Issue flow.** Peer pusher, Master `POST /api/v1/issues`
     listener, redaction, store, triage state and the Master Issues tab. Signed
     round-trip and refusal tests.
-  - [ ] **91H — Bundle and gates.** Regenerate goagx (never hand-edit), update
+  - [x] **91H — Bundle and gates.** Regenerate goagx (never hand-edit), update
     SBOM/notices and `.gitignore`, run the full gate suite.
   - **DoD**: `make validate`, `make contract-test`, `make render-check`,
     `make test-all`, `make ci`, `make lint`, `make shellcheck`,
@@ -102,14 +102,15 @@ current: 91
     signed issue round-trip passes locally. Live cross-node and live browser
     legs are `DoD: confirm: user`.
 
-  - **Status 2026-11-09 — 91A–91G verified; 91H local-only.** Contracts,
-    Python core, Go service, `/understand*` skills, HTML/CSS console tab,
-    Matt Pocock family and the signed issue round-trip are implemented and
-    covered by `make ci`. Peer and master bundles were rebuilt and verified;
-    the goagx tree was staged, verified and copied into the submodule. The
-    published goagx remote still needs `make goagx-publish`, so
-    `make drift-check` is red until that operator action; live cross-node and
-    live browser legs remain `DoD: confirm: user`.
+  - **Status 2026-11-09 — 91A–91H complete locally; live legs pending.** The
+    Step 91 code, contracts, skills, role issue paths and Go understand service
+    are committed and pinned: goSpark `2aaeae7`, peer `35e92bf`, master
+    `ce47283`. Peer and master bundles were rebuilt and verified. The AGX
+    distribution was staged from fabric `6a95f56`, verified (8,093 files, role
+    catalogs, pins, compose, no key material), published as
+    `reallife-spark/goagx` `fd0e573`, and pinned; `make drift-check` is green.
+    `make ci` is green. Live cross-node issue delivery and the live browser
+    surfaces remain `DoD: confirm: user`.
 
 ## Standing verification rules
 
