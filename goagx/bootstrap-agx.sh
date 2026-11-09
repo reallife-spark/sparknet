@@ -15,7 +15,7 @@
 #
 # Options:
 #   --gospark DIR       goSpark checkout to use (default: ./gospark when it
-#                       exists, else .cache/goSpark fetched at the pin;
+#                       exists, else .cache/gospark fetched at the pin;
 #                       forwarded to the setup script too)
 #   --allow-low-swap    continue even when swap is below the build minimum
 #   --allow-low-disk    continue even when free disk is below the image floor
@@ -28,7 +28,7 @@
 #   ./goagx/bootstrap-agx.sh --profiles embed,webui --engine vllm
 #   ./goagx/bootstrap-agx.sh --master-pub KEY --registry node-authorizations.json up
 #
-# The device needs git + credentials that can read reallife-spark/goSpark
+# The device needs git + credentials that can read reallife-spark/gospark
 # (fine-grained PAT or deploy key; the repo is private). Nothing here writes
 # outside .cache/ and peer-node/.state (via the setup script).
 set -euo pipefail
@@ -48,7 +48,7 @@ Usage: goagx/bootstrap-agx.sh [options] [sparknet-node-setup.sh args...]
 
 Options:
   --gospark DIR       goSpark checkout (default: ./gospark when present, else
-                      .cache/goSpark fetched at the pin from goagx/GOSPARK_PIN)
+                      .cache/gospark fetched at the pin from goagx/GOSPARK_PIN)
   --allow-low-swap    continue even when swap < 8 GiB (the source build
                       OOM-kills itself on a 16 GB Xavier without it)
   --allow-low-disk    continue even when free disk < ~25 GB
@@ -144,7 +144,7 @@ fetch_gospark() {
     if [ -d "$ROOT/gospark/.git" ]; then
       GOSPARK_DIR="$ROOT/gospark"
     else
-      GOSPARK_DIR="$ROOT/.cache/goSpark"
+      GOSPARK_DIR="$ROOT/.cache/gospark"
     fi
   fi
 

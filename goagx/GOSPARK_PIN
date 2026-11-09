@@ -8,6 +8,6 @@
 # A bump is a reviewed commit: change the SHA here, run
 # `make goagx-publish` and note the goSpark changelog in the release message.
 # Repo visibility is private; the device needs a fine-grained PAT or a
-# deploy key with read access to reallife-spark/goSpark.
-GOSPARK_REPO=https://github.com/reallife-spark/goSpark.git
-GOSPARK_SHA=7a72209e3dab292f1a7374a3d7eb6079273a32ba
+# deploy key with read access to reallife-spark/gospark.
+GOSPARK_REPO=https://github.com/reallife-spark/gospark.git
+GOSPARK_SHA=081340bd4442ba46c2d12f6f9725960d2d27b609

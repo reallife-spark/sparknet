@@ -43,7 +43,7 @@ map of what may cross from Master to peer and what may never cross.
 | `peer-node/USER_MANUAL.md` | The peer role: its services, scripts, units, manifests and vault. Published at the root of `sparknet-peer`. |
 | `master-node/USER_MANUAL.md` | The master role: the election arc, the three keys, the isolated signer, the ledger and the admin surface. Published at the root of `sparknet-master`. |
 | `goagx/USER_MANUAL.md` | The AGX Xavier twin: the image, the compose surface, the audio shim, the bootstrap and the publish. Published at `goagx/USER_MANUAL.md`. |
-| `gospark/USER_MANUAL.md` | The Go control and service plane, in the `gospark/` checkout (the `reallife-spark/goSpark` repository). |
+| `gospark/USER_MANUAL.md` | The Go control and service plane, in the `gospark/` checkout (the `reallife-spark/gospark` repository). |
 
 ## Quick start
 

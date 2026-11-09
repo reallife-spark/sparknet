@@ -182,14 +182,14 @@ timeout that mixes named phases with an implicit default.
 
 ```sh
 # 1. goSpark binaries (unchanged, arm64):
-make -C ../goSpark build build-gpu          # from a sibling checkout
+make -C ../gospark build build-gpu          # from a sibling checkout
 
 # 2. the image (on an arm64 host with Docker BuildKit):
 ./sparknet-node-setup.sh --platform agx build
 # equivalent manual form (build context IS the fabric root):
 docker buildx build --network=host \
   -f goagx/sparknet.agx.docker \
-  --build-context gospark=<path-to-goSpark> \
+  --build-context gospark=<path-to-gospark> \
   -t sparknet-agx-node:dev --load .
 ```
 

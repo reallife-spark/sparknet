@@ -301,7 +301,7 @@ down rather than leaving a half-serving profile.
 
 `bootstrap-agx.sh` is the device-side entry point. It preflights the
 hardware, uses `./gospark` when a fabric checkout is present (otherwise fetches
-goSpark at the pin into `.cache/goSpark`), builds it, and then hands over to the
+goSpark at the pin into `.cache/gospark`), builds it, and then hands over to the
 fabric's setup script.
 
 ```sh
@@ -345,7 +345,7 @@ judged the risk; they are not the default.
 distribution builds against. It carries two values:
 
 ```
-GOSPARK_REPO=https://github.com/reallife-spark/goSpark.git
+GOSPARK_REPO=https://github.com/reallife-spark/gospark.git
 GOSPARK_SHA=91a6ef9ad28a0f4daa3a33eb1e80a026274125fa
 ```
 

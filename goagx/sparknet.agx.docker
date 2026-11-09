@@ -139,7 +139,7 @@ ARG TARGETARCH
 
 LABEL org.opencontainers.image.title="sparknet AGX Xavier node" \
       org.opencontainers.image.description="SparkNet node image: source-built vLLM + llama.cpp/whisper.cpp + goSpark + sparknet bundle + KB precontext (NVIDIA AGX Xavier / sm_72, ARM64)." \
-      org.opencontainers.image.source="https://github.com/reallife-spark/goSpark" \
+      org.opencontainers.image.source="https://github.com/reallife-spark/gospark" \
       org.opencontainers.image.licenses="MIT"
 
 ENV DEBIAN_FRONTEND=noninteractive \
