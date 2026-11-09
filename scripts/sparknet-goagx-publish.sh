@@ -223,7 +223,7 @@ stage_into() {  # <target-dir>
     git -C "$REPO_ROOT" rev-parse "${FROM_GIT}^{commit}" >/dev/null 2>&1 \
       || die "no such ref: $FROM_GIT"
     for subtree in "${SUBTREES[@]}"; do
-      if ! git -C "$REPO_ROOT" cat-file -e "${FROM_GIT}:${subtree}" 2>/dev/null; then
+      if ! git -C "$REPO_ROOT" ls-tree "$FROM_GIT" -- "$subtree" | grep -q .; then
         die "subtree missing at $FROM_GIT: $subtree"
       fi
       case "$subtree" in
