@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
 updated: 2026-11-08
-current: 90
+current: done
 ---
 
 # sparknet — Active Plan
@@ -34,30 +34,33 @@ current: 90
 
 ## Step 90 — Phase 8 file-level remediation
 
-- [ ] **Step 90** — Review every one of the 416 files in the Phase 8
+- [x] **Step 90** — Review every one of the 416 files in the Phase 8
   inventory, patch confirmed defects and preserve behavior.
-  - [ ] **90A — Inventory and governance.** Archive Steps 75–89, add a
+  - [x] **90A — Inventory and governance.** Archive Steps 75–89, add a
     machine-readable 416-row inventory and `make phase8-check`; no file may be
     left `pending` at closure.
-  - [ ] **90B — Shared core.** Authz, consensus, election, provenance, install,
+  - [x] **90B — Shared core.** Authz, consensus, election, provenance, install,
     memory gateway, HTTP/YAML/loader and associated tests.
-  - [ ] **90C — Master.** Signer, ledger, intake, distill, admin/vector/uplift,
+  - [x] **90C — Master.** Signer, ledger, intake, distill, admin/vector/uplift,
     scheduler, RFI/share and scripts/tests.
-  - [ ] **90D — Peer.** Guard, bridge, OpenCode engine, registry client,
+  - [x] **90D — Peer.** Guard, bridge, OpenCode engine, registry client,
     provisioner, share, telemetry/RFI and WireGuard scripts/tests.
-  - [ ] **90E — goSpark.** Authz, gateway, kvtransfer, transport, server, memory,
+  - [x] **90E — goSpark.** Authz, gateway, kvtransfer, transport, server, memory,
     registryfile, commands, proto and tests; separate repository commits.
-  - [ ] **90F — Scripts, goagx, webui.** Shell help/syntax, bundle/model/vector
+  - [x] **90F — Scripts, goagx, webui.** Shell help/syntax, bundle/model/vector
     tools, image surface and web UI helpers.
-  - [ ] **90G — Tests.** Verify every test can fail for its claimed bug; add a
+  - [x] **90G — Tests.** Verify every test can fail for its claimed bug; add a
     regression for every fixed defect; gate live-only checks.
-  - [ ] **90H — Closure.** No `pending` or `needs-decision`; update the register;
+  - [x] **90H — Closure.** No `pending` or `needs-decision`; update the register;
     run all gates; publish goagx; set `current: done`.
   - **DoD**: all 416 rows have a verdict and evidence; every `fixed` row names a
     regression test or an explicit no-test reason; `make phase8-closure-check`,
     `make test-all`, `make ci`, both bundle verifications, `make -C gospark ci`,
     `make drift-check` and the role suites are green.
-  - **Status 2026-11-08:** Step 90A begins; the register is the execution annex.
+  - **Status 2026-11-08 — CLOSED.** All 416 rows are terminal: 54 fixed,
+    186 reviewed-clean and 176 test-verified. `make phase8-closure-check`,
+    `make test-all`, `make ci`, signed bundle verification, signed goagx
+    verification and `make drift-check` are green.
 
 ## Standing verification rules
 

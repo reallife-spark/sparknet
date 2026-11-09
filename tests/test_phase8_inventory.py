@@ -42,7 +42,7 @@ def test_inventory_matches_the_human_register() -> None:
 
     rows = []
     for line in REGISTER.read_text(encoding="utf-8").splitlines():
-        match = re.match(r"^\| `([^`]+)` \| (\d+) \| (\w+) \| (\w+) \|$", line)
+        match = re.match(r"^\| `([^`]+)` \| (\d+) \| (\w+) \| ([^|]+) \|", line)
         if match:
             rows.append(match.groups())
     assert len(rows) == 416

@@ -4,9 +4,9 @@
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
 Updated: 2026-11-08
 ## Plan cursor
-- `PLAN.md` — `current: 90`; Step 90 is the 416-file Phase 8 remediation. Step 89 is archived in `_archives/PLAN_FULL_2026-11-08.md`.
-- Critical open items: Step 90 is active; 52 fixed / 186 reviewed-clean / 176 test-verified / 2 needs-decision. The remaining items are unsigned bundle/goagx verify execution.
-- Phase 8: closed 2026-11-08. All 416 files are dispositioned; high-risk audit findings (registry replay, signer/verifier asymmetry, script injection, peer pin, patch mode, WG injection, proxy bounds, guard audit, WLAN) are fixed.
+- `PLAN.md` — `current: done`; Step 90 closed 2026-11-08. Step 89 is archived in `_archives/PLAN_FULL_2026-11-08.md`.
+- Critical open items: none from Phase 8. All 416 rows are terminal: 54 fixed, 186 reviewed-clean, 176 test-verified.
+- Phase 8: closed 2026-11-08; register and machine-readable inventory are in `_archives/`.
 - 89H/89I: private loopback OCI registry (`master-node/services/sparknet-container-registry.py`, port 5000, staged unit), GitFlow policy (`shared/sparknet-gitflow.py`), self-improvement source/target branches, signed package distribution. Registry live loopback probe passed on agx64 2026-11-08.
 ## Live fabric
 - **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`). Peer egress only to Master.
