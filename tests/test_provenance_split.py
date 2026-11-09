@@ -1,10 +1,10 @@
-"""Stage 1 of ADR-0006: one facade over provenance primitives and scanning.
+"""One provenance facade over lifecycle modules (ADR-0006/0007).
 
-The split is intentionally narrow. ``base`` owns the canonical form, crypto
-loaders, contract reader, time/key-path helpers and shared key-shaped patterns;
-``scan`` owns the secret detector. Every other lifecycle stays in the facade
-until Stage 2, so this suite pins the seam that exists today rather than the
-one the final split will add.
+The facade stays the only path callers load. ``base`` owns the canonical form,
+crypto loaders, contract reader, time/key-path helpers and shared patterns;
+``scan`` owns secret scanning; ``note``, ``ledger`` and ``grant`` own their
+lifecycle seams. This suite pins the module boundaries and the compatibility
+surface so a future change cannot quietly reintroduce a second implementation.
 """
 
 from __future__ import annotations
@@ -20,12 +20,15 @@ ROOT = Path(__file__).resolve().parent.parent
 SHARED = ROOT / "shared"
 BASE_PATH = SHARED / "sparknet-provenance-base.py"
 SCAN_PATH = SHARED / "sparknet-provenance-scan.py"
+NOTE_PATH = SHARED / "sparknet-provenance-note.py"
+LEDGER_PATH = SHARED / "sparknet-provenance-ledger.py"
+GRANT_PATH = SHARED / "sparknet-provenance-grant.py"
 FACADE_PATH = SHARED / "sparknet-provenance.py"
 YAML_PATH = SHARED / "sparknet-yaml.py"
 
 # Every name an external caller or test reaches through the facade today. This
 # is the compatibility surface, including the private names callers already
-# use; Stage 2 must keep all of them.
+# use; the lifecycle split must keep all of them.
 COMPAT_NAMES = {
     "CO_SIGNATURE_FIELDS",
     "DEFAULT_SHARED_DIR",
@@ -116,18 +119,33 @@ def scan() -> ModuleType:
 
 
 @pytest.fixture(scope="module")
+def note() -> ModuleType:
+    return _load("sparknet_provenance_note", NOTE_PATH)
+
+
+@pytest.fixture(scope="module")
+def ledger() -> ModuleType:
+    return _load("sparknet_provenance_ledger", LEDGER_PATH)
+
+
+@pytest.fixture(scope="module")
+def grant() -> ModuleType:
+    return _load("sparknet_provenance_grant", GRANT_PATH)
+
+
+@pytest.fixture(scope="module")
 def yaml_module() -> ModuleType:
     return _load("sparknet_yaml", YAML_PATH)
 
 
 @pytest.fixture(scope="module")
 def facade() -> ModuleType:
-    return _load("sparknet_provenance_stage1_test", FACADE_PATH)
+    return _load("sparknet_provenance_split_facade", FACADE_PATH)
 
 
-def _top_level_functions(path: Path) -> list[str]:
+def _top_level_functions(path: Path) -> set[str]:
     tree = ast.parse(path.read_text())
-    return [node.name for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    return {node.name for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
 
 
 def _loaded_filenames(path: Path) -> set[str]:
@@ -144,40 +162,62 @@ def _loaded_filenames(path: Path) -> set[str]:
     return names
 
 
-def test_stage_one_files_exist() -> None:
-    assert BASE_PATH.is_file()
-    assert SCAN_PATH.is_file()
-    assert FACADE_PATH.is_file()
+def test_all_lifecycle_files_exist() -> None:
+    for path in (BASE_PATH, SCAN_PATH, NOTE_PATH, LEDGER_PATH, GRANT_PATH, FACADE_PATH):
+        assert path.is_file(), path
 
 
-def test_the_one_error_class_survives_the_split(base: ModuleType, yaml_module: ModuleType, facade: ModuleType) -> None:
-    assert base.ProvenanceError is yaml_module.ProvenanceError
-    assert facade.ProvenanceError is yaml_module.ProvenanceError
+def test_one_error_class_survives_the_split(
+    base: ModuleType,
+    note: ModuleType,
+    ledger: ModuleType,
+    grant: ModuleType,
+    yaml_module: ModuleType,
+    facade: ModuleType,
+) -> None:
+    for module in (base, note, ledger, grant, facade):
+        assert module.ProvenanceError is yaml_module.ProvenanceError
     assert facade.FrontmatterError is yaml_module.FrontmatterError
     assert issubclass(facade.FrontmatterError, facade.ProvenanceError)
 
 
-def test_facade_reexports_exactly_the_stage_one_interfaces(
-    base: ModuleType, scan: ModuleType, facade: ModuleType
+def test_facade_reexports_every_lifecycle_interface(
+    base: ModuleType,
+    scan: ModuleType,
+    note: ModuleType,
+    ledger: ModuleType,
+    grant: ModuleType,
+    facade: ModuleType,
 ) -> None:
-    for module in (base, scan):
+    for module in (base, scan, note, ledger, grant):
         for name in module.__all__:
-            assert hasattr(facade, name), f"facade lost stage-one export {name}"
+            assert hasattr(facade, name), f"facade lost export {name}"
             assert getattr(facade, name) is getattr(module, name), f"{name} is not the same object"
 
 
 def test_the_compatibility_surface_is_still_present(facade: ModuleType) -> None:
     missing = sorted(name for name in COMPAT_NAMES if not hasattr(facade, name))
     assert missing == [], f"facade lost caller-visible names: {missing}"
+    assert set(facade.__all__) >= COMPAT_NAMES
     assert callable(facade.main)
 
 
-def test_primitives_have_one_definition_and_lifecycle_verbs_stay_out(
-    base: ModuleType, scan: ModuleType, facade: ModuleType
+def test_facade_has_only_the_cli_adapter() -> None:
+    assert _top_level_functions(FACADE_PATH) == {"_resolve_vault", "main"}
+
+
+def test_each_lifecycle_owns_its_verbs(
+    base: ModuleType,
+    scan: ModuleType,
+    note: ModuleType,
+    ledger: ModuleType,
+    grant: ModuleType,
 ) -> None:
-    base_functions = set(_top_level_functions(BASE_PATH))
-    scan_functions = set(_top_level_functions(SCAN_PATH))
-    facade_functions = set(_top_level_functions(FACADE_PATH))
+    base_functions = _top_level_functions(BASE_PATH)
+    scan_functions = _top_level_functions(SCAN_PATH)
+    note_functions = _top_level_functions(NOTE_PATH)
+    ledger_functions = _top_level_functions(LEDGER_PATH)
+    grant_functions = _top_level_functions(GRANT_PATH)
 
     primitives = {
         "canonical_json",
@@ -196,25 +236,37 @@ def test_primitives_have_one_definition_and_lifecycle_verbs_stay_out(
         "_node_id",
     }
     assert primitives <= base_functions
-    assert not (primitives & facade_functions), "a primitive is still defined in the facade"
-    assert not (primitives & scan_functions), "the scanner reimplemented a primitive"
+    assert not (primitives & (scan_functions | note_functions | ledger_functions | grant_functions))
 
     scanner = {"scan", "_tracked_files", "_resolve_secret_ref"}
     assert scanner <= scan_functions
-    assert not (scanner & facade_functions), "the scanner is still defined in the facade"
-    assert not (scanner & base_functions), "the primitives module carries scanner policy"
+    assert not (scanner & (base_functions | note_functions | ledger_functions | grant_functions))
 
-    lifecycle = {"sign_note", "verify_note", "append_block", "write_granted_note", "verify_vault"}
-    assert not (lifecycle & base_functions), "base must not carry a lifecycle verb"
-    assert not (lifecycle & scan_functions), "scan must not carry a lifecycle verb"
-    assert lifecycle <= facade_functions, "stage 1 must leave the lifecycle verbs in the facade"
+    note_verbs = {"sign_note", "verify_note", "add_co_signature", "verify_co_signatures", "ingest_note"}
+    assert note_verbs <= note_functions
+    assert not (note_verbs & (base_functions | scan_functions | ledger_functions | grant_functions))
+
+    ledger_verbs = {"append_block", "verify_chain", "build_inbox_acceptance", "verify_vault", "checkpoint"}
+    assert ledger_verbs <= ledger_functions
+    assert not (ledger_verbs & (base_functions | scan_functions | note_functions | grant_functions))
+
+    grant_verbs = {"write_granted_note", "promote_granted_note", "patch_granted_note", "grant_scope_allows"}
+    assert grant_verbs <= grant_functions
+    assert not (grant_verbs & (base_functions | scan_functions | note_functions | ledger_functions))
 
 
-def test_scan_depends_only_on_the_primitives(scan: ModuleType, base: ModuleType) -> None:
-    filenames = _loaded_filenames(SCAN_PATH)
-    assert filenames == {"sparknet-provenance-base.py"}
-    assert scan.scan is not None
-    assert base.canonical_json({"b": 1, "a": 2}) == b'{"a":2,"b":1}'
+def test_dependency_direction_is_lifecycle_order() -> None:
+    assert _loaded_filenames(SCAN_PATH) == {"sparknet-provenance-base.py"}
+    assert _loaded_filenames(NOTE_PATH) == {"sparknet-provenance-base.py"}
+    assert _loaded_filenames(LEDGER_PATH) == {
+        "sparknet-provenance-base.py",
+        "sparknet-provenance-note.py",
+    }
+    assert _loaded_filenames(GRANT_PATH) == {
+        "sparknet-provenance-base.py",
+        "sparknet-provenance-note.py",
+        "sparknet-provenance-ledger.py",
+    }
 
 
 def test_no_provenance_module_carries_crypto() -> None:
@@ -230,3 +282,9 @@ def test_scanner_exempts_the_pattern_definitions_it_uses(scan: ModuleType) -> No
     assert "shared/sparknet-provenance.py" in scan._SCAN_EXEMPT
     assert "shared/sparknet-provenance-base.py" in scan._SCAN_EXEMPT
     assert "shared/sparknet-provenance-scan.py" in scan._SCAN_EXEMPT
+
+
+def test_acceptance_and_vault_verification_live_in_the_ledger(ledger: ModuleType, grant: ModuleType) -> None:
+    assert ledger.build_inbox_acceptance.__module__ == "sparknet_provenance_ledger"
+    assert ledger.verify_vault.__module__ == "sparknet_provenance_ledger"
+    assert grant.write_granted_note.__module__ == "sparknet_provenance_grant"

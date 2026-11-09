@@ -23,6 +23,7 @@ from sparknet_loader import load_by_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROVENANCE_PATH = REPO_ROOT / "shared" / "sparknet-provenance.py"
+PROVENANCE_LEDGER_PATH = REPO_ROOT / "shared" / "sparknet-provenance-ledger.py"
 PROPOSAL_PATH = REPO_ROOT / "shared" / "sparknet-proposal.py"
 CONTRACT = json.loads((REPO_ROOT / "contracts" / "proposal-schema.json").read_text())
 TRACKING = json.loads((REPO_ROOT / "contracts" / "tracking-schema.json").read_text())
@@ -48,8 +49,11 @@ FIXED_NOW = dt.datetime(2026, 10, 13, 12, 0, 0, tzinfo=dt.timezone.utc)
 
 @pytest.fixture(autouse=True)
 def frozen_clock(proposal: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
-    provenance = proposal._load_provenance()
-    monkeypatch.setattr(provenance, "_now", lambda: FIXED_NOW)
+    # ``provenance.now`` is owned by the ledger lifecycle, and its ``_now`` is
+    # the global that function actually calls. Patching the facade would leave
+    # the ledger module's bound primitive untouched.
+    ledger = load_by_path("sparknet_provenance_ledger", PROVENANCE_LEDGER_PATH)
+    monkeypatch.setattr(ledger, "_now", lambda: FIXED_NOW)
 
 
 def user_record_template() -> str:

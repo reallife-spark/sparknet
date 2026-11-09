@@ -1506,13 +1506,20 @@ def test_the_co_signature_shape_is_pinned_to_the_contract(tracking: dict, proven
 
 def test_the_compiled_rules_are_read_from_the_contract_at_runtime(provenance: ModuleType, tracking: dict):
     """The allowlist must not be restated in code — a restated rule goes stale."""
-    source = (REPO_ROOT / "shared" / "sparknet-provenance.py").read_text()
+    source = "\n".join(
+        (REPO_ROOT / "shared" / name).read_text()
+        for name in (
+            "sparknet-provenance.py",
+            "sparknet-provenance-note.py",
+            "sparknet-provenance-ledger.py",
+        )
+    )
     for lookup in (
         'contract()["signature"]["compiler_allowlist"]',
         'contract()["ledger_block"]["required"]',
         'contract()["approval"]["event_vocabulary"]["peer"]',
     ):
-        assert lookup in source, f"shared/sparknet-provenance.py no longer reads {lookup}"
+        assert lookup in source, f"shared/sparknet-provenance*.py no longer reads {lookup}"
     assert tracking["signature"]["compiler_allowlist"], "the allowlist may not be empty"
     assert "updated" in tracking["signature"]["compiler_allowlist"]
 

@@ -44,5 +44,6 @@
   form, crypto loaders, contract reader, time/key-path helpers and shared
   key-shaped patterns in `shared/sparknet-provenance-base.py`.
 - **provenance lifecycle** — the note, ledger, grant and scan concerns behind
-  the provenance facade. Stage 1 (ADR-0006) extracts the primitives and scan;
-  note, ledger and grant remain in the facade.
+  the provenance facade. ADR-0007 completes the split: each lifecycle has its
+  own module, while `shared/sparknet-provenance.py` is the path-stable facade
+  and CLI.

@@ -25,6 +25,7 @@ from sparknet_loader import load_by_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROVENANCE_PATH = REPO_ROOT / "shared" / "sparknet-provenance.py"
+PROVENANCE_LEDGER_PATH = REPO_ROOT / "shared" / "sparknet-provenance-ledger.py"
 CONTRACT = json.loads((REPO_ROOT / "contracts" / "tracking-schema.json").read_text())
 
 OWNER_ID = "U-10421"
@@ -1083,13 +1084,16 @@ def test_email_fails_closed_when_no_sender_is_authorised(provenance: ModuleType,
 def test_email_from_an_authorised_sender_is_treated_as_peer_origin(
     provenance: ModuleType, vault: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    real = provenance.parse_user_record
+    ledger = load_by_path("sparknet_provenance_ledger", PROVENANCE_LEDGER_PATH)
+    real = ledger.parse_user_record
 
     def with_senders(path):
         record = real(path)
         return {**record, "authorised_senders": ["alice@example.test"]}
 
-    monkeypatch.setattr(provenance, "parse_user_record", with_senders)
+    # build_inbox_acceptance lives in the ledger lifecycle; patch the module
+    # whose global the function actually reads.
+    monkeypatch.setattr(ledger, "parse_user_record", with_senders)
     # Allowed, but still untrusted: peer-origin rules apply, so a reviewer is needed.
     with pytest.raises(provenance.ProvenanceError, match="reviewer"):
         _accept(provenance, vault, source="email", sender="alice@example.test")

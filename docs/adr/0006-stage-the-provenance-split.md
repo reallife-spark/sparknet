@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (Stage 1, 2026-11-09). Stage 2 is proposed, not implemented.
+Superseded by [0007](0007-complete-the-provenance-lifecycle-split.md). Stage 1 was accepted 2026-11-09.
 
 ## Context
 
