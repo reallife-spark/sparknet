@@ -22,6 +22,11 @@ AUTHZ = load_shared("sparknet-authz.py", "sparknet_artifact_authz")
 SCHEMA = "sparknet-artifact-signature/1"
 
 
+def _artifact_name(path: Path) -> str:
+    """A stable identity for a directory tree; the temp path must never leak."""
+    return "SHA256SUMS" if path.is_dir() else path.name
+
+
 def _digest(path: Path) -> str:
     if path.is_dir():
         sums = path / "SHA256SUMS"
@@ -42,10 +47,11 @@ def _message(digest: str, name: str) -> bytes:
 def sign(path: Path, key_path: Path, out: Path) -> int:
     key = AUTHZ.load_private_key(key_path)
     digest = _digest(path)
-    signature = AUTHZ.sign_bytes(key, _message(digest, path.name))
+    name = _artifact_name(path)
+    signature = AUTHZ.sign_bytes(key, _message(digest, name))
     document = {
         "schema": SCHEMA,
-        "file": path.name,
+        "file": name,
         "sha256": digest,
         "public_key_b64": AUTHZ.public_key_b64(key.public_key()),
         "signature_b64": signature,
@@ -59,13 +65,14 @@ def verify(path: Path, signature_path: Path, pubkey_path: Path) -> int:
     document = json.loads(signature_path.read_text(encoding="utf-8"))
     if not isinstance(document, dict) or document.get("schema") != SCHEMA:
         raise SystemExit("artifact signature has an unknown schema")
-    if document.get("file") != path.name:
+    name = _artifact_name(path)
+    if document.get("file") != name:
         raise SystemExit("artifact signature names a different file")
     digest = _digest(path)
     if document.get("sha256") != digest:
         raise SystemExit("artifact digest does not match the signature")
     public = AUTHZ.load_public_key(pubkey_path)
-    if not AUTHZ.verify_signature(public, str(document.get("signature_b64") or ""), _message(digest, path.name)):
+    if not AUTHZ.verify_signature(public, str(document.get("signature_b64") or ""), _message(digest, name)):
         raise SystemExit("artifact signature does not verify under the pinned public key")
     return 0
 
