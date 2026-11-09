@@ -25,6 +25,13 @@ and each role wraps it:
 Neither role re-implements the algorithm. Neither role may edit this file to
 serve a local need; a change belongs in `contracts/` first, with both roles
 updated in the same commit.
+The per-artifact canonical forms live in one envelope catalog (`SPECS`):
+`envelope_message`, `sign_envelope` and `verify_envelope` are the generic
+interface, and the named `*_message`/`sign_*`/`verify_*` functions are thin
+adapters over it. The catalog owns shape, canonical JSON and signature
+placement; ordered policy checks stay in the named verifiers. Golden vectors in
+`tests/test_envelopes.py` pin every kind's bytes.
+
 
 ### The guard-approval projection
 

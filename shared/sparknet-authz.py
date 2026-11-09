@@ -39,6 +39,7 @@ import json
 import re
 import secrets
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -71,6 +72,7 @@ KNOWN_CAPABILITIES = frozenset(
         "cross-department-share",
         "model-uplift",
         "memory-supervise",
+        "issue-report",
     }
 )
 
@@ -92,6 +94,77 @@ REASON_NOT_YET_VALID = "not_yet_valid"
 
 class AuthzError(Exception):
     """Raised for malformed input that cannot be interpreted at all."""
+
+
+@dataclass(frozen=True)
+class EnvelopeSpec:
+    """One signed (or validation-only) artifact's canonical rules.
+
+    ``project`` returns the dict the signature covers; the generic encoder owns
+    the one canonical JSON form. The per-kind builder keeps the explicit field
+    checks and vocabulary, which is the security-sensitive part, while the
+    envelope skeleton (dict/required/extra/canonical bytes/signature placement)
+    lives once.
+    """
+
+    fields: tuple[str, ...]
+    required: tuple[str, ...]
+    signed_fields: tuple[str, ...]
+    extra_fields: tuple[str, ...] = ("signature_b64",)
+    prefix: bytes = b""
+    project: Callable[[dict[str, Any]], dict[str, Any]] | None = None
+    signed: bool = True
+    finalize: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None
+
+
+def _envelope_spec(kind: str) -> EnvelopeSpec:
+    try:
+        return SPECS[kind]
+    except KeyError as exc:
+        raise AuthzError(f"unknown envelope kind: {kind!r}") from exc
+
+
+def envelope_message(kind: str, artifact: dict[str, Any]) -> bytes:
+    """Canonical bytes for one artifact kind through the one envelope encoder."""
+    spec = _envelope_spec(kind)
+    if not isinstance(artifact, dict):
+        raise AuthzError(f"{kind} must be an object")
+    projected = (
+        spec.project(artifact)
+        if spec.project is not None
+        else {field_name: artifact.get(field_name) for field_name in spec.signed_fields}
+    )
+    return spec.prefix + json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def sign_envelope(
+    kind: str, artifact: dict[str, Any], private_key: Ed25519PrivateKey, **options: Any
+) -> dict[str, Any]:
+    """Sign one artifact, adding ``signature_b64`` beside its canonical projection."""
+    spec = _envelope_spec(kind)
+    if not spec.signed:
+        raise AuthzError(f"envelope kind {kind!r} is validation-only; it is not signed here")
+    unsigned = {key: value for key, value in artifact.items() if key != "signature_b64"}
+    signed = {**unsigned, "signature_b64": sign_bytes(private_key, envelope_message(kind, unsigned))}
+    if spec.finalize is not None:
+        signed = spec.finalize(signed, options)
+    return signed
+
+
+def verify_envelope(kind: str, artifact: Any, public_key: Ed25519PublicKey) -> bool:
+    """Verify the signature on one artifact; never raises for a refusal."""
+    spec = _envelope_spec(kind)
+    if not spec.signed or not isinstance(artifact, dict):
+        return False
+    signature = artifact.get("signature_b64")
+    if not isinstance(signature, str) or not signature:
+        return False
+    unsigned = {key: value for key, value in artifact.items() if key != "signature_b64"}
+    try:
+        message = envelope_message(kind, unsigned)
+    except AuthzError:
+        return False
+    return verify_signature(public_key, signature, message)
 
 
 # --- canonicalisation + fingerprint ------------------------------------------
@@ -119,7 +192,7 @@ def canonical_bytes(identity: dict[str, Any]) -> bytes:
     insertion order or Python version formatting. This is what the SHA-256
     fingerprint is taken over.
     """
-    return json.dumps(canonical_identity(identity), sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return envelope_message("identity", identity)
 
 
 #: Fields of a registry entry covered by the Master's signature. `revoked` is
@@ -142,7 +215,7 @@ SIGNED_FIELDS = (
 )
 
 
-def authorization_message(entry: dict[str, Any]) -> bytes:
+def _build_authorization(entry: dict[str, Any]) -> dict[str, Any]:
     """Bytes the Master actually signs: identity *and* the privileges it grants.
 
     Signing only the identity would leave `capabilities` and `overlay_ipv4`
@@ -169,7 +242,7 @@ def authorization_message(entry: dict[str, Any]) -> bytes:
         }
     except (KeyError, AuthzError, TypeError) as exc:
         raise AuthzError(f"authorization entry is malformed: {exc}") from exc
-    return json.dumps(envelope, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return envelope
 
 
 def fingerprint(identity: dict[str, Any]) -> str:
@@ -501,8 +574,7 @@ def sign_authorization(
         "department": department,
         "node_pubkey_b64": node_pubkey_b64,
     }
-    entry["signature_b64"] = base64.b64encode(master_private_key.sign(authorization_message(entry))).decode("ascii")
-    return entry
+    return sign_envelope("authorization", entry, master_private_key)
 
 
 # --- guard approvals (guard-apply) --------------------------------------------
@@ -556,7 +628,7 @@ GUARD_APPROVAL_REQUIRED = (
 )
 
 
-def guard_approval_message(approval: dict[str, Any]) -> bytes:
+def _build_guard_approval(approval: dict[str, Any]) -> dict[str, Any]:
     """Canonical bytes a guard-approval signature covers.
 
     One projection rule, shared by the signer and by every peer that verifies
@@ -590,7 +662,7 @@ def guard_approval_message(approval: dict[str, Any]) -> bytes:
     for name, value in projected.items():
         if not isinstance(value, str):
             raise AuthzError(f"guard approval field {name!r} must be a string")
-    return json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return projected
 
 
 # --- registry publications (distribution) ------------------------------------
@@ -641,7 +713,7 @@ def registry_digest(registry: dict[str, Any]) -> str:
     return hashlib.sha256(canonical_registry_bytes(registry)).hexdigest()
 
 
-def registry_publication_message(publication: dict[str, Any]) -> bytes:
+def _build_registry_publication(publication: dict[str, Any]) -> dict[str, Any]:
     """Canonical bytes a registry-publication signature covers.
 
     Like ``guard_approval_message`` this is one rule, imported by the signer and
@@ -682,7 +754,7 @@ def registry_publication_message(publication: dict[str, Any]) -> bytes:
         )
 
     projected = {name: publication[name] for name in REGISTRY_PUBLICATION_SIGNED_FIELDS}
-    return json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return projected
 
 
 def verify_registry_publication(publication: dict[str, Any], public_key: Ed25519PublicKey) -> str:
@@ -775,7 +847,7 @@ def is_expired(value: Any, now: datetime) -> bool:
 LEDGER_SIGNATURE_EXCLUDED = ("hash", "signature")
 
 
-def ledger_block_signable(block: dict[str, Any]) -> bytes:
+def _build_ledger_block(block: dict[str, Any]) -> dict[str, Any]:
     """Canonical bytes the appending node key signs for one ledger block.
 
     The signed unit is the whole *header*, not just `data`. That is the fix for
@@ -788,7 +860,7 @@ def ledger_block_signable(block: dict[str, Any]) -> bytes:
     if not isinstance(block, dict):
         raise AuthzError("ledger block must be an object")
     header = {k: v for k, v in block.items() if k not in LEDGER_SIGNATURE_EXCLUDED}
-    return json.dumps(header, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return header
 
 
 def ledger_block_hash(block: dict[str, Any]) -> str:
@@ -804,7 +876,7 @@ def ledger_block_hash(block: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
-def cluster_job_message(job: dict[str, Any]) -> bytes:
+def _build_cluster_job(job: dict[str, Any]) -> dict[str, Any]:
     """Canonical bytes signed for a cluster job, projected to CLUSTER_JOB_FIELDS.
 
     One projection rule, shared by the signer and every verifier. A second copy of
@@ -826,7 +898,7 @@ def cluster_job_message(job: dict[str, Any]) -> bytes:
     if not isinstance(subtasks, list) or not subtasks:
         raise AuthzError("cluster job subtasks must be a non-empty list")
     projected = {field: job.get(field) for field in sorted(CLUSTER_JOB_FIELDS)}
-    return json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return projected
 
 
 # --- admin requests (admin-supervise) -----------------------------------------
@@ -898,7 +970,7 @@ ADMIN_REQUEST_REQUIRED = (
 )
 
 
-def admin_request_message(request: dict[str, Any]) -> bytes:
+def _build_admin_request(request: dict[str, Any]) -> dict[str, Any]:
     """Canonical bytes signed for an admin-request, projected to ADMIN_REQUEST_FIELDS.
 
     One projection rule, shared by the signer and every peer that executes the
@@ -915,7 +987,7 @@ def admin_request_message(request: dict[str, Any]) -> bytes:
             f"unknown admin action {request['action']!r}; expected one of {', '.join(ADMIN_REQUEST_ACTIONS)}"
         )
     projected = {field: request.get(field) for field in sorted(ADMIN_REQUEST_FIELDS)}
-    return json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return projected
 
 
 # --- distillation runs --------------------------------------------------------
@@ -950,7 +1022,7 @@ DISTILLATION_RUN_REQUIRED = (
 )
 
 
-def distillation_run_message(run: dict[str, Any]) -> bytes:
+def _build_distillation_run(run: dict[str, Any]) -> dict[str, Any]:
     """Canonical bytes signed for a distillation run record."""
     if not isinstance(run, dict):
         raise AuthzError("distillation run must be an object")
@@ -958,17 +1030,11 @@ def distillation_run_message(run: dict[str, Any]) -> bytes:
     if missing:
         raise AuthzError(f"distillation run missing required field(s): {', '.join(missing)}")
     projected = {field: run.get(field) for field in DISTILLATION_RUN_FIELDS}
-    body = json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    return b"sparknet-distillation-run/1\n" + body
+    return projected
 
 
 def sign_distillation_run(run: dict[str, Any], private_key: Any, *, signed_at: str | None = None) -> dict[str, Any]:
-    if not isinstance(run, dict):
-        raise AuthzError("distillation run must be an object")
-    signed = dict(run)
-    signed["signature_b64"] = sign_bytes(private_key, distillation_run_message(run))
-    signed["signed_at"] = signed_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    return signed
+    return sign_envelope("distillation-run", run, private_key, signed_at=signed_at)
 
 
 # --- session grants ------------------------------------------------------------
@@ -1180,7 +1246,7 @@ def guard_approval_operator_allows(approval: Any, *, requires_root: bool) -> tup
     return operator_os_authorises({"operator_os": attested}, requires_root=True)
 
 
-def grant_message(grant: dict[str, Any]) -> bytes:
+def _build_grant(grant: dict[str, Any]) -> dict[str, Any]:
     """Canonical bytes a grant's signature covers, projected to GRANT_FIELDS.
 
     One projection rule, shared by the signer and every verifier — the
@@ -1202,7 +1268,7 @@ def grant_message(grant: dict[str, Any]) -> bytes:
     if parent is not None and not isinstance(parent, str):
         raise AuthzError("grant parent_grant_id must be a string or null")
     projected = {field: grant.get(field) for field in GRANT_FIELDS}
-    return json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return projected
 
 
 def mint_grant(
@@ -1282,8 +1348,7 @@ def mint_grant(
         "parent_grant_id": parent_grant_id,
         "operator_os": normalise_operator_os(operator_os),
     }
-    grant["signature_b64"] = sign_bytes(master_private_key, grant_message(grant))
-    return grant
+    return sign_envelope("grant", grant, master_private_key)
 
 
 def verify_grant(
@@ -1411,7 +1476,7 @@ SHARE_RATIFICATION_SCHEMA = "1.0"
 SHARE_RATIFICATION_DECISIONS = ("ratified", "refused")
 
 
-def share_ratification_message(ratification: dict[str, Any]) -> bytes:
+def _build_share_ratification(ratification: dict[str, Any]) -> dict[str, Any]:
     """Canonical bytes the Master's signature over a share ratification covers.
 
     Closed like the guard approval: an extra field is refused rather than left
@@ -1442,28 +1507,17 @@ def share_ratification_message(ratification: dict[str, Any]) -> bytes:
     if ratification.get("flag_retained") is not True:
         raise AuthzError("share ratification must retain the flag")
     projected = {field: ratification[field] for field in SHARE_RATIFICATION_FIELDS}
-    return json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return projected
 
 
 def sign_share_ratification(ratification: dict[str, Any], master_private_key: Ed25519PrivateKey) -> dict[str, Any]:
     """Sign one share ratification. MASTER-SIDE ONLY."""
-    unsigned = {key: value for key, value in ratification.items() if key != "signature_b64"}
-    message = share_ratification_message(unsigned)
-    return {**unsigned, "signature_b64": sign_bytes(master_private_key, message)}
+    return sign_envelope("share-ratification", ratification, master_private_key)
 
 
 def verify_share_ratification(ratification: dict[str, Any], master_public_key: Ed25519PublicKey) -> bool:
     """Verify the Master's ratification signature; refuse on any shape error."""
-    if not isinstance(ratification, dict):
-        return False
-    signature = ratification.get("signature_b64")
-    if not isinstance(signature, str) or not signature:
-        return False
-    try:
-        message = share_ratification_message(ratification)
-    except AuthzError:
-        return False
-    return verify_signature(master_public_key, signature, message)
+    return verify_envelope("share-ratification", ratification, master_public_key)
 
 
 # --- trust transitions (a belief, never a permission) -------------------------
@@ -1484,7 +1538,7 @@ TRUST_TRANSITION_FIELDS = (
 TRUST_TRANSITION_SCHEMA = "1.0"
 
 
-def trust_transition_message(transition: dict[str, Any]) -> bytes:
+def _build_trust_transition(transition: dict[str, Any]) -> dict[str, Any]:
     """Canonical bytes a Master trust-transition signature covers."""
     if not isinstance(transition, dict):
         raise AuthzError("trust transition must be an object")
@@ -1510,28 +1564,17 @@ def trust_transition_message(transition: dict[str, Any]) -> bytes:
     if transition.get("flag_preserved") is not True:
         raise AuthzError("trust transition must preserve the flag")
     projected = {field: transition[field] for field in TRUST_TRANSITION_FIELDS}
-    return json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return projected
 
 
 def sign_trust_transition(transition: dict[str, Any], master_private_key: Ed25519PrivateKey) -> dict[str, Any]:
     """Sign one trust transition. MASTER-SIDE ONLY."""
-    unsigned = {key: value for key, value in transition.items() if key != "signature_b64"}
-    message = trust_transition_message(unsigned)
-    return {**unsigned, "signature_b64": sign_bytes(master_private_key, message)}
+    return sign_envelope("trust-transition", transition, master_private_key)
 
 
 def verify_trust_transition(transition: dict[str, Any], master_public_key: Ed25519PublicKey) -> bool:
     """Verify a Master trust-transition signature; refuse on any shape error."""
-    if not isinstance(transition, dict):
-        return False
-    signature = transition.get("signature_b64")
-    if not isinstance(signature, str) or not signature:
-        return False
-    try:
-        message = trust_transition_message(transition)
-    except AuthzError:
-        return False
-    return verify_signature(master_public_key, signature, message)
+    return verify_envelope("trust-transition", transition, master_public_key)
 
 
 # --- RFI answers (request for information) ------------------------------------
@@ -1597,7 +1640,7 @@ def check_rfi_item_name(name: Any) -> str:
     return name
 
 
-def rfi_answer_message(answer: dict[str, Any]) -> bytes:
+def _build_rfi_answer(answer: dict[str, Any]) -> dict[str, Any]:
     """Canonical bytes an RFI answer's signature covers.
 
     The same anti-drift rule as every other envelope here: one projection function,
@@ -1625,7 +1668,7 @@ def rfi_answer_message(answer: dict[str, Any]) -> bytes:
     for name, value in projected.items():
         if not isinstance(value, str):
             raise AuthzError(f"rfi answer field {name!r} must be a string")
-    return json.dumps(projected, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return projected
 
 
 def sign_rfi_answer(
@@ -1657,8 +1700,7 @@ def sign_rfi_answer(
         "peer_fingerprint": peer_fingerprint,
         "request_id": request_id,
     }
-    answer["signature_b64"] = base64.b64encode(master_private_key.sign(rfi_answer_message(answer))).decode("ascii")
-    return answer
+    return sign_envelope("rfi-answer", answer, master_private_key)
 
 
 def verify_rfi_answer(
@@ -1921,6 +1963,183 @@ REASON_TELEMETRY_NOT_YET_VALID = "not_yet_valid"
 REASON_TELEMETRY_REPLAYED = "replayed_nonce"
 
 
+# --- issue reports (peer -> Master work items, signed) -------------------------
+#
+# An issue is operational work, never knowledge and never authority. The report is
+# signed with the peer node key and attributed to a registered, non-revoked overlay
+# source; the Master requires the peer-held `issue-report` capability, records the
+# item and triages it. It is never installed into a vault and never served by 4223.
+
+ISSUE_SCHEMA = "sparknet-issue/1"
+ISSUE_STATUSES = frozenset({"open", "triaged", "in-progress", "blocked", "done", "wontfix"})
+ISSUE_LABELS = frozenset({"needs-triage", "needs-info", "ready-for-agent", "ready-for-human", "wontfix"})
+ISSUE_MAX_TITLE = 200
+ISSUE_MAX_BODY = 65_536
+ISSUE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{2,79}$")
+
+ISSUE_REPORT_FIELDS = (
+    "schema",
+    "issue_id",
+    "node_id",
+    "peer_fingerprint",
+    "title",
+    "body",
+    "status",
+    "labels",
+    "links",
+    "source",
+    "content_sha256",
+    "nonce",
+    "issued_at",
+    "expires_at",
+    "updated_at",
+)
+
+ISSUE_REPORT_REQUIRED = (
+    "schema",
+    "issue_id",
+    "node_id",
+    "peer_fingerprint",
+    "title",
+    "body",
+    "status",
+    "content_sha256",
+    "nonce",
+    "issued_at",
+    "expires_at",
+    "updated_at",
+)
+
+REASON_ISSUE_MALFORMED = "malformed"
+REASON_ISSUE_WRONG_PEER = "wrong_peer"
+REASON_ISSUE_DIGEST_MISMATCH = "digest_mismatch"
+REASON_ISSUE_EXPIRED = "expired"
+REASON_ISSUE_NOT_YET_VALID = "not_yet_valid"
+REASON_ISSUE_REPLAYED = "replayed_nonce"
+
+
+def build_issue_report(
+    *,
+    issue_id: str,
+    node_id: str,
+    peer_fingerprint: str,
+    title: str,
+    body: str,
+    status: str = "open",
+    labels: list[str] | tuple[str, ...] = (),
+    links: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+    source: str = "",
+    updated_at: str | None = None,
+    now: datetime | None = None,
+    ttl_seconds: int = 300,
+    nonce: str | None = None,
+) -> dict[str, Any]:
+    """Build one signed issue-report body; never signs it (the transport does)."""
+    if not ISSUE_ID_RE.fullmatch(str(issue_id or "")):
+        raise AuthzError("issue_id must be a lowercase slug of 3..80 characters")
+    if not str(node_id or ""):
+        raise AuthzError("node_id is required")
+    if not str(peer_fingerprint or ""):
+        raise AuthzError("peer_fingerprint is required")
+    if not isinstance(title, str) or not title.strip() or len(title) > ISSUE_MAX_TITLE:
+        raise AuthzError(f"title must be a non-empty string of at most {ISSUE_MAX_TITLE} characters")
+    if not isinstance(body, str) or len(body.encode("utf-8")) > ISSUE_MAX_BODY:
+        raise AuthzError(f"body must be a string of at most {ISSUE_MAX_BODY} bytes")
+    if status not in ISSUE_STATUSES:
+        raise AuthzError(f"status must be one of {sorted(ISSUE_STATUSES)}, got {status!r}")
+    unknown = sorted(set(labels) - ISSUE_LABELS)
+    if unknown:
+        raise AuthzError(f"labels outside the closed vocabulary: {unknown}")
+    if not isinstance(links, (list, tuple)) or any(not isinstance(item, dict) for item in links):
+        raise AuthzError("links must be an array of objects")
+    if not isinstance(source, str) or len(source) > 500:
+        raise AuthzError("source must be a string of at most 500 characters")
+    moment = now or datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    stamp = moment.isoformat().replace("+00:00", "Z")
+    return {
+        "schema": ISSUE_SCHEMA,
+        "issue_id": str(issue_id),
+        "node_id": str(node_id),
+        "peer_fingerprint": str(peer_fingerprint),
+        "title": str(title),
+        "body": body,
+        "status": str(status),
+        "labels": sorted({str(label) for label in labels}),
+        "links": list(links),
+        "source": source,
+        "content_sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
+        "nonce": nonce or secrets.token_hex(16),
+        "issued_at": stamp,
+        "expires_at": (moment + timedelta(seconds=ttl_seconds)).isoformat().replace("+00:00", "Z"),
+        "updated_at": updated_at or stamp,
+    }
+
+
+def verify_issue_report(
+    report: Any,
+    *,
+    expected_fingerprint: str,
+    now: datetime | None = None,
+    seen_nonces: Any = (),
+    max_skew_seconds: int = 300,
+) -> tuple[bool, str]:
+    """Validate one issue report; never raises. Signature is the transport's job."""
+    if not isinstance(report, dict) or set(report) != set(ISSUE_REPORT_FIELDS):
+        return False, REASON_ISSUE_MALFORMED
+    for field_name in ISSUE_REPORT_REQUIRED:
+        value = report.get(field_name)
+        if not isinstance(value, str) or not value:
+            return False, REASON_ISSUE_MALFORMED
+    if report["schema"] != ISSUE_SCHEMA or not ISSUE_ID_RE.fullmatch(report["issue_id"]):
+        return False, REASON_ISSUE_MALFORMED
+    if len(report["title"]) > ISSUE_MAX_TITLE:
+        return False, REASON_ISSUE_MALFORMED
+    if len(report["body"].encode("utf-8")) > ISSUE_MAX_BODY:
+        return False, REASON_ISSUE_MALFORMED
+    if report["status"] not in ISSUE_STATUSES:
+        return False, REASON_ISSUE_MALFORMED
+    labels = report["labels"]
+    if (
+        not isinstance(labels, list)
+        or any(not isinstance(label, str) for label in labels)
+        or set(labels) - ISSUE_LABELS
+    ):
+        return False, REASON_ISSUE_MALFORMED
+    links = report["links"]
+    if not isinstance(links, list) or any(not isinstance(item, dict) for item in links):
+        return False, REASON_ISSUE_MALFORMED
+    if not isinstance(report["source"], str) or len(report["source"]) > 500:
+        return False, REASON_ISSUE_MALFORMED
+    if hashlib.sha256(report["body"].encode("utf-8")).hexdigest() != report["content_sha256"]:
+        return False, REASON_ISSUE_DIGEST_MISMATCH
+    if report["peer_fingerprint"] != expected_fingerprint:
+        return False, REASON_ISSUE_WRONG_PEER
+    moment = now or datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    try:
+        issued = datetime.fromisoformat(report["issued_at"].replace("Z", "+00:00"))
+        expires = datetime.fromisoformat(report["expires_at"].replace("Z", "+00:00"))
+        updated = datetime.fromisoformat(report["updated_at"].replace("Z", "+00:00"))
+    except ValueError:
+        return False, REASON_ISSUE_MALFORMED
+    if issued.tzinfo is None:
+        issued = issued.replace(tzinfo=timezone.utc)
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if updated.tzinfo is None:
+        updated = updated.replace(tzinfo=timezone.utc)
+    if expires <= moment:
+        return False, REASON_ISSUE_EXPIRED
+    if (issued - moment).total_seconds() > max_skew_seconds:
+        return False, REASON_ISSUE_NOT_YET_VALID
+    if report["nonce"] in set(seen_nonces or ()):
+        return False, REASON_ISSUE_REPLAYED
+    return True, ""
+
+
 def build_telemetry_report(
     *,
     kind: str,
@@ -2008,6 +2227,173 @@ def verify_telemetry_report(
     if report["nonce"] in set(seen_nonces or ()):
         return False, REASON_TELEMETRY_REPLAYED
     return True, ""
+
+
+# --- the one envelope catalog -------------------------------------------------
+
+
+def _build_rfi_request(artifact: dict[str, Any]) -> dict[str, Any]:
+    return {field_name: artifact.get(field_name) for field_name in RFI_REQUEST_FIELDS}
+
+
+def _build_telemetry_report(artifact: dict[str, Any]) -> dict[str, Any]:
+    return {field_name: artifact.get(field_name) for field_name in TELEMETRY_REPORT_FIELDS}
+
+
+def _build_issue_report(artifact: dict[str, Any]) -> dict[str, Any]:
+    return {field_name: artifact.get(field_name) for field_name in ISSUE_REPORT_FIELDS}
+
+
+def _finalize_distillation(signed: dict[str, Any], options: dict[str, Any]) -> dict[str, Any]:
+    signed["signed_at"] = options.get("signed_at") or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return signed
+
+
+SPECS: dict[str, EnvelopeSpec] = {
+    "identity": EnvelopeSpec(
+        fields=IDENTITY_FIELDS,
+        required=IDENTITY_FIELDS,
+        signed_fields=IDENTITY_FIELDS,
+        project=canonical_identity,
+        signed=False,
+    ),
+    "authorization": EnvelopeSpec(
+        fields=SIGNED_FIELDS,
+        required=SIGNED_FIELDS,
+        signed_fields=SIGNED_FIELDS,
+        project=_build_authorization,
+    ),
+    "registry-publication": EnvelopeSpec(
+        fields=REGISTRY_PUBLICATION_FIELDS,
+        required=REGISTRY_PUBLICATION_FIELDS,
+        signed_fields=REGISTRY_PUBLICATION_SIGNED_FIELDS,
+        project=_build_registry_publication,
+    ),
+    "guard-approval": EnvelopeSpec(
+        fields=GUARD_APPROVAL_FIELDS,
+        required=GUARD_APPROVAL_REQUIRED,
+        signed_fields=GUARD_APPROVAL_FIELDS,
+        project=_build_guard_approval,
+    ),
+    "cluster-job": EnvelopeSpec(
+        fields=CLUSTER_JOB_FIELDS,
+        required=CLUSTER_JOB_REQUIRED,
+        signed_fields=CLUSTER_JOB_FIELDS,
+        project=_build_cluster_job,
+    ),
+    "admin-request": EnvelopeSpec(
+        fields=ADMIN_REQUEST_FIELDS,
+        required=ADMIN_REQUEST_REQUIRED,
+        signed_fields=ADMIN_REQUEST_FIELDS,
+        project=_build_admin_request,
+    ),
+    "distillation-run": EnvelopeSpec(
+        fields=DISTILLATION_RUN_FIELDS,
+        required=DISTILLATION_RUN_REQUIRED,
+        signed_fields=DISTILLATION_RUN_FIELDS,
+        prefix=b"sparknet-distillation-run/1\n",
+        project=_build_distillation_run,
+        finalize=_finalize_distillation,
+    ),
+    "grant": EnvelopeSpec(
+        fields=GRANT_FIELDS,
+        required=GRANT_REQUIRED,
+        signed_fields=GRANT_FIELDS,
+        project=_build_grant,
+    ),
+    "share-ratification": EnvelopeSpec(
+        fields=SHARE_RATIFICATION_FIELDS,
+        required=SHARE_RATIFICATION_FIELDS,
+        signed_fields=SHARE_RATIFICATION_FIELDS,
+        project=_build_share_ratification,
+    ),
+    "trust-transition": EnvelopeSpec(
+        fields=TRUST_TRANSITION_FIELDS,
+        required=TRUST_TRANSITION_FIELDS,
+        signed_fields=TRUST_TRANSITION_FIELDS,
+        project=_build_trust_transition,
+    ),
+    "rfi-answer": EnvelopeSpec(
+        fields=RFI_ANSWER_FIELDS,
+        required=RFI_ANSWER_REQUIRED,
+        signed_fields=RFI_ANSWER_SIGNED_FIELDS,
+        extra_fields=("content_b64", "signature_b64"),
+        project=_build_rfi_answer,
+    ),
+    "ledger-block": EnvelopeSpec(
+        fields=(),
+        required=(),
+        signed_fields=(),
+        project=_build_ledger_block,
+    ),
+    "rfi-request": EnvelopeSpec(
+        fields=RFI_REQUEST_FIELDS,
+        required=RFI_REQUEST_REQUIRED,
+        signed_fields=RFI_REQUEST_FIELDS,
+        project=_build_rfi_request,
+        signed=False,
+    ),
+    "telemetry-report": EnvelopeSpec(
+        fields=TELEMETRY_REPORT_FIELDS,
+        required=TELEMETRY_REPORT_REQUIRED,
+        signed_fields=TELEMETRY_REPORT_FIELDS,
+        project=_build_telemetry_report,
+        signed=False,
+    ),
+    "issue-report": EnvelopeSpec(
+        fields=ISSUE_REPORT_FIELDS,
+        required=ISSUE_REPORT_REQUIRED,
+        signed_fields=ISSUE_REPORT_FIELDS,
+        project=_build_issue_report,
+        signed=False,
+    ),
+}
+
+ENVELOPE_KINDS = tuple(SPECS)
+
+
+def authorization_message(entry: dict[str, Any]) -> bytes:
+    return envelope_message("authorization", entry)
+
+
+def guard_approval_message(approval: dict[str, Any]) -> bytes:
+    return envelope_message("guard-approval", approval)
+
+
+def registry_publication_message(publication: dict[str, Any]) -> bytes:
+    return envelope_message("registry-publication", publication)
+
+
+def cluster_job_message(job: dict[str, Any]) -> bytes:
+    return envelope_message("cluster-job", job)
+
+
+def admin_request_message(request: dict[str, Any]) -> bytes:
+    return envelope_message("admin-request", request)
+
+
+def distillation_run_message(run: dict[str, Any]) -> bytes:
+    return envelope_message("distillation-run", run)
+
+
+def grant_message(grant: dict[str, Any]) -> bytes:
+    return envelope_message("grant", grant)
+
+
+def share_ratification_message(ratification: dict[str, Any]) -> bytes:
+    return envelope_message("share-ratification", ratification)
+
+
+def trust_transition_message(transition: dict[str, Any]) -> bytes:
+    return envelope_message("trust-transition", transition)
+
+
+def rfi_answer_message(answer: dict[str, Any]) -> bytes:
+    return envelope_message("rfi-answer", answer)
+
+
+def ledger_block_signable(block: dict[str, Any]) -> bytes:
+    return envelope_message("ledger-block", block)
 
 
 # --- CLI ---------------------------------------------------------------------

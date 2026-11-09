@@ -29,3 +29,8 @@
   owns request parsing, route auth and source policy, refusals, health and
   lifecycle for a role module. A route handler owns the service behaviour; the
   listener owns the transport.
+- **envelope** — a signed artifact whose canonical bytes are defined by an
+  `EnvelopeSpec` in `shared/sparknet-authz.py`.
+- **envelope catalog** — the `SPECS` table mapping every envelope kind to its
+  fields, signed projection, signer and verifier. Named `*_message`/`sign_*`/
+  `verify_*` functions are adapters over it.
