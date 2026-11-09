@@ -35,6 +35,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.SPARKNET_SUBMODULE_TOKEN }}
 
       # Code scanning is a paid feature on private repos (GitHub Code Security);
       # without it the Analyze step fails as a "configuration error" after a

@@ -121,7 +121,7 @@ ROOT_FILES=(
   USER_MANUAL.md
   VERSION
 )
-TEMPLATES="$REPO_ROOT/goagx/publish-templates"
+TEMPLATES="$REPO_ROOT/goagx/goagx/publish-templates"
 
 # The release *data* (VERSION, sbom/) ships; the fabric-root tools do not. A
 # distribution has no root Makefile, so `scripts/sparknet` would exit "no
@@ -151,10 +151,42 @@ copy_worktree() {  # <path relative to repo root>
   done < <(git -C "$REPO_ROOT" ls-files -z --cached --others --exclude-standard -- "$rel")
 }
 
-pin_get() { sed -n "s/^$1=//p" "$REPO_ROOT/goagx/GOSPARK_PIN" | head -1; }
+copy_submodule_files() {  # <repo-root> <dest> [subdir-prefix]
+  local src="$1" dest="$2" prefix="${3:-}" f
+  while IFS= read -r -d '' f; do
+    [ -e "$src/$f" ] || [ -L "$src/$f" ] || continue
+    mkdir -p "$dest/$(dirname "$f")"
+    cp -a "$src/$f" "$dest/$f"
+  done < <(git -C "$src" ls-files -z --cached --others --exclude-standard ${prefix:+-- "$prefix"})
+}
+
+submodule_commit() {  # <from-git-ref> <path> -> commit id
+  git -C "$REPO_ROOT" ls-tree "$1" "$2" | awk '$2 == "commit" {print $3; exit}'
+}
+
+export_submodule() {  # <from-git-ref> <path>
+  local commit
+  commit="$(submodule_commit "$1" "$2")"
+  [ -n "$commit" ] || die "submodule $2 is not a gitlink at $1"
+  [ -d "$REPO_ROOT/$2" ] || die "submodule $2 is not initialized"
+  git -C "$REPO_ROOT/$2" cat-file -e "${commit}^{commit}" 2>/dev/null \
+    || die "submodule $2 does not contain pinned commit $commit"
+  git -C "$REPO_ROOT/$2" archive --format=tar --prefix="$2/" "$commit" | tar -xf - -C "$target"
+}
+
+export_goagx_source() {  # <from-git-ref>
+  local commit
+  commit="$(submodule_commit "$1" goagx)"
+  [ -n "$commit" ] || die "goagx is not a gitlink at $1"
+  git -C "$REPO_ROOT/goagx" cat-file -e "${commit}^{commit}" 2>/dev/null \
+    || die "goagx does not contain pinned commit $commit"
+  git -C "$REPO_ROOT/goagx" archive --format=tar "$commit" goagx | tar -xf - -C "$target"
+}
+
+pin_get() { sed -n "s/^$1=//p" "$REPO_ROOT/goagx/goagx/GOSPARK_PIN" | head -1; }
 
 dockerfile_arg() {  # ARG name -> default from the AGX dockerfile
-  sed -n "s/^ARG $1=//p" "$REPO_ROOT/goagx/sparknet.agx.docker" | head -1
+  sed -n "s/^ARG $1=//p" "$REPO_ROOT/goagx/goagx/sparknet.agx.docker" | head -1
 }
 
 sha256_of() {
@@ -191,12 +223,15 @@ stage_into() {  # <target-dir>
     git -C "$REPO_ROOT" rev-parse "${FROM_GIT}^{commit}" >/dev/null 2>&1 \
       || die "no such ref: $FROM_GIT"
     for subtree in "${SUBTREES[@]}"; do
-      if git -C "$REPO_ROOT" cat-file -e "${FROM_GIT}:${subtree}" 2>/dev/null; then
-        git -C "$REPO_ROOT" archive --format=tar "$FROM_GIT" "$subtree" | tar -xf - -C "$target"
-        log "from-git $subtree"
-      else
+      if ! git -C "$REPO_ROOT" cat-file -e "${FROM_GIT}:${subtree}" 2>/dev/null; then
         die "subtree missing at $FROM_GIT: $subtree"
       fi
+      case "$subtree" in
+        peer-node|master-node) export_submodule "$FROM_GIT" "$subtree" ;;
+        goagx) export_goagx_source "$FROM_GIT" ;;
+        *) git -C "$REPO_ROOT" archive --format=tar "$FROM_GIT" "$subtree" | tar -xf - -C "$target" ;;
+      esac
+      log "from-git $subtree"
     done
     for f in "${ROOT_FILES[@]}"; do
       git -C "$REPO_ROOT" cat-file -e "${FROM_GIT}:${f}" 2>/dev/null \
@@ -207,8 +242,12 @@ stage_into() {  # <target-dir>
     [ -z "$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null)" ] \
       || warn "working tree is dirty — the export includes uncommitted work (use --from-git for release-grade)"
     for subtree in "${SUBTREES[@]}"; do
-      [ -e "$REPO_ROOT/$subtree" ] || die "subtree missing: $subtree"
-      copy_worktree "$subtree"
+      [ -e "$REPO_ROOT/$subtree" ] || die "subtree missing: $subtree (run git submodule update --init --recursive)"
+      case "$subtree" in
+        peer-node|master-node) copy_submodule_files "$REPO_ROOT/$subtree" "$target/$subtree" ;;
+        goagx) copy_submodule_files "$REPO_ROOT/goagx" "$target" goagx ;;
+        *) copy_worktree "$subtree" ;;
+      esac
       log "copied  $subtree"
     done
     for f in "${ROOT_FILES[@]}"; do
@@ -241,12 +280,12 @@ out, root, sha, from_git = sys.argv[1:5]
 root = pathlib.Path(root)
 
 def dockerfile_arg(name: str) -> str:
-    text = (root / "goagx" / "sparknet.agx.docker").read_text()
+    text = (root / "goagx" / "goagx" / "sparknet.agx.docker").read_text()
     m = re.search(rf"^ARG {re.escape(name)}=(.*)$", text, re.M)
     return m.group(1).strip().strip('"') if m else ""
 
 pin = {}
-for line in (root / "goagx" / "GOSPARK_PIN").read_text().splitlines():
+for line in (root / "goagx" / "goagx" / "GOSPARK_PIN").read_text().splitlines():
     if "=" in line and not line.lstrip().startswith("#"):
         k, v = line.split("=", 1)
         pin[k.strip()] = v.strip()
@@ -485,8 +524,12 @@ push_release() {  # <stage>
 Full-tree publish (scripts/sparknet-goagx-publish.sh --push). Hand edits are
 overwritten by the next release — fix upstream in reallife-spark/sparknet."
   git -C "$work/goagx" push origin main
+  pushed_sha="$(git -C "$work/goagx" rev-parse HEAD)"
+  git -C "$REPO_ROOT" update-index --cacheinfo "160000,$pushed_sha,goagx" \
+    || die "pushed $pushed_sha but could not stage the superproject goagx pointer"
   rm -rf "$work"
   log "pushed to $REMOTE"
+  log "staged superproject goagx pointer $pushed_sha — commit and push the fabric to pin it"
 }
 
 # --- drift ------------------------------------------------------------------------

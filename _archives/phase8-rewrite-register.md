@@ -4,8 +4,8 @@
 
 | File | LOC | Risk | Disposition | Evidence |
 |---|---:|---|---|---|
-| `goagx/bootstrap-agx.sh` | 193 | low | reviewed-clean | scripts/webui/goagx audit 2026-11-08 |
-| `goagx/sparknet-audio-shim.py` | 146 | low | reviewed-clean | scripts/webui/goagx audit 2026-11-08 |
+| `goagx/goagx/bootstrap-agx.sh` | 193 | low | reviewed-clean | scripts/webui/goagx audit 2026-11-08 |
+| `goagx/goagx/sparknet-audio-shim.py` | 146 | low | reviewed-clean | scripts/webui/goagx audit 2026-11-08 |
 | `gospark/cmd/sparknet-agent/main.go` | 92 | low | reviewed-clean | gospark audit 2026-11-08 + go test ./... |
 | `gospark/cmd/sparknet-backup/main.go` | 314 | low | reviewed-clean | gospark audit 2026-11-08 + go test ./... |
 | `gospark/cmd/sparknet-control/main.go` | 220 | low | reviewed-clean | gospark audit 2026-11-08 + go test ./... |

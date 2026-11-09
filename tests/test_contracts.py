@@ -36,10 +36,15 @@ from contract_helpers import (
 # --- there is exactly one implementation, and it agrees with the contract ------
 
 
+SUBMODULE_DIRS = {"gospark", "peer-node", "master-node", "goagx"}
+
+
 def test_only_one_authz_implementation_exists():
     """A second copy would let the two roles diverge while both still pass."""
     copies = [
-        p for p in REPO_ROOT.rglob("sparknet-authz.py") if not {"__pycache__", "dist", ".venv", ".git"} & set(p.parts)
+        p
+        for p in REPO_ROOT.rglob("sparknet-authz.py")
+        if not {"__pycache__", "dist", ".venv", ".git"} & set(p.parts) and not SUBMODULE_DIRS & set(p.parts)
     ]
     assert copies == [SHARED_PATH], f"expected one authz implementation, found: {copies}"
 
@@ -54,7 +59,9 @@ def test_only_one_shared_loader_exists():
     module reimplements it with ``spec_from_file_location``.
     """
     loaders = [
-        p for p in REPO_ROOT.rglob("sparknet_loader.py") if not {"__pycache__", "dist", ".venv", ".git"} & set(p.parts)
+        p
+        for p in REPO_ROOT.rglob("sparknet_loader.py")
+        if not {"__pycache__", "dist", ".venv", ".git"} & set(p.parts) and not SUBMODULE_DIRS & set(p.parts)
     ]
     loader_path = REPO_ROOT / "shared" / "sparknet_loader.py"
     assert loaders == [loader_path], f"expected one shared loader, found: {loaders}"
@@ -1237,9 +1244,9 @@ def test_node_foreign_images_are_pinned():
     stacks = [
         ("spark.docker", REPO_ROOT / "spark.docker", COMPOSE),
         (
-            "goagx/sparknet.agx.docker",
-            REPO_ROOT / "goagx" / "sparknet.agx.docker",
-            REPO_ROOT / "goagx" / "sparknet.agx.compose.yml",
+            "goagx/goagx/sparknet.agx.docker",
+            REPO_ROOT / "goagx" / "goagx" / "sparknet.agx.docker",
+            REPO_ROOT / "goagx" / "goagx" / "sparknet.agx.compose.yml",
         ),
     ]
     nats_versions: dict[str, str] = {}

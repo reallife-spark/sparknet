@@ -21,13 +21,13 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PUBLISH = REPO_ROOT / "scripts" / "sparknet-goagx-publish.sh"
-BOOTSTRAP = REPO_ROOT / "goagx" / "bootstrap-agx.sh"
-PIN = REPO_ROOT / "goagx" / "GOSPARK_PIN"
-AGX_DOCKER = REPO_ROOT / "goagx" / "sparknet.agx.docker"
-AGX_COMPOSE = REPO_ROOT / "goagx" / "sparknet.agx.compose.yml"
+BOOTSTRAP = REPO_ROOT / "goagx" / "goagx" / "bootstrap-agx.sh"
+PIN = REPO_ROOT / "goagx" / "goagx" / "GOSPARK_PIN"
+AGX_DOCKER = REPO_ROOT / "goagx" / "goagx" / "sparknet.agx.docker"
+AGX_COMPOSE = REPO_ROOT / "goagx" / "goagx" / "sparknet.agx.compose.yml"
 SETUP = REPO_ROOT / "sparknet-node-setup.sh"
 KEYS_CHECK = REPO_ROOT / "scripts" / "sparknet-keys-check.sh"
-TEMPLATES = REPO_ROOT / "goagx" / "publish-templates"
+TEMPLATES = REPO_ROOT / "goagx" / "goagx" / "publish-templates"
 
 #: The export surface, mirrored from scripts/sparknet-goagx-publish.sh and
 #: asserted against it below — a change to either side must touch both.

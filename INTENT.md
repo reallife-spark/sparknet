@@ -31,12 +31,11 @@ escalate. The Master supplies authority and knowledge, not control.
 1. **The contract is the single source of truth.** Overlay addressing,
    capabilities, identity, ports, the guard conversation and the knowledge
    channel map are defined in `contracts/`; a role does not restate them.
-2. **Cross-role changes are atomic.** A change to anything a peer depends on is
-   one commit touching `contracts/`, both roles and the shared implementation,
-   followed by `make contract-test`.
+2. **Cross-role changes are atomic across repositories.** Commit role changes
+   first, then pin them with the contract/shared change and run `make contract-test`.
 3. **One authorization implementation.** `shared/sparknet-authz.py` signs and
    verifies; neither role carries a copy.
-4. **A role subvault is not a deployment.** A node needs the contract, the
+4. **A role submodule is not a deployment.** A node needs the contract, the
    shared implementation and its role; `make bundle` assembles them and
    `bundle-verify` proves the result runs elsewhere.
 5. **Vaults are per-role and per-node.** Cross-cutting knowledge belongs in the
@@ -63,16 +62,17 @@ escalate. The Master supplies authority and knowledge, not control.
     never cross a `vault_id`. Every surface is an adapter over one store.
 13. **The Master reads memory only through a signed, audited read-through.**
     `memory-supervise` is on-demand and transient; no mirror, no answer corpus.
+14. **Submodule pins are explicit.** `gospark`, `peer-node`, `master-node`,
+    `goagx` are independent repositories pinned and updated deliberately.
 ## First deployment
 
-1. `make env-init` writes the vault `.env` and category skeleton.
+1. `make submodules` initializes the pinned repositories; `make env-init` writes the vault `.env` and category skeleton.
 2. `make user-init` creates the user key and fills `00_System/user.md` once.
 3. `make validate` proves the role's files, environment and manifests.
 4. `make wiki-preflight` proves the vendored skills resolve this vault.
 5. An AI session reads `CONTEXT.md`, `AGENTS.md`, `MISSION.md`, `INTENT.md`,
    `MEMORY.md` and today's session file before acting.
-Nothing about the deployment is hand-edited into these identity pages. A new
-node inherits the role's intent, not another node's history.
+Nothing deployment-specific is hand-edited here; a new node inherits the role's intent, not its history.
 ## AI operating model
 
 - `AGENTS.md` defines the rules and wins on conflict.

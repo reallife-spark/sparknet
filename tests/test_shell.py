@@ -37,6 +37,10 @@ SKIP_DIR_PARTS = {
     ".ruff_cache",
     ".opencode",
     "references",
+    "gospark",
+    "peer-node",
+    "master-node",
+    "goagx",
 }
 
 # A single `[` that is not `[[`, i.e. a POSIX test builtin invocation.

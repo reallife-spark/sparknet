@@ -141,6 +141,8 @@ EXPECTED_TOP_LEVEL = {
     # of the goagx distribution, so its links must resolve in BOTH trees.
     "USER_MANUAL.md",
     ".github",
+    ".gitmodules",
+    "gospark",
 }
 
 # Machine-local or generated: never tracked, so never part of the design.
@@ -161,9 +163,6 @@ UNTRACKED_TOP_LEVEL = {
     # It is machine-local state (the volatile files are gitignored, the rest is
     # never tracked), not part of the fabric's design.
     ".obsidian",
-    # A local goSpark checkout is a separate Git repository (it carries its own
-    # .git); its layout and provenance snapshots are not the fabric's to police.
-    "gospark",
 }
 
 # Files that record what one machine looked like, rather than describing the
@@ -198,7 +197,7 @@ VAULT_CATEGORY_DIRS = [
 # subvaults' equivalents under the PARA layout (`peer-node/`), so a capture
 # that legitimately records a host path stays exempt after the move.
 # A local goSpark checkout is a separate repository, not part of this tree.
-EXTERNAL_REPO_DIRS = {"gospark"}
+EXTERNAL_REPO_DIRS = {"gospark", "peer-node", "master-node", "goagx"}
 
 PROVENANCE_DIRS = {
     "references",
@@ -419,6 +418,11 @@ def test_env_example_templates_share_one_key_set():
         }
 
     examples = sorted(p for p in REPO_ROOT.rglob(".env.example") if not (SKIP_DIR_PARTS & set(p.parts)))
+    for role in ("peer-node", "master-node"):
+        candidate = REPO_ROOT / role / ".env.example"
+        if candidate.is_file() and candidate not in examples:
+            examples.append(candidate)
+    examples = sorted(examples)
     assert len(examples) >= 3, f"expected at least the root and both roles' templates, found: {examples}"
     reference = examples[0]
     ref_keys = keys(reference)

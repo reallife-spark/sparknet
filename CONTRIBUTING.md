@@ -9,6 +9,9 @@ Protocol — and `STYLE_GUIDE.md` for how work is written here.
 ## Before you start
 
 ```sh
+git clone --recurse-submodules https://github.com/reallife-spark/sparknet.git
+cd sparknet
+make submodules      # update the four pinned repositories
 make devtools        # create .venv with pytest + ruff (only needed once)
 make hooks           # point this clone at .githooks/ (commits run keys-check)
 make help            # every fabric target, with one-line descriptions
@@ -39,11 +42,13 @@ step skips, say so in the pull request rather than leaving it implicit.
 
 ## The one rule that is not style
 
-**Cross-role changes are atomic.** If you touch anything a role depends on —
-`contracts/`, `shared/`, a protocol — edit the contract *and* both roles in the
-**same commit**, then run `make contract-test`. A commit that updates one
-side only leaves the other verifying against a shape that no longer exists;
-`tests/test_contracts.py` exists to fail in exactly that case.
+**Cross-role changes are atomic across repositories.** `contracts/` and
+`shared/` live in the superproject; `peer-node`, `master-node`, `gospark` and
+`goagx` are submodules. Commit role changes in their submodule first, then commit
+the updated pointers with the contract/shared change in the superproject, then
+run `make contract-test`. A pointer-only change leaves the other side verifying
+against a shape that no longer exists; `tests/test_contracts.py` exists to fail
+in exactly that case.
 
 ## Style
 

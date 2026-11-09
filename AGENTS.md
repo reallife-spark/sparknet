@@ -22,13 +22,19 @@ Read `CONTEXT.md` first. It is generated from this charter, `MISSION.md`,
 |---|---|---|
 | `contracts/` | both | single source of truth: overlay, capabilities, identity, ports, registry, guard, share, consensus, health, telemetry, RFI, knowledge flow |
 | `shared/` | both | `sparknet-authz.py` and the one shared implementation of provenance, consensus, registry install, RFI install, liveness, notify, and the memory gateway |
-| `peer-node/` | peer | implemented: guard, anchor, dispatch bridge, AI stack, per-user vaults, self-healing |
-| `master-node/` | master | built: parity loader, ledger, isolated signer, registry, approvals, intake, admin console, responder |
-| `goagx/` | both | AGX Xavier node image surface and standalone distribution |
-| `gospark/` | both | separate Go control/service-plane checkout; gitignored, gated in place |
+| `peer-node/` | peer | pinned submodule `reallife-spark/sparknet-peer`: guard, anchor, dispatch bridge, AI stack, per-user vaults, self-healing |
+| `master-node/` | master | pinned submodule `reallife-spark/sparknet-master`: parity loader, ledger, isolated signer, registry, approvals, intake, admin console, responder |
+| `goagx/` | both | pinned submodule `reallife-spark/goagx`: generated AGX Xavier node distribution |
+| `gospark/` | both | pinned submodule `reallife-spark/gospark`: Go control/service plane |
 | `.opencode/skills/` | both | vendored wiki suite; role catalogs live under `<role>/.opencode/skills/` |
 
-A role subvault alone is **not** a deployment. `make bundle` assembles what a
+The four role/distribution directories are **Git submodules** with their own
+remotes, histories and branches. `contracts/` and `shared/` remain in the
+superproject. Clone with `git clone --recurse-submodules`; after a checkout use
+`make submodules` (`git submodule update --init --recursive`). Submodule pins are
+updated explicitly, never by an implicit pull.
+
+A role submodule alone is **not** a deployment. `make bundle` assembles what a
 node needs; `bundle-verify` proves it runs elsewhere.
 
 ## Knowledge flow
@@ -92,6 +98,7 @@ per-user KBs/models, the vLLM/MASTERSPIKE precontext and the admin terminal.
 | `make ci` / `CI_QUICK=1` | local pre-merge gate (authoritative) |
 | `make lint` / `make format-check` / `make shellcheck` | style and shell gates |
 | `make render-check` / `make sbom-check` / `make drift-check` | derived artifacts |
+| `make submodules` | initialize/update all four submodules at their pinned commits |
 | `make bundle ROLE=peer\|master` / `bundle-verify` | standalone node bundles |
 | `make wiki-sync` / `wiki-verify` / `wiki-preflight` | vendored wiki suite |
 | `make role-skills-check` | role-local catalogs and licenses |
@@ -106,8 +113,10 @@ resource-first check before building a container or model.
 
 `STYLE_GUIDE.md` is the standing convention: Python, shell, Makefiles, commits,
 secrets, CI, docs, release. Its §1 is resource-first: check NVIDIA's catalog
-before building your own. Cross-role changes are atomic: edit `contracts/`,
-`shared/` and both roles in one commit, then `make contract-test`.
+before building your own. Cross-role changes remain atomic across repositories:
+commit the role changes in their submodule first, then commit the updated
+submodule pointer together with `contracts/`/`shared/` in the superproject, and
+run `make contract-test`.
 
 ## Layout
 

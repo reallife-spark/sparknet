@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Assemble a standalone node bundle for one role.
 #
-# A role subvault alone is NOT a deployment. Verified by test: copy peer-node/
+# A role submodule alone is NOT a deployment. Verified by test: copy peer-node/
 # on its own and validation fails, because the contract it obeys is absent. The
 # smallest thing that actually runs is:
 #
@@ -36,6 +36,16 @@ SKILLS_DIR="$REPO_ROOT/.opencode/skills"
 AGENTS_DIR="$REPO_ROOT/.opencode/agents"
 
 die() { printf 'sparknet-bundle: %s\n' "$1" >&2; exit 1; }
+
+export_git_submodule() {  # <ref> <path>
+  local ref="$1" path="$2" commit
+  commit="$(git -C "$REPO_ROOT" ls-tree "$ref" "$path" | awk '$2 == "commit" {print $3; exit}')"
+  [ -n "$commit" ] || die "submodule $path is not a gitlink at $ref"
+  [ -d "$REPO_ROOT/$path" ] || die "submodule $path is not initialized (git submodule update --init --recursive)"
+  git -C "$REPO_ROOT/$path" cat-file -e "${commit}^{commit}" 2>/dev/null \
+    || die "submodule $path does not contain pinned commit $commit"
+  git -C "$REPO_ROOT/$path" archive --format=tar --prefix="$prefix/$path/" "$commit" | tar -xf - -C "$stage"
+}
 
 # --- integrity manifest -------------------------------------------------------
 # The bundle ships a SHA256SUMS so a node can prove the bytes it received are the
@@ -285,8 +295,8 @@ Options:
   --pubkey PATH   pinned public key for --verify (or SPARKNET_BUNDLE_PUBKEY)
   --signature PATH detached signature for --verify (default: ARCHIVE.sig)
 
-The bundle reproduces the repository layout (role subvault + contracts/ +
-shared/ + .opencode/ + opencode.json), because a role subvault alone is not a
+The bundle reproduces the repository layout (role submodule + contracts/ +
+shared/ + .opencode/ + opencode.json), because a role submodule alone is not a
 deployment. A SHA256SUMS over the whole tree is written at build time and
 checked by --verify, so a corrupted or tampered archive fails before it runs.
 USAGE
@@ -400,8 +410,12 @@ if [ -n "$from_git" ]; then
     git -C "$REPO_ROOT" rev-parse --verify --quiet "$from_git^{commit}" >/dev/null \
       || die "not a commit: $from_git"
     if git -C "$REPO_ROOT" cat-file -e "$from_git:${subtrees[0]}" 2>/dev/null; then
-      git -C "$REPO_ROOT" archive --format=tar --prefix="$prefix/" "$from_git" "${subtrees[@]}" \
-        | tar -xf - -C "$stage"
+      for sub in "${subtrees[@]}"; do
+        case "$sub" in
+          peer-node|master-node) export_git_submodule "$from_git" "$sub" ;;
+          *) git -C "$REPO_ROOT" archive --format=tar --prefix="$prefix/" "$from_git" "$sub" | tar -xf - -C "$stage" ;;
+        esac
+      done
       printf '  from-git %-24s %s\n' "${subtrees[*]}" "$from_git"
     else
       printf '  from-git %-24s MISSING at %s\n' "${subtrees[*]}" "$from_git"

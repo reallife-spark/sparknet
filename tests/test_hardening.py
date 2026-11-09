@@ -37,6 +37,9 @@ SKIP_DIRS = {
     ".opencode",
     # A local goSpark checkout is a separate repository, not fabric deployment config.
     "gospark",
+    "peer-node",
+    "master-node",
+    "goagx",
 }
 
 # The one module allowed to call b64decode directly: the strict helper lives here,
@@ -174,16 +177,26 @@ _IMMUTABLE_SOURCES = ("03_Sources", "_raw")
 
 
 def _compose_files() -> list[Path]:
+    roots = [
+        REPO_ROOT,
+        REPO_ROOT / "peer-node",
+        REPO_ROOT / "master-node",
+        REPO_ROOT / "goagx" / "goagx",
+    ]
     out: list[Path] = []
-    for path in REPO_ROOT.rglob("*.y*ml"):
-        if not path.is_file() or SKIP_DIRS & set(path.parts):
-            continue
-        rel = path.relative_to(REPO_ROOT).as_posix()
-        if any(part in rel.split("/") for part in _IMMUTABLE_SOURCES):
-            continue
-        if _IMAGE_LINE.search(path.read_text(encoding="utf-8", errors="replace")):
-            out.append(path)
-    return sorted(out)
+    for base in roots:
+        for path in base.rglob("*.y*ml"):
+            local_skip = SKIP_DIRS - {"gospark", "peer-node", "master-node", "goagx"}
+            if not path.is_file() or local_skip & set(path.parts):
+                continue
+            if base == REPO_ROOT and {"gospark", "peer-node", "master-node", "goagx"} & set(path.parts):
+                continue
+            rel = path.relative_to(REPO_ROOT).as_posix()
+            if any(part in rel.split("/") for part in _IMMUTABLE_SOURCES):
+                continue
+            if _IMAGE_LINE.search(path.read_text(encoding="utf-8", errors="replace")):
+                out.append(path)
+    return sorted(set(out))
 
 
 def _effective_tag(image: str) -> str | None:

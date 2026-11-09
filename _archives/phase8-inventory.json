@@ -4,7 +4,7 @@
   "source": "_archives/phase8-rewrite-register.md",
   "files": [
     {
-      "path": "goagx/bootstrap-agx.sh",
+      "path": "goagx/goagx/bootstrap-agx.sh",
       "loc": 193,
       "risk": "low",
       "language": "sh",
@@ -19,7 +19,7 @@
       "notes": "no high-confidence remaining defect"
     },
     {
-      "path": "goagx/sparknet-audio-shim.py",
+      "path": "goagx/goagx/sparknet-audio-shim.py",
       "loc": 146,
       "risk": "low",
       "language": "py",

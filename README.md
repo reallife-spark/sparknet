@@ -42,12 +42,15 @@ map of what may cross from Master to peer and what may never cross.
 | [`USER_MANUAL.md`](USER_MANUAL.md) | **The master manual** — the whole system: the five repositories, the architecture, the authority model, the contracts, the node image, the vault, every gate, and how to change something without breaking the fabric. Start here. |
 | `peer-node/USER_MANUAL.md` | The peer role: its services, scripts, units, manifests and vault. Published at the root of `sparknet-peer`. |
 | `master-node/USER_MANUAL.md` | The master role: the election arc, the three keys, the isolated signer, the ledger and the admin surface. Published at the root of `sparknet-master`. |
-| `goagx/USER_MANUAL.md` | The AGX Xavier twin: the image, the compose surface, the audio shim, the bootstrap and the publish. Published at `goagx/USER_MANUAL.md`. |
-| `gospark/USER_MANUAL.md` | The Go control and service plane, in the `gospark/` checkout (the `reallife-spark/gospark` repository). |
+| `goagx/USER_MANUAL.md` | The AGX Xavier twin: the image, the compose surface, the audio shim, the bootstrap and the publish. The `goagx/` submodule is `reallife-spark/goagx`. |
+| `gospark/USER_MANUAL.md` | The Go control and service plane, in the `gospark/` submodule (`reallife-spark/gospark`). |
 
 ## Quick start
 
 ```bash
+git clone --recurse-submodules https://github.com/reallife-spark/sparknet.git
+cd sparknet
+make submodules    # update the four pinned repositories
 make help          # what the fabric can do
 make layout        # what exists, and what is merely specified
 make devtools      # optional: .venv with cryptography, pytest, ruff

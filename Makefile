@@ -12,7 +12,7 @@
 # So this Makefile is a router, not an implementation. Anything that touches a
 # role lives in that role's Makefile; `make help-role` lists those.
 #
-# A role subvault alone is NOT a deployment. `make bundle` assembles what a node
+# A role submodule alone is NOT a deployment. `make bundle` assembles what a node
 # actually needs and can prove it runs.
 
 SHELL := /usr/bin/env bash
@@ -46,8 +46,12 @@ SCOPE ?= fabric
         vector-dev vector-init vector-inspect \
         vector-index vector-stamp vector-query vector-parity kv-export reflex-eval reflex-live-check reflex-live-query \
         reflex-plan-eval verify-plans env-init wiki-sync wiki-verify \
-        wiki-preflight bundle bundle-verify status-plan clean dist \
+        wiki-preflight bundle bundle-verify status-plan clean dist submodules \
         role-skills role-skills-check keys-check shims-check hooks self-improve package-install
+
+submodules: ## Initialize/update all four pinned repositories
+	@git submodule update --init --recursive
+	@git submodule status
 
 help: ## Show this help
 	@echo "sparknet — fabric root"

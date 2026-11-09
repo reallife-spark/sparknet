@@ -56,9 +56,10 @@ target-version = "py310"
 # not ours to reformat, and `make wiki-verify` proves it has not drifted, so
 # ruff must keep its hands off it. The role-local skill trees are vendored
 # third-party content too; `make role-skills-check` hashes them instead.
-# `gospark/` is a separate Git checkout (it carries its own .git); the fabric
-# lints and formats its own tree, not the reference checkout.
-exclude = [".venv", ".state", ".cache", "references", ".opencode", "peer-node/.opencode", "master-node/.opencode", "gospark"]
+# `gospark/` and `goagx/` are separate repositories (submodules) with their own
+# licensing and generated content; the fabric lints and formats its own tree,
+# not the reference or generated trees.
+exclude = [".venv", ".state", ".cache", "references", ".opencode", "peer-node/.opencode", "master-node/.opencode", "gospark", "goagx"]
 # `ruff format` is a Python-only gate. Without this it also rewrites fenced
 # code blocks inside Markdown, which produces documentation churn unrelated to
 # any code change.

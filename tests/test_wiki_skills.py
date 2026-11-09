@@ -341,7 +341,19 @@ def _ours_with_old_editor_name() -> list[tuple[str, int, str]]:
             continue
         rel = path.relative_to(REPO_ROOT).as_posix()
         parts = set(rel.split("/"))
-        if parts & {"__pycache__", ".git", ".venv", "dist", "node_modules", ".pytest_cache", ".ruff_cache"}:
+        if parts & {
+            "__pycache__",
+            ".git",
+            ".venv",
+            "dist",
+            "node_modules",
+            ".pytest_cache",
+            ".ruff_cache",
+            "gospark",
+            "peer-node",
+            "master-node",
+            "goagx",
+        }:
             continue
         if parts & OBSIDIAN_HISTORY_PARTS:
             continue

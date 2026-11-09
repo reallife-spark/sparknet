@@ -18,7 +18,7 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-AGX_DIR = REPO_ROOT / "goagx"
+AGX_DIR = REPO_ROOT / "goagx" / "goagx"
 AGX_COMPOSE = AGX_DIR / "sparknet.agx.compose.yml"
 AGX_DOCKER = AGX_DIR / "sparknet.agx.docker"
 SPARK_COMPOSE = REPO_ROOT / "spark.compose.yml"
