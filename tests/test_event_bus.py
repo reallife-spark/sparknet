@@ -3,30 +3,21 @@
 from __future__ import annotations
 
 import contextlib
-import importlib.util
 import json
 import socket
-import sys
 import threading
 from datetime import datetime, timedelta, timezone
 
 import pytest
 from contract_helpers import REPO_ROOT
+from sparknet_loader import load_by_path
 
 BUS_PATH = REPO_ROOT / "shared" / "sparknet-event-bus.py"
 EVENT_PATH = REPO_ROOT / "shared" / "sparknet-event.py"
 
 
 def _load(name, path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        sys.modules.pop(spec.name, None)
-    return module
+    return load_by_path(name, path)
 
 
 event = _load("event_bus_event_test", EVENT_PATH)

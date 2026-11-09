@@ -20,7 +20,6 @@ import base64
 import fnmatch
 import hashlib
 import hmac
-import importlib.util
 import json
 import os
 import sys
@@ -34,6 +33,9 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "shared"))
+from sparknet_loader import load_shared  # noqa: E402 - shared/ is added by path above
+
 ROLE_ROOT = {"peer": ROOT / "peer-node", "master": ROOT / "master-node"}
 ROLE_CONFIG = {
     "peer": ROOT / "peer-node" / "configs" / "webui" / "console.json",
@@ -648,19 +650,6 @@ def api_map(config: dict[str, Any], role_root: Path, collection: str | None) -> 
 _LEARNING_CACHE: tuple[float, dict[str, Any]] | None = None
 
 
-def _load_shared_module(filename: str, name: str) -> Any:
-    path = ROOT / "shared" / filename
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, path)
-    if spec is None or spec.loader is None:
-        raise ConsoleError(f"cannot load {path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
 def _node_private_key(role_root: Path) -> Any:
     raw_state = os.environ.get("SPARKNET_STATE_DIR", "").strip()
     if raw_state:
@@ -672,7 +661,7 @@ def _node_private_key(role_root: Path) -> Any:
     path = state / "keys" / "ed25519-node.key.b64"
     if not path.is_file():
         raise ConsoleError(f"node key is missing: {path}")
-    authz = _load_shared_module("sparknet-authz.py", "sparknet_console_authz")
+    authz = load_shared("sparknet-authz.py", "sparknet_console_authz", dirs=[ROOT / "shared"], error=ConsoleError)
     try:
         return authz.load_private_key(path)
     except Exception as exc:
@@ -694,7 +683,7 @@ def _master_learning(config: dict[str, Any], role_root: Path) -> tuple[int, dict
     base = str(settings.get("master_file_share_url") or "http://10.100.0.1:4221").rstrip("/")
     path = str(settings.get("status_path") or "/v1/file/learning/status.json")
     try:
-        http = _load_shared_module("sparknet-http.py", "sparknet_console_http")
+        http = load_shared("sparknet-http.py", "sparknet_console_http", dirs=[ROOT / "shared"], error=ConsoleError)
         status, payload = http.post_json(base, "GET", path, {}, _node_private_key(role_root), timeout=10)
     except Exception as exc:
         return 502, {"ok": False, "error": f"Master Learning link unavailable: {exc}"}

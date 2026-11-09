@@ -7,24 +7,20 @@ handshake and the fact that the role configs use MCP, not `.opencode/plugin*`.
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import ClassVar
+
+from sparknet_loader import load_by_path
 
 ROOT = Path(__file__).resolve().parent.parent
 MCP = ROOT / "shared" / "sparknet-memory-mcp.py"
 
 
 def _load():
-    spec = importlib.util.spec_from_file_location("sparknet_memory_mcp_test", MCP)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path("sparknet_memory_mcp_test", MCP)
 
 
 mcp = _load()

@@ -7,13 +7,12 @@ compose command construction, the memory guard and the lease state machine with
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from sparknet_loader import load_by_path
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNTIME = ROOT / "scripts" / "sparknet-model-runtime.py"
@@ -21,12 +20,7 @@ CATALOG = ROOT / "contracts" / "model-catalog.json"
 
 
 def _load() -> object:
-    spec = importlib.util.spec_from_file_location("sparknet_model_runtime_test", RUNTIME)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path("sparknet_model_runtime_test", RUNTIME)
 
 
 runtime = _load()

@@ -2,22 +2,17 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import struct
-import sys
 from pathlib import Path
+
+from sparknet_loader import load_by_path
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
 def _load(name: str, path: Path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path(name, path)
 
 
 kv = _load("sparknet_kv_export", ROOT / "scripts" / "sparknet-kv-export.py")

@@ -21,7 +21,6 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
-import importlib.util
 import json
 import os
 import sys
@@ -36,6 +35,9 @@ from typing import Any
 SERVICE_DIR = Path(__file__).resolve().parent
 ROLE_ROOT = SERVICE_DIR.parent
 REPO_ROOT = ROLE_ROOT
+sys.path.insert(0, str(REPO_ROOT / "shared"))
+from sparknet_loader import load_shared  # noqa: E402 - shared/ is added by path above
+
 DEFAULT_ENDPOINT = os.environ.get("SPARKNET_UPLIFT_ENDPOINT", "http://10.100.0.1:8091")
 DEFAULT_QDRANT = os.environ.get("SPARKNET_QDRANT_URL", "http://127.0.0.1:6333")
 TIMEOUT = float(os.environ.get("SPARKNET_UPLIFT_TIMEOUT", "60"))
@@ -43,20 +45,6 @@ TIMEOUT = float(os.environ.get("SPARKNET_UPLIFT_TIMEOUT", "60"))
 
 class PushError(RuntimeError):
     pass
-
-
-def _load(name: str, path: Path) -> Any:
-    if name in sys.modules:
-        return sys.modules[name]
-    if not path.is_file():
-        return None
-    spec = importlib.util.spec_from_file_location(name, path)
-    if spec is None or spec.loader is None:
-        return None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
 
 
 def _shared_dir() -> Path:
@@ -70,11 +58,15 @@ def _shared_dir() -> Path:
 
 
 def authz() -> Any:
-    return _load("sparknet_uplift_push_authz", _shared_dir() / "sparknet-authz.py")
+    return load_shared(
+        "sparknet-authz.py", "sparknet_uplift_push_authz", dirs=[_shared_dir()], error=PushError, missing_ok=True
+    )
 
 
 def http() -> Any:
-    return _load("sparknet_uplift_push_http", _shared_dir() / "sparknet-http.py")
+    return load_shared(
+        "sparknet-http.py", "sparknet_uplift_push_http", dirs=[_shared_dir()], error=PushError, missing_ok=True
+    )
 
 
 def state_dir() -> Path:

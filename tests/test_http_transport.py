@@ -20,14 +20,13 @@ What this file asserts:
 
 from __future__ import annotations
 
-import importlib.util
 import socket
-import sys
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from sparknet_loader import load_by_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SHARED = REPO_ROOT / "shared"
@@ -38,12 +37,7 @@ AUTHZ_SCRIPT = SHARED / "sparknet-authz.py"
 @pytest.fixture(scope="module")
 def http():
     """shared/sparknet-http.py, loaded by path for the reason authz is."""
-    spec = importlib.util.spec_from_file_location("sparknet_http", HTTP_SCRIPT)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path("sparknet_http", HTTP_SCRIPT)
 
 
 @pytest.fixture(scope="module")
@@ -331,15 +325,9 @@ def test_dispatch_bridge_serves_signed_status(http, authz):
 
     priv = authz.load_private_key(priv_path)
 
-    import importlib.util as iu
-
-    bridge_spec = iu.spec_from_file_location(
+    bridge = load_by_path(
         "sparknet_dispatch_bridge", REPO_ROOT / "peer-node" / "services" / "sparknet-dispatch-bridge.py"
     )
-    assert bridge_spec and bridge_spec.loader
-    bridge = iu.module_from_spec(bridge_spec)
-    sys.modules[bridge_spec.name] = bridge
-    bridge_spec.loader.exec_module(bridge)
 
     server = _Serve(http, bridge._make_router(bridge.STATES), priv.public_key())
     try:

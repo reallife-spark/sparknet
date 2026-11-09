@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+from sparknet_loader import load_by_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SYNC = REPO_ROOT / "scripts" / "sync-role-skills.py"
@@ -17,11 +17,7 @@ MASTER = REPO_ROOT / "master-node" / ".opencode" / "skills"
 
 
 def load_sync():
-    spec = importlib.util.spec_from_file_location("sync_role_skills", SYNC)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["sync_role_skills"] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path("sync_role_skills", SYNC)
 
 
 def manifest(role_dir: Path) -> dict:

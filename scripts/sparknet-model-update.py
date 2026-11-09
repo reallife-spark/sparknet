@@ -9,7 +9,6 @@ without a passing benchmark result. It never downloads, starts or deletes weight
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import os
 import sys
@@ -19,6 +18,9 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "shared"))
+from sparknet_loader import load_by_path  # noqa: E402 - shared/ is added by path above
+
 STORE = Path(os.environ.get("SPARKNET_MODEL_STORE", "/mnt/ai/models"))
 CATALOG = ROOT / "contracts" / "model-catalog.json"
 PULL = ROOT / "scripts" / "sparknet-model-pull.py"
@@ -40,16 +42,9 @@ def load_json(path: Path) -> dict[str, Any]:
 
 
 def pull_module() -> Any:
-    name = "sparknet_model_pull_update"
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, PULL)
-    if spec is None or spec.loader is None:
-        raise SystemExit(f"model-update: cannot load {PULL}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path(
+        "sparknet_model_pull_update", PULL, error=SystemExit, message=f"model-update: cannot load {PULL}"
+    )
 
 
 def state_path(store: Path, node: str) -> Path:

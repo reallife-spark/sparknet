@@ -22,7 +22,6 @@ from __future__ import annotations
 import ast
 import base64
 import hashlib
-import importlib.util
 import json
 import os
 import socket
@@ -34,6 +33,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from sparknet_loader import load_by_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SHARED = REPO_ROOT / "shared"
@@ -55,15 +55,7 @@ def _clock() -> datetime:
 
 
 def _load(name: str, path: Path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    # Registered before exec: @dataclass resolves its own module through
-    # sys.modules, and a late registration raises an AttributeError that names
-    # neither the cause nor the file. See sparknet-consensus._load_authz.
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path(name, path)
 
 
 @pytest.fixture(scope="module")

@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from datetime import datetime, timezone
 
 import pytest
 from contract_helpers import REPO_ROOT
+from sparknet_loader import load_by_path
 
 AGENT_BUS = REPO_ROOT / "shared" / "sparknet-agent-bus.py"
 EVENT = REPO_ROOT / "shared" / "sparknet-event.py"
@@ -16,12 +15,7 @@ CYBER = REPO_ROOT / "peer-node" / "agents" / "cyber" / "agent.py"
 
 
 def _load(name, path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path(name, path)
 
 
 agent_bus = _load("agent_bus_test", AGENT_BUS)

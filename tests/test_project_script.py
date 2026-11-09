@@ -7,7 +7,6 @@ provenance implementation the vault uses.
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 import shutil
@@ -18,6 +17,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import ClassVar
 
+from sparknet_loader import load_by_path
+
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "sparknet-project.py"
 PEER = ROOT / "peer-node"
@@ -25,11 +26,7 @@ SHARED = ROOT / "shared"
 
 
 def _load(name: str, filename: str):
-    spec = importlib.util.spec_from_file_location(name, SHARED / filename)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path(name, SHARED / filename)
 
 
 prov = _load("sparknet_provenance_project_test", "sparknet-provenance.py")

@@ -10,7 +10,6 @@ the metric code but cannot calibrate a model.
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import math
 import os
@@ -20,20 +19,21 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "shared"))
+from sparknet_loader import load_shared  # noqa: E402 - shared/ is added by path above
+
 VERIFY_PATH = REPO_ROOT / "shared" / "sparknet-verify.py"
 GOLDEN_PATH = REPO_ROOT / "tests" / "reflex" / "plans-golden.json"
 
 
 def _load_verify() -> Any:
-    if "sparknet_verify" in sys.modules:
-        return sys.modules["sparknet_verify"]
-    spec = importlib.util.spec_from_file_location("sparknet_verify", VERIFY_PATH)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"cannot load the verifier from {VERIFY_PATH}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["sparknet_verify"] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_shared(
+        "sparknet-verify.py",
+        "sparknet_verify",
+        dirs=[REPO_ROOT / "shared"],
+        error=RuntimeError,
+        message=f"cannot load the verifier from {VERIFY_PATH}",
+    )
 
 
 def load_golden(path: Path, verify: Any) -> dict[str, Any]:

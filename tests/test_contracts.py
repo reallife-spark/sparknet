@@ -14,10 +14,8 @@ the role vocabulary itself. Run via `make contract-test`.
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import re
-import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -32,6 +30,7 @@ from contract_helpers import (
     SHARED_PATH,
     load,
 )
+from sparknet_loader import load_by_path
 
 # --- there is exactly one implementation, and it agrees with the contract ------
 
@@ -1420,30 +1419,12 @@ def provenance() -> ModuleType:
     carrying a private copy of its rules; an import would let a stale
     installed copy satisfy the assertions below.
     """
-    spec = importlib.util.spec_from_file_location(
-        "sparknet_provenance", REPO_ROOT / "shared" / "sparknet-provenance.py"
-    )
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        sys.modules.pop(spec.name, None)
-    return module
+    return load_by_path("sparknet_provenance", REPO_ROOT / "shared" / "sparknet-provenance.py")
 
 
 @pytest.fixture(scope="module")
 def master_ledger() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("sparknet_ledger_master", MASTER / "services" / "sparknet-ledger.py")
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        sys.modules.pop(spec.name, None)
-    return module
+    return load_by_path("sparknet_ledger_master", MASTER / "services" / "sparknet-ledger.py")
 
 
 def test_every_contract_file_is_named_in_the_readme():

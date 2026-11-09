@@ -2,25 +2,19 @@
 
 from __future__ import annotations
 
-import importlib.util
 import stat
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from sparknet_loader import load_by_path
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "sparknet-recovery.py"
 
 
 def _load():
-    spec = importlib.util.spec_from_file_location("sparknet_recovery_test", SCRIPT)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path("sparknet_recovery_test", SCRIPT)
 
 
 recovery = _load()

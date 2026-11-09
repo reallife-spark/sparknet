@@ -2,24 +2,19 @@
 
 from __future__ import annotations
 
-import importlib.util
 import io
-import sys
 import tarfile
 from pathlib import Path
 
 import pytest
+from sparknet_loader import load_by_path
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
 def _load():
     path = ROOT / "scripts" / "sparknet-safe-extract.py"
-    spec = importlib.util.spec_from_file_location("safe_extract_test", path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path("safe_extract_test", path)
 
 
 safe = _load()

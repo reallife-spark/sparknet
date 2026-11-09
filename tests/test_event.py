@@ -2,26 +2,17 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from datetime import datetime, timedelta, timezone
 
 import pytest
 from contract_helpers import REPO_ROOT, load
+from sparknet_loader import load_by_path
 
 EVENT_PATH = REPO_ROOT / "shared" / "sparknet-event.py"
 
 
 def _load_event():
-    spec = importlib.util.spec_from_file_location("sparknet_event", EVENT_PATH)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        sys.modules.pop(spec.name, None)
-    return module
+    return load_by_path("sparknet_event", EVENT_PATH)
 
 
 event = _load_event()

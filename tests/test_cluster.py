@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from pathlib import Path
 from types import ModuleType
 
 import pytest
+from sparknet_loader import load_by_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CLUSTER_PATH = REPO_ROOT / "shared" / "sparknet-cluster.py"
@@ -15,15 +14,7 @@ CLUSTER_PATH = REPO_ROOT / "shared" / "sparknet-cluster.py"
 
 @pytest.fixture(scope="module")
 def cluster() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("sparknet_cluster_test", CLUSTER_PATH)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        sys.modules.pop(spec.name, None)
-    return module
+    return load_by_path("sparknet_cluster_test", CLUSTER_PATH)
 
 
 def _job() -> dict:

@@ -8,24 +8,19 @@ WireGuard interface, or a malformed logind session cannot be mistaken for zero.
 
 from __future__ import annotations
 
-import importlib.util
 import subprocess
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
+
+from sparknet_loader import load_by_path
 
 FABRIC_ROOT = Path(__file__).resolve().parent.parent
 IDLE_PATH = FABRIC_ROOT / "shared" / "sparknet-idle.py"
 
 
 def _load() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("sparknet_idle_for_tests", IDLE_PATH)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path("sparknet_idle_for_tests", IDLE_PATH)
 
 
 idle = _load()

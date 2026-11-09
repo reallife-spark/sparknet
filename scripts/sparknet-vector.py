@@ -60,7 +60,6 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
-import importlib.util
 import json
 import math
 import os
@@ -74,6 +73,8 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "shared"))
+from sparknet_loader import load_by_path  # noqa: E402 - shared/ is added by path above
 
 #: Stamp fields whose disagreement means the stored vectors cannot be trusted:
 #: a different model, different weights, or different content.
@@ -409,13 +410,9 @@ def _policy() -> Any:
     global _POLICY
     if _POLICY is None:
         script = Path(__file__).resolve().parent / "sparknet-rag-corpus.py"
-        spec = importlib.util.spec_from_file_location("sparknet_rag_corpus_policy", script)
-        if spec is None or spec.loader is None:
-            raise RuntimeError(f"cannot load the corpus policy: {script}")
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
-        _POLICY = module
+        _POLICY = load_by_path(
+            "sparknet_rag_corpus_policy", script, error=RuntimeError, message=f"cannot load the corpus policy: {script}"
+        )
     return _POLICY
 
 

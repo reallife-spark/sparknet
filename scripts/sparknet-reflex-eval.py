@@ -38,7 +38,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib.util
 import json
 import math
 import os
@@ -49,6 +48,9 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "shared"))
+from sparknet_loader import load_by_path, load_shared  # noqa: E402 - shared/ is added by path above
+
 GOLDEN = REPO_ROOT / "tests" / "reflex" / "rag-golden.json"
 EXIT_PREFLIGHT = 4
 RELEVANCE_INSTRUCTIONS = (
@@ -60,25 +62,18 @@ RELEVANCE_INSTRUCTIONS = (
 def _load_chroma():
     """Load ``sparknet-vector.py`` (the filename is not a module name)."""
     path = REPO_ROOT / "scripts" / "sparknet-vector.py"
-    spec = importlib.util.spec_from_file_location("sparknet_vector", path)
-    if spec is None or spec.loader is None:
-        raise SystemExit(f"reflex-eval: cannot load {path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path("sparknet_vector", path, error=SystemExit, message=f"reflex-eval: cannot load {path}")
 
 
 def _load_reflex():
     """Load the shared decision contract (the filename is not a module name)."""
-    path = REPO_ROOT / "shared" / "sparknet-reflex.py"
-    spec = importlib.util.spec_from_file_location("sparknet_reflex_eval_contract", path)
-    if spec is None or spec.loader is None:
-        raise SystemExit(f"reflex-eval: cannot load {path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_shared(
+        "sparknet-reflex.py",
+        "sparknet_reflex_eval_contract",
+        dirs=[REPO_ROOT / "shared"],
+        error=SystemExit,
+        message="reflex-eval: cannot load the shared reflex contract",
+    )
 
 
 def live_config(overrides: dict[str, Any] | None = None) -> dict[str, Any]:

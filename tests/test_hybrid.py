@@ -2,25 +2,15 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-
 import pytest
 from contract_helpers import REPO_ROOT, load
+from sparknet_loader import load_by_path
 
 HYBRID_PATH = REPO_ROOT / "shared" / "sparknet-hybrid.py"
 
 
 def _load_hybrid():
-    spec = importlib.util.spec_from_file_location("sparknet_hybrid", HYBRID_PATH)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        sys.modules.pop(spec.name, None)
-    return module
+    return load_by_path("sparknet_hybrid", HYBRID_PATH)
 
 
 hybrid = _load_hybrid()

@@ -16,13 +16,13 @@ The real-Qdrant round trip is skipped when the optional package is absent.
 
 from __future__ import annotations
 
-import importlib.util
 import os
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+from sparknet_loader import load_by_path  # shared/ comes from conftest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = REPO_ROOT / "scripts" / "sparknet-vector.py"
@@ -30,12 +30,7 @@ SCOPES = ("peer", "master", "fabric", "shared")
 
 
 def _load():
-    spec = importlib.util.spec_from_file_location("sparknet_vector", SCRIPT)
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    return load_by_path("sparknet_vector", SCRIPT)
 
 
 vector = _load()

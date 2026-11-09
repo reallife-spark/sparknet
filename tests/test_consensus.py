@@ -12,12 +12,11 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import importlib.util
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from sparknet_loader import load_by_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SHARED = REPO_ROOT / "shared"
@@ -30,12 +29,7 @@ def _load(name: str, path: Path):
     module through sys.modules, and skipping it raises an AttributeError about
     __dict__ that gives no hint what went wrong.
     """
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path(name, path)
 
 
 @pytest.fixture(scope="module")

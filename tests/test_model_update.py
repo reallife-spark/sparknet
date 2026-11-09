@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
-import sys
 from pathlib import Path
 from types import ModuleType
 
 import pytest
+from sparknet_loader import load_by_path
 
 ROOT = Path(__file__).resolve().parent.parent
 UPDATE = ROOT / "scripts" / "sparknet-model-update.py"
@@ -18,12 +17,7 @@ MODEL_ID = "qwen3.5-9b-q8"
 
 @pytest.fixture(scope="module")
 def update() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("sparknet_model_update_test", UPDATE)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path("sparknet_model_update_test", UPDATE)
 
 
 def _store(tmp_path: Path) -> Path:

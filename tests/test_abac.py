@@ -7,29 +7,20 @@ only, fail-closed classification, and scope that narrows but never widens.
 from __future__ import annotations
 
 import base64
-import importlib.util
 import json
-import sys
 
 import pytest
 from contract_helpers import REPO_ROOT, load
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from sparknet_loader import load_by_path
 
 ABAC_PATH = REPO_ROOT / "shared" / "sparknet-abac.py"
 AUTHZ_PATH = REPO_ROOT / "shared" / "sparknet-authz.py"
 
 
 def _load_abac():
-    spec = importlib.util.spec_from_file_location("sparknet_abac", ABAC_PATH)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        sys.modules.pop(spec.name, None)
-    return module
+    return load_by_path("sparknet_abac", ABAC_PATH)
 
 
 abac = _load_abac()
@@ -306,14 +297,7 @@ def test_subject_projection_requires_verification_and_a_local_vault():
 
 
 def test_subject_projection_uses_real_authz_records():
-    spec = importlib.util.spec_from_file_location("sparknet_authz_for_abac", AUTHZ_PATH)
-    assert spec and spec.loader
-    authz = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = authz
-    try:
-        spec.loader.exec_module(authz)
-    finally:
-        sys.modules.pop(spec.name, None)
+    authz = load_by_path("sparknet_authz_for_abac", AUTHZ_PATH)
 
     key = Ed25519PrivateKey.generate()
     public_b64 = base64.b64encode(

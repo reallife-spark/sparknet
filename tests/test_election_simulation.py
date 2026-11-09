@@ -28,10 +28,10 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import importlib.util
-import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+from sparknet_loader import load_by_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SHARED = REPO_ROOT / "shared"
@@ -44,12 +44,7 @@ ELECTION_WINDOW = timedelta(hours=2)
 
 
 def _load(name: str, path: Path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path(name, path)
 
 
 def _module():

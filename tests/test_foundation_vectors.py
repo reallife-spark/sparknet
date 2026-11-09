@@ -6,26 +6,17 @@ a canonical form fails here before it can become a Python-only dialect.
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 
 from contract_helpers import REPO_ROOT
+from sparknet_loader import load_by_path
 
 VECTORS = REPO_ROOT / "contracts" / "vectors" / "foundations.json"
 GOSPARK_VECTORS = REPO_ROOT / "gospark" / "spec" / "sparknet" / "foundations-vectors.json"
 
 
 def _load(name: str, relative: str):
-    spec = importlib.util.spec_from_file_location(name, REPO_ROOT / "shared" / relative)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        sys.modules.pop(spec.name, None)
-    return module
+    return load_by_path(name, REPO_ROOT / "shared" / relative)
 
 
 event = _load("vectors_event", "sparknet-event.py")

@@ -12,7 +12,6 @@ health, session creation, message listing, the SSE handshake and interruption.
 from __future__ import annotations
 
 import base64
-import importlib.util
 import os
 import socket
 import subprocess
@@ -22,6 +21,7 @@ import urllib.request
 from pathlib import Path
 
 import pytest
+from sparknet_loader import load_by_path
 
 ROOT = Path(__file__).resolve().parent.parent
 ENGINE_PATH = ROOT / "peer-node" / "services" / "sparknet-opencode-engine.py"
@@ -30,11 +30,7 @@ PASSWORD = "opencode-certify-password"
 
 
 def _load_engine():
-    spec = importlib.util.spec_from_file_location("sparknet_opencode_engine_integration", ENGINE_PATH)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path("sparknet_opencode_engine_integration", ENGINE_PATH)
 
 
 def _free_port() -> int:

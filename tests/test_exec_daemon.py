@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 import socket
@@ -12,21 +11,15 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from sparknet_loader import load_by_path
+
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "sparknet-exec-daemon.py"
 SHARED = ROOT / "shared"
 
 
 def _load(name: str, filename: str):
-    spec = importlib.util.spec_from_file_location(name, SHARED / filename)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        sys.modules.pop(spec.name, None)
-    return module
+    return load_by_path(name, SHARED / filename)
 
 
 authz = _load("exec_daemon_authz_test", "sparknet-authz.py")

@@ -98,111 +98,23 @@ done
 REMOTE="${SPARKNET_GOAGX_REMOTE:-$REMOTE_DEFAULT}"
 
 # --- export surface -----------------------------------------------------------
-# The layout a node needs: both role subvaults (a master image runs the peer
-# bundle too — services/sparknet-parity.py loads peer services by path), the
-# contract + shared implementation the bundle already deems non-optional, the
-# fabric scripts the node machinery calls, the vendored wiki suite + agents,
-# the goagx image surface, and the root files the image build COPYs or the
-# setup script drives.
-SUBTREES=(peer-node master-node contracts shared scripts .opencode/skills .opencode/agents goagx sbom)
-# Root files the image build or the node flow names. spark.docker and
-# spark.compose.yml stay: the setup script's default platform IS spark, and a
-# distribution shipping half the platform pair fails the moment it runs bare.
-# .env.example is what env-init copies into every role vault.
-# USER_MANUAL.md is the fabric's master manual: the goagx distribution is a
-# mirror of the fabric, so it carries the manual that describes the mirror.
-ROOT_FILES=(
-  spark-entrypoint.sh spark-precontext.py spark.compose.cpu.yml
-  torch-dist-l4t-compat.py spark-vllm-l4t-patch.py spark-vllm-xformers-gqa-patch.py
-  sparknet-node-setup.sh bootstrap-agx.sh
-  spark.docker spark.compose.yml
-  .env.example
-  .dockerignore .gitignore opencode.json requirements.txt
-  USER_MANUAL.md
-  VERSION
-)
+# The layout a node needs — both role subvaults (a master image runs the peer
+# bundle too), the contract + shared implementation, the fabric scripts, the
+# vendored wiki suite + agents, the goagx image surface, and the root files the
+# image build COPYs — is the release export module's specification. This
+# adapter only generates the distribution's own README/VERSIONS content and
+# runs the surface-specific verify.
+EXPORT_PY="$REPO_ROOT/scripts/sparknet-release-export.py"
+export_run() { python3 "$EXPORT_PY" "$@"; }
+json_field() {
+  python3 -c 'import json,sys; v=json.loads(sys.argv[1]).get(sys.argv[2]); print("" if v is None else v)' "$1" "$2"
+}
 TEMPLATES="$REPO_ROOT/goagx/goagx/publish-templates"
-
-# The release *data* (VERSION, sbom/) ships; the fabric-root tools do not. A
-# distribution has no root Makefile, so `scripts/sparknet` would exit "no
-# makefile found" and `scripts/sparknet-sbom.py` would have nothing to read a
-# root version from. Same policy as `scripts/sparknet-bundle.sh`.
-EXCLUDE_SCRIPT_FILES=(sparknet sparknet-sbom.py)
-EXCLUDE_SCRIPT_DIRS=(plugins)
-
-prune_fabric_only_tools() {  # <root>
-  local root="$1" name
-  for name in "${EXCLUDE_SCRIPT_FILES[@]}"; do rm -f "$root/scripts/$name"; done
-  for name in "${EXCLUDE_SCRIPT_DIRS[@]}"; do rm -rf "$root/scripts/$name"; done
-}
-
-# The export surface is selected with git's own view of the tree: tracked
-# files plus untracked files git would not refuse to add. That keeps .env,
-# .state, .obsidian and the staged bundle tarball out automatically — anything
-# .gitignore hides in the fabric stays hidden in the distribution, so the
-# staged tree and the published commit can never disagree on contents.
-# NUL-delimited because paths may carry spaces.
-copy_worktree() {  # <path relative to repo root>
-  local rel="$1" f
-  while IFS= read -r -d '' f; do
-    [ -e "$REPO_ROOT/$f" ] || [ -L "$REPO_ROOT/$f" ] || continue  # deleted in the worktree
-    mkdir -p "$target/$(dirname "$f")"
-    cp -a "$REPO_ROOT/$f" "$target/$f"
-  done < <(git -C "$REPO_ROOT" ls-files -z --cached --others --exclude-standard -- "$rel")
-}
-
-copy_submodule_files() {  # <repo-root> <dest> [subdir-prefix]
-  local src="$1" dest="$2" prefix="${3:-}" f
-  while IFS= read -r -d '' f; do
-    [ -e "$src/$f" ] || [ -L "$src/$f" ] || continue
-    mkdir -p "$dest/$(dirname "$f")"
-    cp -a "$src/$f" "$dest/$f"
-  done < <(git -C "$src" ls-files -z --cached --others --exclude-standard ${prefix:+-- "$prefix"})
-}
-
-submodule_commit() {  # <from-git-ref> <path> -> commit id
-  git -C "$REPO_ROOT" ls-tree "$1" "$2" | awk '$2 == "commit" {print $3; exit}'
-}
-
-export_submodule() {  # <from-git-ref> <path>
-  local commit
-  commit="$(submodule_commit "$1" "$2")"
-  [ -n "$commit" ] || die "submodule $2 is not a gitlink at $1"
-  [ -d "$REPO_ROOT/$2" ] || die "submodule $2 is not initialized"
-  git -C "$REPO_ROOT/$2" cat-file -e "${commit}^{commit}" 2>/dev/null \
-    || die "submodule $2 does not contain pinned commit $commit"
-  git -C "$REPO_ROOT/$2" archive --format=tar --prefix="$2/" "$commit" | tar -xf - -C "$target"
-}
-
-export_goagx_source() {  # <from-git-ref>
-  local commit
-  commit="$(submodule_commit "$1" goagx)"
-  [ -n "$commit" ] || die "goagx is not a gitlink at $1"
-  git -C "$REPO_ROOT/goagx" cat-file -e "${commit}^{commit}" 2>/dev/null \
-    || die "goagx does not contain pinned commit $commit"
-  git -C "$REPO_ROOT/goagx" archive --format=tar "$commit" goagx | tar -xf - -C "$target"
-}
 
 pin_get() { sed -n "s/^$1=//p" "$REPO_ROOT/goagx/goagx/GOSPARK_PIN" | head -1; }
 
 dockerfile_arg() {  # ARG name -> default from the AGX dockerfile
   sed -n "s/^ARG $1=//p" "$REPO_ROOT/goagx/goagx/sparknet.agx.docker" | head -1
-}
-
-sha256_of() {
-  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1
-  elif command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1
-  else return 1; fi
-}
-
-write_sums() {  # <root>: SHA256SUMS over every file but itself and .git
-  local root="$1" rel
-  ( cd "$root" && find . -path ./.git -prune -o -type f -print | LC_ALL=C sort | while IFS= read -r f; do
-      rel="${f#./}"
-      [ "$rel" = "SHA256SUMS" ] && continue
-      printf '%s  %s\n' "$(sha256_of "$f")" "$rel"
-    done
-  ) > "$root/SHA256SUMS"
 }
 
 resolved_sha() {  # the sparknet revision this export represents
@@ -216,47 +128,18 @@ resolved_sha() {  # the sparknet revision this export represents
 # --- stage --------------------------------------------------------------------
 
 stage_into() {  # <target-dir>
-  local target="$1" subtree f sha
+  local target="$1" stage_json sha
   mkdir -p "$target"
 
   if [ -n "$FROM_GIT" ]; then
-    git -C "$REPO_ROOT" rev-parse "${FROM_GIT}^{commit}" >/dev/null 2>&1 \
-      || die "no such ref: $FROM_GIT"
-    for subtree in "${SUBTREES[@]}"; do
-      if ! git -C "$REPO_ROOT" ls-tree "$FROM_GIT" -- "$subtree" | grep -q .; then
-        die "subtree missing at $FROM_GIT: $subtree"
-      fi
-      case "$subtree" in
-        peer-node|master-node) export_submodule "$FROM_GIT" "$subtree" ;;
-        goagx) export_goagx_source "$FROM_GIT" ;;
-        *) git -C "$REPO_ROOT" archive --format=tar "$FROM_GIT" "$subtree" | tar -xf - -C "$target" ;;
-      esac
-      log "from-git $subtree"
-    done
-    for f in "${ROOT_FILES[@]}"; do
-      git -C "$REPO_ROOT" cat-file -e "${FROM_GIT}:${f}" 2>/dev/null \
-        || die "root file missing at $FROM_GIT: $f"
-      git -C "$REPO_ROOT" archive --format=tar "$FROM_GIT" "$f" | tar -xf - -C "$target"
-    done
+    stage_json="$(export_run stage --surface goagx --source "$FROM_GIT" --dest "$target")" \
+      || die "release export failed"
   else
-    [ -z "$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null)" ] \
-      || warn "working tree is dirty — the export includes uncommitted work (use --from-git for release-grade)"
-    for subtree in "${SUBTREES[@]}"; do
-      [ -e "$REPO_ROOT/$subtree" ] || die "subtree missing: $subtree (run git submodule update --init --recursive)"
-      case "$subtree" in
-        peer-node|master-node) copy_submodule_files "$REPO_ROOT/$subtree" "$target/$subtree" ;;
-        goagx) copy_submodule_files "$REPO_ROOT/goagx" "$target" goagx ;;
-        *) copy_worktree "$subtree" ;;
-      esac
-      log "copied  $subtree"
-    done
-    for f in "${ROOT_FILES[@]}"; do
-      [ -e "$REPO_ROOT/$f" ] || die "root file missing: $f"
-      copy_worktree "$f"
-    done
+    stage_json="$(export_run stage --surface goagx --dest "$target")" \
+      || die "release export failed"
+    [ "$(json_field "$stage_json" dirty)" = "True" ] \
+      && warn "working tree is dirty — the export includes uncommitted work (use --from-git for release-grade)"
   fi
-
-  prune_fabric_only_tools "$target"
 
   # Generated artefacts: the deploy-first README, the machine-readable pin
   # manifest, and the distribution's own CI workflow (same verify command).
@@ -314,7 +197,7 @@ PY
   if [ -n "$PUBKEY" ] && [ -f "$PUBKEY" ]; then
     cp "$PUBKEY" "$target/RELEASE_PUBKEY"
   fi
-  write_sums "$target"
+  export_run checksums --dest "$target" >/dev/null
   if [ -n "$SIGN_KEY" ]; then
     python3 "$REPO_ROOT/scripts/sparknet-sign-artifact.py" sign --file "$target" --key "$SIGN_KEY" --out "$target/SHA256SUMS.sig" \
       || die "could not sign the staged tree"
@@ -342,7 +225,7 @@ verify_tree() {  # <root>
     [ -n "$PUBKEY" ] && [ -f "$PUBKEY" ] || die "--verify needs a pinned --pubkey"
     local sig="${SIGNATURE:-$root/SHA256SUMS.sig}"
     [ -f "$sig" ] || die "detached signature missing: $sig"
-    python3 "$REPO_ROOT/scripts/sparknet-sign-artifact.py" verify --file "$root" --signature "$sig" --pubkey "$PUBKEY" \
+    export_run verify-integrity --path "$root" --signature "$sig" --pubkey "$PUBKEY" >/dev/null \
       || die "tree signature does not verify"
   fi
 
@@ -385,11 +268,11 @@ verify_tree() {  # <root>
   step "integrity manifest (SHA256SUMS)"
   if [ ! -f "$root/SHA256SUMS" ]; then
     bad "SHA256SUMS missing"
-  elif ( cd "$root" && { sha256sum -c SHA256SUMS 2>/dev/null || shasum -a 256 -c SHA256SUMS 2>/dev/null; } ) >/dev/null; then
+  elif export_run verify-integrity --path "$root" >/dev/null 2>&1; then
     ok "$(grep -c . "$root/SHA256SUMS") files verified"
   else
     bad "SHA256SUMS does not match the tree"
-    ( cd "$root" && sha256sum -c SHA256SUMS 2>&1 | grep -v ': OK$' | head -8 | sed 's/^/      /' )
+    export_run verify-integrity --path "$root" 2>&1 | head -8 | sed 's/^/      /'
   fi
 
   # Symlinks carry no hash (SHA256SUMS is regular files only) — but the
@@ -565,7 +448,7 @@ with open(path, "w") as fh:
 PY
     LC_ALL=C sed -i -E "s/[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z/<published>/g" "$tree/README.md"
     LC_ALL=C sed -i -E "s/\`[0-9a-f]{40}\` of \[reallife-spark\/sparknet\]/\`<sparknet-sha>\` of [reallife-spark\/sparknet]/g" "$tree/README.md"
-    write_sums "$tree"
+    export_run checksums --dest "$tree" >/dev/null
   done
   if diff -r --exclude=.git --exclude=RELEASE_PUBKEY --exclude=SHA256SUMS.sig --exclude=SHA256SUMS \
       "$remote_work/goagx" "$stage" >"$remote_work/diff.txt" 2>&1; then
@@ -597,7 +480,7 @@ case "$ACTION" in
           [ -n "$PUBKEY" ] && [ -f "$PUBKEY" ] || die "--verify needs a pinned --pubkey"
           sig="${SIGNATURE:-$VERIFY_PATH.sig}"
           [ -f "$sig" ] || die "detached archive signature missing: $sig"
-          python3 "$REPO_ROOT/scripts/sparknet-sign-artifact.py" verify --file "$VERIFY_PATH" --signature "$sig" --pubkey "$PUBKEY" \
+          export_run verify-integrity --path "$VERIFY_PATH" --signature "$sig" --pubkey "$PUBKEY" >/dev/null \
             || die "archive signature does not verify"
           tmp="$(mktemp -d)"
           python3 "$REPO_ROOT/scripts/sparknet-safe-extract.py" "$root" "$tmp"

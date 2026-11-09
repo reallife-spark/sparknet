@@ -6,26 +6,20 @@ exercises the real HTTP path and the summary arithmetic without loading a model.
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
+from sparknet_loader import load_by_path
 
 ROOT = Path(__file__).resolve().parent.parent
 BENCH = ROOT / "scripts" / "sparknet-model-bench.py"
 
 
 def _load() -> object:
-    spec = importlib.util.spec_from_file_location("sparknet_model_bench_test", BENCH)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path("sparknet_model_bench_test", BENCH)
 
 
 bench = _load()

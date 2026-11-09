@@ -13,13 +13,17 @@ are registered in ``pyproject.toml`` so ``--strict-markers`` accepts them and
 
 from __future__ import annotations
 
-import importlib.util
 import sys
 from pathlib import Path
 from types import ModuleType
 
 import pytest
-from contract_helpers import SHARED_PATH, load
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "shared"))
+
+from contract_helpers import SHARED_PATH, load  # noqa: E402 - after the shared path shim
+from sparknet_loader import load_by_path  # noqa: E402 - shared/ is added by path above
 
 
 @pytest.fixture
@@ -55,20 +59,10 @@ def ports() -> dict:
 
 @pytest.fixture(scope="module")
 def authz() -> ModuleType:
-    """Load the one shared implementation by path, not by import.
+    """Load the one shared implementation through the one loader.
 
     It lives outside the package so that neither role can accidentally import a
-    private copy; importing by path is what proves there is only one of them.
+    private copy; loading it through ``sparknet_loader`` is what proves there is
+    only one loader and one implementation.
     """
-    spec = importlib.util.spec_from_file_location("sparknet_authz", SHARED_PATH)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    # dataclasses resolves its own module via sys.modules, so it must be
-    # registered before exec_module or @dataclass blows up with a confusing
-    # AttributeError about __dict__.
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        sys.modules.pop(spec.name, None)
-    return module
+    return load_by_path("sparknet_authz", SHARED_PATH)

@@ -8,9 +8,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import importlib.util
 import json
-import sys
 import threading
 import urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -18,6 +16,7 @@ from pathlib import Path
 from typing import ClassVar
 
 import pytest
+from sparknet_loader import load_by_path
 
 ROOT = Path(__file__).resolve().parent.parent
 CONSOLE = ROOT / "scripts" / "sparknet-console.py"
@@ -25,12 +24,7 @@ STATIC = ROOT / "webui" / "console"
 
 
 def _load() -> object:
-    spec = importlib.util.spec_from_file_location("sparknet_console_test", CONSOLE)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path("sparknet_console_test", CONSOLE)
 
 
 console = _load()

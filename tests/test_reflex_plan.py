@@ -9,14 +9,13 @@ model's judgment.
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from pathlib import Path
 from types import ModuleType
 
 import pytest
 from contract_helpers import REPO_ROOT
+from sparknet_loader import load_by_path
 
 REFLEX_PATH = REPO_ROOT / "shared" / "sparknet-reflex.py"
 VERIFY_PATH = REPO_ROOT / "shared" / "sparknet-verify.py"
@@ -34,15 +33,7 @@ RUBRIC = "The plan must be local-only and require no cloud credential."
 
 
 def _load(name: str, path: Path) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        sys.modules.pop(spec.name, None)
-    return module
+    return load_by_path(name, path)
 
 
 @pytest.fixture(scope="module")

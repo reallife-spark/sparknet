@@ -3,26 +3,18 @@
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import sys
 
 import pytest
 from contract_helpers import REPO_ROOT, load
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from sparknet_loader import load_by_path
 
 PACKAGE_PATH = REPO_ROOT / "shared" / "sparknet-package.py"
 
 
 def _load_package():
-    spec = importlib.util.spec_from_file_location("sparknet_package", PACKAGE_PATH)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        sys.modules.pop(spec.name, None)
-    return module
+    return load_by_path("sparknet_package", PACKAGE_PATH)
 
 
 package = _load_package()
@@ -156,12 +148,7 @@ def test_cli_install_verifies_signatures_and_copies_artifacts(tmp_path):
     from contract_helpers import REPO_ROOT
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-    authz_spec = importlib.util.spec_from_file_location(
-        "package_install_authz", REPO_ROOT / "shared" / "sparknet-authz.py"
-    )
-    authz = importlib.util.module_from_spec(authz_spec)
-    sys.modules[authz_spec.name] = authz
-    authz_spec.loader.exec_module(authz)
+    authz = load_by_path("package_install_authz", REPO_ROOT / "shared" / "sparknet-authz.py")
 
     key = Ed25519PrivateKey.generate()
     signed = package.sign_package(manifest(artifacts=[{"path": "bin/tool", "sha256": DIGEST, "size": 8}]), key)

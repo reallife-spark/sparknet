@@ -8,9 +8,7 @@ control token is the only way to select an arbitrary allowed vault.
 from __future__ import annotations
 
 import base64
-import importlib.util
 import json
-import sys
 import threading
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -20,6 +18,7 @@ from typing import ClassVar
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from sparknet_loader import load_by_path
 
 ROOT = Path(__file__).resolve().parent.parent
 SHARED = ROOT / "shared"
@@ -28,11 +27,7 @@ NOW = datetime.now(timezone.utc)
 
 def _load(name: str, filename: str):
     path = SHARED / filename
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path(name, path)
 
 
 authz = _load("sparknet_authz_gateway_test", "sparknet-authz.py")

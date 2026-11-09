@@ -431,18 +431,12 @@ print(json.dumps(sorted(json.loads(out.decode())["capabilities"])))
 step "the elected master can sign (DoD 7), and a peer verifies by the root"
 ROOT_ID="$(jfield "$(node "$CAND")/master-node/manifests/cluster-trust-root.json" root_id)"
 RESP="$("$PY" -c '
-import json, importlib.util, socket, sys
+import json, socket, sys
 from datetime import datetime, timedelta, timezone
 shared = sys.argv[1]
-
-def load(name, file):
-    spec = importlib.util.spec_from_file_location(name, f"{shared}/{file}")
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-authz = load("authz", "sparknet-authz.py")
+sys.path.insert(0, shared)
+from sparknet_loader import load_shared
+authz = load_shared("sparknet-authz.py", "authz", dirs=[shared])
 identity = json.load(open(sys.argv[2]))
 now = datetime.now(timezone.utc)
 entry = {
@@ -470,12 +464,11 @@ check "signer signed a registry entry for a still-peer" \
   bash -c "grep -qF '\"ok\": true' <<< \"\$0\"" "$RESP"
 check "that signature verifies against the root public key" \
   "$PY" -c '
-import json, importlib.util, sys
+import json, sys
 shared = sys.argv[1]
-spec = importlib.util.spec_from_file_location("authz", f"{shared}/sparknet-authz.py")
-authz = importlib.util.module_from_spec(spec)
-sys.modules["authz"] = authz
-spec.loader.exec_module(authz)
+sys.path.insert(0, shared)
+from sparknet_loader import load_shared
+authz = load_shared("sparknet-authz.py", "authz", dirs=[shared])
 resp = json.loads(sys.argv[2])
 root = json.load(open(sys.argv[3]))
 entry = resp["entry"]
@@ -532,12 +525,11 @@ else
 fi
 check "a still-peer verifies the published entry by the root alone" \
   "$PY" -c '
-import json, importlib.util, sys
+import json, sys
 shared = sys.argv[1]
-spec = importlib.util.spec_from_file_location("authz", f"{shared}/sparknet-authz.py")
-authz = importlib.util.module_from_spec(spec)
-sys.modules["authz"] = authz
-spec.loader.exec_module(authz)
+sys.path.insert(0, shared)
+from sparknet_loader import load_shared
+authz = load_shared("sparknet-authz.py", "authz", dirs=[shared])
 entry_path, root_path = sys.argv[2], sys.argv[3]
 entry = json.load(open(entry_path))
 root = json.load(open(root_path))

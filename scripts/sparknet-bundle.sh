@@ -37,51 +37,11 @@ AGENTS_DIR="$REPO_ROOT/.opencode/agents"
 
 die() { printf 'sparknet-bundle: %s\n' "$1" >&2; exit 1; }
 
-export_git_submodule() {  # <ref> <path>
-  local ref="$1" path="$2" commit
-  commit="$(git -C "$REPO_ROOT" ls-tree "$ref" "$path" | awk '$2 == "commit" {print $3; exit}')"
-  [ -n "$commit" ] || die "submodule $path is not a gitlink at $ref"
-  [ -d "$REPO_ROOT/$path" ] || die "submodule $path is not initialized (git submodule update --init --recursive)"
-  git -C "$REPO_ROOT/$path" cat-file -e "${commit}^{commit}" 2>/dev/null \
-    || die "submodule $path does not contain pinned commit $commit"
-  git -C "$REPO_ROOT/$path" archive --format=tar --prefix="$prefix/$path/" "$commit" | tar -xf - -C "$stage"
-}
-
-# --- integrity manifest -------------------------------------------------------
-# The bundle ships a SHA256SUMS so a node can prove the bytes it received are the
-# bytes the build host assembled — a tarball corrupted or tampered with in transit
-# fails the check before anything runs. A node has coreutils (`sha256sum`) or macOS
-# `shasum`; pick whichever is present so generation and verification agree.
-sha256_tool() {
-  if command -v sha256sum >/dev/null 2>&1; then printf 'sha256sum'
-  elif command -v shasum >/dev/null 2>&1; then printf 'shasum'
-  else printf ''; fi
-}
-sha256_of() {  # file -> hex digest
-  case "$(sha256_tool)" in
-    sha256sum) sha256sum "$1" | cut -d' ' -f1 ;;
-    shasum)    shasum -a 256 "$1" | cut -d' ' -f1 ;;
-    *)         return 1 ;;
-  esac
-}
-sha256_check() {  # run `-c` against a sums file, from inside its directory
-  case "$(sha256_tool)" in
-    sha256sum) sha256sum -c "$1" ;;
-    shasum)    shasum -a 256 -c "$1" ;;
-    *)         return 1 ;;
-  esac
-}
-
-write_sums() {  # <bundle-root>: write SHA256SUMS over every file but itself
-  local root="$1" rel
-  (
-    cd "$root" || exit 1
-    find . -type f | LC_ALL=C sort | while IFS= read -r f; do
-      rel="${f#./}"
-      [ "$rel" = "SHA256SUMS" ] && continue
-      printf '%s  %s\n' "$(sha256_of "$f")" "$rel"
-    done
-  ) > "$root/SHA256SUMS"
+# The one release export implementation (scripts/sparknet-release-export.py).
+EXPORT_PY="$REPO_ROOT/scripts/sparknet-release-export.py"
+export_run() { python3 "$EXPORT_PY" "$@"; }
+json_field() {
+  python3 -c 'import json,sys; v=json.loads(sys.argv[1]).get(sys.argv[2]); print("" if v is None else v)' "$1" "$2"
 }
 
 # --- verify: prove an extracted bundle actually runs --------------------------
@@ -94,7 +54,7 @@ verify_bundle() {
   sig="${signature:-$archive.sig}"
   [ -f "$sig" ] || die "detached signature missing: $sig (build with --sign-key, then rerun --verify --pubkey ...)"
   [ -n "$pubkey" ] && [ -f "$pubkey" ] || die "--verify needs a pinned --pubkey (or SPARKNET_BUNDLE_PUBKEY)"
-  python3 "$REPO_ROOT/scripts/sparknet-sign-artifact.py" verify --file "$archive" --signature "$sig" --pubkey "$pubkey" \
+  export_run verify-integrity --path "$archive" --signature "$sig" --pubkey "$pubkey" >/dev/null \
     || die "archive signature does not verify under $pubkey"
 
   # The role is encoded in the archive name: sparknet-<role>-...
@@ -123,11 +83,11 @@ verify_bundle() {
   sumfile="$root/SHA256SUMS"
   if [ ! -f "$sumfile" ]; then
     bad "SHA256SUMS missing — not assembled by this script's build step?"
-  elif ( cd "$root" && sha256_check "$sumfile" ) >/dev/null 2>&1; then
+  elif export_run verify-integrity --path "$root" >/dev/null 2>&1; then
     ok "$(grep -c . "$sumfile") files verified"
   else
     bad "SHA256SUMS does not match the extracted tree"
-    ( cd "$root" && sha256_check "$sumfile" 2>&1 | grep -v ': OK$' | head -8 | sed 's/^/      /' )
+    export_run verify-integrity --path "$root" 2>&1 | head -8 | sed 's/^/      /'
   fi
 
   step "vendored skills present"
@@ -342,47 +302,11 @@ role_dir="$REPO_ROOT/$role-node"
 [ -d "$SKILLS_DIR" ] || die "vendored skills missing: $SKILLS_DIR (run make wiki-sync)"
 [ -d "$AGENTS_DIR" ] || die "role agents missing: $AGENTS_DIR (docs name .opencode/agents/, plural)"
 
-# A worktree bundle ships the working tree's SBOM as data, so a stale one would
-# be a false statement about what is inside the archive. Fail closed before we
-# stage anything. (A --from-git bundle reads VERSION and the SBOM from the ref
-# itself; consistency there is what the pre-merge gate checks before commit.)
-if [ -z "$from_git" ]; then
-  sbom_py="python3"
-  [ -x "$REPO_ROOT/.venv/bin/python" ] && sbom_py="$REPO_ROOT/.venv/bin/python"
-  "$sbom_py" "$REPO_ROOT/scripts/sparknet-sbom.py" --check >/dev/null 2>&1 \
-    || die "the SBOM is stale — run make sbom before bundling"
-fi
-
-# Excluded from the working-tree copy. `.opencode/node_modules` matters most:
-# it is a multi-megabyte dependency tree with nothing to do with the vault.
-# `.env` is excluded on purpose: it is gitignored, machine-local, and its
-# VAULT_PATH is an absolute path from the machine that generated it. Shipping it
-# would point every extracted node back at the build host -- and, worse, the
-# extracted copy's own validate and pytest would then silently exercise the
-# BUILD HOST's tree instead of the extracted one, which is exactly the false
-# green this script exists to prevent. sparknet-env-init.sh regenerates it.
-EXCLUDES=(
-  --exclude=.git --exclude=.venv --exclude=dist --exclude=.state --exclude=.cache
-  --exclude=__pycache__ --exclude=.pytest_cache --exclude=.ruff_cache
-  --exclude=node_modules --exclude=.opencode/node_modules
-  --exclude='*.pyc' --exclude='.trash' --exclude=.env
-)
-
-# Fabric-root-local tools that must NOT ship. Both assume a repo root with a
-# root Makefile and/or VERSION, which a node bundle deliberately does not have
-# (the bundle root carries only the role, contracts, shared, scripts, the
-# release data and opencode.json). Shipping them would hand a node a command
-# that exits "no makefile found" or "VERSION is missing" — worse than absent,
-# because it looks like a supported surface. The release *data* does ship.
-EXCLUDE_SCRIPT_FILES=(sparknet sparknet-sbom.py)
-# Desktop-only plugin surface: fabric-root sessions only (see BUNDLE.md).
-EXCLUDE_SCRIPT_DIRS=(plugins)
-
-prune_fabric_only_tools() {  # <bundle-root>
-  local root="$1" name
-  for name in "${EXCLUDE_SCRIPT_FILES[@]}"; do rm -f "$root/scripts/$name"; done
-  for name in "${EXCLUDE_SCRIPT_DIRS[@]}"; do rm -rf "$root/scripts/$name"; done
-}
+# The staging rules — excludes, from-git export, SHA256SUMS and the prune
+# policy — are the release export module's, not this adapter's. A worktree
+# bundle ships the working tree's SBOM as data, so this adapter still fails
+# closed on the fact the module returns; a --from-git bundle reads VERSION and
+# the SBOM from the ref itself.
 
 
 stamp="$(date +%Y%m%d-%H%M%S)"
@@ -397,73 +321,19 @@ target="$stage/$prefix"
 mkdir -p "$target"
 
 if [ -n "$from_git" ]; then
-  # Release-grade: only committed content, from an explicit ref.
-  # A master bundle must carry the peer as well: services/sparknet-parity.py
-  # loads the peer's service files by path, so without them a master bundle
-  # cannot start. This is the one place where "Master = peer" costs bytes, and
-  # it is not optional — see verify_bundle's parity check.
-  for subtree in "$role-node" contracts shared .opencode/skills .opencode/agents scripts; do
-    subtrees=("$subtree")
-    if [ "$role" = "master" ] && [ "$subtree" = "master-node" ]; then
-      subtrees=(master-node peer-node)
-    fi
-    git -C "$REPO_ROOT" rev-parse --verify --quiet "$from_git^{commit}" >/dev/null \
-      || die "not a commit: $from_git"
-    if ! git -C "$REPO_ROOT" ls-tree "$from_git" -- "${subtrees[0]}" | grep -q .; then
-      die "subtree missing at $from_git: ${subtrees[0]}"
-    fi
-    for sub in "${subtrees[@]}"; do
-      case "$sub" in
-        peer-node|master-node) export_git_submodule "$from_git" "$sub" ;;
-        *)
-          git -C "$REPO_ROOT" ls-tree "$from_git" -- "$sub" | grep -q . \
-            || die "subtree missing at $from_git: $sub"
-          git -C "$REPO_ROOT" archive --format=tar --prefix="$prefix/" "$from_git" "$sub" | tar -xf - -C "$stage"
-          ;;
-      esac
-    done
-    printf '  from-git %-24s %s\n' "${subtrees[*]}" "$from_git"
-  done
-  cp "$REPO_ROOT/opencode.json" "$target/opencode.json"
-  cp "$REPO_ROOT/requirements.txt" "$target/requirements.txt"
-  # Release data comes from the same ref, not the working tree: a from-git
-  # bundle must describe exactly the commit it names.
-  mkdir -p "$target/sbom"
-  git -C "$REPO_ROOT" show "$from_git:VERSION" > "$target/VERSION" \
-    || die "VERSION is missing at $from_git (commit the release surface)"
-  git -C "$REPO_ROOT" show "$from_git:sbom/sparknet.cdx.json" > "$target/sbom/sparknet.cdx.json" \
-    || die "sbom/sparknet.cdx.json is missing at $from_git (run make sbom and commit it)"
+  stage_json="$(export_run stage --surface bundle --role "$role" --source "$from_git" --dest "$target")" \
+    || die "release export failed"
 else
-  if [ -n "$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null || true)" ]; then
+  stage_json="$(export_run stage --surface bundle --role "$role" --dest "$target")" \
+    || die "release export failed"
+  if [ "$(json_field "$stage_json" sbom_stale)" = "True" ]; then
+    die "the SBOM is stale — run make sbom before bundling"
+  fi
+  if [ "$(json_field "$stage_json" dirty)" = "True" ]; then
     printf 'WARNING: working tree is dirty — the bundle includes uncommitted work.\n'
     printf '         Use --from-git <ref> to build from a commit instead.\n\n'
   fi
-  for subtree in "$role-node" contracts shared scripts; do
-    rsync -a "${EXCLUDES[@]}" "$REPO_ROOT/$subtree/" "$target/$subtree/"
-    printf '  copied   %s\n' "$subtree"
-    # Ships alongside the master so the parity loader can resolve it. One copy of
-    # the peer's services in the bundle, loaded by path — not a master-side copy.
-    if [ "$role" = "master" ] && [ "$subtree" = master-node ]; then
-      rsync -a "${EXCLUDES[@]}" "$REPO_ROOT/peer-node/" "$target/peer-node/"
-      printf '  copied   peer-node (required by master parity)\n'
-    fi
-  done
-  mkdir -p "$target/.opencode"
-  rsync -a "${EXCLUDES[@]}" "$SKILLS_DIR/" "$target/.opencode/skills/"
-  rsync -a "${EXCLUDES[@]}" "$AGENTS_DIR/" "$target/.opencode/agents/"
-  cp "$REPO_ROOT/opencode.json" "$target/opencode.json"
-  cp "$REPO_ROOT/requirements.txt" "$target/requirements.txt"
-  cp "$REPO_ROOT/VERSION" "$target/VERSION"
-  mkdir -p "$target/sbom"
-  cp "$REPO_ROOT/sbom/sparknet.cdx.json" "$target/sbom/sparknet.cdx.json"
-  printf '  copied   .opencode/skills (%s skills), .opencode/agents (%s agents)\n' \
-    "$(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d | wc -l)" \
-    "$(find "$AGENTS_DIR" -mindepth 1 -maxdepth 1 -name '*.md' | wc -l)"
 fi
-
-# Fabric-root tools and the desktop plugin are pruned in both build paths, so
-# the bundle contains exactly what a node can run.
-prune_fabric_only_tools "$target"
 
 
 # --- the bundle's own manifest ------------------------------------------------
@@ -547,7 +417,7 @@ printf '\n.env is not bundled (machine-local paths); run sparknet-env-init.sh af
 # Hash the finished tree last, so BUNDLE.md and every copied file are covered.
 # Deliberately the final build action before tar: a manifest written earlier
 # would silently omit whatever was added after it.
-write_sums "$target"
+export_run checksums --dest "$target" >/dev/null
 printf '  hashed   SHA256SUMS (%s files)\n' "$(grep -c . "$target/SHA256SUMS")"
 
 mkdir -p "$out_root"

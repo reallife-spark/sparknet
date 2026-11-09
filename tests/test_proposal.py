@@ -14,13 +14,12 @@ from __future__ import annotations
 
 import copy
 import datetime as dt
-import importlib.util
 import json
-import sys
 from pathlib import Path
 from types import ModuleType
 
 import pytest
+from sparknet_loader import load_by_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROVENANCE_PATH = REPO_ROOT / "shared" / "sparknet-provenance.py"
@@ -33,28 +32,12 @@ OWNER_ID = "U-10421"
 
 @pytest.fixture(scope="module")
 def provenance() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("sparknet_provenance_proposal_test", PROVENANCE_PATH)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        sys.modules.pop(spec.name, None)
-    return module
+    return load_by_path("sparknet_provenance_proposal_test", PROVENANCE_PATH)
 
 
 @pytest.fixture(scope="module")
 def proposal() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("sparknet_proposal_under_test", PROPOSAL_PATH)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        sys.modules.pop(spec.name, None)
-    return module
+    return load_by_path("sparknet_proposal_under_test", PROPOSAL_PATH)
 
 
 # The proposal id embeds the date (`PRO-<YYYY-MM-DD>-NNN`), so the suite would

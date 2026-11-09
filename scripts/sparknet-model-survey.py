@@ -10,7 +10,6 @@ never enter a vault, bundle or 4223.
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import os
 import sys
@@ -22,6 +21,9 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "shared"))
+from sparknet_loader import load_by_path  # noqa: E402 - shared/ is added by path above
+
 CATALOG = ROOT / "contracts" / "model-catalog.json"
 STORE = Path(os.environ.get("SPARKNET_MODEL_STORE", "/mnt/ai/models"))
 BENCH = ROOT / "scripts" / "sparknet-model-bench.py"
@@ -58,16 +60,9 @@ def load_json(path: Path) -> dict[str, Any]:
 
 
 def bench_module() -> Any:
-    name = "sparknet_model_bench_survey"
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, BENCH)
-    if spec is None or spec.loader is None:
-        raise SystemExit(f"model-survey: cannot load {BENCH}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path(
+        "sparknet_model_bench_survey", BENCH, error=SystemExit, message=f"model-survey: cannot load {BENCH}"
+    )
 
 
 def get_json(url: str, timeout: float = 10.0) -> dict[str, Any]:

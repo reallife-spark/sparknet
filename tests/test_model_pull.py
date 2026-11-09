@@ -9,26 +9,20 @@ model.
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
-import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
+from sparknet_loader import load_by_path
 
 ROOT = Path(__file__).resolve().parent.parent
 PULL = ROOT / "scripts" / "sparknet-model-pull.py"
 
 
 def _load() -> object:
-    spec = importlib.util.spec_from_file_location("sparknet_model_pull_test", PULL)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path("sparknet_model_pull_test", PULL)
 
 
 pull = _load()

@@ -2,22 +2,17 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from pathlib import Path
 
 import pytest
+from sparknet_loader import load_by_path
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
 def _load():
     path = ROOT / "shared" / "sparknet-registry-install.py"
-    spec = importlib.util.spec_from_file_location("registry_install_record_test", path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path("registry_install_record_test", path)
 
 
 install = _load()

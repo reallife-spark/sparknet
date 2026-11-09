@@ -9,13 +9,12 @@ spool or a failed ping degrades to nothing rather than to an error.
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from pathlib import Path
 from types import ModuleType
 
 import pytest
+from sparknet_loader import load_by_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 NOTIFY_PATH = REPO_ROOT / "shared" / "sparknet-notify.py"
@@ -23,15 +22,7 @@ NOTIFY_PATH = REPO_ROOT / "shared" / "sparknet-notify.py"
 
 @pytest.fixture(scope="module")
 def notify() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("sparknet_notify_under_test", NOTIFY_PATH)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        sys.modules.pop(spec.name, None)
-    return module
+    return load_by_path("sparknet_notify_under_test", NOTIFY_PATH)
 
 
 class _Run:

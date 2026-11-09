@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import subprocess
 import sys
 from pathlib import Path
+
+from sparknet_loader import load_by_path
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "sparknet-self-improve.py"
@@ -14,12 +15,7 @@ SHARED = ROOT / "shared"
 
 
 def _load(name, filename):
-    spec = importlib.util.spec_from_file_location(name, SHARED / filename)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path(name, SHARED / filename)
 
 
 improve = _load("self_improve_test", "sparknet-self-improve.py")

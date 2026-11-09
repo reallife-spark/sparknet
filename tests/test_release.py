@@ -15,7 +15,6 @@ Three artifacts that only stay honest if something checks them:
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 import subprocess
@@ -23,6 +22,7 @@ import sys
 from pathlib import Path
 
 import tomllib
+from sparknet_loader import load_by_path  # shared/ comes from conftest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 VERSION_FILE = REPO_ROOT / "VERSION"
@@ -31,18 +31,12 @@ SBOM_SCRIPT = REPO_ROOT / "scripts" / "sparknet-sbom.py"
 SBOM = REPO_ROOT / "sbom" / "sparknet.cdx.json"
 CLI = REPO_ROOT / "scripts" / "sparknet"
 SKILLS_DIR = REPO_ROOT / ".opencode" / "skills"
-BUNDLE_SCRIPT = REPO_ROOT / "scripts" / "sparknet-bundle.sh"
 
 SBOM_RUN = [sys.executable, str(SBOM_SCRIPT)]
 
 
 def _load_sbom_module() -> object:
-    spec = importlib.util.spec_from_file_location("sparknet_sbom", SBOM_SCRIPT)
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    return load_by_path("sparknet_sbom", SBOM_SCRIPT)
 
 
 sbom_mod = _load_sbom_module()
@@ -330,29 +324,6 @@ def test_cli_refuses_arguments_a_command_does_not_take() -> None:
 
 
 # --- 5. the bundle carries the data, not the fabric-root tools -----------------
-
-
-def test_bundle_ships_release_data_and_prunes_fabric_root_tools() -> None:
-    """The bundle policy is a property of the script, asserted at the source.
-
-    `bundle-verify` proves it on a real archive; this keeps the rule visible in
-    a fast test so a future edit cannot quietly re-ship a CLI that has no root
-    Makefile to call.
-    """
-    text = BUNDLE_SCRIPT.read_text(encoding="utf-8")
-    assert "EXCLUDE_SCRIPT_FILES=(sparknet sparknet-sbom.py)" in text
-    assert "EXCLUDE_SCRIPT_DIRS=(plugins)" in text
-    assert 'cp "$REPO_ROOT/VERSION" "$target/VERSION"' in text
-    assert "$target/sbom/sparknet.cdx.json" in text
-    assert 'prune_fabric_only_tools "$target"' in text
-    assert 'sparknet-sbom.py" --check' in text, "the bundle build must fail closed on a stale SBOM"
-
-
-def test_goagx_publish_applies_the_same_release_policy() -> None:
-    """The AGX distribution is another node surface; it gets the same rule."""
-    text = (REPO_ROOT / "scripts" / "sparknet-goagx-publish.sh").read_text(encoding="utf-8")
-    assert "EXCLUDE_SCRIPT_FILES=(sparknet sparknet-sbom.py)" in text
-    assert "EXCLUDE_SCRIPT_DIRS=(plugins)" in text
-    assert 'prune_fabric_only_tools "$target"' in text
-    assert "goagx sbom)" in text, "sbom/ must be a published subtree"
-    assert "USER_MANUAL.md\n  VERSION\n)" in text, "VERSION must be a published root file"
+# The staging and prune policy is now exercised through the release export
+# module in tests/test_release_export.py; these source-text mirrors were the
+# duplication the module exists to remove.

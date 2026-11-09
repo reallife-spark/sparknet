@@ -18,7 +18,6 @@ so one file states the whole 70A contract.
 from __future__ import annotations
 
 import base64
-import importlib.util
 import json
 import subprocess
 import sys
@@ -31,6 +30,7 @@ from typing import Any
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from sparknet_loader import load_by_path
 
 FABRIC_ROOT = Path(__file__).resolve().parent.parent
 ROLE_ROOT = FABRIC_ROOT / "peer-node"
@@ -40,12 +40,7 @@ ROUTE = "/api/v1/telemetry"
 
 
 def _load(name: str, path: Path) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path(name, path)
 
 
 push = _load("sparknet_telemetry_push", PUSH_PATH)

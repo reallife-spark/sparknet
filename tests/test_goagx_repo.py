@@ -18,9 +18,11 @@ from pathlib import Path
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from sparknet_loader import load_by_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PUBLISH = REPO_ROOT / "scripts" / "sparknet-goagx-publish.sh"
+EXPORT = REPO_ROOT / "scripts" / "sparknet-release-export.py"
 BOOTSTRAP = REPO_ROOT / "goagx" / "goagx" / "bootstrap-agx.sh"
 PIN = REPO_ROOT / "goagx" / "goagx" / "GOSPARK_PIN"
 AGX_DOCKER = REPO_ROOT / "goagx" / "goagx" / "sparknet.agx.docker"
@@ -29,38 +31,15 @@ SETUP = REPO_ROOT / "sparknet-node-setup.sh"
 KEYS_CHECK = REPO_ROOT / "scripts" / "sparknet-keys-check.sh"
 TEMPLATES = REPO_ROOT / "goagx" / "goagx" / "publish-templates"
 
-#: The export surface, mirrored from scripts/sparknet-goagx-publish.sh and
-#: asserted against it below — a change to either side must touch both.
-SUBTREES = [
-    "peer-node",
-    "master-node",
-    "contracts",
-    "shared",
-    "scripts",
-    ".opencode/skills",
-    ".opencode/agents",
-    "goagx",
-]
-ROOT_FILES = [
-    "spark-entrypoint.sh",
-    "spark-precontext.py",
-    "spark.compose.cpu.yml",
-    "torch-dist-l4t-compat.py",
-    "spark-vllm-l4t-patch.py",
-    "spark-vllm-xformers-gqa-patch.py",
-    "sparknet-node-setup.sh",
-    "bootstrap-agx.sh",
-    "spark.docker",
-    "spark.compose.yml",
-    ".env.example",
-    ".dockerignore",
-    ".gitignore",
-    "opencode.json",
-    "requirements.txt",
-    # the fabric's master manual: the goagx distribution mirrors the fabric,
-    # so it carries the manual that describes the mirror.
-    "USER_MANUAL.md",
-]
+
+def _load_export() -> object:
+    return load_by_path("sparknet_release_export_goagx", EXPORT)
+
+
+export = _load_export()
+#: The export surface now lives once in scripts/sparknet-release-export.py.
+SUBTREES = list(export.SURFACES["goagx"]["subtrees"])
+ROOT_FILES = list(export.SURFACES["goagx"]["root_files"])
 GENERATED = ["README.md", "VERSIONS.json", "SHA256SUMS", ".github/workflows/verify.yml"]
 
 
@@ -128,17 +107,6 @@ def test_make_targets_exist() -> None:
     assert "goagx-drift-check" in makefile.split("drift-check:", 1)[1], (
         "the umbrella drift-check must include the goagx leg (self-skipping offline)"
     )
-
-
-def test_publish_script_mirrors_the_declared_surface() -> None:
-    text = PUBLISH.read_text()
-    subtrees_block = re.search(r"^SUBTREES=\(([^)]*)\)", text, re.M)
-    files_block = re.search(r"^ROOT_FILES=\(([^)]*)\)", text, re.M)
-    assert subtrees_block and files_block
-    for item in SUBTREES:
-        assert item in subtrees_block.group(1), f"{item} missing from SUBTREES"
-    for item in ROOT_FILES:
-        assert item in files_block.group(1), f"{item} missing from ROOT_FILES"
 
 
 def test_dockerfile_context_sources_are_exported() -> None:

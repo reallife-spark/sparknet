@@ -23,12 +23,11 @@ What this file asserts:
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from sparknet_loader import load_by_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LIVENESS_SCRIPT = REPO_ROOT / "shared" / "sparknet-liveness.py"
@@ -36,12 +35,7 @@ LIVENESS_SCRIPT = REPO_ROOT / "shared" / "sparknet-liveness.py"
 
 @pytest.fixture(scope="module")
 def liveness():
-    spec = importlib.util.spec_from_file_location("sparknet_liveness", LIVENESS_SCRIPT)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path("sparknet_liveness", LIVENESS_SCRIPT)
 
 
 def _monitor(liveness, *, resolves=True, lit=None, at=None, **kwargs):

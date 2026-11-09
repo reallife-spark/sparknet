@@ -20,7 +20,6 @@ loopback evidence for the wire and the human gate, not a live-overlay claim.
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import socket
 import sys
@@ -30,6 +29,9 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "shared"))
+from sparknet_loader import load_by_path  # noqa: E402 - shared/ is added by path above
+
 PEER_SERVICE = ROOT / "peer-node" / "services" / "sparknet-share-serve.py"
 MASTER_SERVICE = ROOT / "master-node" / "services" / "sparknet-share-ratify.py"
 SHARED = ROOT / "shared"
@@ -38,18 +40,6 @@ NOW = datetime.now(timezone.utc)
 
 PASS = 0
 FAIL = 0
-
-
-def _load(name: str, path: Path) -> Any:
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, path)
-    if spec is None or spec.loader is None:
-        raise SystemExit(f"cannot load {path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
 
 
 def check(label: str, condition: bool, detail: str = "") -> None:
@@ -146,10 +136,10 @@ def main(argv: list[str] | None = None) -> int:
         work.rmdir()
     work.mkdir(parents=True)
 
-    http = _load("sparknet_http_share_rehearsal", SHARED / "sparknet-http.py")
+    http = load_by_path("sparknet_http_share_rehearsal", SHARED / "sparknet-http.py", error=SystemExit)
     authz = http._load_authz()
-    peer_service = _load("sparknet_share_serve_rehearsal", PEER_SERVICE)
-    master_service = _load("sparknet_share_ratify_rehearsal", MASTER_SERVICE)
+    peer_service = load_by_path("sparknet_share_serve_rehearsal", PEER_SERVICE, error=SystemExit)
+    master_service = load_by_path("sparknet_share_ratify_rehearsal", MASTER_SERVICE, error=SystemExit)
     master = authz.private_key_from_b64(authz.generate_keypair()[1])
     nodes, registry, keys = _build(work, authz, master)
 

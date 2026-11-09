@@ -89,13 +89,31 @@ def load_shared(
     dirs: Iterable[Path] | None = None,
     error: type[Exception] = FileNotFoundError,
     message: Callable[[], str] | str | None = None,
+    required: Iterable[str] = (),
+    missing_ok: bool = False,
 ) -> Any:
-    """Find ``filename`` on the shared search path and load it as ``modname``."""
+    """Find ``filename`` on the shared search path and load it as ``modname``.
+
+    ``required`` names sibling files that must exist beside the one found; a
+    caller that depends on two canonical files (a transport plus the authz it
+    verifies with) refuses before loading a half-usable module. ``missing_ok``
+    returns ``None`` instead of raising for an optional surface; the caller
+    keeps its own policy about whether that is fatal.
+    """
     if modname in sys.modules:
         return sys.modules[modname]
     for path in candidates(filename, dirs):
         if path.is_file():
+            missing = [dep for dep in required if not (path.parent / dep).is_file()]
+            if missing:
+                raise error(
+                    f"cannot locate {', '.join(missing)} beside {filename}; "
+                    "the fabric carries exactly one implementation and this tool "
+                    "does not carry a fallback"
+                )
             return load_by_path(modname, path, error=error, message=_text(message))
+    if missing_ok:
+        return None
     if callable(message):
         raise error(message())
     raise error(

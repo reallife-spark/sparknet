@@ -13,13 +13,12 @@ Runs in the fabric suite (``tests/``); the implementation lives at
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from types import ModuleType
 
 import pytest
 from contract_helpers import REPO_ROOT, load
+from sparknet_loader import load_by_path
 
 REFLEX_PATH = REPO_ROOT / "shared" / "sparknet-reflex.py"
 GOLDEN = REPO_ROOT / "tests" / "reflex" / "golden" / "vectors.json"
@@ -27,15 +26,7 @@ GOLDEN = REPO_ROOT / "tests" / "reflex" / "golden" / "vectors.json"
 
 @pytest.fixture(scope="module")
 def reflex() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("sparknet_reflex", REFLEX_PATH)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        sys.modules.pop(spec.name, None)
-    return module
+    return load_by_path("sparknet_reflex", REFLEX_PATH)
 
 
 @pytest.fixture(scope="module")

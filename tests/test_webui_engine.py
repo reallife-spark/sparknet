@@ -2,22 +2,18 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
 
 import pytest
+from sparknet_loader import load_by_path
 
 ROOT = Path(__file__).resolve().parent.parent
 ENGINE_PATH = ROOT / "peer-node" / "services" / "sparknet-opencode-engine.py"
 
 
 def _load_engine():
-    spec = importlib.util.spec_from_file_location("sparknet_opencode_engine_test", ENGINE_PATH)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return load_by_path("sparknet_opencode_engine_test", ENGINE_PATH)
 
 
 def test_engine_compiles_and_exposes_three_models():
