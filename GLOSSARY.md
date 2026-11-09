@@ -37,3 +37,12 @@
 - **console surface** — one read-only view exposed by
   `scripts/sparknet-console.py`: its endpoints, `session`/`admin` auth class
   and optional menu metadata in the one `SURFACES` table.
+- **provenance facade** — the path-stable `shared/sparknet-provenance.py`
+  that re-exports the provenance lifecycle modules and holds the CLI. Callers
+  and role code load this path, never a lifecycle module directly.
+- **provenance primitives** — the loader, YAML error re-exports, canonical
+  form, crypto loaders, contract reader, time/key-path helpers and shared
+  key-shaped patterns in `shared/sparknet-provenance-base.py`.
+- **provenance lifecycle** — the note, ledger, grant and scan concerns behind
+  the provenance facade. Stage 1 (ADR-0006) extracts the primitives and scan;
+  note, ledger and grant remain in the facade.

@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Sparknet provenance: note signatures, ledger approvals, the user record, secret scanning.
+"""Sparknet provenance: the path-stable facade over the accountability chain.
 
-This is the one implementation of the accountability chain described in
-``contracts/provenance-protocol.md`` and machine-read from
-``contracts/tracking-schema.json``:
+This file is the one path every caller loads. Stage 1 of ADR-0006 moved the
+loader/canonical/crypto primitives into ``sparknet-provenance-base.py`` and the
+secret detector into ``sparknet-provenance-scan.py``. The note, ledger and
+grant lifecycles remain in this file until Stage 2; the facade re-exports the
+moved names so ``provenance.<name>`` and the CLI are unchanged.
+
+The accountability chain described in ``contracts/provenance-protocol.md`` and
+machine-read from ``contracts/tracking-schema.json``:
 
 * **Notes** in ``01_Inbox``..``07_Archives`` carry a ``tracking`` block whose
   signature envelope records what was signed — the body hash, the metadata hash
@@ -25,9 +30,10 @@ This is the one implementation of the accountability chain described in
   key-shaped literal appears in a tracked file.
 
 Ed25519 is not reimplemented here. Every signing and verification operation
-loads ``sparknet-authz.py`` by path from this directory, so the fabric still has
-exactly one crypto implementation — the same rule ``sparknet-consensus.py``
-follows, and the same test failure if this module starts doing its own.
+loads ``sparknet-authz.py`` by path through the primitives module, so the fabric
+still has exactly one crypto implementation — the same rule
+``sparknet-consensus.py`` follows, and the same test failure if this module
+starts doing its own.
 
 The normative contract is ``contracts/tracking-schema.json``. Constants that
 must not drift — the compiler allowlist, the ledger's required fields, the
@@ -38,18 +44,13 @@ rather than restated here, so a contract change cannot leave this tool stale.
 from __future__ import annotations
 
 import argparse
-import base64
 import contextlib
 import fcntl
-import hashlib
 import json
 import os
 import re
-import stat
-import subprocess
 import sys
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -60,7 +61,65 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from sparknet_loader import load_shared
 
-DEFAULT_SHARED_DIR = Path(__file__).resolve().parent
+# --- Stage 1 of ADR-0006: primitives and secret scanning live in modules ------
+# `base` owns the one canonical form and the authz/merkle/abac loaders; `scan`
+# owns the one secret detector. They are loaded by path under stable module
+# names, so the rest of this facade and every external caller keep the same
+# `provenance.<name>` interface. Note, ledger and grant remain here until
+# Stage 2; this file is the compatibility facade either way.
+_base = load_shared(
+    "sparknet-provenance-base.py",
+    "sparknet_provenance_base",
+    error=ImportError,
+    message=(
+        "cannot find shared/sparknet-provenance-base.py; the fabric carries "
+        "exactly one provenance implementation and this tool does not carry a "
+        "fallback. Set SPARKNET_SHARED_DIR."
+    ),
+)
+_scan = load_shared(
+    "sparknet-provenance-scan.py",
+    "sparknet_provenance_scan",
+    error=_base.ProvenanceError,
+    message=(
+        "cannot find shared/sparknet-provenance-scan.py; the provenance "
+        "scanner is part of the one implementation and this tool does not "
+        "carry a fallback. Set SPARKNET_SHARED_DIR."
+    ),
+)
+DEFAULT_SHARED_DIR = _base.DEFAULT_SHARED_DIR
+FINGERPRINT_RE = _base.FINGERPRINT_RE
+OWNER_ID_RE = _base.OWNER_ID_RE
+USER_RECORD_REF = _base.USER_RECORD_REF
+_PATTERNS = _base._PATTERNS
+FrontmatterError = _base.FrontmatterError
+ProvenanceError = _base.ProvenanceError
+_find_vault_from_cwd = _base._find_vault_from_cwd
+_iso = _base._iso
+_load_abac = _base._load_abac
+_load_authz = _base._load_authz
+_load_merkle = _base._load_merkle
+_node_id = _base._node_id
+_node_key_path = _base._node_key_path
+_now = _base._now
+_refuse_loose_key = _base._refuse_loose_key
+_split_frontmatter = _base._split_frontmatter
+_state_dir = _base._state_dir
+_user_key_path = _base._user_key_path
+canonical_json = _base.canonical_json
+contract = _base.contract
+emit_yaml = _base.emit_yaml
+fingerprint_label_of_public_b64 = _base.fingerprint_label_of_public_b64
+fingerprint_of_public_b64 = _base.fingerprint_of_public_b64
+parse_yaml_subset = _base.parse_yaml_subset
+sha256_hex = _base.sha256_hex
+SECRET_INDEX_ENTRY_KEYS = _scan.SECRET_INDEX_ENTRY_KEYS
+SECRET_INDEX_FORBIDDEN = _scan.SECRET_INDEX_FORBIDDEN
+_SCAN_EXEMPT = _scan._SCAN_EXEMPT
+_resolve_secret_ref = _scan._resolve_secret_ref
+_tracked_files = _scan._tracked_files
+scan = _scan.scan
+
 
 #: Domain separator for note signatures. Versioned so a future envelope change
 #: cannot silently verify against old signatures — they would simply not match.
@@ -69,16 +128,6 @@ DEFAULT_SHARED_DIR = Path(__file__).resolve().parent
 NOTE_VERSION = "sparknet-note/2"
 NOTE_DOMAIN = NOTE_VERSION.encode("ascii")
 
-#: A node-scoped user number: U- plus five digits.
-OWNER_ID_RE = re.compile(r"^U-[0-9]{5}$")
-
-#: The fingerprint form a filled record must carry: sha256 of the raw key bytes.
-FINGERPRINT_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
-
-#: Where every tracking block points to find the record that defines owner_id.
-#: A constant because it is a contract value (`tracking_block.required_fields.
-#: owner_ref.const`), and a note whose pointer drifts resolves to nothing.
-USER_RECORD_REF = "00_System/user.md"
 
 #: Frontmatter keys allowed in a filled user record. An allowlist, not a
 #: blocklist: a new key is a schema change that belongs in the contract first,
@@ -98,185 +147,6 @@ USER_RECORD_KEYS = frozenset(
     }
 )
 USER_KEY_FIELDS = frozenset({"alg", "public_key_b64", "fingerprint", "key_ref", "created"})
-
-#: Fields the secret index may contain. There is deliberately no field a value
-#: could hide in.
-SECRET_INDEX_ENTRY_KEYS = frozenset(
-    {
-        "id",
-        "kind",
-        "holder_agent",
-        "ref",
-        "fingerprint",
-        "scopes",
-        "created",
-        "last_rotated",
-        "status",
-        "notes",
-    }
-)
-SECRET_INDEX_FORBIDDEN = frozenset({"value", "secret", "token", "password", "private_key"})
-
-#: Key-shaped literals the scanner refuses to see in a tracked file. Built from
-#: fragments so the patterns themselves do not match their own source.
-_PATTERNS = (
-    ("private key block", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
-    ("api key literal", re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")),
-    (
-        "assigned secret",
-        re.compile(r"\b(?:api[_-]?key|secret|token|password)\b\s*[:=]\s*[\"'][^\"'\s]{8,}[\"']", re.I),
-    ),
-)
-
-#: Files exempt from the literal scan: the detector itself (its patterns would
-#: match its own source) and the test suite (whose fixtures are subjects under
-#: test). Everything else is scanned, including docs and configs.
-_SCAN_EXEMPT = frozenset({"shared/sparknet-provenance.py"})
-
-
-# --- the one frontmatter implementation (loaded by path, D10/Step 40) ---------
-# The YAML-subset parser and emitter live in sparknet-yaml.py so the note format
-# is one loadable unit. ProvenanceError and FrontmatterError are defined there
-# too — FrontmatterError subclasses ProvenanceError, and the many handlers below
-# that catch ProvenanceError must keep catching a malformed note — and are
-# re-exported here so `provenance.ProvenanceError` still names the same class.
-# Loading by path is the same one-copy rule the crypto modules follow.
-_yaml = load_shared(
-    "sparknet-yaml.py",
-    "sparknet_yaml",
-    error=ImportError,
-    message=(
-        "cannot find shared/sparknet-yaml.py; the fabric carries exactly one "
-        "frontmatter implementation and this tool does not carry a fallback. "
-        "Set SPARKNET_SHARED_DIR."
-    ),
-)
-
-ProvenanceError = _yaml.ProvenanceError
-FrontmatterError = _yaml.FrontmatterError
-parse_yaml_subset = _yaml.parse_yaml_subset
-emit_yaml = _yaml.emit_yaml
-_split_frontmatter = _yaml._split_frontmatter
-
-
-# --- loading the one crypto implementation -----------------------------------
-
-
-def _load_authz() -> Any:
-    """Load sparknet-authz.py by path, never by import.
-
-    Loading by path is what proves there is one implementation. An import would
-    let a role quietly end up with a private copy, and two crypto
-    implementations that must agree byte-for-byte is a second trust boundary.
-    The resolve-and-cache mechanics live once in ``shared/sparknet_loader.py``.
-    """
-    return load_shared(
-        "sparknet-authz.py",
-        "sparknet_authz",
-        error=ProvenanceError,
-        message=(
-            "cannot find shared/sparknet-authz.py; set SPARKNET_SHARED_DIR. "
-            "There is exactly one signing implementation and this tool does not "
-            "carry a fallback."
-        ),
-    )
-
-
-def _load_merkle() -> Any:
-    """Load sparknet-merkle.py by path, never by import.
-
-    Same loader and same reasoning as ``_load_authz``: the RFC 6962 integrity
-    math (the checkpoint root and the conversation root both rest on it) lives
-    in its own shared module so there is exactly one implementation, and a test
-    fails if this tool ever starts carrying a private copy. The
-    resolve-and-cache mechanics live once in ``shared/sparknet_loader.py``.
-    """
-    return load_shared(
-        "sparknet-merkle.py",
-        "sparknet_merkle",
-        error=ProvenanceError,
-        message=(
-            "cannot find shared/sparknet-merkle.py; set SPARKNET_SHARED_DIR. "
-            "The checkpoint and note roots come from the one integrity module; "
-            "this tool does not carry a fallback."
-        ),
-    )
-
-
-def _load_abac() -> Any:
-    """Load the ABAC vocabulary by path; ingestion must not restate it."""
-    return load_shared(
-        "sparknet-abac.py",
-        "sparknet_abac",
-        error=ProvenanceError,
-        message="cannot find shared/sparknet-abac.py; set SPARKNET_SHARED_DIR.",
-    )
-
-
-_contract_cache: dict[str, Any] | None = None
-
-
-def contract() -> dict[str, Any]:
-    """The tracking contract, loaded once. Rules are read from it, not restated."""
-    global _contract_cache
-    if _contract_cache is None:
-        env = os.environ.get("SPARKNET_CONTRACTS_DIR")
-        path = (Path(env) if env else DEFAULT_SHARED_DIR.parent / "contracts") / "tracking-schema.json"
-        if not path.is_file():
-            raise ProvenanceError(
-                f"cannot find {path}; this tool refuses to guess its own rules. Set SPARKNET_CONTRACTS_DIR."
-            )
-        try:
-            _contract_cache = json.loads(path.read_text())
-        except json.JSONDecodeError as exc:
-            raise ProvenanceError(f"{path} is not valid JSON: {exc}") from exc
-    return _contract_cache
-
-
-# --- canonical form -----------------------------------------------------------
-
-
-def canonical_json(obj: Any) -> bytes:
-    """The house canonical form: sorted keys, tight separators, ASCII-escaped, UTF-8.
-
-    Identical to ``sparknet-authz.authorization_message`` and to the block hash
-    the ledger already uses. A second canonicalisation rule would be a signature
-    that verifies in one place and not another.
-    """
-    return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
-
-
-def sha256_hex(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
-def fingerprint_of_public_b64(public_key_b64: str) -> str:
-    """sha256 of the raw 32-byte public key, hex — the key fingerprint."""
-    try:
-        raw = base64.b64decode(public_key_b64, validate=True)
-    except Exception as exc:
-        raise ProvenanceError("public key is not valid base64") from exc
-    if len(raw) != 32:
-        raise ProvenanceError(f"Ed25519 public key must be 32 bytes, got {len(raw)}")
-    return hashlib.sha256(raw).hexdigest()
-
-
-def fingerprint_label_of_public_b64(public_key_b64: str) -> str:
-    """The stored form: `sha256:` + the raw key's hex digest.
-
-    user.md and the note envelope both spell it this way, and `FINGERPRINT_RE`
-    accepts nothing else — a bare hex digest in either place is unreadable as a
-    fingerprint by anything checking the pattern.
-    """
-    return "sha256:" + fingerprint_of_public_b64(public_key_b64)
-
-
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def _iso(moment: datetime) -> str:
-    return moment.isoformat().replace("+00:00", "Z")
 
 
 # --- frontmatter: the documented YAML subset lives in sparknet-yaml.py --------
@@ -402,54 +272,6 @@ def user_public_b64(record: dict[str, Any]) -> str:
     if not isinstance(key, dict) or not key.get("public_key_b64"):
         raise ProvenanceError("user record has no public key — run `make user-init`")
     return str(key["public_key_b64"])
-
-
-def _state_dir(vault: Path | None = None) -> Path:
-    env = os.environ.get("SPARKNET_STATE_DIR")
-    if env:
-        return Path(env)
-    return (vault or _find_vault_from_cwd()) / ".state"
-
-
-def _user_key_path(vault: Path | None = None) -> Path:
-    return _state_dir(vault) / "keys" / "user.ed25519"
-
-
-def _node_key_path(vault: Path | None = None) -> Path:
-    return _state_dir(vault) / "keys" / "ed25519-node.key.b64"
-
-
-def _find_vault_from_cwd() -> Path:
-    """Walk up for a filled-or-template user record — the numbered layout's marker."""
-    here = Path.cwd().resolve()
-    for candidate in (here, *here.parents):
-        if (candidate / "00_System" / "user.md").is_file():
-            return candidate
-    raise ProvenanceError("no vault with 00_System/user.md found from the current directory")
-
-
-def _refuse_loose_key(path: Path) -> None:
-    """Refuse a private key anyone but the owner can read.
-
-    Not a style check: a 0644 key is readable by any process on the node, which
-    makes every signature it produced attributable to nobody.
-    """
-    mode = stat.S_IMODE(path.stat().st_mode)
-    if mode & (stat.S_IRWXG | stat.S_IRWXO):
-        raise ProvenanceError(
-            f"private key {path} is mode {mode:04o}; it must not be readable by "
-            f"group or other. Fix with: chmod 600 {path}"
-        )
-
-
-def _node_id(vault: Path) -> str:
-    identity = vault / "manifests" / "node-identity.json"
-    if identity.is_file():
-        try:
-            return str(json.loads(identity.read_text()).get("node_id") or "unknown")
-        except json.JSONDecodeError:
-            return "unknown"
-    return "unknown"
 
 
 def sign_note(raw: bytes, vault: Path, agent: str | None = None, model: str | None = None) -> bytes:
@@ -2394,109 +2216,6 @@ def _safe_frontmatter(path: Path) -> dict[str, Any] | None:
         return split_note(path.read_bytes())[0]
     except (ProvenanceError, OSError, UnicodeDecodeError):
         return None
-
-
-# --- secret scanning -----------------------------------------------------------
-
-
-def _tracked_files(vault: Path) -> list[Path]:
-    """Tracked files, or a walk when this tree has no git (an extracted bundle)."""
-    try:
-        out = subprocess.run(
-            ["git", "-C", str(vault), "ls-files", "-z"],
-            capture_output=True,
-            check=True,
-        )
-        names = [name for name in out.stdout.decode("utf-8", "replace").split("\0") if name]
-        return [vault / name for name in names]
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        pass
-    skip = {".git", ".state", ".cache", "__pycache__", ".venv", "dist", "node_modules"}
-    suffixes = {".md", ".py", ".sh", ".json", ".yaml", ".yml", ".template", ".conf", ".txt"}
-    return [
-        path for path in vault.rglob("*") if path.is_file() and not skip & set(path.parts) and path.suffix in suffixes
-    ]
-
-
-def _resolve_secret_ref(ref: str, store: Path) -> bytes | None:
-    """The value a ref names, read only to prove it appears nowhere else.
-
-    `ref` is a path under the state dir, an absolute path, or the name of an
-    environment variable — never a value. The index schema has no field one
-    could put a value in; this is the only place a value is ever read.
-    """
-    if ref.startswith("$"):
-        raw = os.environ.get(ref[1:])
-        return raw.encode("utf-8") if raw else None
-    path = Path(ref) if ref.startswith("/") else store / ref
-    if path.is_file():
-        return path.read_bytes().strip()
-    return None
-
-
-def scan(vault: Path) -> tuple[int, str]:
-    """Fail if a secret or key-shaped literal is reachable in a tracked file."""
-    findings: list[str] = []
-
-    index_path = vault / "00_System" / "secrets-index.json"
-    registered: list[dict[str, Any]] = []
-    if index_path.is_file():
-        try:
-            index = json.loads(index_path.read_text())
-        except json.JSONDecodeError as exc:
-            return 1, f"scan: {index_path.name} is not valid JSON: {exc}"
-        entries = index.get("secrets") if isinstance(index, dict) else index
-        for entry in entries or []:
-            if not isinstance(entry, dict):
-                findings.append(f"{index_path.name}: entry is not an object")
-                continue
-            extra = set(entry) - SECRET_INDEX_ENTRY_KEYS
-            if extra:
-                findings.append(
-                    f"{index_path.name}: entry {entry.get('id')} has keys outside the schema: {sorted(extra)}"
-                )
-            registered.append(entry)
-
-    store = _state_dir(vault) / "secrets"
-    values: dict[str, bytes] = {}
-    for entry in registered:
-        value = _resolve_secret_ref(str(entry.get("ref") or ""), store)
-        if value:
-            values[str(entry.get("id"))] = value
-
-    files = [path for path in _tracked_files(vault) if path.is_file()]
-    for path in files:
-        if not path.is_relative_to(vault):
-            continue
-        rel = str(path.relative_to(vault))
-        if rel in _SCAN_EXEMPT or "tests" in path.parts:
-            continue
-        # Vendored role-local skills are third-party content with upstream
-        # examples that can contain key-shaped strings. Their integrity is
-        # covered by the role-skill manifest; the authored-vault scan skips
-        # them so an upstream detection example is not reported as our secret.
-        if rel.startswith(".opencode/skills/") or "/.opencode/skills/" in rel:
-            continue
-        try:
-            raw = path.read_bytes()
-            text = raw.decode("utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        for label, pattern in _PATTERNS:
-            match = pattern.search(text)
-            if match:
-                line = text[: match.start()].count("\n") + 1
-                findings.append(f"{rel}:{line}: {label}")
-        for secret_id, value in values.items():
-            if value and value in raw:
-                findings.append(f"{rel}: contains the value of registered secret {secret_id!r}")
-
-    if findings:
-        return 1, "scan: FAILED\n  " + "\n  ".join(findings)
-    return (
-        0,
-        f"scan: clean ({len(files)} tracked files, {len(registered)} registered secret(s), no values in the vault)",
-    )
 
 
 # --- CLI -----------------------------------------------------------------------
