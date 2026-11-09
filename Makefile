@@ -376,8 +376,9 @@ drift-check: ## Fail if derived artifacts drifted (manifest, SBOM, skills, contr
 # The goagx distribution (reallife-spark/goagx, generated — fabric PLAN Step
 # 62). Publish is a full-tree release commit; verify also ships inside the
 # published repo, where its generated workflow re-runs it on every push.
-goagx-publish: ## Push a release commit of the goagx distribution to reallife-spark/goagx
-	@scripts/sparknet-goagx-publish.sh --push $(if $(FROM_GIT),--from-git $(FROM_GIT),)
+goagx-publish: ## Push a signed release commit of the goagx distribution
+	@test -f "$(BUNDLE_SIGN_KEY)" && test -f "$(BUNDLE_PUBKEY)" || { echo "BUNDLE_SIGN_KEY and BUNDLE_PUBKEY are required" >&2; exit 1; }
+	@scripts/sparknet-goagx-publish.sh --push --sign-key "$(BUNDLE_SIGN_KEY)" --pubkey "$(BUNDLE_PUBKEY)" $(if $(FROM_GIT),--from-git $(FROM_GIT),)
 
 goagx-drift-check: ## Fail if reallife-spark/goagx drifted from this tree (self-skips offline)
 	@scripts/sparknet-goagx-publish.sh --drift
@@ -481,12 +482,17 @@ role-skills-check: ## Verify role-local catalogs, licenses and removal list
 
 # --- standalone node bundles ---------------------------------------------------
 
-bundle: ## Build a standalone bundle for ROLE=peer|master into dist/
-	@./scripts/sparknet-bundle.sh "$(ROLE)"
+BUNDLE_SIGN_KEY ?= $(HOME)/.local/state/sparknet/master-node/keys/operational.ed25519
+BUNDLE_PUBKEY ?= $(HOME)/.local/state/sparknet/master-node/keys/operational.pub.b64
 
-bundle-verify: ## Extract the newest bundle and prove it runs standalone
+bundle: ## Build a standalone bundle for ROLE=peer|master into dist/
+	@./scripts/sparknet-bundle.sh $(if $(BUNDLE_SIGN_KEY),--sign-key "$(BUNDLE_SIGN_KEY)") "$(ROLE)"
+
+bundle-verify: ## Verify the newest bundle's signature and prove it runs standalone
+	@test -n "$(BUNDLE_PUBKEY)" && test -f "$(BUNDLE_PUBKEY)" || { echo "BUNDLE_PUBKEY is required" >&2; exit 1; }
 	@./scripts/sparknet-bundle.sh --verify \
-		$$(ls -t "$(VAULT_ROOT)"/dist/sparknet-$(ROLE)-*.tar.gz 2>/dev/null | head -1)
+		$$(ls -t "$(VAULT_ROOT)"/dist/sparknet-$(ROLE)-*.tar.gz 2>/dev/null | head -1) \
+		--pubkey "$(BUNDLE_PUBKEY)"
 
 self-improve: ## Run a bounded worktree benchmark candidate (ARGS=...)
 	@$(PY) scripts/sparknet-self-improve.py $(ARGS)

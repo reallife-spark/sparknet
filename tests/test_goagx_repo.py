@@ -9,12 +9,15 @@ it (the dockerfile's COPY sources, the compose build, the goSpark pin), the
 generated manifest, and the verify contract the published workflow re-runs.
 """
 
+import base64
 import json
 import re
 import subprocess
 from pathlib import Path
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PUBLISH = REPO_ROOT / "scripts" / "sparknet-goagx-publish.sh"
@@ -77,8 +80,20 @@ def _dockerfile_arg(name: str) -> str:
 def staged(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """A freshly staged distribution — the integration surface under test."""
     out = tmp_path_factory.mktemp("goagx-stage")
+    key = Ed25519PrivateKey.generate()
+    private = base64.b64encode(
+        key.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption())
+    ).decode()
+    public = base64.b64encode(
+        key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    ).decode()
+    key_path = out.parent / "release.key"
+    pub_path = out.parent / "release.pub"
+    key_path.write_text(private + "\n", encoding="utf-8")
+    key_path.chmod(0o600)
+    pub_path.write_text(public + "\n", encoding="utf-8")
     proc = subprocess.run(
-        [str(PUBLISH), "--out", str(out)],
+        [str(PUBLISH), "--out", str(out), "--sign-key", str(key_path), "--pubkey", str(pub_path)],
         capture_output=True,
         text=True,
         check=False,

@@ -51,7 +51,10 @@ Usage:
   scripts/sparknet-goagx-publish.sh --help
 
   --out DIR       stage the distribution into DIR (empty unless --force)
-  --verify PATH   check a staged dir or .tar.gz; no network needed
+  --verify PATH   verify a detached signature, then check a staged dir or .tar.gz
+  --pubkey PATH   pinned public key for --verify
+  --signature P   detached signature for --verify (default: PATH.sig or PATH/SHA256SUMS.sig)
+  --sign-key P    sign the staged SHA256SUMS with this Ed25519 private key
   --push          stage and push one release commit to reallife-spark/goagx
   --drift         diff the staged tree against the published tip
   --from-git REF  export committed content at REF (default: working tree)
@@ -71,6 +74,9 @@ FROM_GIT=""
 FORCE=0
 CREATE=0
 VERIFY_PATH=""
+SIGN_KEY=""
+PUBKEY=""
+SIGNATURE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -h|--help)     usage; exit 0 ;;
@@ -79,6 +85,9 @@ while [ $# -gt 0 ]; do
     --push)        ACTION="push"; shift ;;
     --drift)       ACTION="drift"; shift ;;
     --from-git)    [ $# -ge 2 ] || die "--from-git needs a ref"; FROM_GIT="$2"; shift 2 ;;
+    --sign-key)    [ $# -ge 2 ] || die "--sign-key needs a path"; SIGN_KEY="$2"; shift 2 ;;
+    --pubkey)      [ $# -ge 2 ] || die "--pubkey needs a path"; PUBKEY="$2"; shift 2 ;;
+    --signature)   [ $# -ge 2 ] || die "--signature needs a path"; SIGNATURE="$2"; shift 2 ;;
     --create)      CREATE=1; shift ;;
     --force)       FORCE=1; shift ;;
     *) die "unknown argument: $1 (try --help)" ;;
@@ -263,7 +272,14 @@ manifest = {
 pathlib.Path(out).write_text(json.dumps(manifest, indent=2) + "\n")
 PY
 
+  if [ -n "$PUBKEY" ] && [ -f "$PUBKEY" ]; then
+    cp "$PUBKEY" "$target/RELEASE_PUBKEY"
+  fi
   write_sums "$target"
+  if [ -n "$SIGN_KEY" ]; then
+    python3 "$REPO_ROOT/scripts/sparknet-sign-artifact.py" sign --file "$target" --key "$SIGN_KEY" --out "$target/SHA256SUMS.sig" \
+      || die "could not sign the staged tree"
+  fi
   log "staged $(find "$target" -type f | wc -l) files into $target"
   log "verify it: scripts/sparknet-goagx-publish.sh --verify $target"
 }
@@ -280,6 +296,16 @@ verify_tree() {  # <root>
   ok()   { printf '    ✓ %s\n' "$*"; }
   bad()  { printf '    ✗ %s\n' "$*" >&2; fail=1; }
   skip() { printf '    · skipped: %s\n' "$*"; }
+  if [ "${SKIP_TREE_SIGNATURE:-0}" != "1" ]; then
+    if [ -z "$PUBKEY" ] && [ -f "$root/RELEASE_PUBKEY" ]; then
+      PUBKEY="$root/RELEASE_PUBKEY"
+    fi
+    [ -n "$PUBKEY" ] && [ -f "$PUBKEY" ] || die "--verify needs a pinned --pubkey"
+    local sig="${SIGNATURE:-$root/SHA256SUMS.sig}"
+    [ -f "$sig" ] || die "detached signature missing: $sig"
+    python3 "$REPO_ROOT/scripts/sparknet-sign-artifact.py" verify --file "$root" --signature "$sig" --pubkey "$PUBKEY" \
+      || die "tree signature does not verify"
+  fi
 
   step "required layout"
   local p
@@ -497,7 +523,8 @@ PY
     LC_ALL=C sed -i -E "s/[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z/<published>/g" "$tree/README.md"
     write_sums "$tree"
   done
-  if diff -r --exclude=.git "$remote_work/goagx" "$stage" >"$remote_work/diff.txt" 2>&1; then
+  if diff -r --exclude=.git --exclude=RELEASE_PUBKEY --exclude=SHA256SUMS.sig --exclude=SHA256SUMS \
+      "$remote_work/goagx" "$stage" >"$remote_work/diff.txt" 2>&1; then
     rm -rf "$stage" "$remote_work"
     log "no drift: the published repo matches this tree"
     return 0
@@ -523,9 +550,15 @@ case "$ACTION" in
     if [ -f "$root" ]; then
       case "$root" in
         *.tar.gz|*.tgz)
+          [ -n "$PUBKEY" ] && [ -f "$PUBKEY" ] || die "--verify needs a pinned --pubkey"
+          sig="${SIGNATURE:-$VERIFY_PATH.sig}"
+          [ -f "$sig" ] || die "detached archive signature missing: $sig"
+          python3 "$REPO_ROOT/scripts/sparknet-sign-artifact.py" verify --file "$VERIFY_PATH" --signature "$sig" --pubkey "$PUBKEY" \
+            || die "archive signature does not verify"
           tmp="$(mktemp -d)"
           python3 "$REPO_ROOT/scripts/sparknet-safe-extract.py" "$root" "$tmp"
           root="$tmp"
+          SKIP_TREE_SIGNATURE=1
           ;;
         *) die "--verify needs a staged directory or a .tar.gz (got: $VERIFY_PATH)" ;;
       esac

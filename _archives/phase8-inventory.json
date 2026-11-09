@@ -4060,13 +4060,13 @@
       "language": "sh",
       "area": "scripts",
       "prior_disposition": "rewrite",
-      "status": "needs-decision",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "make bundle ROLE=peer && make bundle-verify ROLE=peer",
+      "test": "tests/test_goagx_repo.py / bundle-verify",
       "commit": "",
       "reviewer": "",
-      "notes": "requires detached-signature verification / pinned image digests"
+      "notes": "detached archive signature required before extraction/execution"
     },
     {
       "path": "scripts/sparknet-chroma.py",
@@ -4150,13 +4150,13 @@
       "language": "sh",
       "area": "scripts",
       "prior_disposition": "rewrite",
-      "status": "needs-decision",
+      "status": "fixed",
       "finding_ids": [],
-      "evidence": "",
-      "test": "",
+      "evidence": "goagx signed staged verify",
+      "test": "tests/test_goagx_repo.py::test_staged_verify_mode_passes",
       "commit": "",
       "reviewer": "",
-      "notes": "requires detached-signature verification / pinned image digests"
+      "notes": "detached SHA256SUMS/archive signature required before executing staged content"
     },
     {
       "path": "scripts/sparknet-governance-check.py",

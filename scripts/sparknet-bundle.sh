@@ -81,6 +81,11 @@ write_sums() {  # <bundle-root>: write SHA256SUMS over every file but itself
 verify_bundle() {
   archive="$1"
   [ -f "$archive" ] || die "no such archive: $archive"
+  sig="${signature:-$archive.sig}"
+  [ -f "$sig" ] || die "detached signature missing: $sig (build with --sign-key, then rerun --verify --pubkey ...)"
+  [ -n "$pubkey" ] && [ -f "$pubkey" ] || die "--verify needs a pinned --pubkey (or SPARKNET_BUNDLE_PUBKEY)"
+  python3 "$REPO_ROOT/scripts/sparknet-sign-artifact.py" verify --file "$archive" --signature "$sig" --pubkey "$pubkey" \
+    || die "archive signature does not verify under $pubkey"
 
   # The role is encoded in the archive name: sparknet-<role>-...
   base="$(basename "$archive" .tar.gz)"
@@ -275,7 +280,10 @@ Usage:
 Options:
   --out DIR       write archives under DIR (default: dist/)
   --from-git REF  build from a committed ref instead of the working tree
-  --verify        extract ARCHIVE elsewhere and run its deploy sequence there
+  --sign-key PATH  sign the finished archive with this Ed25519 private key
+  --verify        verify ARCHIVE's detached signature, then run its deploy sequence
+  --pubkey PATH   pinned public key for --verify (or SPARKNET_BUNDLE_PUBKEY)
+  --signature PATH detached signature for --verify (default: ARCHIVE.sig)
 
 The bundle reproduces the repository layout (role subvault + contracts/ +
 shared/ + .opencode/ + opencode.json), because a role subvault alone is not a
@@ -288,10 +296,16 @@ role=""
 out_root="$REPO_ROOT/dist"
 from_git=""
 verify=""
+sign_key=""
+pubkey="${SPARKNET_BUNDLE_PUBKEY:-}"
+signature=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --out)       out_root="$2"; shift 2 ;;
     --from-git)  from_git="$2"; shift 2 ;;
+    --sign-key)  sign_key="$2"; shift 2 ;;
+    --pubkey)    pubkey="$2"; shift 2 ;;
+    --signature) signature="$2"; shift 2 ;;
     --out=*)     out_root="${1#*=}"; shift ;;
     --from-git=*) from_git="${1#*=}"; shift ;;
     --verify)    verify="$2"; shift 2 ;;
@@ -522,6 +536,10 @@ printf '  hashed   SHA256SUMS (%s files)\n' "$(grep -c . "$target/SHA256SUMS")"
 mkdir -p "$out_root"
 archive="$out_root/$name.tar.gz"
 tar -czf "$archive" -C "$stage" "$prefix"
+if [ -n "$sign_key" ]; then
+  python3 "$REPO_ROOT/scripts/sparknet-sign-artifact.py" sign --file "$archive" --key "$sign_key" --out "$archive.sig" \
+    || die "could not sign $archive"
+fi
 
 printf '\nWrote %s\n' "${archive#$REPO_ROOT/}"
 printf '  size    : %s\n' "$(du -h "$archive" | cut -f1)"
