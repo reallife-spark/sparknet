@@ -547,23 +547,24 @@ drift_check() {  # stage from the tree, diff against the published tip
     warn "SKIPPED: cannot fetch $REMOTE (private remote unreachable or unauthenticated) — goagx drift not measured"
     return 0
   fi
-  # Generation metadata, stamped at stage time: the manifest timestamp, how
-  # the tip happened to be published (worktree vs a ref — the sparknet_sha
-  # field still catches an old ref), the README's Published row and the
-  # hashes those set in SHA256SUMS. Normalizing keeps --drift from flagging
-  # its own clock/mode — real content drift still shows.
+  # Generation metadata, stamped at stage time: the manifest timestamp, the
+  # source commit, how the tip was published, the README's Published row and
+  # the hashes those set in SHA256SUMS. The source commit is necessarily older
+  # than the superproject commit that pins this release, so normalize it too;
+  # real content drift still shows.
   for tree in "$remote_work/goagx" "$stage"; do
     python3 - "$tree/VERSIONS.json" <<'PY'
 import json, sys
 path = sys.argv[1]
 m = json.load(open(path))
-for key in ("published", "sparknet_from_git"):
+for key in ("published", "sparknet_sha", "sparknet_from_git"):
     m.pop(key, None)
 with open(path, "w") as fh:
     json.dump(m, fh, indent=2, sort_keys=True)
     fh.write("\n")
 PY
     LC_ALL=C sed -i -E "s/[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z/<published>/g" "$tree/README.md"
+    LC_ALL=C sed -i -E "s/\`[0-9a-f]{40}\` of \[reallife-spark\/sparknet\]/\`<sparknet-sha>\` of [reallife-spark\/sparknet]/g" "$tree/README.md"
     write_sums "$tree"
   done
   if diff -r --exclude=.git --exclude=RELEASE_PUBKEY --exclude=SHA256SUMS.sig --exclude=SHA256SUMS \
