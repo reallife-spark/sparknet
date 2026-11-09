@@ -47,3 +47,7 @@
   the provenance facade. ADR-0007 completes the split: each lifecycle has its
   own module, while `shared/sparknet-provenance.py` is the path-stable facade
   and CLI.
+- **signer operation catalog** — the `SIGNER_OPERATIONS` table in
+  `master-node/services/sparknet-signer.py`. One row names an operation's
+  request field, response key, ledger event and named prepare method; the
+  common signer path owns root pinning, validation, ledger append and response.
