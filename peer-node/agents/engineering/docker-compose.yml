@@ -1,4 +1,0 @@
-services:
-  engineering:
-    image: alpine:3.20
-    command: ["sleep", "infinity"]

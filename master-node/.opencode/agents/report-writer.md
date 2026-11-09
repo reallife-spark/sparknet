@@ -1,1 +1,0 @@
-../../../peer-node/.opencode/agents/report-writer.md

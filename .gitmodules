@@ -1,0 +1,16 @@
+[submodule "gospark"]
+	path = gospark
+	url = https://github.com/reallife-spark/gospark.git
+	branch = main
+[submodule "peer-node"]
+	path = peer-node
+	url = https://github.com/reallife-spark/sparknet-peer.git
+	branch = main
+[submodule "master-node"]
+	path = master-node
+	url = https://github.com/reallife-spark/sparknet-master.git
+	branch = main
+[submodule "goagx"]
+	path = goagx
+	url = https://github.com/reallife-spark/goagx.git
+	branch = main

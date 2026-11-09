@@ -1,4 +1,0 @@
-# wlan0 emergency-only metric 600 (hypothetical template)
-network:
-  version: 2
-  wifis: {}

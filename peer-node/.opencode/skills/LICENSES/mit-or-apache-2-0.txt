@@ -1,2 +1,0 @@
-Dual-licensed skills in this catalog are available under either
-the MIT license (mit.txt) or Apache-2.0 (apache-2-0.txt).
