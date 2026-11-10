@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
 updated: 2026-11-10
-current: 93
+current: done
 ---
 
 # sparknet — Active Plan
@@ -168,7 +168,7 @@ current: 93
 
 ## Step 93 — Implement the architecture roadmap
 
-- [ ] **Step 93** — Implement the approved 92E roadmap in order. The graph
+- [x] **Step 93** — Implement the approved 92E roadmap in order. The graph
   producer and core split both touch `shared/sparknet_understand/`; never run
   them in parallel.
   - [x] **93A — Graph producer.** Python owns `scan`/`diff`; Go `scan`/`diff`
@@ -179,8 +179,8 @@ current: 93
     parity fixture and ADR 0018. **DoD: verified 2026-11-10** — Go adapter,
     parse, scan and raw-fidelity tests pass; `make -C gospark ci`,
     `make understand-check`, `make test-all` (exit 0) and
-    `make contract-test` are green. No role or live claim is made; goagx
-    republish remains pending because the local generated tree is not published.
+    `make contract-test` are green. goagx was republished as `fc9ccee` with
+    goSpark `970d714`; no role or live claim is made.
   - [x] **93B — Issue module.** Implemented `shared/sparknet-issue.py` and
     `shared/sparknet_issue/` for parse, `body_sha256`, redaction, validation,
     ledger/latest view, triage and projection. Peer pusher, Master intake and
@@ -189,8 +189,8 @@ current: 93
     read-only effective-status projection. **DoD: verified 2026-11-10** —
     module, route, console and triage tests pass; peer/master suites,
     `make test-all`, `make ci`, `make contract-test`, `make render-check`,
-    `make sbom-check`, `make validate`, lint/format/shellcheck green. No live
-    claim; role and root changes remain uncommitted.
+    `make sbom-check`, `make validate`, lint/format/shellcheck green. Committed
+    as peer `a64e993` and master `8580214`; no live claim.
   - [x] **93C — Skill catalog.** Implemented
     `scripts/skill_catalog/{__init__,engine}.py` and moved wiki, Matt,
     Understand and role sync onto the shared copy, digest, manifest, host-path
@@ -208,11 +208,11 @@ current: 93
   - **DoD**: each implementation step has its named gates; cross-repository
     commits land role changes before superproject pins; goagx is republished
     where the distributed tree changes; no live claim comes from this host.
-  - **Status 2026-11-10 — 93A–93D complete; Step 93 closure pending commits and
-    goagx republish.** Graph adapters, issue module, triage writer,
-    skill-catalog engine, console projection and core split are green locally.
-    No cross-repository commit or goagx publish has been made; those remain
-    closure actions, not local verification claims.
+  - **Status 2026-11-10 — COMPLETE.** Graph adapters, issue module, triage
+    writer, skill-catalog engine, console projection and core split are green.
+    goSpark `970d714`, peer `a64e993`, master `8580214` and goagx `fc9ccee`
+    are published; root code is `c5602cc`. Step 91 and the role live-leg
+    confirmations remain open and are not claimed here.
 
 ## Standing verification rules
 

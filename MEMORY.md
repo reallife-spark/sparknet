@@ -4,9 +4,9 @@
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
 Updated: 2026-11-10
 ## Plan cursor
-- `PLAN.md` — `current: 93`; Step 92 complete; 93A–93D complete; Step 93 closure pending cross-repository commits and a goagx republish. Graph adapters, the shared issue module, the skill-catalog engine and the core split are green locally and uncommitted. ADRs 0009/0010/0011/0018 are uncommitted; goagx has the 93A bootstrap change locally but has not been republished.
+- `PLAN.md` — `current: done`; Steps 92 and 93 complete. goSpark `970d714`, peer `a64e993`, master `8580214`, root code `c5602cc`, goagx `fc9ccee` pinned and published. The 93A graph adapter set, shared issue module, skill-catalog engine and core split are committed.
 - Step 91 and role Steps 19/28 remain open only on live confirmations. Steps 18/27 are closed as delivered by Step 89.
-- Critical open items: close Step 93 with commits/pins and goagx republish; confirm live issue delivery and live browser surfaces; run the 9G nocturnal window; peer precommit still reports `peer-node/02_Daily/2026-11-02.md`.
+- Critical open items: confirm live issue delivery and live browser surfaces; run the 9G nocturnal window; peer precommit still reports `peer-node/02_Daily/2026-11-02.md`.
 - Phase 8 remains closed: 54 fixed, 186 reviewed-clean, 176 test-verified; register and inventory in `_archives/`.
 ## Live fabric
 - **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`). Peer egress only to Master.
