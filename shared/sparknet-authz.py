@@ -69,6 +69,7 @@ KNOWN_CAPABILITIES = frozenset(
         "cluster-dispatch",
         "cluster-serve",
         "admin-supervise",
+        "sandbox-supervise",
         "cross-department-share",
         "model-uplift",
         "memory-supervise",
@@ -987,6 +988,86 @@ def _build_admin_request(request: dict[str, Any]) -> dict[str, Any]:
             f"unknown admin action {request['action']!r}; expected one of {', '.join(ADMIN_REQUEST_ACTIONS)}"
         )
     projected = {field: request.get(field) for field in sorted(ADMIN_REQUEST_FIELDS)}
+    return projected
+
+
+# --- sandbox requests (sandbox-supervise) ------------------------------------
+
+
+#: The closed set of execution-sandbox actions a Master may ask a peer to
+#: perform against the peer's own OpenShell gateway. The peer still applies its
+#: own local execution whitelist before any gateway call; a request naming an
+#: action outside this list is refused rather than guessed at, exactly like
+#: CLUSTER_JOB_MODES and ADMIN_REQUEST_ACTIONS.
+SANDBOX_REQUEST_ACTIONS = (
+    "list",
+    "get",
+    "create",
+    "start",
+    "stop",
+    "delete",
+    "policy-get",
+    "policy-update",
+    "expose",
+)
+
+#: Fields of a sandbox-request covered by the Master's signature. `policy`,
+#: `mounts`, `image` and `service_name` are inside the projection because a
+#: signature over a sandbox name alone would let anyone replay one request's
+#: signature with a wider mount set or a different image. The peer executes only
+#: the signed projection; an unsigned field is refused.
+SANDBOX_REQUEST_FIELDS = (
+    "request_id",
+    "conversation_id",
+    "master_node_id",
+    "target_node_id",
+    "target_fingerprint",
+    "issued_at",
+    "expires_at",
+    "nonce",
+    "action",
+    "sandbox_name",
+    "image",
+    "policy",
+    "mounts",
+    "service_name",
+    "port",
+    "reason",
+)
+
+#: Fields a request must carry and fill before it can be canonicalised. The
+#: remaining fields are action-dependent and are projected as null/empty; the
+#: peer's execution whitelist enforces which action needs which field.
+SANDBOX_REQUEST_REQUIRED = (
+    "request_id",
+    "master_node_id",
+    "target_node_id",
+    "target_fingerprint",
+    "issued_at",
+    "expires_at",
+    "nonce",
+    "action",
+)
+
+
+def _build_sandbox_request(request: dict[str, Any]) -> dict[str, Any]:
+    """Canonical bytes signed for a sandbox-request, projected to SANDBOX_REQUEST_FIELDS.
+
+    One projection rule, shared by the signer and every peer that executes the
+    request — the same anti-drift pattern as ``admin_request_message`` and
+    ``cluster_job_message``: a second copy of this rule is exactly how signing
+    and verifying diverge.
+    """
+    if not isinstance(request, dict):
+        raise AuthzError("sandbox request must be an object")
+    missing = [f for f in SANDBOX_REQUEST_REQUIRED if not request.get(f)]
+    if missing:
+        raise AuthzError(f"sandbox request missing required field(s): {', '.join(missing)}")
+    if request["action"] not in SANDBOX_REQUEST_ACTIONS:
+        raise AuthzError(
+            f"unknown sandbox action {request['action']!r}; expected one of {', '.join(SANDBOX_REQUEST_ACTIONS)}"
+        )
+    projected = {field: request.get(field) for field in sorted(SANDBOX_REQUEST_FIELDS)}
     return projected
 
 
@@ -2287,6 +2368,12 @@ SPECS: dict[str, EnvelopeSpec] = {
         signed_fields=ADMIN_REQUEST_FIELDS,
         project=_build_admin_request,
     ),
+    "sandbox-request": EnvelopeSpec(
+        fields=SANDBOX_REQUEST_FIELDS,
+        required=SANDBOX_REQUEST_REQUIRED,
+        signed_fields=SANDBOX_REQUEST_FIELDS,
+        project=_build_sandbox_request,
+    ),
     "distillation-run": EnvelopeSpec(
         fields=DISTILLATION_RUN_FIELDS,
         required=DISTILLATION_RUN_REQUIRED,
@@ -2370,6 +2457,10 @@ def cluster_job_message(job: dict[str, Any]) -> bytes:
 
 def admin_request_message(request: dict[str, Any]) -> bytes:
     return envelope_message("admin-request", request)
+
+
+def sandbox_request_message(request: dict[str, Any]) -> bytes:
+    return envelope_message("sandbox-request", request)
 
 
 def distillation_run_message(run: dict[str, Any]) -> bytes:

@@ -95,6 +95,7 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/graph-schema.json` | derived document-link graph: vault-scoped nodes, edge kinds, deterministic ordering and unresolved links |
 | `contracts/hybrid-schema.json` | semantic + agentic retrieval bundle: both result sets with provenance, never silently merged |
 | `contracts/exec-schema.json` | signed argv-only execution contract: vector argv, vault-relative cwd, environment allow-list, operator OS cap, timeout and output bounds |
+| `contracts/sandbox-schema.json` | signed Master→peer execution-sandbox contract: closed action set, driver-neutral owner identity, one-vault mount scope (plus VM ro config mount), bind-mount caveat and refusals; route/executor not implemented (20E) |
 | `contracts/collab-schema.json` | bounded collaboration rooms: participants, classification ceiling, department boundary, provenance and no authority |
 | `contracts/package-schema.json` | signed package manifests and the closed dependency-first install plan; a package is data and never executes itself |
 | `contracts/agent-schema.json` | event-driven agent descriptors: bounded runtime and concurrency, one role family, no authority |

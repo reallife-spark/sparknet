@@ -1,0 +1,158 @@
+{
+  "contract": "sandbox-schema",
+  "schema_version": "1.0",
+  "description": "The signed Master-to-peer contract for the peer's OpenShell execution sandbox. A request may inspect, create, start, stop or delete a sandbox and read or change its policy; it never reads vault content and never widens a mount. The peer executes the verified action against its own gateway with its own local credentials.",
+  "implementation": "The signed envelope and verification grammar are implemented. The bridge `/sandbox/*` route and the signed executor are not implemented; the capability is inert (peer PLAN 20E).",
+  "request": {
+    "schema": "sparknet-sandbox-request/1",
+    "fields": [
+      "request_id",
+      "conversation_id",
+      "master_node_id",
+      "target_node_id",
+      "target_fingerprint",
+      "issued_at",
+      "expires_at",
+      "nonce",
+      "action",
+      "sandbox_name",
+      "image",
+      "policy",
+      "mounts",
+      "service_name",
+      "port",
+      "reason"
+    ],
+    "required": [
+      "request_id",
+      "master_node_id",
+      "target_node_id",
+      "target_fingerprint",
+      "issued_at",
+      "expires_at",
+      "nonce",
+      "action"
+    ],
+    "signed_fields": [
+      "request_id",
+      "conversation_id",
+      "master_node_id",
+      "target_node_id",
+      "target_fingerprint",
+      "issued_at",
+      "expires_at",
+      "nonce",
+      "action",
+      "sandbox_name",
+      "image",
+      "policy",
+      "mounts",
+      "service_name",
+      "port",
+      "reason"
+    ],
+    "actions": [
+      "list",
+      "get",
+      "create",
+      "start",
+      "stop",
+      "delete",
+      "policy-get",
+      "policy-update",
+      "expose"
+    ],
+    "signature": "Ed25519 over canonical JSON of signed_fields. It records who asked; the capability is read only from the peer's signed registry entry."
+  },
+  "actions": {
+    "list": {
+      "required": [],
+      "rule": "Return the gateway inventory. The response names sandboxes and states, never mounted host paths or policy bodies."
+    },
+    "get": {
+      "required": ["sandbox_name"],
+      "rule": "Return one sandbox record and its resolved workload identity; no host path and no credential is returned."
+    },
+    "create": {
+      "required": ["sandbox_name", "image"],
+      "rule": "Create a sandbox from the image with the signed policy and the signed mount list. The peer refuses an image or mount outside its local whitelist."
+    },
+    "start": {
+      "required": ["sandbox_name"],
+      "rule": "Start an existing sandbox under its stored policy; no new mount may appear."
+    },
+    "stop": {
+      "required": ["sandbox_name"],
+      "rule": "Stop a sandbox; the record and its persistent mounts remain."
+    },
+    "delete": {
+      "required": ["sandbox_name"],
+      "rule": "Delete a sandbox record and its compute resource. A persistent bind mount is never deleted with it."
+    },
+    "policy-get": {
+      "required": ["sandbox_name"],
+      "rule": "Return the active policy. It may name paths, not file contents."
+    },
+    "policy-update": {
+      "required": ["sandbox_name", "policy"],
+      "rule": "Apply the signed policy. Network rules may change live; filesystem, Landlock and process changes require sandbox recreation and are refused rather than applied to a running sandbox."
+    },
+    "expose": {
+      "required": ["sandbox_name", "service_name", "port"],
+      "rule": "Expose one sandbox-local TCP port through an authenticated gateway forward. The peer refuses a port it did not create and never exposes a host path."
+    }
+  },
+  "identity": {
+    "model": "The workload runs with the node owner's Unix identity, resolved on the peer at creation time. The peer chooses the driver; a sandbox request does not.",
+    "drivers": {
+      "docker-rootful": {
+        "identity": "Numeric owner UID/GID; run_as_user and run_as_group are the numeric selectors.",
+        "status": "blocked on the current Jetson pair until Docker 28+ and Landlock ABI 3 are available."
+      },
+      "vm": {
+        "identity": "The symbolic sandbox guest account, reconciled by the driver to sandbox_uid/sandbox_gid; those must equal the node owner.",
+        "status": "validated on a supported host; blocked on the current Jetson pair because the embedded libkrun requires GLIBC 2.33."
+      }
+    },
+    "uid_min": 1,
+    "uid_max": 4294967294,
+    "uid_range": "1 through 4294967294; OpenShell refuses uid 0.",
+    "supplementary_groups": "A numeric selector skips initgroups, so a Docker sandbox receives only the primary GID. It must never inherit docker, sudo or equivalent host groups. A VM sandbox uses the reconciled guest account with the owner's primary GID.",
+    "mount_scope": "One read-write bind per sandbox (the user's peer-<id> vault). A VM sandbox also has one read-only mount for its generated OpenCode config directory. Isolation between users is mount-scoped, not UID-scoped, because they share the node owner's Unix account.",
+    "excluded_drivers": [
+      "podman-rootless"
+    ],
+    "excluded_driver_reason": "Rootless Podman maps the container uid through an unpinned subuid range, not to the host user (OpenShell issue 2336), and the driver exposes no userns/keep-id setting; it is excluded until that changes."
+  },
+  "policy": {
+    "filesystem": "read_only and read_write lists are absolute, at most 256 paths, and read_write cannot contain /.",
+    "landlock": "hard_requirement protects container-internal paths only; the kernel needs Landlock ABI v3 or later.",
+    "bind_mounts": "Bind-mounted paths bypass filesystem_policy (OpenShell issue 1748, closed as not planned). The mount's read_only flag is the boundary; the policy must still declare the same paths so intent and mount agree.",
+    "network": "The workload has no network interface. Egress is the supervisor's policy; loopback, link-local and 169.254.169.254 are never reachable.",
+    "approvals": "OpenShell proposal auto-approval stays off. A policy proposal is surfaced to the local user; the Master cannot approve on the user's behalf."
+  },
+  "refusal_codes": [
+    "malformed-request",
+    "not-canonicalisable",
+    "unknown-action",
+    "action-mismatch",
+    "bad-signature",
+    "wrong-target",
+    "capability_missing",
+    "replayed",
+    "expired",
+    "no-gateway",
+    "sandbox-not-found",
+    "mount-refused",
+    "uid-zero",
+    "policy-refused"
+  ],
+  "rules": [
+    "Authority comes from the Master signature plus sandbox-supervise in the peer's registry; neither alone executes.",
+    "The peer keeps the gateway credential. The Master never receives a token, a host socket or a shell.",
+    "A sandbox-request is authority, never knowledge: it cannot carry a vault page, an answer or a prompt.",
+    "The peer's local execution whitelist is narrower than this contract and can refuse an otherwise valid request.",
+    "A mount may only name a path the peer itself provisioned for that user; no $HOME, .state, key, sibling vault or Docker socket.",
+    "Unsigned, stale, replayed or unknown-capability requests are refused before any gateway call."
+  ]
+}

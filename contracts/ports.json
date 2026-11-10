@@ -288,7 +288,7 @@
     "4096": {
       "bound_by": "peer",
       "implementation_state": "implemented",
-      "note": "OpenAI-compatible local proxy routing to domain agent ports. The OpenAI/session/vault route class is local-only by design: it injects the user environment profile, so it stays loopback-only even when the bridge is bound to the overlay (`LOCAL_ONLY_PREFIXES`; an overlay source is refused `403 not-loopback` before the request is read). The `/admin/*` route is the exception: Master-signed, and from fabric Step 29 the one route class the overlay may reach.",
+      "note": "OpenAI-compatible local proxy routing to domain agent ports. The OpenAI/session/vault route class is local-only by design: it injects the user environment profile, so it stays loopback-only even when the bridge is bound to the overlay (`LOCAL_ONLY_PREFIXES`; an overlay source is refused `403 not-loopback` before the request is read). The `/admin/*` route is the implemented Master-signed exception and the only route class the overlay may reach. The `/sandbox/*` name is reserved for peer PLAN 20E; no handler exists and it is not overlay-reachable today.",
       "overlay_only": false,
       "protocol": "tcp/http",
       "runtime": "not-listening",
@@ -521,9 +521,41 @@
       "runtime_why": "The development host opens nothing. On 2026-11-01 the live Master bound 10.100.0.1:8091 and accepted signed agx64 uplifts. `runtime` describes this host, so it stays not-listening.",
       "service": "uplift-intake",
       "status": "LIVE 2026-11-01 \u2014 agx64 pushed 41 inventory records (mirrored into agx32 uplift-inventory), 30 teacher traces and four Qdrant collection snapshots; one inventory snapshot restored into a scratch collection. The listener holds no key."
+    },
+    "11501": {
+      "bound_by": "peer",
+      "dynamic_range": "11501-11749",
+      "implementation_state": "implemented",
+      "note": "Base of the per-user OpenShell model-proxy range (`proxy_port` plus allocator index). Loopback only; the VM guest reaches its proxy as host.openshell.internal:<port>. The range stops before the forward range.",
+      "overlay_only": false,
+      "protocol": "tcp/http",
+      "runtime": "not-listening",
+      "runtime_why": "The engine binds one loopback proxy per active sandbox; no sandbox is running on this host at measurement time.",
+      "service": "openshell-model-proxy"
+    },
+    "14201": {
+      "bound_by": "peer",
+      "dynamic_range": "14201-14449",
+      "implementation_state": "implemented",
+      "note": "Base of the per-user OpenShell forward range (`forward_base` plus allocator index). `openshell forward service` maps each loopback port to the VM's OpenCode 4200 and preserves Basic auth.",
+      "overlay_only": false,
+      "protocol": "tcp/http",
+      "runtime": "not-listening",
+      "runtime_why": "The engine starts one loopback forward per active VM sandbox; none is running on this host at measurement time.",
+      "service": "openshell-forward"
+    },
+    "17670": {
+      "bound_by": "peer",
+      "implementation_state": "implemented",
+      "note": "The OpenShell gateway control plane. Loopback only, package-managed mTLS; it is never exposed to the overlay and carries no knowledge. The peer's engine is the only client.",
+      "overlay_only": false,
+      "protocol": "tcp/http",
+      "runtime": "not-listening",
+      "runtime_why": "The package user service binds 127.0.0.1:17670 when installed and running; it is stopped on this measurement host.",
+      "service": "openshell-gateway"
     }
   },
-  "schema_version": "2.0",
+  "schema_version": "2.1",
   "states": {
     "implementation_state": {
       "implemented": "The code exists and binds the port it names.",

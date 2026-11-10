@@ -49,6 +49,7 @@ the tests then prove both roles still agree.
 | `graph-schema.json` | the derived document-link graph: vault-scoped nodes, wikilink/frontmatter/manual edges, deterministic ordering and reported unresolved links |
 | `hybrid-schema.json` | the semantic + agentic retrieval bundle: both result sets, provenance, and the rule that they are never silently merged |
 | `exec-schema.json` | the signed argv-only execution contract: vector argv, vault-relative cwd, environment allow-list, operator OS cap, timeout and output bounds |
+| `sandbox-schema.json` | the signed Master→peer execution-sandbox contract: the closed action set, the driver-neutral owner-identity model, the one-vault mount scope (plus the VM read-only config mount), the bind-mount caveat and the refusal vocabulary. The envelope is implemented; the `/sandbox/*` route and executor are not (peer PLAN 20E). Authority, never knowledge |
 | `collab-schema.json` | bounded collaboration rooms: participants, classification ceiling, department boundary, provenance and no authority |
 | `package-schema.json` | signed package manifests and the closed dependency-first install plan; a package is data and never executes itself |
 | `agent-schema.json` | event-driven agent descriptors: one role family, bounded runtime/concurrency, no authority, no vault write |

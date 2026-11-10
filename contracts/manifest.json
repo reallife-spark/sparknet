@@ -16,8 +16,8 @@
     {
       "contract": "capabilities",
       "file": "capabilities.json",
-      "schema_version": "1.0",
-      "sha256": "cc3124423ae83892625d71e227a21fdc505e0501fd0bafaa01a907442719caa6"
+      "schema_version": "1.1",
+      "sha256": "12058a22d42a0883bc079ae2c9a6e57ba4ab6e9a998606b61f338a0f3a170e71"
     },
     {
       "contract": "collab-schema",
@@ -130,8 +130,8 @@
     {
       "contract": "ports",
       "file": "ports.json",
-      "schema_version": "2.0",
-      "sha256": "c5b09d3e2700e98177d426c7987a6b1c8dcc59efc0b98b87cd4a81a34c0e88e7"
+      "schema_version": "2.1",
+      "sha256": "6b07140a10be1a7eb57fe65b8de1b1d1ad2c3e62996e250e18393d29c14b1a37"
     },
     {
       "contract": "proposal-schema",
@@ -168,6 +168,12 @@
       "file": "rfi-schema.json",
       "schema_version": "1.0",
       "sha256": "377f608c1bfc001d2c4226ea4640a46aac7820d8131fdac8d4d9cdaeb57191c3"
+    },
+    {
+      "contract": "sandbox-schema",
+      "file": "sandbox-schema.json",
+      "schema_version": "1.0",
+      "sha256": "83c802b637ea634f87614688a18ed3f87f6cf3154ed83291fab33401042defcf"
     },
     {
       "contract": "self-improvement-schema",
@@ -226,6 +232,7 @@
     "model-uplift",
     "p2p-sync",
     "push-receive",
+    "sandbox-supervise",
     "telemetry"
   ],
   "node_ports": {
@@ -358,6 +365,24 @@
   },
   "note": "Generated from contracts/*.json. Regenerate with `make render`.",
   "ports": {
+    "11501": {
+      "bound_by": "peer",
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "openshell-model-proxy"
+    },
+    "14201": {
+      "bound_by": "peer",
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "openshell-forward"
+    },
+    "17670": {
+      "bound_by": "peer",
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "openshell-gateway"
+    },
     "4096": {
       "bound_by": "peer",
       "implementation_state": "implemented",

@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "contract": "capabilities",
   "description": "The complete, closed capability vocabulary. The Master grants these by signing; a peer holds only what the Master signed. Anything not listed here is rejected by both roles. Adding a capability is a contract change and must land here first.",
   "known_capabilities": [
@@ -11,6 +11,7 @@
     "cluster-dispatch",
     "cluster-serve",
     "admin-supervise",
+    "sandbox-supervise",
     "cross-department-share",
     "model-uplift",
     "memory-supervise",
@@ -61,6 +62,12 @@
       "holder": "master",
       "sensitive": true,
       "note": "The cross-node administration capability (ADMIN_FEDERATION_DESIGN.md, fabric PLAN Step 29). holder: master — the authority to *issue* sits with the elected key holder; a peer holding this in its registry entry accepts Master-signed admin-requests in guard-protocol order and executes them against the peer's own Open WebUI with the peer's own service-account token, which never leaves the node. The bridge /admin/* route exists and verifies, but authorises nothing until the real registry carries a signed grant of this capability — the same inert posture as cluster-dispatch."
+    },
+    "sandbox-supervise": {
+      "grants": "Submit signed sandbox-requests that make a peer inspect, create, start, stop or delete OpenShell execution sandboxes, and read or change their sandbox policy, against its own node.",
+      "holder": "master",
+      "sensitive": true,
+      "note": "The execution-sandbox counterpart to admin-supervise. holder: master — the authority to *issue* sits with the elected key holder; a peer holding this in its registry entry accepts Master-signed sandbox-requests in guard-protocol order and executes them against its own OpenShell gateway with the peer's own local credentials, which never leave the node. The bridge has no `/sandbox/*` route yet: the route class is reserved and no request is accepted until peer PLAN 20E implements and tests it. The capability is inert until both a signed registry grant and that route exist — the same inert posture as cluster-dispatch. It grants no read of the user's vault content and no authority to widen a sandbox's mounts; the peer's local execution whitelist still decides every action."
     },
     "cross-department-share": {
       "grants": "Offer or accept a share with a node whose Master-attested department differs from this node's own.",

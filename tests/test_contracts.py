@@ -152,6 +152,49 @@ def test_admin_supervise_is_adopted_cross_role(authz: ModuleType, capabilities: 
     )
 
 
+def test_sandbox_supervise_is_adopted_cross_role(authz: ModuleType, capabilities: dict):
+    """Execution-sandbox supervision is a Master capability and inert until granted.
+
+    `sandbox-supervise` is reserved for the `/sandbox/*` route. Its holder is
+    the Master — a peer never signs a sandbox request — and the action
+    vocabulary, signed projection and required fields must agree between the
+    shared grammar and `contracts/sandbox-schema.json`.
+    """
+    assert "sandbox-supervise" in authz.KNOWN_CAPABILITIES
+    assert "sandbox-supervise" in capabilities["known_capabilities"]
+    definition = capabilities["definitions"]["sandbox-supervise"]
+    assert definition["holder"] == "master", "sandbox-supervise must be Master-held; peers never sign it"
+    assert definition["sensitive"] is True
+    schema = load("sandbox-schema.json")
+    assert tuple(authz.SANDBOX_REQUEST_ACTIONS) == tuple(schema["request"]["actions"])
+    assert set(authz.SANDBOX_REQUEST_FIELDS) == set(schema["request"]["fields"])
+    assert set(authz.SANDBOX_REQUEST_FIELDS) == set(schema["request"]["signed_fields"])
+    assert set(authz.SANDBOX_REQUEST_REQUIRED) <= set(authz.SANDBOX_REQUEST_FIELDS), (
+        "a sandbox-request field is required but not projected"
+    )
+    assert set(schema["refusal_codes"]) >= {"bad-signature", "capability_missing", "mount-refused", "uid-zero"}
+
+
+def test_sandbox_contract_is_driver_neutral_and_the_route_is_not_claimed(capabilities: dict, ports: dict) -> None:
+    schema = load("sandbox-schema.json")
+    assert set(schema["identity"]["drivers"]) == {"docker-rootful", "vm"}
+    assert "vm" not in schema["identity"]["excluded_drivers"]
+    assert schema["identity"]["uid_min"] == 1
+    assert schema["identity"]["uid_max"] == 4294967294
+    assert "not implemented" in schema["implementation"].lower()
+    note = capabilities["definitions"]["sandbox-supervise"]["note"].lower()
+    assert "no `/sandbox/*` route" in note or "no /sandbox/*" in note
+    bridge = (PEER / "services" / "sparknet-dispatch-bridge.py").read_text()
+    assert "/sandbox/" not in bridge, (
+        "the bridge grew a /sandbox/ handler; the contract truth test must be updated with 20E"
+    )
+    assert "17670" in ports["ports"]
+    assert ports["ports"]["17670"]["service"] == "openshell-gateway"
+    assert "11501" in ports["ports"] and "14201" in ports["ports"]
+    route_note = ports["ports"]["4096"]["note"].lower()
+    assert "no handler" in route_note and "not overlay-reachable" in route_note
+
+
 def test_signed_envelope_covers_everything_that_grants_power(identity_schema: dict):
     """`capabilities` and `revoked` must be inside the signature.
 
