@@ -26,8 +26,6 @@ difference from upstream is reviewable in git rather than invisible.
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
 import os
 import re
 import shutil
@@ -35,6 +33,9 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from skill_catalog import engine
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEST = REPO_ROOT / ".opencode" / "skills"
@@ -121,7 +122,6 @@ HOME_PLACEHOLDERS = {
     "default",
     "nobody",
 }
-HOME_PATH_RE = re.compile(r"/(?:home|Users)/([^/\s\"'`]+)")
 
 
 def skill_dirs() -> list[str]:
@@ -132,30 +132,15 @@ def skill_dirs() -> list[str]:
 
 
 def copy_skill(name: str, src: Path, dest: Path) -> None:
-    """Copy one skill, skipping symlinks and build noise.
-
-    `symlinks=True` copies a symlink as a symlink instead of traversing it,
-    which is what keeps a polluted source (see GIT_SOURCES) from being followed
-    into a 40-deep loop. Any symlink that does land in the copy is then unlinked,
-    because a vendored skill must be self-contained.
-    """
-    target = dest / name
-    if target.exists():
-        shutil.rmtree(target)
-    shutil.copytree(
+    """Copy one skill, skipping build noise and pruning any copied symlink."""
+    engine.copy_tree(
         src,
-        target,
-        ignore=shutil.ignore_patterns(*IGNORED_NAMES, "*.pyc", "*.pyo"),
+        dest / name,
+        ignored_names=IGNORED_NAMES,
+        ignored_suffixes=IGNORED_SUFFIXES,
         symlinks=True,
+        prune=True,
     )
-    prune_symlinks(target)
-
-
-def prune_symlinks(root: Path) -> None:
-    """Remove every symlink under `root`, deepest first."""
-    for path in sorted(root.rglob("*"), key=lambda p: len(p.parts), reverse=True):
-        if path.is_symlink():
-            path.unlink()
 
 
 def copy_skill_from_git(name: str, repo: Path, relpath: str, dest: Path) -> None:
@@ -167,8 +152,6 @@ def copy_skill_from_git(name: str, repo: Path, relpath: str, dest: Path) -> None
     if not (repo / ".git").exists():
         sys.exit(f"not a git repository: {repo}")
     target = dest / name
-    if target.exists():
-        shutil.rmtree(target)
     with tempfile.TemporaryDirectory() as tmp:
         proc = subprocess.run(
             ["git", "-C", str(repo), "archive", "--format=tar", "HEAD", relpath],
@@ -189,13 +172,14 @@ def copy_skill_from_git(name: str, repo: Path, relpath: str, dest: Path) -> None
         staged = Path(tmp) / relpath
         if not (staged / "SKILL.md").is_file():
             sys.exit(f"{name}: git archive produced no SKILL.md")
-        shutil.copytree(
+        engine.copy_tree(
             staged,
             target,
-            ignore=shutil.ignore_patterns(*IGNORED_NAMES, "*.pyc", "*.pyo"),
+            ignored_names=IGNORED_NAMES,
+            ignored_suffixes=IGNORED_SUFFIXES,
             symlinks=True,
+            prune=True,
         )
-    prune_symlinks(target)
 
 
 def apply_patches(name: str, quiet: bool = False) -> list[str]:
@@ -220,7 +204,7 @@ def apply_patches(name: str, quiet: bool = False) -> list[str]:
 
 
 def digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return engine.file_digest(path)
 
 
 # The word "Obsidian" in the vendored suite names the markdown editor this
@@ -276,18 +260,7 @@ def dialect_rewrite_tree(root: Path) -> None:
 
 def source_digest(name: str, src: Path) -> str:
     """Hash a source skill: every tracked file plus its relative path."""
-    parts: list[str] = []
-    for path in sorted(src.rglob("*")):
-        if path.is_dir() or path.is_symlink():
-            continue
-        if path.name in IGNORED_NAMES or path.suffix in IGNORED_SUFFIXES:
-            continue
-        parts.append(f"{path.relative_to(src).as_posix()}:{digest(path)}")
-    return hashlib.sha256("\n".join(parts).encode()).hexdigest()
-
-
-def skill_dirs_on_disk() -> list[Path]:
-    return sorted(p for p in DEST.iterdir() if p.is_dir())
+    return engine.source_digest(src, ignored_names=IGNORED_NAMES, ignored_suffixes=IGNORED_SUFFIXES)
 
 
 FAMILIES_STATE = DEST / ".families.json"
@@ -300,12 +273,7 @@ def family_manifests() -> list[Path]:
     registry keeps the wiki pruner from deleting a sibling family's skills and
     keeps the host-path scan from judging files this suite does not own.
     """
-    if not FAMILIES_STATE.is_file():
-        return []
-    try:
-        data = json.loads(FAMILIES_STATE.read_text())
-    except (OSError, json.JSONDecodeError):
-        return []
+    data = engine.read_manifest(FAMILIES_STATE, default={})
     names = data.get("manifests", []) if isinstance(data, dict) else []
     return [DEST / name for name in names if isinstance(name, str) and name != SYNC_STATE.name]
 
@@ -315,46 +283,28 @@ def other_family_skills() -> set[str]:
     for manifest in family_manifests():
         if not manifest.is_file():
             continue
-        try:
-            state = json.loads(manifest.read_text())
-        except (OSError, json.JSONDecodeError):
-            continue
-        skills = state.get("skills", {})
+        state = engine.read_manifest(manifest, default={})
+        skills = state.get("skills", {}) if isinstance(state, dict) else {}
         if isinstance(skills, dict):
             names.update(str(name) for name in skills)
     return names
 
 
 def find_host_paths() -> list[str]:
-    """Report vendored SKILL CONTENT that still names a host absolute path.
-
-    Scoped to the skill directories on purpose. The provenance README at the top
-    of this directory legitimately cites where the suite came from
-    (`/mnt/nvme/skills/wiki`), and flagging that would make the check
-    unsatisfiable — it would also hide a real hit among the noise.
-    """
-    hits: list[str] = []
+    """Report vendored skill content that still names a host absolute path."""
     protected = other_family_skills()
-    for skill_root in skill_dirs_on_disk():
+    hits: list[str] = []
+    for skill_root in sorted(path for path in DEST.iterdir() if path.is_dir()):
         if skill_root.name in protected:
             continue
-        paths = sorted(skill_root.rglob("*"))
-        for path in paths:
-            if not path.is_file():
-                continue
-            if path.name in IGNORED_NAMES or path.suffix in IGNORED_SUFFIXES:
-                continue
-            try:
-                text = path.read_text()
-            except (UnicodeDecodeError, OSError):
-                continue
-            for marker in HOST_PATH_MARKERS:
-                if marker in text:
-                    hits.append(f"{path.relative_to(DEST)}: {marker}")
-            for match in HOME_PATH_RE.finditer(text):
-                user = match.group(1)
-                if user.lower() not in HOME_PLACEHOLDERS:
-                    hits.append(f"{path.relative_to(DEST)}: {match.group(0)}")
+        for path, hit in engine.host_path_hits(
+            skill_root,
+            markers=HOST_PATH_MARKERS,
+            home_placeholders=HOME_PLACEHOLDERS,
+            ignored_names=IGNORED_NAMES,
+            ignored_suffixes=IGNORED_SUFFIXES,
+        ):
+            hits.append(f"{path.relative_to(DEST)}: {hit}")
     return hits
 
 
@@ -425,7 +375,7 @@ def apply_mode() -> None:
             shutil.rmtree(child)
             print(f"  pruned  {child.name}")
 
-    SYNC_STATE.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+    engine.write_manifest(SYNC_STATE, state)
 
     hits = find_host_paths()
     if hits:
@@ -447,10 +397,10 @@ def check_mode() -> int:
     clone works without the farm. Drift is only knowable between two trees
     that are both present, so that is what is checked and that still fails.
     """
-    if not SYNC_STATE.is_file():
+    state = engine.read_manifest(SYNC_STATE)
+    if state is None:
         print("no .sync.json — run --apply first", file=sys.stderr)
         return 1
-    state = json.loads(SYNC_STATE.read_text())
     problems: list[str] = []
     unverifiable: list[str] = []
 
@@ -475,7 +425,7 @@ def check_mode() -> int:
             # Git-sourced: the working tree may be polluted, so verify the
             # commit the vendoring was pinned to instead of hashing the tree.
             repo = Path(meta["source"]).parents[1]
-            if not repo.is_dir():
+            if not engine.source_available(repo):
                 unverifiable.append(f"{name}: git source {repo} not on this machine")
                 continue
             head = subprocess.run(
@@ -488,7 +438,7 @@ def check_mode() -> int:
                 problems.append(f"{name}: upstream is at {head}, vendored from {UPSTREAM_COMMIT}")
             continue
         src = Path(meta["source"])
-        if not src.is_dir():
+        if not engine.source_available(src):
             unverifiable.append(f"{name}: source {src} not on this machine")
             continue
         if source_digest(name, src) != meta["sha256"]:

@@ -15,14 +15,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from skill_catalog import engine
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEST = REPO_ROOT / ".opencode" / "skills"
@@ -83,22 +83,6 @@ DESCRIPTION_OVERRIDES = {
 IGNORED = {"__pycache__", ".DS_Store", ".pytest_cache"}
 
 
-def digest_tree(path: Path) -> tuple[str, dict[str, str]]:
-    hasher = hashlib.sha256()
-    files: dict[str, str] = {}
-    for file in sorted(candidate for candidate in path.rglob("*") if candidate.is_file()):
-        if file.name in IGNORED or file.suffix in {".pyc", ".pyo"}:
-            continue
-        rel = file.relative_to(path).as_posix()
-        data = file.read_bytes()
-        files[rel] = hashlib.sha256(data).hexdigest()
-        hasher.update(rel.encode())
-        hasher.update(b"\0")
-        hasher.update(data)
-        hasher.update(b"\0")
-    return hasher.hexdigest(), files
-
-
 def source_for(name: str) -> Path | None:
     if DEFAULT_SOURCE.is_dir():
         matches = sorted(DEFAULT_SOURCE.rglob(f"{name}/SKILL.md"))
@@ -124,10 +108,13 @@ def upstream_commit() -> str:
 
 
 def copy_skill(name: str, source: Path) -> None:
-    target = DEST / name
-    if target.exists():
-        shutil.rmtree(target)
-    shutil.copytree(source, target, ignore=shutil.ignore_patterns(*IGNORED, "*.pyc", "*.pyo"), symlinks=False)
+    engine.copy_tree(
+        source,
+        DEST / name,
+        ignored_names=IGNORED,
+        ignored_suffixes={".pyc", ".pyo"},
+        symlinks=False,
+    )
 
 
 def apply_mode() -> int:
@@ -150,7 +137,7 @@ def apply_mode() -> int:
             text = skill_md.read_text(encoding="utf-8")
             text = re.sub(r"(?m)^description:.*$", f'description: "{DESCRIPTION_OVERRIDES[name]}"', text, count=1)
             skill_md.write_text(text, encoding="utf-8")
-        digest, files = digest_tree(DEST / name)
+        digest, files = engine.tree_digest(DEST / name, ignored_names=IGNORED, ignored_suffixes={".pyc", ".pyo"})
         skills[name] = {
             "sha256": digest,
             "files": files,
@@ -159,16 +146,16 @@ def apply_mode() -> int:
         }
         print(f"  vendored {name}")
     state["skills"] = skills
-    STATE.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    engine.write_manifest(STATE, state)
     print(f"wrote {STATE.relative_to(REPO_ROOT)}")
     return 0
 
 
 def check_mode() -> int:
-    if not STATE.is_file():
+    state = engine.read_manifest(STATE)
+    if state is None:
         print("no .mattpocock.json — run --apply first", file=sys.stderr)
         return 1
-    state = json.loads(STATE.read_text(encoding="utf-8"))
     recorded = state.get("skills", {})
     problems: list[str] = []
     if set(recorded) != set(SKILLS):
@@ -181,19 +168,19 @@ def check_mode() -> int:
         if not isinstance(meta, dict):
             problems.append(f"{name}: not recorded")
             continue
-        digest, files = digest_tree(DEST / name)
+        digest, files = engine.tree_digest(DEST / name, ignored_names=IGNORED, ignored_suffixes={".pyc", ".pyo"})
         if digest != meta.get("sha256"):
             problems.append(f"{name}: bytes drifted from .mattpocock.json")
         if files != meta.get("files"):
             problems.append(f"{name}: file set changed")
-        for file in sorted(candidate for candidate in (DEST / name).rglob("*") if candidate.is_file()):
-            try:
-                text = file.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError):
-                continue
-            for marker in HOST_MARKERS:
-                if marker in text:
-                    problems.append(f"{file.relative_to(REPO_ROOT)}: host absolute path {marker}")
+        for file, marker in engine.host_path_hits(
+            DEST / name,
+            markers=HOST_MARKERS,
+            ignored_names=IGNORED,
+            ignored_suffixes={".pyc", ".pyo"},
+            home_placeholders=None,
+        ):
+            problems.append(f"{file.relative_to(REPO_ROOT)}: host absolute path {marker}")
         if not (DEST / name / "SKILL.md").is_file():
             problems.append(f"{name}: SKILL.md missing")
     if problems:

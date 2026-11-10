@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
-updated: 2026-11-09
-current: 91
+updated: 2026-11-10
+current: 93
 ---
 
 # sparknet — Active Plan
@@ -111,6 +111,108 @@ current: 91
     `reallife-spark/goagx` `fd0e573`, and pinned; `make drift-check` is green.
     `make ci` is green. Live cross-node issue delivery and the live browser
     surfaces remain `DoD: confirm: user`.
+
+## Step 92 — Four-candidate architecture exploration
+
+- [x] **Step 92** — Explore the four `improve-codebase-architecture` candidates
+  in report order, one candidate at a time. This is design-only: no production
+  code, contracts, manifests or submodule pins change. Operator approved:
+  design-only decision packs, report order, explicit per-candidate gate,
+  `design-it-twice` only for contested adopted seams, Step 92 tracking, root
+  ADRs for cross-role decisions and goSpark ADRs for Go-plane decisions.
+  - [x] **92A — Graph producer.** Verify the Python/Go scan-and-diff split,
+    ADR-0017 friction, schema fidelity and build/gate/bundle gaps. Grill the
+    seam, policy ownership, diff semantics, failure modes, compatibility and
+    parity tests. Adopted: Python owns `scan`/`diff`; Go keeps query/export/MCP;
+    Go CLI commands are adapters; `gofrag` keeps `go/parser` over Python scan
+    records. Seam settled as the path-stable `shared/sparknet-understand.py`
+    JSON CLI; no design-it-twice needed. ADR-0017 superseded by goSpark ADR
+    0018. **DoD: confirm: user — confirmed 2026-11-10.**
+  - [x] **92B — Issue module.** Verify the peer, Master and console issue paths,
+    contract, store, triage state and signed-route authority. Adopted: one
+    shared issue module in `shared/sparknet-issue.py` plus
+    `shared/sparknet_issue/`; authz remains the envelope/signature owner; peer,
+    Master and console are adapters. Triage transitions are in scope through an
+    append-only `triage.jsonl` and derived `triage.json`; one redaction policy;
+    wire contract unchanged. Root ADR `0009-issue-module.md` records it.
+    **DoD: confirm: user — confirmed 2026-11-10.**
+  - [x] **92C — Skill catalog.** Verify the four sync scripts, manifest shapes,
+    licenses, host-path guards, gates and tests. Adopted: one build-time engine
+    under `scripts/skill_catalog/` with wiki, Matt, Understand and role adapters;
+    existing script paths and flags stay stable. Internal manifest model
+    converges; external manifest shapes remain unchanged. Engine owns copy,
+    digest, manifest/check, host-path guard and missing-source handling; adapters
+    own family transforms and role-catalog policy. Root ADR
+    `0010-skill-catalog.md` records it. **DoD: confirm: user — confirmed
+    2026-11-10.**
+  - [x] **92D — Core split.** Re-scoped against 92A: this is internal locality,
+    not producer duplication. Adopted the four-module map: `schema.py`,
+    `production.py`, `algebra.py`, and a path-stable `core.py` facade, with
+    `build.py` as orchestration. Design-it-twice compared minimal, flexible and
+    common-caller maps; the four-module common-caller map won. Root ADR
+    `0011-understand-core-split.md` records it.
+    **DoD: confirm: user — confirmed 2026-11-10.**
+  - [x] **92E — Synthesis.** Compared all four decisions, resolved overlap and
+    conflicts, and produced one combined implementation roadmap with interfaces,
+    migration, tests, gates, cross-repository commit boundaries and goagx
+    impact. Implementation order: graph producer, issue module, skill catalog,
+    core split. **DoD: confirm: user — approved 2026-11-10.**
+  - **DoD**: 92A–92D each have a confirmed decision memo and no open design
+    frontier; 92E has an operator-approved roadmap; `PLAN.md`, `log.md`,
+    `sessions/2026-11-10.md`, `GLOSSARY.md` and any accepted ADRs are current;
+    `git diff --check` passes and `make validate` is green. No production gates
+    are claimed because no production code changed.
+  - **Status 2026-11-10 — COMPLETE.** All four candidates adopted, the roadmap
+    approved, and the design-only records written. Step 91 stays open on its
+    live-only confirmations; this step does not claim them.
+
+## Step 93 — Implement the architecture roadmap
+
+- [ ] **Step 93** — Implement the approved 92E roadmap in order. The graph
+  producer and core split both touch `shared/sparknet_understand/`; never run
+  them in parallel.
+  - [x] **93A — Graph producer.** Python owns `scan`/`diff`; Go `scan`/`diff`
+    and `parse` are adapters over `shared/sparknet-understand.py`; `gofrag`
+    keeps `go/parser` over Python `FileRecords`; Go preserves raw graph fidelity
+    for query/export/MCP; duplicate Go scan/diff policy deleted. Built
+    `sparknet-understand`, added root `understand-check`, one cross-language
+    parity fixture and ADR 0018. **DoD: verified 2026-11-10** — Go adapter,
+    parse, scan and raw-fidelity tests pass; `make -C gospark ci`,
+    `make understand-check`, `make test-all` (exit 0) and
+    `make contract-test` are green. No role or live claim is made; goagx
+    republish remains pending because the local generated tree is not published.
+  - [x] **93B — Issue module.** Implemented `shared/sparknet-issue.py` and
+    `shared/sparknet_issue/` for parse, `body_sha256`, redaction, validation,
+    ledger/latest view, triage and projection. Peer pusher, Master intake and
+    console are adapters; authz remains the envelope/signature owner. Added the
+    append-only `triage.jsonl`, derived `triage.json`, Master triage CLI and
+    read-only effective-status projection. **DoD: verified 2026-11-10** —
+    module, route, console and triage tests pass; peer/master suites,
+    `make test-all`, `make ci`, `make contract-test`, `make render-check`,
+    `make sbom-check`, `make validate`, lint/format/shellcheck green. No live
+    claim; role and root changes remain uncommitted.
+  - [x] **93C — Skill catalog.** Implemented
+    `scripts/skill_catalog/{__init__,engine}.py` and moved wiki, Matt,
+    Understand and role sync onto the shared copy, digest, manifest, host-path
+    and missing-source mechanics. The four existing script paths and external
+    manifest shapes remain stable. **DoD: verified 2026-11-10** —
+    `tests/test_skill_catalog.py`, `make wiki-verify`, `make role-skills-check`,
+    `make sbom-check`, `make test-all`, `make ci` and lint/format/shellcheck are
+    green.
+  - [x] **93D — Core split.** Implemented `schema.py`, `production.py`,
+    `algebra.py` and the path-stable `core.py` facade; `build.py` and the
+    extractors/knowledge/figma/domain/CLI callers now import the narrow modules.
+    **DoD: verified 2026-11-10** — focused module tests plus the existing
+    integration fixture pass; `make understand-check`, `make test-all`,
+    `make ci` and lint/format/shellcheck are green; caller paths are unchanged.
+  - **DoD**: each implementation step has its named gates; cross-repository
+    commits land role changes before superproject pins; goagx is republished
+    where the distributed tree changes; no live claim comes from this host.
+  - **Status 2026-11-10 — 93A–93D complete; Step 93 closure pending commits and
+    goagx republish.** Graph adapters, issue module, triage writer,
+    skill-catalog engine, console projection and core split are green locally.
+    No cross-repository commit or goagx publish has been made; those remain
+    closure actions, not local verification claims.
 
 ## Standing verification rules
 

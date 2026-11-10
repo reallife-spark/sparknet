@@ -14,7 +14,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from .core import scan
+from .production import scan
 
 ROUTE_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"""@(?:app|router|bp|blueprint)\.(get|post|put|patch|delete)\(\s*['"]([^'"]+)['"]""", re.I), "http"),

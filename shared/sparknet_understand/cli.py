@@ -13,11 +13,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .algebra import diff_graphs, normalize_graph, validate_graph
 from .build import build_from_fragments, build_graph
-from .core import diff_graphs, normalize_graph, scan, validate_graph
 from .domain import extract_domain_context
 from .figma import scan_figma
 from .knowledge import build_knowledge_graph, parse_knowledge_base
+from .production import scan
 
 
 def _emit(value: Any, out: str | None) -> None:

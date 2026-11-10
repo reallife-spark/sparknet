@@ -23,13 +23,15 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import json
 import os
 import re
 import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from skill_catalog import engine
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ROLE_DIRS = {
@@ -45,6 +47,42 @@ NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 MAX_NAME = 64
 MAX_DESCRIPTION = 1024
 MAX_FILE_BYTES = 2_000_000
+
+# Role skills are vendored third-party content. These markers match the wiki
+# policy (not a generic /mnt/) and treat the common forensic/vendor examples as
+# placeholders rather than host paths.
+HOST_PATH_MARKERS = (
+    "/mnt/knowledge/",
+    "/mnt/nvme/",
+    "/opt/raxxar",
+    "/home/raxxar",
+    "/srv/raxxar",
+)
+HOME_PLACEHOLDERS = {
+    "me",
+    "name",
+    "you",
+    "your",
+    "user",
+    "username",
+    "someone",
+    "somebody",
+    "u",
+    "x",
+    "example",
+    "test",
+    "default",
+    "nobody",
+    "suspect",
+    "admin",
+    "deploy",
+    "ubuntu",
+    "scan_user",
+    "nessus_svc",
+    "teknium",
+    "linuxbrew",
+    "*",
+}
 
 REMOVED_NAMES = {
     "docx",
@@ -360,7 +398,7 @@ class Entry:
 
 
 def digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return engine.file_digest(path)
 
 
 def frontmatter(text: str) -> dict[str, str]:
@@ -628,32 +666,24 @@ def all_sellable(entries: list[Entry], root_names: set[str]) -> dict[str, list[E
 
 
 def copy_payload(src: Path, dest: Path, name: str) -> tuple[int, list[str]]:
-    skipped: list[str] = []
-    files = 0
     repo_root_skill = src in REPO_ROOT_SKILLS
-    for dirpath, dirnames, filenames in os.walk(src):
-        dirnames[:] = [
-            entry for entry in dirnames if entry not in EXCLUDED_PATH_PARTS and not (Path(dirpath) / entry).is_symlink()
-        ]
-        for filename in filenames:
-            source = Path(dirpath) / filename
-            relative = source.relative_to(src)
-            if source.is_symlink():
-                skipped.append(str(relative))
-                continue
-            if repo_root_skill and relative != Path("SKILL.md"):
-                continue
-            if relative.name == "SKILL.md" and relative.parent != Path("."):
-                skipped.append(f"nested:{relative}")
-                continue
-            if source.stat().st_size > MAX_FILE_BYTES:
-                skipped.append(f"large:{relative}")
-                continue
-            target = dest / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, target)
-            files += 1
-    return files, skipped
+
+    def keep(relative: Path, source: Path) -> bool:
+        if repo_root_skill and relative != Path("SKILL.md"):
+            return False
+        if relative.name == "SKILL.md" and relative.parent != Path("."):
+            return False
+        return source.stat().st_size <= MAX_FILE_BYTES
+
+    return engine.copy_tree(
+        src,
+        dest,
+        ignored_names=EXCLUDED_PATH_PARTS,
+        ignored_suffixes=set(),
+        symlinks=False,
+        skip_symlinks=True,
+        keep=keep,
+    )
 
 
 def rewrite_name(skill_md: Path, name: str) -> None:
@@ -734,9 +764,6 @@ def portable_source(path: Path) -> str:
 
 
 def copy_skill(entry: Entry, dest: Path) -> dict[str, object]:
-    if dest.exists():
-        shutil.rmtree(dest)
-    dest.mkdir(parents=True)
     files, skipped = copy_payload(entry.path, dest, entry.name)
     rewrite_name(dest / "SKILL.md", entry.name)
     truncated = truncate_description(dest / "SKILL.md")
@@ -925,9 +952,7 @@ def apply(role: str) -> int:
         if not original.is_dir():
             print("peer skill-template missing; author it first", file=sys.stderr)
             return 1
-        if (role_dir / "skill-template").exists():
-            shutil.rmtree(role_dir / "skill-template")
-        shutil.copytree(original, role_dir / "skill-template")
+        engine.copy_tree(original, role_dir / "skill-template", symlinks=False)
     for child in sorted(role_dir.iterdir()):
         if child.is_dir() and child.name not in {"skill-template"}:
             shutil.rmtree(child)
@@ -978,7 +1003,7 @@ def apply(role: str) -> int:
         }
         manifest["counts"]["skills"] += 1
         manifest["counts"]["total_visible"] += 1
-    (role_dir / ".inventory.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    engine.write_manifest(role_dir / ".inventory.json", manifest)
     write_readme(role_dir, manifest, role)
     write_licenses(role_dir, manifest)
     write_notices(role_dir, manifest, role)
@@ -993,9 +1018,9 @@ def check_role(role: str) -> list[str]:
     role_dir = ROLE_DIRS[role]
     manifest_path = role_dir / ".inventory.json"
     problems: list[str] = []
-    if not manifest_path.is_file():
+    manifest = engine.read_manifest(manifest_path)
+    if manifest is None:
         return [f"{role}: .inventory.json is missing"]
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     skills = manifest.get("skills", {})
     present = {path.parent.name for path in role_dir.rglob("SKILL.md")}
     if present != set(skills):
@@ -1032,6 +1057,15 @@ def check_role(role: str) -> list[str]:
         nested = [path for path in skill_dir.rglob("SKILL.md") if path.parent != skill_dir]
         if nested:
             problems.append(f"{role}/{name}: nested SKILL.md present")
+        for file, hit in engine.host_path_hits(
+            skill_dir,
+            markers=HOST_PATH_MARKERS,
+            home_placeholders=HOME_PLACEHOLDERS,
+            ignored_names={"__pycache__", ".DS_Store", ".pytest_cache"},
+            ignored_suffixes={".pyc", ".pyo"},
+            include_names={"SKILL.md"},
+        ):
+            problems.append(f"{role}/{name}: host absolute path {hit} in {file.name}")
     template = role_dir / "skill-template" / "SKILL.md"
     other = ROLE_DIRS["peer"] / "skill-template" / "SKILL.md"
     if not template.is_file():

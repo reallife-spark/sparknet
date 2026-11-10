@@ -889,12 +889,15 @@ async function loadIssues() {
         el("summary", { text: issue.title || issue.issue_id }),
         el("p", { class: "muted", text: issue.body || "No body." }),
       ]);
+      if (issue.triage?.note) {
+        detail.append(el("p", { class: "muted", text: `Triage: ${issue.triage.note}` }));
+      }
       body.append(el("tr", {}, [
         el("td", { text: issue.node_id || "—" }),
         el("td", { text: issue.issue_id || "—" }),
         el("td", {}, [detail]),
-        el("td", { text: issue.status || "—" }),
-        el("td", { text: (issue.labels || []).join(", ") || "—" }),
+        el("td", { text: issue.effective_status || issue.status || "—" }),
+        el("td", { text: (issue.effective_labels || issue.labels || []).join(", ") || "—" }),
         el("td", { text: issue.updated_at || issue.received_at || "—" }),
       ]));
     }

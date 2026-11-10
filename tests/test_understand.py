@@ -20,7 +20,7 @@ SHARED = REPO_ROOT / "shared"
 if str(SHARED) not in sys.path:
     sys.path.insert(0, str(SHARED))
 
-from sparknet_understand import build, core, domain, figma, knowledge  # noqa: E402
+from sparknet_understand import algebra, build, core, domain, figma, knowledge, production, schema  # noqa: E402
 
 
 def _write(root: Path, rel: str, text: str) -> None:
@@ -102,6 +102,37 @@ See [[Guide]] and [app](src/app.py).
 
 def _build(root: Path) -> tuple[dict, list[dict[str, str]]]:
     return build.build_graph(root, analyzed_at="2026-11-09T00:00:00Z")
+
+
+def test_core_facade_reexports_the_narrow_modules() -> None:
+    assert core.load_schema is schema.load_schema
+    assert core.make_node is schema.make_node
+    assert core.scan is production.scan
+    assert core.FileRecord is production.FileRecord
+    assert core.build_layers is algebra.build_layers
+    assert core.diff_graphs is algebra.diff_graphs
+    assert {"load_schema", "scan", "validate_graph", "diff_graphs"} <= set(core.__all__)
+
+
+def test_schema_module_reads_the_contract_and_builds_nodes() -> None:
+    contract = schema.load_schema()
+    assert contract["node_types"][0] == "file"
+    node = schema.make_node("function:a.py:greet:1", "function", "greet")
+    assert node["type"] == "function"
+
+
+def test_production_module_owns_scan_policy(project: Path) -> None:
+    result = production.scan(project)
+    paths = {record.path for record in result.files}
+    assert "src/app.py" in paths
+    assert "node_modules/ignored.js" not in paths
+
+
+def test_algebra_module_owns_graph_transforms(project: Path) -> None:
+    graph, _ = build.build_graph(project, analyzed_at="2026-11-09T00:00:00Z")
+    assert algebra.validate_graph(graph) == []
+    delta = algebra.diff_graphs(graph, graph)
+    assert delta["nodes_added"] == [] and delta["nodes_removed"] == []
 
 
 def test_contract_vocabulary_is_complete() -> None:

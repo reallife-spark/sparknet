@@ -40,6 +40,17 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "shared"))
 from sparknet_loader import load_shared  # noqa: E402 - shared/ is added by path above
 
+
+def load_issue_module() -> Any:
+    return load_shared(
+        "sparknet-issue.py",
+        "sparknet_console_issue",
+        dirs=[ROOT / "shared"],
+        error=ConsoleError,
+        message="cannot find shared/sparknet-issue.py; the console carries no issue implementation",
+    )
+
+
 ROLE_ROOT = {"peer": ROOT / "peer-node", "master": ROOT / "master-node"}
 ROLE_CONFIG = {
     "peer": ROOT / "peer-node" / "configs" / "webui" / "console.json",
@@ -798,46 +809,17 @@ def api_issues(config: dict[str, Any], role_root: Path) -> tuple[int, dict[str, 
         return 403, {"ok": False, "error": "Issues are Master-only"}
     configured = (config.get("paths") or {}).get("issues")
     path = resolve(role_root, configured) if configured else Path("/mnt/log/sparknet-issues.jsonl")
-    rows: dict[tuple[str, str], dict[str, Any]] = {}
-    if path and path.is_file():
-        text = read_text(path, limit=4_000_000) or ""
-        for line in text.splitlines():
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(row, dict):
-                continue
-            key = (str(row.get("node_id") or ""), str(row.get("issue_id") or ""))
-            if not all(key):
-                continue
-            current = rows.get(key)
-            if current is None or str(row.get("updated_at") or "") >= str(current.get("updated_at") or ""):
-                rows[key] = row
-    triage_path = role_root / ".state" / "issues" / "triage.json"
-    triage = read_json(triage_path)
-    if not isinstance(triage, dict):
-        triage = {}
-    issues = []
-    for row in sorted(
-        rows.values(), key=lambda item: (str(item.get("node_id") or ""), str(item.get("issue_id") or ""))
-    ):
-        key = f"{row.get('node_id')}:{row.get('issue_id')}"
-        item = dict(row)
-        item["body"] = str(item.get("body") or "")[:4000]
-        item["triage"] = triage.get(key, {}) if isinstance(triage.get(key), dict) else {}
-        issues.append(item)
-    counts = {
-        "total": len(issues),
-        "open": sum(1 for item in issues if item.get("status") not in {"done", "wontfix"}),
-        "needs_triage": sum(1 for item in issues if "needs-triage" in (item.get("labels") or [])),
-        "ready_for_agent": sum(1 for item in issues if "ready-for-agent" in (item.get("labels") or [])),
-    }
+    state_env = os.environ.get("SPARKNET_STATE_DIR", "").strip()
+    state_dir = Path(state_env) if state_env else role_root / ".state"
+    issue = load_issue_module()
+    try:
+        projection = issue.load_projection(path, state_dir)
+    except Exception as exc:
+        return 500, {"ok": False, "error": f"issues: {exc}"}
     return 200, {
         "ok": True,
         "store": str(path) if path else "",
-        "issues": issues,
-        "counts": counts,
+        **projection,
         "read_only": True,
         "note": "Operational work items, not knowledge and not authority.",
     }

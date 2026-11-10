@@ -134,7 +134,7 @@ preflight() {
   fi
   if [ "$DO_BUILD" = 1 ]; then
     [ -d "$GOSPARK_DIR" ] || die "goSpark not found at $GOSPARK_DIR (use --gospark DIR)"
-    for b in sparknet-agent sparknet-control sparknet-gpu sparknetctl; do
+    for b in sparknet-agent sparknet-control sparknet-gpu sparknetctl sparknet-understand; do
       [ -x "$GOSPARK_DIR/bin/$b" ] \
         || die "missing $GOSPARK_DIR/bin/$b — run: make -C $GOSPARK_DIR build build-gpu"
     done

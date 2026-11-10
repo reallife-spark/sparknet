@@ -7,13 +7,9 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from .core import (
-    merge_fragments,
-    normalize_graph,
-    project_meta,
-    scan,
-)
+from .algebra import merge_fragments, normalize_graph
 from .extractors import extract, link_tests
+from .production import project_meta, scan
 
 
 def build_graph(

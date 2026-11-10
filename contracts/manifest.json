@@ -89,7 +89,7 @@
       "contract": "issue-schema",
       "file": "issue-schema.json",
       "schema_version": 1,
-      "sha256": "d934c8ed1e8678a8a5df83887768a43d0b05ce7f515694211a7eaec09c0138b7"
+      "sha256": "77dfcd6cd965351a798a9d35c1bbd9475864a2c3027d23c8bf068ea164550a02"
     },
     {
       "contract": "memory-schema",

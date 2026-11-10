@@ -2,11 +2,11 @@
 > Standing state only. Read at session start; **replace, never append**.
 > History belongs in `log.md` and `sessions/YYYY-MM-DD.md`; pre-2026-10-31
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
-Updated: 2026-11-09
+Updated: 2026-11-10
 ## Plan cursor
-- `PLAN.md` — `current: 91`; 91A–91H complete locally and `make ci`/`drift-check` green. goagx `fd0e573` is published and pinned. Live issue delivery and live browser surfaces remain `DoD: confirm: user`.
-- Peer Step 19 and Master Step 28 are open only on their live-leg confirmations; their code is committed and pinned. Steps 18/27 are closed as delivered by Step 89, with the non-adopted optional forms recorded in the role plans.
-- Critical open items: confirm live issue delivery and live browser surfaces on the pair; run the 9G nocturnal window when both nodes are idle; role precommit still reports the pre-existing invalid `peer-node/02_Daily/2026-11-02.md` daily note.
+- `PLAN.md` — `current: 93`; Step 92 complete; 93A–93D complete; Step 93 closure pending cross-repository commits and a goagx republish. Graph adapters, the shared issue module, the skill-catalog engine and the core split are green locally and uncommitted. ADRs 0009/0010/0011/0018 are uncommitted; goagx has the 93A bootstrap change locally but has not been republished.
+- Step 91 and role Steps 19/28 remain open only on live confirmations. Steps 18/27 are closed as delivered by Step 89.
+- Critical open items: close Step 93 with commits/pins and goagx republish; confirm live issue delivery and live browser surfaces; run the 9G nocturnal window; peer precommit still reports `peer-node/02_Daily/2026-11-02.md`.
 - Phase 8 remains closed: 54 fixed, 186 reviewed-clean, 176 test-verified; register and inventory in `_archives/`.
 ## Live fabric
 - **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`). Peer egress only to Master.
@@ -26,6 +26,10 @@ Updated: 2026-11-09
 - Live fleet uses iptables and userspace WireGuard.
 - Registry ships empty; fresh nodes grant nothing.
 - Understand graph is a build artifact (`.ua/`); issues are work items (`.scratch/issues/`). Neither is knowledge or authority.
+- Understand graph: Python is the sole producer (`scan`/`build`/`merge`/`validate`/`diff`); Go consumes `query`/`export`/MCP and adapts `scan`/`diff`/`parse` through `shared/sparknet-understand.py`. Python core is split into `schema.py`, `production.py`, `algebra.py` behind the path-stable `core.py` facade.
+- Issue model: `shared/sparknet-issue.py` owns parse, redaction, validation, ledger, triage and projection; `shared/sparknet-authz.py` still owns the envelope/signature. Triage history is append-only `triage.jsonl`, derived `triage.json`.
+- Skill catalog: `scripts/skill_catalog/` owns copy/digest/manifest/host-path mechanics; the four sync scripts remain adapters and keep their external manifest shapes.
+- Architecture decisions recorded: issue module (root ADR 0009), skill catalog (root ADR 0010), core split (root ADR 0011), graph producer/consumer (goSpark ADR 0018).
 - Base skill tree: 80 skills (33 wiki, 9 understand, 38 mattpocock); role catalogs peer 125 / master 1614.
 ## Security hardening 2026-11-08
 - Signer: **live on agx64** as root with a root-owned 0600 operational key, socket group `sparknet-signer` at 0660, and the exact caller allowlist; probe succeeds, direct `python3 -c` is refused. Verifies ledger against the pinned operational key before signing. See `master-node/docs/signer-isolation.md`.

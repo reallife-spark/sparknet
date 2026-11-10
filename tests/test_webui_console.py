@@ -284,6 +284,21 @@ def test_master_issues_route_is_read_only_and_master_only(tmp_path: Path, qdrant
         )
         + "\n"
     )
+    triage = role_root / ".state" / "issues"
+    triage.mkdir(parents=True, exist_ok=True)
+    (triage / "triage.json").write_text(
+        json.dumps(
+            {
+                "sparknet-node-0002:fix-token": {
+                    "status": "triaged",
+                    "labels": ["ready-for-agent"],
+                    "actor": "operator",
+                    "note": "reproduced",
+                    "at": "2026-11-09T10:05:00Z",
+                }
+            }
+        )
+    )
     server = _serve(config, role_root)
     try:
         status, body = _get(server.server_port, "/api/issues", "console-token-1234567890")
@@ -292,6 +307,9 @@ def test_master_issues_route_is_read_only_and_master_only(tmp_path: Path, qdrant
         assert payload["ok"] is True and payload["counts"]["total"] == 1
         assert payload["read_only"] is True
         assert payload["issues"][0]["issue_id"] == "fix-token"
+        assert payload["issues"][0]["effective_status"] == "triaged"
+        assert payload["issues"][0]["effective_labels"] == ["ready-for-agent"]
+        assert payload["counts"]["ready_for_agent"] == 1
     finally:
         server.shutdown()
         server.server_close()

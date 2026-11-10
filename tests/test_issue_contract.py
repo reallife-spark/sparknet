@@ -57,6 +57,13 @@ def test_contract_fields_match_the_implementation() -> None:
     )
 
 
+def test_local_triage_history_is_append_only() -> None:
+    store = CONTRACT["store"]
+    assert store["triage_ledger"].endswith("triage.jsonl")
+    assert "derived" in store["triage_state"]
+    assert "appends to triage.jsonl" in store["retention"]
+
+
 def test_round_trip_accepts_one_report() -> None:
     value = report()
     assert value["schema"] == "sparknet-issue/1"

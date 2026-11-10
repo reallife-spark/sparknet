@@ -57,5 +57,8 @@ The root workspace keeps its issues local. A role workspace pushes its own
 `.scratch/issues/` to the Master with its role pusher
 (`services/sparknet-issue-push.py` in `peer-node/`). The Master records the
 work item under `issue-report` on `POST /api/v1/issues` (8090) and exposes it at
-`GET /api/issues`. An issue is operational work: it is never knowledge, never
-authority and never an answer corpus.
+`GET /api/issues`. The Master-local triage CLI is
+`master-node/scripts/sparknet-issue-triage.py`; it appends to the triage ledger
+and refreshes the derived view, but grants no authority. An issue is
+operational work: it is never knowledge, never authority and never an answer
+corpus.

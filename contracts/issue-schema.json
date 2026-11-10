@@ -124,8 +124,9 @@
   "store": {
     "master_jsonl": "/mnt/log/sparknet-issues.jsonl",
     "master_queue": "<state-dir>/issues/queue",
-    "triage_state": "<state-dir>/issues/triage.json",
-    "retention": "append-only evidence; a triage transition writes a new record and never rewrites history",
+    "triage_ledger": "<state-dir>/issues/triage.jsonl",
+    "triage_state": "<state-dir>/issues/triage.json (derived latest view)",
+    "retention": "append-only evidence; a triage transition appends to triage.jsonl and refreshes the derived triage.json; history is never rewritten",
     "console": "master-node GET /api/issues lists the recorded issues and their triage state; a triage transition is a local Master action, never a peer authority"
   },
   "redaction": {
@@ -137,9 +138,11 @@
   "implementation_state": {
     "contract": "this file",
     "local_skill_setup": "docs/agents/issue-tracker.md + .scratch/issues in the root, peer and master workspaces (Step 91)",
-    "peer_pusher": "peer-node/services/sparknet-issue-push.py (Step 91)",
-    "master_listener": "master-node/services/sparknet-peer-intake.py POST /api/v1/issues (Step 91)",
-    "master_console": "webui/console Issues tab + GET /api/issues (Step 91)",
+    "issue_module": "shared/sparknet-issue.py + shared/sparknet_issue/ (Step 93B)",
+    "peer_pusher": "peer-node/services/sparknet-issue-push.py (Step 91; shared module adapter in Step 93B)",
+    "master_listener": "master-node/services/sparknet-peer-intake.py POST /api/v1/issues (Step 91; shared store in Step 93B)",
+    "triage_cli": "master-node/scripts/sparknet-issue-triage.py (Step 93B)",
+    "master_console": "webui/console Issues tab + GET /api/issues (Step 91; shared projection in Step 93B)",
     "honest_pair": "loopback round-trip is testable here; live cross-node delivery is DoD: confirm: user"
   }
 }

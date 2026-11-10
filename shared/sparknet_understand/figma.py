@@ -13,7 +13,9 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from .core import make_edge, make_node, merge_fragments, normalize_graph, project_meta
+from .algebra import merge_fragments, normalize_graph
+from .production import project_meta
+from .schema import make_edge, make_node
 
 TYPE_MAP = {
     "PAGE": "page",

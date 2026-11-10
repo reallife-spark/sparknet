@@ -26,13 +26,12 @@ from typing import Any
 
 import tomllib
 
-from .core import (
+from .production import FileRecord, is_test_path
+from .schema import (
     REPO_ROOT,
-    FileRecord,
     config_id,
     document_id,
     file_id,
-    is_test_path,
     make_edge,
     make_node,
     module_id,

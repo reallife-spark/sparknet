@@ -47,7 +47,7 @@ SCOPE ?= fabric
         vector-index vector-stamp vector-query vector-parity kv-export reflex-eval reflex-live-check reflex-live-query \
         reflex-plan-eval verify-plans env-init wiki-sync wiki-verify \
         wiki-preflight bundle bundle-verify status-plan clean dist submodules \
-        role-skills role-skills-check keys-check shims-check hooks self-improve package-install
+        role-skills role-skills-check understand-check keys-check shims-check hooks self-improve package-install
 
 submodules: ## Initialize/update all four pinned repositories
 	@git submodule update --init --recursive
@@ -107,6 +107,9 @@ test-all: ## Run every suite in the repository
 	@echo "=== memory ==="
 	@$(MAKE) --no-print-directory memory-check
 	@echo
+	@echo "=== understand graph ==="
+	@$(MAKE) --no-print-directory understand-check
+	@echo
 	@echo "=== fabric + vendored wiki skills ==="
 	@$(PY) -m pytest tests/ -q
 	@echo
@@ -129,6 +132,12 @@ memory-check: ## Prove the memory gateway, Go store, delegate broker and project
 	else \
 		echo "memory-check: gospark checkout absent — gateway contract only"; \
 	fi
+
+understand-check: ## Prove the Python graph producer and Go adapters share one semantics
+	@echo "=== understand graph ==="
+	@$(MAKE) --no-print-directory -C gospark build
+	@$(PY) -m pytest tests/test_understand.py tests/test_understand_parity.py -q
+	@$(MAKE) --no-print-directory -C gospark test
 
 project-new: ## Create a signed project: PROJECT=slug ROLE=peer|master TITLE="..."
 	@$(PY) scripts/sparknet-project.py --vault "$(VAULT_ROOT)/$(ROLE)-node" new "$(PROJECT)" --title "$(TITLE)"

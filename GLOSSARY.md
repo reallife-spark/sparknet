@@ -16,8 +16,30 @@
   and receives a signed answer into `01_Inbox/`.
 - **issue** — an operational work item under `.scratch/issues/`. It is not
   knowledge and not authority.
+- **issue module** — the shared local issue model that owns issue parsing,
+  redaction, validation, state transitions and the read projection. It is not
+  authority and never signs a report.
+- **issue projection** — the canonical read view of recorded issues and their
+  triage state. It carries no authority and is not a knowledge corpus.
+- **triage ledger** — the append-only record of issue triage transitions; the
+  latest triage view is derived from it.
+- **skill catalog** — the build-time module that owns skill copy, digest,
+  manifest and drift checks. Family adapters supply sources, destinations,
+  exclusions and transforms.
+- **skill family adapter** — the skill-catalog adapter for one vendored family
+  or the role catalogs. It owns that family's source policy and transformations.
 - **understand graph** — the derived `.ua/knowledge-graph.json` built by the
   `/understand` tool. It is a build artifact, not an answer corpus.
+- **graph producer** — the side of the understand graph that produces graph
+  data and deltas; it owns scan and diff semantics.
+- **graph consumer** — the side that reads an existing understand graph and
+  exposes query, export and MCP; it does not produce graph data or deltas.
+- **graph seam** — the path-stable entry point through which a graph consumer
+  asks the producer for graph data and deltas. It is not an installed package.
+- **graph production** — the producer's file-scanning and project-metadata work:
+  what files exist, what language they use and what project they form.
+- **graph algebra** — the producer's operations over graph data: normalize,
+  merge, validate, diff, layers and tour.
 - **opencode workspace** — one of the three editing contexts: the fabric root,
   `peer-node/` and `master-node/`.
 - **release export** — the build-time module

@@ -14,15 +14,9 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from .core import (
-    FileRecord,
-    make_edge,
-    make_node,
-    merge_fragments,
-    normalize_graph,
-    project_meta,
-    scan,
-)
+from .algebra import merge_fragments, normalize_graph
+from .production import FileRecord, project_meta, scan
+from .schema import make_edge, make_node
 
 WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
