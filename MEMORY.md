@@ -29,7 +29,7 @@ Updated: 2026-11-10
 - Understand graph: Python is the sole producer (`scan`/`build`/`merge`/`validate`/`diff`); Go consumes `query`/`export`/MCP and adapts `scan`/`diff`/`parse` through `shared/sparknet-understand.py`. Python core is split into `schema.py`, `production.py`, `algebra.py` behind the path-stable `core.py` facade.
 - Issue model: `shared/sparknet-issue.py` owns parse, redaction, validation, ledger, triage and projection; `shared/sparknet-authz.py` still owns the envelope/signature. Triage history is append-only `triage.jsonl`, derived `triage.json`.
 - Skill catalog: `scripts/skill_catalog/` owns copy/digest/manifest/host-path mechanics; the four sync scripts remain adapters and keep their external manifest shapes.
-- Architecture decisions recorded: issue module (root ADR 0009), skill catalog (root ADR 0010), core split (root ADR 0011), graph producer/consumer (goSpark ADR 0018).
+- Architecture decisions recorded: issue module (root ADR 0009), skill catalog (root ADR 0010), core split (root ADR 0011), sandbox policy authority (root ADR 0013), graph producer/consumer (goSpark ADR 0018).
 - Live Step 91 evidence: `live-step91-issue` delivered peer `agx32` → Master `agx64` on `10.100.0.1:8090`, triaged `done`/`wontfix`; Master Issues and both Understand tabs rendered in Chromium.
 - Base skill tree: 80 skills (33 wiki, 9 understand, 38 mattpocock); role catalogs peer 125 / master 1614.
 ## Security hardening 2026-11-08

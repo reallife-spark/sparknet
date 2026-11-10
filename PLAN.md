@@ -219,6 +219,53 @@ current: done
     is peer `a5f80e7`, master `ea4822a`, root `7b7ae6b`, goagx `c3efd98`. Step 91 and the role live-leg
     confirmations remain open and are not claimed here.
 
+## Step 94 — Sandbox domain vocabulary and policy authority
+
+- [x] **Step 94** — Settle the execution-sandbox vocabulary and the
+  policy-authority boundary. Documentation only: no contracts, code, manifests,
+  submodule pins or live claims change.
+  - [x] **94A — Glossary.** Reformat `GLOSSARY.md` into the domain-modeling
+    structure, retain every existing term, strip file paths and table names,
+    add the sandbox cluster and the authority vocabulary it needs, and name the
+    collision pairs (`approval`, `supervisor`/`supervision`, `proposal`,
+    `mount`, `execution`, `holder`, `owner`).
+    **DoD**: every sandbox concept in ADR-0012/0013 and
+    `contracts/sandbox-schema.json` resolves to exactly one glossary entry; no
+    file path or table name remains; no term still used in the repo was removed.
+    **Status 2026-11-10 — COMPLETE.** 72 unique terms in four clusters; every
+    prior term retained; the sandbox contract's actions, identity, policy,
+    mounts, exposure and refusal vocabulary resolve to an entry; no file path
+    or table name remains.
+  - [x] **94B — ADRs.** Amend proposed ADR-0012 for the layered names, the
+    vault/config mount split, the peer-local backend/driver choice and the
+    execution-surface classification. Add accepted ADR-0013 for the
+    signed-`policy-update` versus local-`policy-proposal` boundary and the
+    refuse-then-recreate lifecycle.
+    **DoD**: ADR-0012 and ADR-0013 agree with the glossary and the sandbox
+    contract; ADR-0013 records the independence of the two policy paths and the
+    service-sandbox open edge; neither ADR claims deployment.
+    **Status 2026-11-10 — COMPLETE.** ADR-0012 uses the layered vocabulary and
+    the vault/config mount split; ADR-0013 records the authority split,
+    independence, `policy-refused` recreation rule and the 20F service-sandbox
+    open edge. ADR-0012 remains proposed; ADR-0013 is accepted as a model
+    decision and claims no deployment.
+  - [x] **94C — Verification and records.** Update `sessions/2026-11-10.md` and
+    the architecture-decision line in `MEMORY.md`; append the Step 94
+    transitions to `log.md`; run the docs gates.
+    **DoD**: `git diff --check` and `make ci CI_QUICK=1` are green;
+    `DoD: confirm: user` for the vocabulary and ADR read-through.
+    **Status 2026-11-10 — COMPLETE.** Operator confirmed the vocabulary and ADR
+    read-through. Session and memory records updated; `git diff --check` and
+    `make ci CI_QUICK=1` pass (context, governance, phase8, keys, shims, lint,
+    format, shellcheck, role-skills, validate, contract-test, render-check,
+    SBOM). The full test suite was skipped because no code or contract changed.
+  - **DoD**: 94A–94C each have their named gate; the vocabulary is used
+    consistently in ADR-0012, ADR-0013 and the glossary; no production gate or
+    live claim is made because no contract or code changed.
+  - **Status 2026-11-10 — COMPLETE.** The glossary, ADR-0012 and ADR-0013 are
+    the settled model; `current: done`. No contract, code, manifest, submodule,
+    goagx or live change.
+
 ## Standing verification rules
 
 - A gate that cannot fail is not a gate. Every claim needs a named test or a
