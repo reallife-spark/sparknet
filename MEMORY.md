@@ -4,9 +4,9 @@
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
 Updated: 2026-11-10
 ## Plan cursor
-- `PLAN.md` — `current: done`; Steps 92 and 93 complete. goSpark `970d714`, peer `a64e993`, master `8580214`, root code `c5602cc`, goagx `fc9ccee` pinned and published. The 93A graph adapter set, shared issue module, skill-catalog engine and core split are committed.
-- Step 91 and role Steps 19/28 remain open only on live confirmations. Steps 18/27 are closed as delivered by Step 89.
-- Critical open items: confirm live issue delivery and live browser surfaces; run the 9G nocturnal window; peer precommit still reports `peer-node/02_Daily/2026-11-02.md`.
+- `PLAN.md` — `current: done`; Steps 91, 92 and 93 complete, including live Step 91/19/28 legs. goSpark `970d714`, peer `a64e993`, master `8580214`, root code `c5602cc`, goagx `fc9ccee` published; a follow-up goagx republish carries the console CSS/node-label fixes.
+- Step 91 and role Steps 19/28 are complete, including the live issue, triage and browser legs. Steps 18/27 are closed as delivered by Step 89.
+- Critical open items: run the 9G nocturnal window; peer precommit still reports `peer-node/02_Daily/2026-11-02.md`.
 - Phase 8 remains closed: 54 fixed, 186 reviewed-clean, 176 test-verified; register and inventory in `_archives/`.
 ## Live fabric
 - **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`). Peer egress only to Master.
@@ -30,6 +30,7 @@ Updated: 2026-11-10
 - Issue model: `shared/sparknet-issue.py` owns parse, redaction, validation, ledger, triage and projection; `shared/sparknet-authz.py` still owns the envelope/signature. Triage history is append-only `triage.jsonl`, derived `triage.json`.
 - Skill catalog: `scripts/skill_catalog/` owns copy/digest/manifest/host-path mechanics; the four sync scripts remain adapters and keep their external manifest shapes.
 - Architecture decisions recorded: issue module (root ADR 0009), skill catalog (root ADR 0010), core split (root ADR 0011), graph producer/consumer (goSpark ADR 0018).
+- Live Step 91 evidence: `live-step91-issue` delivered peer `agx32` → Master `agx64` on `10.100.0.1:8090`, triaged `done`/`wontfix`; Master Issues and both Understand tabs rendered in Chromium.
 - Base skill tree: 80 skills (33 wiki, 9 understand, 38 mattpocock); role catalogs peer 125 / master 1614.
 ## Security hardening 2026-11-08
 - Signer: **live on agx64** as root with a root-owned 0600 operational key, socket group `sparknet-signer` at 0660, and the exact caller allowlist; probe succeeds, direct `python3 -c` is refused. Verifies ledger against the pinned operational key before signing. See `master-node/docs/signer-isolation.md`.

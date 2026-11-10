@@ -64,7 +64,7 @@ current: done
 
 ## Step 91 — Understand-Anything + Matt Pocock integration
 
-- [ ] **Step 91** — Port Understand-Anything to Python/Go, add its skills and
+- [x] **Step 91** — Port Understand-Anything to Python/Go, add its skills and
   console surface, and integrate the Matt Pocock engineering skills with a
   local issue tracker whose work items reach the Master over a signed route.
   - [x] **91A — Contracts and provenance.** Add `contracts/understand-schema.json`
@@ -102,15 +102,20 @@ current: done
     signed issue round-trip passes locally. Live cross-node and live browser
     legs are `DoD: confirm: user`.
 
-  - **Status 2026-11-09 — 91A–91H complete locally; live legs pending.** The
-    Step 91 code, contracts, skills, role issue paths and Go understand service
-    are committed and pinned: goSpark `2aaeae7`, peer `35e92bf`, master
-    `ce47283`. Peer and master bundles were rebuilt and verified. The AGX
-    distribution was staged from fabric `6a95f56`, verified (8,093 files, role
-    catalogs, pins, compose, no key material), published as
-    `reallife-spark/goagx` `fd0e573`, and pinned; `make drift-check` is green.
-    `make ci` is green. Live cross-node issue delivery and the live browser
-    surfaces remain `DoD: confirm: user`.
+  - **Status 2026-11-10 — COMPLETE, including live legs.** The Step 91 code is
+    committed and pinned: goSpark `970d714`, peer `a64e993`, master `8580214`,
+    root code `c5602cc`. Live role code was updated on `agx64`/`agx32`, the
+    Master registry granted the peer `issue-report`, and `/etc/sparknet/issue-keys.json`
+    bound the peer key. Live issue `live-step91-issue` was signed by
+    `sparknet-node-0002` and delivered from `10.100.0.2` to the Master's
+    `10.100.0.1:8090`; the Master recorded it in
+    `/mnt/log/sparknet-issues.jsonl`, the console reported it, and the
+    Master-local triage transition closed it `done`/`wontfix`. Chromium browser
+    checks rendered the Master Issues tab and both Understand tabs; the peer
+    issue is operational data, not knowledge and not authority. A live console
+    bug (`.panel[hidden]` not hiding panels) and swapped node labels were fixed
+    and deployed. Peer and master bundles were rebuilt and verified. No live
+    claim is made for any surface outside these dated checks.
 
 ## Step 92 — Four-candidate architecture exploration
 

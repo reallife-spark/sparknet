@@ -32,6 +32,7 @@ h3 { margin: 0 0 12px; font-size: 14px; color: #cbd5e1; }
 .tabs a.active { color: var(--accent); background: #0d2422; border-color: #164e48; }
 main { padding: 24px 26px 40px; max-width: 1500px; margin: 0 auto; }
 .panel { display: grid; gap: 18px; }
+.panel[hidden] { display: none; }
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 2px; }
 .pill { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: 12px; }
 .pill.small { font-size: 10px; padding: 2px 7px; }
