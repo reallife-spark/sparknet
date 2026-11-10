@@ -103,8 +103,8 @@ current: done
     legs are `DoD: confirm: user`.
 
   - **Status 2026-11-10 — COMPLETE, including live legs.** The Step 91 code is
-    committed and pinned: goSpark `970d714`, peer `a64e993`, master `8580214`,
-    root code `c5602cc`. Live role code was updated on `agx64`/`agx32`, the
+    committed and pinned: goSpark `970d714`, peer `a5f80e7`, master `ea4822a`,
+    root code `7b7ae6b`, goagx `c3efd98`. Live role code was updated on `agx64`/`agx32`, the
     Master registry granted the peer `issue-report`, and `/etc/sparknet/issue-keys.json`
     bound the peer key. Live issue `live-step91-issue` was signed by
     `sparknet-node-0002` and delivered from `10.100.0.2` to the Master's
@@ -215,8 +215,8 @@ current: done
     where the distributed tree changes; no live claim comes from this host.
   - **Status 2026-11-10 — COMPLETE.** Graph adapters, issue module, triage
     writer, skill-catalog engine, console projection and core split are green.
-    goSpark `970d714`, peer `a64e993`, master `8580214` and goagx `fc9ccee`
-    are published; root code is `c5602cc`. Step 91 and the role live-leg
+    goSpark `970d714`; Step 93 code root `c5602cc`; the live-fix follow-up
+    is peer `a5f80e7`, master `ea4822a`, root `7b7ae6b`, goagx `c3efd98`. Step 91 and the role live-leg
     confirmations remain open and are not claimed here.
 
 ## Standing verification rules

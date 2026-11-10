@@ -4,7 +4,7 @@
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
 Updated: 2026-11-10
 ## Plan cursor
-- `PLAN.md` — `current: done`; Steps 91, 92 and 93 complete, including live Step 91/19/28 legs. goSpark `970d714`, peer `a64e993`, master `8580214`, root code `c5602cc`, goagx `fc9ccee` published; a follow-up goagx republish carries the console CSS/node-label fixes.
+- `PLAN.md` — `current: done`; Steps 91, 92 and 93 complete, including live Step 91/19/28 legs. goSpark `970d714`, peer `a5f80e7`, master `ea4822a`, root code `7b7ae6b`, goagx `c3efd98` published; the follow-up republish carries the console CSS/node-label fixes.
 - Step 91 and role Steps 19/28 are complete, including the live issue, triage and browser legs. Steps 18/27 are closed as delivered by Step 89.
 - Critical open items: run the 9G nocturnal window; peer precommit still reports `peer-node/02_Daily/2026-11-02.md`.
 - Phase 8 remains closed: 54 fixed, 186 reviewed-clean, 176 test-verified; register and inventory in `_archives/`.
