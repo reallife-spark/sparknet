@@ -295,7 +295,9 @@ current: done
     published and its pointer pinned.
   - **Status 2026-11-11 — COMPLETE.** All seven local issues are `done`.
     Commits: goSpark `cd2d72a`, peer `24bee7d`, master `edc45eb`, fabric
-    `503a2f7`; goagx republished as `dcb84b4` and pinned. No live claim.
+    `503a2f7`; goagx republished as `dcb84b4` and pinned. All four remotes are
+    pushed; the release-pin commit is `ff2cd12`. GitHub issue mirroring remains
+    blocked by the current PAT's missing Issues write. No live claim.
 
 ## Standing verification rules
 

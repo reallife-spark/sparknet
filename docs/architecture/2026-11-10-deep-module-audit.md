@@ -271,7 +271,9 @@ Verification after the changes: `make test-all`, `make lint`,
 `make format-check`, `make shellcheck`, `make render-check` and
 `make context-check` pass. The source commits are goSpark `cd2d72a`, peer
 `24bee7d`, master `edc45eb` and fabric `503a2f7`; the goagx distribution was
-republished as `dcb84b4` and the pointer is pinned.
+republished as `dcb84b4` and the pointer is pinned. All four remotes are
+pushed; the release-pin commit is `ff2cd12`. The GitHub issue mirror remains
+blocked by the current PAT's missing Issues write; local issues are canonical.
 
 ## Verification performed
 
