@@ -9,6 +9,8 @@ from contract_helpers import (
     load,
 )
 
+pytestmark = pytest.mark.contract
+
 
 @pytest.fixture(scope="module")
 def telemetry_schema() -> dict:

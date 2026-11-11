@@ -6,6 +6,7 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
 from sparknet_loader import load_by_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -14,6 +15,9 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from skill_catalog import engine  # noqa: E402 - scripts/ is added by path above
+
+pytestmark = pytest.mark.layout
+
 
 ADAPTERS = {
     "wiki": SCRIPTS / "sync-wiki-skills.py",

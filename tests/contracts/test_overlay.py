@@ -5,12 +5,15 @@ from __future__ import annotations
 import json
 import re
 
+import pytest
 from contract_helpers import (
     BROADCAST_HOST,
     MASTER,
     MASTER_HOST,
     PEER,
 )
+
+pytestmark = pytest.mark.contract
 
 
 def test_master_is_the_anchor_and_the_peer_prefix_agrees(overlay: dict):

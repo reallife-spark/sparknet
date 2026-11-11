@@ -23,6 +23,9 @@ from pathlib import Path
 import pytest
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.integration
+
+
 ROOT = Path(__file__).resolve().parent.parent
 ENGINE_PATH = ROOT / "peer-node" / "services" / "sparknet-opencode-engine.py"
 TEMPLATE = ROOT / "peer-node" / "configs" / "opencode-engine" / "opencode.json.template"

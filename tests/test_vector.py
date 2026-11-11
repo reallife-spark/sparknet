@@ -24,6 +24,9 @@ from pathlib import Path
 import pytest
 from sparknet_loader import load_by_path  # shared/ comes from conftest
 
+pytestmark = pytest.mark.integration
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = REPO_ROOT / "scripts" / "sparknet-vector.py"
 SCOPES = ("peer", "master", "fabric", "shared")

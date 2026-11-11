@@ -35,6 +35,9 @@ from pathlib import Path
 import pytest
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.integration
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SHARED = REPO_ROOT / "shared"
 ELECTION_SCRIPT = SHARED / "sparknet-election.py"

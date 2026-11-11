@@ -15,6 +15,9 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.unit
+
+
 ABAC_PATH = REPO_ROOT / "shared" / "sparknet-abac.py"
 AUTHZ_PATH = REPO_ROOT / "shared" / "sparknet-authz.py"
 

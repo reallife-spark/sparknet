@@ -8,8 +8,12 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from contract_helpers import REPO_ROOT
 from sparknet_loader import load_by_path
+
+pytestmark = pytest.mark.unit
+
 
 VECTORS = REPO_ROOT / "contracts" / "vectors" / "foundations.json"
 GOSPARK_VECTORS = REPO_ROOT / "gospark" / "spec" / "sparknet" / "foundations-vectors.json"

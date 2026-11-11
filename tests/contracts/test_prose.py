@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import re
 
+import pytest
 from contract_helpers import (
     CONTRACTS,
 )
+
+pytestmark = pytest.mark.contract
 
 
 def test_guard_protocol_states_the_master_side_is_built():

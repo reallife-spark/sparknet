@@ -17,6 +17,9 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = REPO_ROOT / ".opencode" / "skills"
 SYNC_STATE = SKILLS_DIR / ".sync.json"

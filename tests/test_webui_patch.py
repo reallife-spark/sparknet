@@ -12,6 +12,9 @@ from pathlib import Path
 import pytest
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.unit
+
+
 ROOT = Path(__file__).resolve().parent.parent
 PATCH = ROOT / "webui" / "patch-openwebui.py"
 

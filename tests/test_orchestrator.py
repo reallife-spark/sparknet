@@ -8,6 +8,9 @@ import pytest
 from contract_helpers import REPO_ROOT
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.unit
+
+
 EVENT = REPO_ROOT / "shared" / "sparknet-event.py"
 ORCH = REPO_ROOT / "master-node" / "services" / "sparknet-orchestrator.py"
 

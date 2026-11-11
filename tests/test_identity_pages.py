@@ -13,6 +13,9 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.layout
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCOPES = {
     "fabric": REPO_ROOT,

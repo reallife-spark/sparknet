@@ -26,6 +26,9 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKIP_DIR_PARTS = {
     "__pycache__",

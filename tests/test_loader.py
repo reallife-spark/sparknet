@@ -12,6 +12,8 @@ sys.path.insert(0, str(ROOT / "shared"))
 
 from sparknet_loader import load_by_path, load_shared  # noqa: E402 - the shared path shim
 
+pytestmark = pytest.mark.unit
+
 
 def test_failed_load_is_not_cached(tmp_path):
     bad = tmp_path / "bad.py"

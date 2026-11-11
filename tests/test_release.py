@@ -21,8 +21,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import tomllib
 from sparknet_loader import load_by_path  # shared/ comes from conftest
+
+pytestmark = pytest.mark.layout
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 VERSION_FILE = REPO_ROOT / "VERSION"

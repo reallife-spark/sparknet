@@ -20,6 +20,9 @@ import pytest
 from contract_helpers import REPO_ROOT, load
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.contract
+
+
 REFLEX_PATH = REPO_ROOT / "shared" / "sparknet-reflex.py"
 GOLDEN = REPO_ROOT / "tests" / "reflex" / "golden" / "vectors.json"
 

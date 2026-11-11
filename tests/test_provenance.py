@@ -23,6 +23,9 @@ from types import ModuleType
 import pytest
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.unit
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROVENANCE_PATH = REPO_ROOT / "shared" / "sparknet-provenance.py"
 PROVENANCE_LEDGER_PATH = REPO_ROOT / "shared" / "sparknet-provenance-ledger.py"

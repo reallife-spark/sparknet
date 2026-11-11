@@ -16,6 +16,9 @@ from types import ModuleType
 import pytest
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.unit
+
+
 ROOT = Path(__file__).resolve().parent.parent
 SHARED = ROOT / "shared"
 BASE_PATH = SHARED / "sparknet-provenance-base.py"

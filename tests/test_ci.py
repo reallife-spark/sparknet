@@ -27,6 +27,9 @@ from pathlib import Path
 import pytest
 import yaml
 
+pytestmark = pytest.mark.layout
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GOSPARK_ROOT = REPO_ROOT / "gospark"
 

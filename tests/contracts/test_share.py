@@ -15,6 +15,8 @@ from contract_helpers import (
     share_policy,
 )
 
+pytestmark = pytest.mark.contract
+
 
 def test_share_protocol_states_its_own_build_boundary(ports: dict):
     """Same honesty guard as guard-protocol.md, aimed at the real boundary.

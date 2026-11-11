@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
 from contract_helpers import load
+
+pytestmark = pytest.mark.contract
 
 
 def test_agent_contract_is_bounded_and_authority_free():

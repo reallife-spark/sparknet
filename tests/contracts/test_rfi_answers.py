@@ -6,6 +6,8 @@ from types import ModuleType
 
 import pytest
 
+pytestmark = pytest.mark.contract
+
 
 def _rfi_key():
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey

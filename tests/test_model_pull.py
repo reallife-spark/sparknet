@@ -17,6 +17,9 @@ from pathlib import Path
 import pytest
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.integration
+
+
 ROOT = Path(__file__).resolve().parent.parent
 PULL = ROOT / "scripts" / "sparknet-model-pull.py"
 

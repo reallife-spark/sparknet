@@ -13,7 +13,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
 
+import pytest
 from sparknet_loader import load_by_path
+
+pytestmark = pytest.mark.integration
+
 
 FABRIC_ROOT = Path(__file__).resolve().parent.parent
 IDLE_PATH = FABRIC_ROOT / "shared" / "sparknet-idle.py"

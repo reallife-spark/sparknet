@@ -18,6 +18,9 @@ import pytest
 from contract_helpers import REPO_ROOT, load
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.unit
+
+
 SKILL_EVAL_PATH = REPO_ROOT / "shared" / "sparknet-skill-eval.py"
 GOLDEN = REPO_ROOT / "tests" / "skill-evals" / "record-golden.json"
 

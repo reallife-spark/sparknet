@@ -384,6 +384,27 @@ current: done
     mirror guard; each reverted green. Full fabric suite, lint and format
     green. No live claim.
 
+## Step 98 — Make the pytest tier vocabulary selectable
+
+- [x] **Step 98** — Apply the registered tiers to every fabric test module and
+  add the selection path, so `-m unit` is a real fast loop.
+  - [x] **98A — Marks.** Module-level `pytestmark` in all 128 fabric test
+    modules: 47 `unit`, 44 `integration`, 21 `contract`, 11 `layout`, plus the
+    5 that already carried an integration/slow mark.
+  - [x] **98B — Selection and guard.** `make test-unit` and
+    `make test-integration`; `tests/test_tier_markers.py` fails on an unmarked
+    module and on a `unit` module that imports or calls a process/socket
+    boundary.
+  - [x] **98C — Docs.** `CONTRIBUTING.md` explains the tiers and the two
+    targets.
+  - **DoD**: `make test-unit` is green and fast; `make test-integration` is
+    green; the full suite and `CI_QUICK=1 make ci` are green; lint and format
+    are clean.
+  - **Status 2026-11-11 — COMPLETE.** `make test-unit` passed in 17.2 s (213
+    tests) and `make test-integration` in 2 m 07 s; the full fabric suite and
+    the quick pre-merge gate are green. No test behavior changed; the change is
+    additive marks plus the meta-guard.
+
 ## Standing verification rules
 
 - A gate that cannot fail is not a gate. Every claim needs a named test or a

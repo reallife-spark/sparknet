@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
 from contract_helpers import REPO_ROOT, load
+
+pytestmark = pytest.mark.unit
+
 
 STATES = {"contract", "loopback", "dry-run", "live", "implemented"}
 

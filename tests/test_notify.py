@@ -16,6 +16,9 @@ from types import ModuleType
 import pytest
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.integration
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 NOTIFY_PATH = REPO_ROOT / "shared" / "sparknet-notify.py"
 

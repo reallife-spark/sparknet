@@ -24,6 +24,9 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.layout
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CHECKER = REPO_ROOT / "scripts" / "sparknet-keys-check.sh"
 HOOK = REPO_ROOT / ".githooks" / "pre-commit"

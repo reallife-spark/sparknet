@@ -20,6 +20,9 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.integration
+
+
 ROOT = Path(__file__).resolve().parent.parent
 SHARED = ROOT / "shared"
 NOW = datetime.now(timezone.utc)

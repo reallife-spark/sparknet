@@ -12,6 +12,9 @@ import pytest
 from contract_helpers import load
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.unit
+
+
 ROOT = Path(__file__).resolve().parent.parent
 authz = load_by_path("authz_envelopes_test", ROOT / "shared" / "sparknet-authz.py")
 

@@ -18,6 +18,9 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PLUGIN_FILE = REPO_ROOT / "scripts" / "plugins" / "kde-notify.ts"
 NOTIF_CONFIG = REPO_ROOT / "scripts" / "plugins" / "kde-notif.opencode.json"

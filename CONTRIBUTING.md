@@ -40,6 +40,18 @@ binary into `.cache/tools/` when shellcheck is not on `PATH` (see the Makefile
 for the pin), and fails closed if it can neither find nor fetch one. If any other
 step skips, say so in the pull request rather than leaving it implicit.
 
+Every fabric test module declares a tier: `unit` (fast, no sockets or
+subprocesses), `integration` (ports, processes or filesystem writes), `contract`
+(cross-role conformance), `layout` (structure, claims, hygiene) and `slow`.
+
+```sh
+make test-unit          # pytest -m unit — the tight feedback loop
+make test-integration   # pytest -m integration
+```
+
+A module without a module-level `pytestmark` fails
+`tests/test_tier_markers.py`, so the fast loop cannot silently lose coverage.
+
 ## The one rule that is not style
 
 **Cross-role changes are atomic across repositories.** `contracts/` and

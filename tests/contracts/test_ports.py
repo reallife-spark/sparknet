@@ -11,6 +11,8 @@ from contract_helpers import (
     guard_port,
 )
 
+pytestmark = pytest.mark.contract
+
 
 def test_the_two_significant_ports_are_not_transposed(ports: dict):
     """9090 is the peer's guard; 8090 is the Master's peer-intake listener.

@@ -6,6 +6,11 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.contract
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONTRACT = REPO_ROOT / "contracts" / "knowledge-flow.md"
 

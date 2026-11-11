@@ -31,6 +31,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.layout
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 #: Directories whose contents are history rather than current specification.

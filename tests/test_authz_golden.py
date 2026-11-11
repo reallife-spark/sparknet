@@ -11,6 +11,9 @@ from types import ModuleType
 import pytest
 from contract_helpers import load
 
+pytestmark = pytest.mark.unit
+
+
 # --- golden vectors -----------------------------------------------------------
 #
 # The rest of the contract suite checks that the contract and the code agree on

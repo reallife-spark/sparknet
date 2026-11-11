@@ -8,6 +8,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
+pytestmark = pytest.mark.unit
+
+
 NOW = datetime(2026, 11, 10, 12, 0, tzinfo=timezone.utc)
 
 

@@ -8,6 +8,11 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
+
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "sparknet-exec.py"
 

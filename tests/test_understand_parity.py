@@ -14,6 +14,9 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SHARED = REPO_ROOT / "shared" / "sparknet-understand.py"
 GO_BIN = REPO_ROOT / "gospark" / "bin" / "sparknet-understand"

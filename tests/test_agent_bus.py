@@ -8,6 +8,9 @@ import pytest
 from contract_helpers import REPO_ROOT
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.unit
+
+
 AGENT_BUS = REPO_ROOT / "shared" / "sparknet-agent-bus.py"
 EVENT = REPO_ROOT / "shared" / "sparknet-event.py"
 ENGINEERING = REPO_ROOT / "peer-node" / "agents" / "engineering" / "agent.py"

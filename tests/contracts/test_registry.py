@@ -10,6 +10,8 @@ from contract_helpers import (
     load,
 )
 
+pytestmark = pytest.mark.contract
+
 
 @pytest.fixture(scope="module")
 def registry_publication() -> dict:

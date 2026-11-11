@@ -10,6 +10,9 @@ from types import ModuleType
 import pytest
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.unit
+
+
 ROOT = Path(__file__).resolve().parent.parent
 UPDATE = ROOT / "scripts" / "sparknet-model-update.py"
 MODEL_ID = "qwen3.5-9b-q8"

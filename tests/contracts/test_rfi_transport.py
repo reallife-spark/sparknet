@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import pytest
 from contract_helpers import (
     MASTER,
     PEER,
     REPO_ROOT,
     guard_port,
 )
+
+pytestmark = pytest.mark.contract
 
 
 def test_the_rfi_route_is_the_guard_route_the_contract_names(rfi_schema: dict, ports: dict) -> None:

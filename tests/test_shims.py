@@ -26,6 +26,9 @@ from types import ModuleType
 import pytest
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.layout
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROVENANCE_PATH = REPO_ROOT / "shared" / "sparknet-provenance.py"
 CONTRACT = json.loads((REPO_ROOT / "contracts" / "tracking-schema.json").read_text())

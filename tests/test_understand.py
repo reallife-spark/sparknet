@@ -22,6 +22,8 @@ if str(SHARED) not in sys.path:
 
 from sparknet_understand import algebra, build, core, domain, figma, knowledge, production, schema  # noqa: E402
 
+pytestmark = pytest.mark.integration
+
 
 def _write(root: Path, rel: str, text: str) -> None:
     path = root / rel

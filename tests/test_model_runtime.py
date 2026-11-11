@@ -14,6 +14,9 @@ from pathlib import Path
 import pytest
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.integration
+
+
 ROOT = Path(__file__).resolve().parent.parent
 RUNTIME = ROOT / "scripts" / "sparknet-model-runtime.py"
 CATALOG = ROOT / "contracts" / "model-catalog.json"

@@ -11,7 +11,11 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pytest
 from sparknet_loader import load_by_path
+
+pytestmark = pytest.mark.integration
+
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "sparknet-exec-daemon.py"

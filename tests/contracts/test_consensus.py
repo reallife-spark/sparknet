@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import re
 
+import pytest
 from contract_helpers import (
     CONTRACTS,
     load,
     share_policy,
 )
+
+pytestmark = pytest.mark.contract
 
 
 def test_guard_protocol_no_longer_claims_a_peer_can_never_sign_as_a_fact(ports: dict):

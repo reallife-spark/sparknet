@@ -6,6 +6,9 @@ import pytest
 from contract_helpers import REPO_ROOT, load
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.unit
+
+
 GRAPH_PATH = REPO_ROOT / "shared" / "sparknet-graph.py"
 
 

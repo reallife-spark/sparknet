@@ -36,7 +36,7 @@ INBOX ?=
 # the vendored .opencode/skills tree (see pyproject.toml).
 SCOPE ?= fabric
 
-.PHONY: help help-role layout tui validate test test-all test-peer test-master \
+.PHONY: help help-role layout tui validate test test-all test-unit test-integration test-peer test-master \
         contract-test lint lint-strict format-check shellcheck test-report ci \
         shellcheck-install \
         container-test \
@@ -121,6 +121,12 @@ test-all: ## Run every suite in the repository
 	@echo
 	@echo "=== master-node (parity + spec) ==="
 	@$(MAKE) --no-print-directory -C master-node test
+
+test-unit: ## Run the fast unit tier (no sockets, no subprocesses)
+	@$(PY) -m pytest tests/ -q -m unit
+
+test-integration: ## Run the integration tier (ports, processes, slow included)
+	@$(PY) -m pytest tests/ -q -m integration
 
 test-peer: ## Run only the peer suite
 	@$(MAKE) --no-print-directory -C peer-node test

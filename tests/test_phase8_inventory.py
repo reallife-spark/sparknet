@@ -8,6 +8,11 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
+
 ROOT = Path(__file__).resolve().parent.parent
 INVENTORY = ROOT / "_archives" / "phase8-inventory.json"
 REGISTER = ROOT / "_archives" / "phase8-rewrite-register.md"

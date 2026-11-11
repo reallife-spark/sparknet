@@ -5,7 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from sparknet_loader import load_by_path
+
+pytestmark = pytest.mark.unit
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = REPO_ROOT / "scripts" / "sparknet-context-pack.py"

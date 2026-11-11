@@ -27,6 +27,9 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.layout
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Top-level entries the fabric is documented to have. Anything else at the root

@@ -14,6 +14,8 @@ from contract_helpers import (
     load,
 )
 
+pytestmark = pytest.mark.contract
+
 
 @pytest.fixture(scope="module")
 def guard_approval() -> dict:

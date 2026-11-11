@@ -21,6 +21,9 @@ from types import ModuleType
 import pytest
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.unit
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MERKLE_PATH = REPO_ROOT / "shared" / "sparknet-merkle.py"
 

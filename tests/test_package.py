@@ -10,6 +10,9 @@ from contract_helpers import REPO_ROOT, load
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.integration
+
+
 PACKAGE_PATH = REPO_ROOT / "shared" / "sparknet-package.py"
 
 

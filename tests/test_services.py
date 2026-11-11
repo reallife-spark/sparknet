@@ -14,7 +14,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
 import tomllib
+
+pytestmark = pytest.mark.unit
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = REPO_ROOT / "pyproject.toml"

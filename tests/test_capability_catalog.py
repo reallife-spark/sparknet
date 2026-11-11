@@ -12,6 +12,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.unit
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GO_CAPABILITIES = REPO_ROOT / "gospark" / "internal" / "authz" / "capabilities.go"
 

@@ -29,6 +29,9 @@ from pathlib import Path
 import pytest
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.unit
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OOB_SCRIPT = REPO_ROOT / "shared" / "sparknet-oob.py"
 

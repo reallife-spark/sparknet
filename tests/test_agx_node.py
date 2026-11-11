@@ -17,6 +17,9 @@ from pathlib import Path
 import pytest
 import yaml
 
+pytestmark = pytest.mark.integration
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AGX_DIR = REPO_ROOT / "goagx" / "goagx"
 AGX_COMPOSE = AGX_DIR / "sparknet.agx.compose.yml"

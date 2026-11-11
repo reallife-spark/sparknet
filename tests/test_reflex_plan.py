@@ -17,6 +17,9 @@ import pytest
 from contract_helpers import REPO_ROOT
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.unit
+
+
 REFLEX_PATH = REPO_ROOT / "shared" / "sparknet-reflex.py"
 VERIFY_PATH = REPO_ROOT / "shared" / "sparknet-verify.py"
 CLI_PATH = REPO_ROOT / "scripts" / "sparknet-verify-plans.py"

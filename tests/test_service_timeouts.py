@@ -21,6 +21,9 @@ from pathlib import Path
 import pytest
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.integration
+
+
 ROOT = Path(__file__).resolve().parent.parent
 PEER_SERVICE = ROOT / "peer-node" / "services" / "sparknet-guard-d.py"
 

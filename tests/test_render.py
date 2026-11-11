@@ -21,7 +21,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from sparknet_loader import load_by_path  # shared/ comes from conftest
+
+pytestmark = pytest.mark.layout
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = REPO_ROOT / "scripts" / "sparknet-render.py"

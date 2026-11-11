@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from types import ModuleType
 
+import pytest
+
+pytestmark = pytest.mark.contract
+
 
 def _request(authz: ModuleType, **overrides) -> dict:
     from datetime import datetime, timezone

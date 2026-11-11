@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import re
 
+import pytest
 from contract_helpers import (
     REPO_ROOT,
 )
+
+pytestmark = pytest.mark.contract
+
 
 #
 # The node's ports are docker host-publishes plus in-stack listeners, not overlay

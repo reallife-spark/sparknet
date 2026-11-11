@@ -27,6 +27,9 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AGENTS_DIR = REPO_ROOT / ".opencode" / "agents"
 LEGACY_DIR = REPO_ROOT / ".opencode" / "agent"

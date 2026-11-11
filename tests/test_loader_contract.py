@@ -12,6 +12,11 @@ import ast
 import re
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.contract
+
+
 ROOT = Path(__file__).resolve().parent.parent
 LOADER = ROOT / "shared" / "sparknet_loader.py"
 

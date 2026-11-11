@@ -16,6 +16,8 @@ from contract_helpers import (
 )
 from sparknet_loader import load_by_path
 
+pytestmark = pytest.mark.contract
+
 
 @pytest.fixture(scope="module")
 def provenance() -> ModuleType:

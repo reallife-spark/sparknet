@@ -16,7 +16,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from sparknet_loader import load_by_path
+
+pytestmark = pytest.mark.integration
+
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "sparknet-skill-eval.py"

@@ -13,6 +13,8 @@ from contract_helpers import (
     REPO_ROOT,
 )
 
+pytestmark = pytest.mark.contract
+
 
 def test_contract_declares_exactly_two_roles(identity_schema: dict):
     assert set(identity_schema["roles"]) == {"master", "peer"}, (

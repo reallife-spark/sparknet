@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from types import ModuleType
 
+import pytest
 from contract_helpers import (
     MASTER,
     PEER,
@@ -11,6 +12,9 @@ from contract_helpers import (
     SHARED_PATH,
     load,
 )
+
+pytestmark = pytest.mark.contract
+
 
 SUBMODULE_DIRS = {"gospark", "peer-node", "master-node", "goagx"}
 
