@@ -426,3 +426,4 @@ file, not here.
 - [2026-11-11] **Step 101 complete.** Diagnosed and fixed the console's malformed-gateway crash: `/api/evals` and `/api/projects` dropped the connection when the gateway returned a JSON list. The regression test failed on `AttributeError: 'list' object has no attribute 'get'` and passes after `_local_gateway_runs` validates the payload shape. Full suite, lint and format green.
 - [2026-11-11] **Step 101 released.** Fabric `7135b83` pushed; goagx republished as `59a83e7` and pinned. `make drift-check` green.
 - [2026-11-11] **Step 102 complete.** `project report` now refuses a malformed delegate run record (`result` or `task` not an object) with a clean message instead of an `AttributeError` traceback. The loop failed at `scripts/sparknet-project.py:428` and passes for both variants; full suite, lint and format green.
+- [2026-11-11] **Step 102 released.** Fabric `a84529f` pushed; goagx republished as `62797c6` and pinned. `make drift-check` green.

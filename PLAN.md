@@ -485,7 +485,8 @@ current: done
     project suite, full suite, lint and format are green; goagx republished.
   - **Status 2026-11-11 — COMPLETE.** Both variants refuse with
     `run record is malformed: result and task must be objects`; the full suite,
-    lint and format are green. No live claim.
+    lint and format are green. goagx republished as `62797c6` and pinned. No
+    live claim.
 
 ## Standing verification rules
 
