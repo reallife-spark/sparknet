@@ -463,7 +463,8 @@ current: done
   - **DoD**: the regression test, the console file, the full suite, lint and
     format are green; `make drift-check` green after the goagx republish.
   - **Status 2026-11-11 — COMPLETE.** Regression test and full suite green;
-    goagx republished and pinned; `make drift-check` green. No live claim.
+    goagx republished as `59a83e7` and pinned; `make drift-check` green.
+    No live claim.
 
 ## Standing verification rules
 

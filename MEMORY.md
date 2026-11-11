@@ -7,8 +7,8 @@ Updated: 2026-11-11
 - `PLAN.md` — `current: done`; Steps 96–101 closed: skill-eval record/gate/
   harness, dependency guard, test tiers, ADR-0015's boundary, the console
   eval view and its malformed-gateway degradation fix.
-- Commits: goSpark `2e8b2be`; fabric `8f9bb08`/`962cf66`/pin; goagx `6b8d195`
-  pinned. Peer `a4d3835`, master `9435b65`. `make drift-check` green.
+- Commits: goSpark `2e8b2be`; fabric `7135b83`/pin; goagx `59a83e7` pinned.
+  Peer `a4d3835`, master `9435b65`. `make drift-check` green.
 - Critical open items: mirror complete (21 issues/5 repos, 18 closed); 9G
   nocturnal window, shell migrations and the peer→Master eval transport
   decision remain; peer precommit reports `peer-node/02_Daily/2026-11-02.md`.
