@@ -543,7 +543,8 @@ current: done
     live checks are recorded with host and date.
   - **Status 2026-11-11 — code complete; target-host verification pending.**
     The Python ports and wrappers are in place; all local gates are green.
-    Step 104D remains open.
+    Commits: peer `633fef9`, fabric `00883a5`; goagx republished as `d6930f6`
+    and pinned. Step 104D remains open (`DoD: confirm: user`).
 
 ## Standing verification rules
 

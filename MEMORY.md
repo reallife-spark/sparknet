@@ -6,8 +6,8 @@ Updated: 2026-11-11
 ## Plan cursor
 - `PLAN.md` — `current: 104`; Steps 96–103 closed; Step 104 (node-script
   migrations) is code-complete with target-host verification open.
-- Commits: goSpark `2e8b2be`; fabric `ab9be7a`/pin; goagx `2b4de0f`; peer
-  `89afef4`, master `b93f077`. `make drift-check` green before Step 104.
+- Commits: goSpark `2e8b2be`; fabric `00883a5`/pin; goagx `d6930f6`; peer
+  `633fef9`, master `b93f077`. `make drift-check` green.
 - Critical open items: Step 104D target-host verification (#11); live
   nocturnal window tonight 02:00–05:00 (#8, operator raxxar); peer→Master eval
   transport (#9); mirror complete (21 issues/5 repos, 18 closed); peer
