@@ -9,10 +9,9 @@ Updated: 2026-11-11
   read-only console eval view.
 - Commits: goSpark `2e8b2be`; fabric `8f9bb08`/`962cf66`/pin; goagx `6b8d195`
   pinned. Peer `a4d3835`, master `9435b65`. `make drift-check` green.
-- Critical open items: GitHub mirror blocked by the PAT (`createIssue`), so
-  `.scratch/issues/` is canonical; 9G nocturnal window; shell migrations;
-  dependency guard, tier markers, memory-filter boundary and master audit
-  view open; peer precommit reports `peer-node/02_Daily/2026-11-02.md`.
+- Critical open items: mirror complete (21 issues/5 repos, 18 closed); 9G
+  nocturnal window, shell migrations and the peer→Master eval transport
+  decision remain; peer precommit reports `peer-node/02_Daily/2026-11-02.md`.
 - Phase 8 remains closed: 54 fixed, 186 reviewed-clean, 176 test-verified;
   register and inventory in `_archives/`.
 ## Live fabric
