@@ -28,10 +28,12 @@ this file checks.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
 import pytest
+import yaml
 
 pytestmark = pytest.mark.layout
 
@@ -204,3 +206,52 @@ def test_readme_documents_the_verifier_for_each_claim_class():
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     for tool in ("make test-all", "make contract-test", "make validate"):
         assert tool in readme, f"README.md no longer mentions `{tool}`"
+
+
+def _manual_section(start: str, end: str) -> str:
+    """Return the USER_MANUAL section between two headings."""
+    text = (REPO_ROOT / "USER_MANUAL.md").read_text(encoding="utf-8")
+    assert start in text, f"USER_MANUAL.md lost the {start!r} section"
+    assert end in text, f"USER_MANUAL.md lost the {end!r} section"
+    return text.split(start, 1)[1].split(end, 1)[0]
+
+
+def test_manual_compose_table_names_every_compose_service() -> None:
+    """The compose table must name every service the compose file declares."""
+    compose = yaml.safe_load((REPO_ROOT / "spark.compose.yml").read_text(encoding="utf-8"))
+    section = _manual_section("### 7.2 The compose graph", "### 7.3 The entrypoint")
+    missing = [name for name in compose["services"] if f"`{name}`" not in section]
+    assert not missing, "USER_MANUAL.md §7.2 is missing compose services: " + ", ".join(missing)
+
+
+def test_manual_gate_section_names_every_gate_step() -> None:
+    """The manual's gate table must not silently omit a gate step."""
+    script = (REPO_ROOT / "scripts" / "pre-merge-gate.sh").read_text(encoding="utf-8")
+    steps = re.findall(r'run_step "([^"]+)"', script)
+    assert steps, "scripts/pre-merge-gate.sh has no run_step calls"
+    section = _manual_section("## 10. The gate", "## 11.")
+    missing = [step for step in steps if f"`{step}`" not in section]
+    assert not missing, "USER_MANUAL.md §10 is missing gate steps: " + ", ".join(missing)
+
+
+def test_guard_protocol_lists_every_approval_field() -> None:
+    """The narrative protocol must name every field in the machine-readable contract."""
+    approval = json.loads((REPO_ROOT / "contracts" / "guard-approval.json").read_text(encoding="utf-8"))
+    fields = approval["approval"]["fields"]
+    protocol = (REPO_ROOT / "contracts" / "guard-protocol.md").read_text(encoding="utf-8")
+    missing = [field for field in fields if f"`{field}`" not in protocol]
+    assert not missing, "contracts/guard-protocol.md is missing approval fields: " + ", ".join(missing)
+
+
+def test_manual_bundle_section_names_the_pinned_bundle_keys() -> None:
+    """A verifiable bundle needs both the signing key and the pinned public key."""
+    section = _manual_section("### 9.4 Bundles", "### 9.5 goSpark")
+    for key in ("BUNDLE_SIGN_KEY", "BUNDLE_PUBKEY"):
+        assert key in section, f"USER_MANUAL.md §9.4 no longer names {key}"
+
+
+def test_manual_port_table_marks_master_ports_implemented() -> None:
+    """The master-side file/vector ports are implemented, not spec-only."""
+    section = _manual_section("### 7.4 The two port namespaces", "### 7.5 Bring-up")
+    row = next((line for line in section.splitlines() if "4220" in line), "")
+    assert "implemented" in row, "USER_MANUAL.md §7.4 no longer marks the master ports implemented"

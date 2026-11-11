@@ -73,6 +73,7 @@ signature covers lives once, in `shared/sparknet-authz.py`
 | `content_sha256` | SHA-256 of the new content; the peer recomputes it and refuses a mismatch |
 | `nonce` | single-use value; replay refused |
 | `request_id` | correlates plan → permission → execute |
+| `operator_os` | encoded operator OS attestation; empty means unattested and is refused for a privileged mutation |
 | `issued_at` / `expires_at` | validity window |
 
 `content_b64` is **inside** the signed message (`content_in_signature: true`).
@@ -82,9 +83,9 @@ For the same reason the envelope carries **no capabilities**: the peer reads
 approval that could grant the authority it is checked against would be a
 privilege-escalation channel wearing a signature.
 
-The envelope is *exactly* these eight fields. A payload with a missing field is
-refused, and so is one with an extra field: the signature covers exactly this
-projection, so anything outside it is unsigned.
+The envelope is exactly the fields in `contracts/guard-approval.json`. A
+payload with a missing field is refused, and so is one with an extra field: the
+signature covers exactly this projection, so anything outside it is unsigned.
 
 ### One rule, two implementations of it — no longer
 

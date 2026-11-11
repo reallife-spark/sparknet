@@ -94,7 +94,7 @@ If you read nothing else, read this table.
 | `scripts/` | Fabric-level tooling: bundling, env init, contract rendering, SBOM, the resource-first search helper, the pre-merge gate. |
 | `tests/` | The fabric-level suite: contract conformance, layout, claims, election, consensus, layout registries. |
 | `sbom/` | The generated CycloneDX SBOM. Never hand-edited. |
-| `spark.docker`, `spark.compose.yml` | The DGX Spark node image and its 14-service compose graph. The image build context **is the repository root**. |
+| `spark.docker`, `spark.compose.yml` | The DGX Spark node image and its compose graph. The image build context **is the repository root**. |
 | `goagx/sparknet.agx.docker`, `goagx/sparknet.agx.compose.yml` | The AGX Xavier equivalents. Same service contract, different silicon. |
 | `sparknet-node-setup.sh` | The one-command host bring-up (`--platform spark|agx`). |
 | `spark-entrypoint.sh` | The in-container dispatcher every service runs. |
@@ -461,8 +461,8 @@ search helper is `make nv-search q="…"`.
 
 ### 7.2 The compose graph
 
-`spark.compose.yml` declares 15 services. The AGX compose declares the same 15
-with the same names, container names, profiles and published ports — parity is
+`spark.compose.yml` declares the services below. The AGX compose declares the
+same service names, container names, profiles and published ports — parity is
 asserted by `tests/test_agx_node.py`.
 
 | Service | Role |
@@ -475,15 +475,18 @@ asserted by `tests/test_agx_node.py`.
 | `compute` | The Python/CUDA compute worker — the compute plane. |
 | `kvrouter` | The RadixAttention KV-residency daemon. |
 | `agent` | The node agent: reports health, verifies signed tasks, executes the closed operation whitelist. |
+| `memory` | The Go typed-memory store on loopback. |
+| `memory-gateway` | The Python authority front door in front of memory. |
 | `control` | The control plane — only meaningful with `--role master`. |
 | `gpu` | The GPU-telemetry sidecar (NVML + DCGM). |
 | `webui` | Open WebUI. |
+| `qdrant` | The node-local vector store (`vector` profile). |
 | `ingest` | The vault crawler / chunker / embedder driver. |
 | `backup` | The signed snapshot / verify / restore daemon. |
 | `opencode` | The agent surface inside the node. |
 
 Profiles (`embed`, `rerank`, `audio`, `webui`, `kv`, `control`, `ingest`,
-`backup`, `opencode`) are how optional services are switched on.
+`vector`, `backup`, `opencode`) are how optional services are switched on.
 
 ### 7.3 The entrypoint
 
@@ -492,7 +495,7 @@ Profiles (`embed`, `rerank`, `audio`, `webui`, `kv`, `control`, `ingest`,
 
 ```
 vllm   vllm-stub   compute   kvrouter   agent   control   gpu
-nats   ingest      backup    opencode
+nats   ingest      backup    memory     memory-gateway   opencode
 llama-embed   llama-rerank   whisper-asr   precontext   shell
 ```
 
@@ -521,16 +524,15 @@ uncapped precontext overflows the engine's context window — on the AGX the
 | 4203 | share-ratification | master | implemented | yes |
 | 4210 | cluster-election | both | implemented | yes |
 | 4211 | liveness-probe | peer | implemented | yes |
-| 4220–4223 | git-repo / file-share / nat-gateway / vector-embed | master | spec-only | yes |
+| 4220–4223 | git-repo / file-share / nat-gateway / vector-embed | master | implemented | yes |
 | 4224 | reflex-broker | master | implemented | yes |
 | 8088 | admin-surface | master | provisioned | yes |
 | 8090 | master-peer-intake | master | implemented | yes |
 | 9090 | guard | peer | implemented | yes |
 
-`4203` and `4224` are the two that moved: share ratification and the reflex
-broker are implemented, while the git/file/nat/vector siblings remain
-spec-only by role boundary. `8090` is the **peer-intake** listener
-(telemetry and RFI requests), not the retired instant-push stub.
+`4203` and `4220`–`4224` are implemented; `4200` remains spec-only. `8090` is
+the **peer-intake** listener (telemetry and RFI requests), not the retired
+instant-push stub.
 
 **Node namespace** (the docker host-publishes inside the node; all implemented):
 
@@ -637,8 +639,8 @@ make test-report SCOPE=all   # JUnit XML + .state/reports/summary.json
 root Makefile actually delegates to both roles, so "all" cannot quietly mean
 less.
 
-The fabric suite at `tests/` covers the cross-cutting concerns. It is 47 files;
-the groups below are the map, and `ls tests/` is the enumeration.
+The fabric suite at `tests/` covers the cross-cutting concerns. The groups
+below are the map, and `ls tests/` is the enumeration.
 
 | Group | Files |
 |---|---|
@@ -678,9 +680,10 @@ SPARKNET_DRY=1 scripts/sparknet test   # print the make invocation, run nothing
 ### 9.4 Bundles
 
 ```sh
-make bundle ROLE=peer          # -> dist/sparknet-peer-<tree>.tar.gz
-make bundle-verify ROLE=peer   # extract elsewhere and prove it runs
-make bundle ROLE=master        # vault + peer parity (it ships peer-node/ because parity needs it)
+make bundle ROLE=peer BUNDLE_SIGN_KEY=/path/to/bundle.key
+make bundle-verify ROLE=peer BUNDLE_PUBKEY=/path/to/bundle.pub
+make bundle ROLE=master BUNDLE_SIGN_KEY=/path/to/bundle.key
+make bundle-verify ROLE=master BUNDLE_PUBKEY=/path/to/bundle.pub
 ```
 
 A bundle carries the role, `contracts/`, `shared/`, `scripts/`, the vendored
@@ -688,6 +691,8 @@ wiki suite and `opencode.json`, plus a `SHA256SUMS` manifest. Verification
 extracts the archive to a **different path** and runs `env-init`, the wiki
 preflight, role validation and that role's test suite from the extracted copy —
 which is what makes "self-contained" a checked claim rather than a description.
+Verification also needs the detached signature produced by `BUNDLE_SIGN_KEY`
+and a pinned `BUNDLE_PUBKEY`; an unsigned build cannot be verified.
 `.env` is never bundled: it records machine-local paths, so deployment runs
 `scripts/sparknet-env-init.sh` as its first step.
 
@@ -724,6 +729,9 @@ The gate steps, and the file that enforces each rule:
 
 | Step | What it enforces | Enforced by |
 |---|---|---|
+| `context-check` | Every generated `CONTEXT.md` is current. | `scripts/sparknet-context-pack.py --check` |
+| `governance-check` | The five-file shape, budgets and template parity. | `scripts/sparknet-governance-check.py` |
+| `phase8-check` | The Phase 8 inventory covers every file and is well formed. | `scripts/sparknet-phase8-inventory.py` |
 | `keys-check` | No tracked key material; `.state/keys/` and `.state/secrets/` are `0600` (dirs `0700`). | `scripts/sparknet-keys-check.sh` |
 | `shims-check` | Every legacy category name is still a symlink. | `tests/test_shims.py` |
 | `lint` | Ruff over the whole fabric: `E,F,I,UP` plus `B,SIM,RUF,S`. | `pyproject.toml` |
@@ -736,7 +744,9 @@ The gate steps, and the file that enforces each rule:
 | `sbom-check` | The SBOM is not stale vs `VERSION`, deps or the skills. | `scripts/sparknet-sbom.py` |
 | `test-all` | Every suite. | `tests/` + both roles' `tests/` |
 
-The GitHub Actions in `.github/workflows/` run the **same script** as a mirror,
+The order above is the script's order: `scripts/pre-merge-gate.sh` is the
+canonical definition, and `tests/test_ci.py` pins the step vocabulary. The
+GitHub Actions in `.github/workflows/` run the **same script** as a mirror,
 SHA-pinned. But a node has no forge and no hosted runner, so a green badge
 there is never what authorises a merge — the local gate stays the authority.
 
@@ -942,10 +952,10 @@ Broadly:
   `arm` / `status` / `abort`) is built; it dispatches nothing until its next
   increment.
 - **Contracted and scaffolding** — the agent domain ports `4097`, `4098` and
-  `4100`, the admin surface (`8088`, configuration exists but nothing binds in
-  the shipped tree), and the master-side ports `4220`–`4223` (git, file-share,
-  NAT gateway, vector embed) are spec-only by deliberate role boundary. `4200`
-  `opencode-serve` is spec-only.
+  `4100` and the admin surface (`8088`, configuration exists but nothing binds
+  in the shipped tree) remain provisioned. The master-side ports `4220`–`4223`
+  (git, file-share, NAT gateway, vector embed) are implemented in the contract.
+  `4200` `opencode-serve` remains spec-only.
 - **Deliberately parked** — the destructive legs of the deployment runbook
   (rollback; replace-Master re-formation) are documented and deliberately left
   unexecuted by operator decision. The reflex layer's enforce stage is
