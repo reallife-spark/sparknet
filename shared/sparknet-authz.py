@@ -39,7 +39,7 @@ import json
 import re
 import secrets
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -456,6 +456,132 @@ def _parse_ts(value: Any) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
+ENTRY_CLOCK_SKEW_SECONDS = 300
+
+
+class RegistryEntryError(AuthzError):
+    """A registry entry the fabric will not use, with a stable reason code."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+@dataclass(frozen=True)
+class AcceptedEntry:
+    """A verified registry entry, narrowed to the facts a caller may use."""
+
+    fingerprint: str
+    identity: dict[str, Any]
+    capabilities: list[str]
+    overlay_ipv4: str | None
+    entry: dict[str, Any]
+
+
+def accept_entry(
+    entry: Any,
+    master_key: Ed25519PublicKey,
+    *,
+    now: datetime | None = None,
+    required_capability: str | None = None,
+    expected_fingerprint: str | None = None,
+    mode: str = "strict",
+    clock_skew_seconds: int = ENTRY_CLOCK_SKEW_SECONDS,
+) -> AcceptedEntry | None:
+    """Verify one registry entry and return the facts a caller may rely on.
+
+    This is the one acceptance rule for an entry that is not necessarily the
+    local node. ``evaluate`` uses it for the local identity; the Master's
+    intake, scheduler, RFI responder and uplift intake use it for a remote
+    entry; the peer's liveness roster uses the tolerant mode.
+
+    ``mode="roster"`` returns ``None`` instead of raising, for a caller that is
+    listing peers rather than granting authority. It still applies every check;
+    it just treats a bad entry as "not a peer" rather than a refusal.
+    """
+    try:
+        return _accept_entry(
+            entry,
+            master_key,
+            now=now,
+            required_capability=required_capability,
+            expected_fingerprint=expected_fingerprint,
+            clock_skew_seconds=clock_skew_seconds,
+        )
+    except RegistryEntryError:
+        if mode == "roster":
+            return None
+        raise
+
+
+def _accept_entry(
+    entry: Any,
+    master_key: Ed25519PublicKey,
+    *,
+    now: datetime | None,
+    required_capability: str | None,
+    expected_fingerprint: str | None,
+    clock_skew_seconds: int,
+) -> AcceptedEntry:
+    if not isinstance(entry, Mapping):
+        raise RegistryEntryError(REASON_MALFORMED, "registry entry must be an object")
+    fingerprint_value = entry.get("fingerprint")
+    if not isinstance(fingerprint_value, str) or len(fingerprint_value) != 64:
+        raise RegistryEntryError(REASON_MALFORMED, "registry entry has no usable fingerprint")
+    if expected_fingerprint is not None and fingerprint_value != expected_fingerprint:
+        raise RegistryEntryError(REASON_IDENTITY_MISMATCH, "registry entry names a different node")
+    if entry.get("revoked"):
+        raise RegistryEntryError(REASON_REVOKED, "registry entry is revoked")
+    moment = now or datetime.now(timezone.utc)
+    expires = _parse_ts(entry.get("expires_at"))
+    if expires is None:
+        raise RegistryEntryError(REASON_MALFORMED, "registry entry has no usable expires_at")
+    if moment > expires:
+        raise RegistryEntryError(REASON_EXPIRED, "registry entry has expired")
+    issued = _parse_ts(entry.get("issued_at"))
+    if issued is None:
+        raise RegistryEntryError(REASON_MALFORMED, "registry entry has no usable issued_at")
+    if moment < issued - timedelta(seconds=clock_skew_seconds):
+        raise RegistryEntryError(REASON_NOT_YET_VALID, "registry entry is not valid yet")
+
+    identity_value = entry.get("identity")
+    if not isinstance(identity_value, Mapping):
+        raise RegistryEntryError(REASON_MALFORMED, "registry entry has no identity object")
+    identity = dict(identity_value)
+    try:
+        actual_fingerprint = fingerprint(identity)
+    except AuthzError as exc:
+        raise RegistryEntryError(REASON_MALFORMED, f"identity is not canonical: {exc}") from exc
+    if actual_fingerprint != fingerprint_value:
+        raise RegistryEntryError(REASON_IDENTITY_MISMATCH, "identity does not hash to the entry fingerprint")
+
+    if not verify_signature(
+        master_key,
+        str(entry.get("signature_b64") or ""),
+        authorization_message(dict(entry)),
+    ):
+        raise RegistryEntryError(REASON_BAD_SIGNATURE, "registry entry signature does not verify")
+
+    capabilities = entry.get("capabilities")
+    if not isinstance(capabilities, list) or not capabilities:
+        raise RegistryEntryError(REASON_MALFORMED, "registry entry has no capabilities")
+    unknown = [capability for capability in capabilities if capability not in KNOWN_CAPABILITIES]
+    if unknown:
+        raise RegistryEntryError(REASON_UNKNOWN_CAPABILITY, f"registry entry has unknown capabilities: {unknown}")
+    if required_capability is not None and required_capability not in capabilities:
+        raise RegistryEntryError("capability_missing", f"registry entry does not carry {required_capability}")
+
+    overlay = entry.get("overlay_ipv4") or identity.get("overlay_ipv4")
+    return AcceptedEntry(
+        fingerprint=fingerprint_value,
+        identity=identity,
+        capabilities=sorted(str(capability) for capability in capabilities),
+        overlay_ipv4=str(overlay) if overlay else None,
+        entry=dict(entry),
+    )
+
+
 def evaluate(
     identity: dict[str, Any],
     registry: dict[str, Any],
@@ -481,48 +607,23 @@ def evaluate(
     if entry is None:
         return Decision(False, REASON_UNKNOWN, local_fp)
 
-    if entry.get("revoked"):
-        return Decision(False, REASON_REVOKED, local_fp)
-
-    expires = _parse_ts(entry.get("expires_at"))
-    if expires is None:
-        return Decision(False, REASON_MALFORMED, local_fp)
-    if now > expires:
-        return Decision(False, REASON_EXPIRED, local_fp)
-    issued = _parse_ts(entry.get("issued_at"))
-    if issued is None:
-        return Decision(False, REASON_MALFORMED, local_fp)
-    if now < issued - timedelta(minutes=5):
-        return Decision(False, REASON_NOT_YET_VALID, local_fp)
-
-    # The registry must not be able to carry an identity that hashes to
-    # something other than the fingerprint it is filed under.
-    stored_identity = entry.get("identity")
-    if not isinstance(stored_identity, dict):
-        return Decision(False, REASON_MALFORMED, local_fp)
     try:
-        if fingerprint(stored_identity) != local_fp:
-            return Decision(False, REASON_IDENTITY_MISMATCH, local_fp)
-    except AuthzError:
-        return Decision(False, REASON_MALFORMED, local_fp)
-
-    if not verify_signature(master_public_key, str(entry.get("signature_b64", "")), authorization_message(entry)):
-        return Decision(False, REASON_BAD_SIGNATURE, local_fp)
-
-    granted = entry.get("capabilities")
-    if not isinstance(granted, list) or not granted:
-        return Decision(False, REASON_MALFORMED, local_fp)
-    unknown = [c for c in granted if c not in KNOWN_CAPABILITIES]
-    if unknown:
-        return Decision(False, REASON_UNKNOWN_CAPABILITY, local_fp)
+        accepted = accept_entry(
+            entry,
+            master_public_key,
+            now=now,
+            expected_fingerprint=local_fp,
+        )
+    except RegistryEntryError as exc:
+        return Decision(False, exc.code, local_fp)
 
     return Decision(
         True,
         REASON_OK,
         local_fp,
-        capabilities=sorted(granted),
-        overlay_ipv4=entry.get("overlay_ipv4") or stored_identity.get("overlay_ipv4"),
-        identity=stored_identity,
+        capabilities=accepted.capabilities,
+        overlay_ipv4=accepted.overlay_ipv4,
+        identity=accepted.identity,
     )
 
 

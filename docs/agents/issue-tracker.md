@@ -51,6 +51,21 @@ What happened, what was expected, and the smallest useful reproduction.
 The five canonical roles are `needs-triage`, `needs-info`, `ready-for-agent`,
 `ready-for-human` and `wontfix`. See `triage-labels.md`.
 
+## GitHub mirror
+
+GitHub Issues may carry a **derived mirror** of local work for visibility. The
+mirror is not the tracker: `.scratch/issues/` remains canonical under
+[ADR-0001](../adr/0001-local-markdown-issue-tracker.md), and an issue that
+exists only on GitHub is not triaged work.
+
+- Mirror one local issue at a time with the same title and one canonical label.
+- The mirror body ends with `Mirror of .scratch/issues/<id>.md; local is
+  canonical.` and carries no private vault page, secret or live host state.
+- A triage transition happens locally first; the mirror follows. Never let a
+  GitHub edit become the only record of a decision.
+- The five labels are created once with `gh label create`; `wontfix` may already
+  exist and is updated rather than duplicated.
+
 ## Master
 
 The root workspace keeps its issues local. A role workspace pushes its own

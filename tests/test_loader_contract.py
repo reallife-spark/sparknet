@@ -9,6 +9,7 @@ implementation (an AST call), not for a comment or a string in a test fixture.
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -89,3 +90,22 @@ def test_production_loader_callers_have_a_shared_path_shim() -> None:
         if "sys.path.insert" not in text or "shared" not in text:
             offenders.append(str(path.relative_to(ROOT)))
     assert not offenders, "loader import without a shared path shim: " + ", ".join(offenders)
+
+
+def test_role_services_do_not_carry_a_shared_directory_resolver() -> None:
+    """The loader owns resolution; a service may only call it.
+
+    A local `_shared_dir`/`_shared_dirs`/`shared_dir` is how the search orders
+    drifted before: one service accepted a role-local `shared/`, another did
+    not, and one treated `SPARKNET_SHARED_DIR` as a root while another treated
+    it as the directory. The one loader now accepts both meanings.
+    """
+    offenders: list[str] = []
+    for path in _files(".py"):
+        relative = path.relative_to(ROOT).as_posix()
+        if not relative.startswith(("peer-node/services/", "master-node/services/")):
+            continue
+        text = path.read_text(encoding="utf-8")
+        if re.search(r"^def (?:shared_dir|_shared_dir|_shared_dirs)\b", text, re.MULTILINE):
+            offenders.append(relative)
+    assert not offenders, "role service reimplements shared-directory resolution: " + ", ".join(offenders)

@@ -161,7 +161,7 @@ verify_bundle() {
   [ -x "$py" ] || py="python3"
 
   # Both roles run their own suite. Note what is *not* in a bundle: the fabric-level
-  # `tests/`, so an extracted node cannot run test_contracts.py and therefore cannot
+  # `tests/`, so an extracted node cannot run the contract suite and therefore cannot
   # check contract drift for itself. Parity between the roles and contracts/ is
   # proved at the build host by `make contract-test` before bundling, not in the
   # bundle. (This comment used to say the Master had no code and its pytest run

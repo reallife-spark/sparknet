@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import argparse
 import base64
-import fnmatch
 import hashlib
 import hmac
 import json
@@ -48,6 +47,16 @@ def load_issue_module() -> Any:
         dirs=[ROOT / "shared"],
         error=ConsoleError,
         message="cannot find shared/sparknet-issue.py; the console carries no issue implementation",
+    )
+
+
+def load_vector_view() -> Any:
+    return load_shared(
+        "sparknet-vector-view.py",
+        "sparknet_console_vector_view",
+        dirs=[ROOT / "shared"],
+        error=ConsoleError,
+        message="cannot find shared/sparknet-vector-view.py; the console carries no vector view",
     )
 
 
@@ -125,108 +134,6 @@ def token_from_file(path: Path) -> str:
     if len(token) < 16:
         raise ConsoleError(f"console token {path} is too short")
     return token
-
-
-def qdrant_key(config: dict[str, Any], role_root: Path) -> str | None:
-    explicit = os.environ.get("SPARKNET_QDRANT_API_KEY") or os.environ.get("QDRANT_API_KEY")
-    if explicit:
-        return explicit
-    path = resolve(role_root, (config.get("qdrant") or {}).get("api_key_file"))
-    if path and path.is_file():
-        try:
-            return path.read_text(encoding="utf-8").strip() or None
-        except OSError:
-            return None
-    return None
-
-
-def allowed_collection(name: str, config: dict[str, Any]) -> bool:
-    qdrant = config.get("qdrant") or {}
-    excluded = [str(prefix) for prefix in qdrant.get("excluded_prefixes", [])]
-    if any(name.startswith(prefix) for prefix in excluded):
-        return False
-    return any(fnmatch.fnmatch(name, str(pattern)) for pattern in qdrant.get("allowed_collections", []))
-
-
-def qdrant_request(
-    config: dict[str, Any],
-    role_root: Path,
-    method: str,
-    path: str,
-    body: dict[str, Any] | None = None,
-    timeout: float = 15,
-) -> Any:
-    qdrant = config.get("qdrant") or {}
-    base = str(qdrant.get("uri") or "http://127.0.0.1:6333").rstrip("/")
-    data = json.dumps(body).encode("utf-8") if body is not None else None
-    request = urllib.request.Request(base + path, data=data, method=method)
-    request.add_header("Accept", "application/json")
-    if data is not None:
-        request.add_header("Content-Type", "application/json")
-    key = qdrant_key(config, role_root)
-    if key:
-        request.add_header("api-key", key)
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    with opener.open(request, timeout=timeout) as response:
-        raw = response.read()
-    return json.loads(raw.decode("utf-8")) if raw else None
-
-
-def project_points(points: list[dict[str, Any]], node: str) -> list[dict[str, Any]]:
-    """A deterministic 3D random projection for the pilot cloud.
-
-    It is not UMAP. It preserves rough neighbourhoods and lets the canvas show
-    real sampled vectors without adding a second ML runtime. The label in the
-    response says so.
-    """
-    pairs: list[tuple[dict[str, Any], list[float]]] = []
-    for point in points:
-        vector = point.get("vector")
-        if isinstance(vector, dict):
-            vector = next((value for value in vector.values() if isinstance(value, list)), None)
-        if not isinstance(vector, list):
-            continue
-        try:
-            pairs.append((point, [float(value) for value in vector]))
-        except (TypeError, ValueError):
-            continue
-    if not pairs:
-        return []
-    dim = len(pairs[0][1])
-    axes = []
-    for axis in range(3):
-        axes.append(
-            [
-                int.from_bytes(hashlib.sha256(f"{dim}:{axis}:{index}".encode()).digest()[:4], "big") / 2**32 - 0.5
-                for index in range(dim)
-            ]
-        )
-    projected = [
-        [sum(value * coeff for value, coeff in zip(vector, axis, strict=True)) for axis in axes] for _, vector in pairs
-    ]
-    max_abs = [max(abs(row[axis]) for row in projected) or 1.0 for axis in range(3)]
-    rows: list[dict[str, Any]] = []
-    for (point, _vector), xyz in zip(pairs, projected, strict=True):
-        payload = point.get("payload") if isinstance(point.get("payload"), dict) else {}
-        label = (
-            payload.get("label")
-            or payload.get("doc_id")
-            or payload.get("path")
-            or payload.get("trace_id")
-            or str(point.get("id"))
-        )
-        rows.append(
-            {
-                "x": round(xyz[0] / max_abs[0], 4),
-                "y": round(xyz[1] / max_abs[1], 4),
-                "z": round(xyz[2] / max_abs[2], 4),
-                "role": str(payload.get("role") or payload.get("kind") or "knowledge"),
-                "label": str(label)[:160],
-                "node": str(payload.get("node_id") or node),
-                "run_id": payload.get("run_id"),
-            }
-        )
-    return rows
 
 
 def api_surface(config: dict[str, Any]) -> dict[str, Any]:
@@ -588,50 +495,19 @@ def api_step89(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
 
 
 def api_qdrant(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
+    module = load_vector_view()
     try:
-        root = qdrant_request(config, role_root, "GET", "/")
-        listing = qdrant_request(config, role_root, "GET", "/collections")
+        view = module.VectorView.from_config(config, role_root)
+        version = view.version()
+        collections = view.collections()
     except Exception as exc:
-        return {"ok": False, "error": f"Qdrant unavailable: {exc}"}
-    names = []
-    for row in (listing or {}).get("result", {}).get("collections", []):
-        if isinstance(row, dict) and row.get("name"):
-            name = str(row["name"])
-            if allowed_collection(name, config):
-                names.append(name)
-    collections = []
-    for name in sorted(names)[:20]:
-        try:
-            info = qdrant_request(config, role_root, "GET", f"/collections/{urllib.parse.quote(name)}")
-        except Exception:
-            info = None
-        detail = (info or {}).get("result", {}) if isinstance(info, dict) else {}
-        vectors = ((detail.get("config") or {}).get("params") or {}).get("vectors")
-        vector_size = None
-        distance = None
-        if isinstance(vectors, dict) and vectors:
-            first = next(iter(vectors.values()))
-            if isinstance(first, dict):
-                vector_size = first.get("size")
-                distance = first.get("distance")
-        elif isinstance(vectors, dict):
-            vector_size = vectors.get("size")
-            distance = vectors.get("distance")
-        collections.append(
-            {
-                "name": name,
-                "status": detail.get("status"),
-                "points_count": detail.get("points_count"),
-                "vectors_count": detail.get("vectors_count"),
-                "vector_size": vector_size,
-                "distance": distance,
-            }
-        )
+        message = getattr(exc, "message", str(exc))
+        return {"ok": False, "error": f"Qdrant unavailable: {message}"}
     return {
         "ok": True,
-        "version": (root or {}).get("version") if isinstance(root, dict) else None,
-        "uri": (config.get("qdrant") or {}).get("uri"),
-        "api_key": "configured" if qdrant_key(config, role_root) else "not-configured",
+        "version": version,
+        "uri": view.uri,
+        "api_key": "configured" if view.api_key_configured else "not-configured",
         "collections": collections,
         "map_collections": config.get("qdrant", {}).get("map_collections", []),
         "read_only": True,
@@ -641,25 +517,24 @@ def api_qdrant(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
 def api_map(config: dict[str, Any], role_root: Path, collection: str | None) -> tuple[int, dict[str, Any]]:
     if not collection:
         return 200, {"ok": False, "error": "collection is required"}
-    if not allowed_collection(collection, config):
-        return 403, {"ok": False, "error": "collection is outside this surface"}
+    module = load_vector_view()
     try:
-        result = qdrant_request(
-            config,
-            role_root,
-            "POST",
-            f"/collections/{urllib.parse.quote(collection)}/points/scroll",
-            {"limit": MAX_POINTS, "with_payload": True, "with_vector": True},
-        )
+        view = module.VectorView.from_config(config, role_root)
+        points = view.sample(collection, MAX_POINTS)
+        stamp = view.stamp(collection)
+    except module.VectorViewError as exc:
+        if exc.code == "collection-not-allowed":
+            return 403, {"ok": False, "error": exc.message}
+        return 200, {"ok": False, "error": exc.message, "points": []}
     except Exception as exc:
         return 200, {"ok": False, "error": f"Qdrant unavailable: {exc}", "points": []}
-    points = (result or {}).get("result", {}).get("points", []) if isinstance(result, dict) else []
-    rows = project_points([point for point in points if isinstance(point, dict)], str(config.get("node")))
+    rows = module.project_points(points, str(config.get("node")))
     return 200, {
         "ok": True,
         "collection": collection,
         "projection": "deterministic-random-3d-pilot",
         "note": "Pilot projection, not UMAP. Replace with the UMAP pipeline in a later step.",
+        "index": {"status": "stamped" if stamp else "unstamped", "stamp": stamp},
         "points": rows,
     }
 

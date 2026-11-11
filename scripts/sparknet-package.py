@@ -17,8 +17,6 @@ from sparknet_loader import load_shared
 PACKAGE = load_shared("sparknet-package.py", "sparknet_package_cli")
 AUTHZ = load_shared("sparknet-authz.py", "sparknet_authz_package_cli")
 HTTP = load_shared("sparknet-http.py", "sparknet_http_package_cli")
-SKIP_PARTS = {".git", ".state", "keys", "manifests", "__pycache__", ".pytest_cache", ".ruff_cache"}
-SKIP_NAMES = {"secrets-index.json", "user-env-manifest.json", ".env"}
 
 
 def _dep(value: str) -> dict[str, str]:
@@ -77,27 +75,6 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _artifacts(root: Path) -> list[dict]:
-    rows = []
-    for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.is_symlink() or any(part in SKIP_PARTS for part in path.parts):
-            continue
-        if path.name in SKIP_NAMES:
-            continue
-        data = path.read_bytes()
-        rows.append(
-            {
-                "path": path.relative_to(root).as_posix(),
-                "sha256": hashlib.sha256(data).hexdigest(),
-                "size": len(data),
-                "mode": path.stat().st_mode & 0o777,
-            }
-        )
-    if not rows:
-        raise PACKAGE.PackageError("bad-artifact", "root contains no artifacts")
-    return rows
-
-
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
@@ -105,13 +82,13 @@ def main(argv: list[str] | None = None) -> int:
             root = Path(args.root).resolve()
             if not root.is_dir():
                 raise PACKAGE.PackageError("malformed-package", f"root is not a directory: {root}")
-            package = PACKAGE.make_package(
+            package = PACKAGE.make_package_from_directory(
+                root,
                 package_id=args.package_id,
                 version=args.version,
-                artifacts=_artifacts(root),
-                dependencies=args.dep,
-                description=args.description,
                 signer_node_id=args.signer,
+                description=args.description,
+                dependencies=args.dep,
             )
             Path(args.out).write_text(json.dumps(package, indent=2, sort_keys=True) + "\n", encoding="utf-8")
             print(json.dumps({"package": package["package_id"], "version": package["version"], "out": args.out}))

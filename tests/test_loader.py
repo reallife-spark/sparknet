@@ -63,3 +63,27 @@ def test_missing_required_file_uses_the_callers_error(tmp_path):
 
     with pytest.raises(Refusal, match="cannot locate"):
         load_shared("absent.py", "sparknet_absent_module", dirs=[tmp_path], error=Refusal)
+
+
+def test_shared_dir_environment_accepts_a_directory_or_a_root(tmp_path, monkeypatch):
+    marker = "tmp_loader_env_probe.py"
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    (shared / marker).write_text("VALUE = 'loaded'\n", encoding="utf-8")
+    monkeypatch.delenv("VAULT_PATH", raising=False)
+
+    monkeypatch.setenv("SPARKNET_SHARED_DIR", str(shared))
+    direct = load_shared(marker, "sparknet_env_direct_probe", missing_ok=True)
+    assert direct is not None and direct.VALUE == "loaded"
+
+    sys.modules.pop("sparknet_env_root_probe", None)
+    monkeypatch.setenv("SPARKNET_SHARED_DIR", str(tmp_path))
+    root = load_shared(marker, "sparknet_env_root_probe", missing_ok=True)
+    assert root is not None and root.VALUE == "loaded"
+
+
+def test_loader_accepts_the_deployed_shared_path() -> None:
+    from sparknet_loader import candidates
+
+    paths = [str(path) for path in candidates("sparknet-authz.py")]
+    assert "/srv/sparknet/shared/sparknet-authz.py" in paths

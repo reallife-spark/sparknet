@@ -40,6 +40,48 @@ def test_contract_vocabularies_match_the_module():
     assert schema["package"]["schema"] == package.PACKAGE_SCHEMA
     assert schema["index"]["schema"] == package.INDEX_SCHEMA
     assert set(schema["refusal_codes"]) >= {"dependency-cycle", "unknown-package", "bad-digest"}
+    assert set(schema["artifact_selection"]["default_exclude_parts"]) == package.DEFAULT_EXCLUDE_PARTS
+    assert set(schema["artifact_selection"]["default_exclude_names"]) == package.DEFAULT_EXCLUDE_NAMES
+
+
+def test_directory_package_owns_excludes_and_never_follows_symlinks(tmp_path):
+    root = tmp_path / "package"
+    (root / "bin").mkdir(parents=True)
+    (root / "bin" / "tool").write_text("tool", encoding="utf-8")
+    (root / ".env").write_text("HOST_LOCAL=1", encoding="utf-8")
+    (root / "secrets-index.json").write_text("{}", encoding="utf-8")
+    (root / ".git").mkdir()
+    (root / ".git" / "config").write_text("no", encoding="utf-8")
+    (root / "keys").mkdir()
+    (root / "keys" / "node.key").write_text("no", encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside.write_text("outside", encoding="utf-8")
+    (root / "bin" / "link").symlink_to(outside)
+
+    built = package.make_package_from_directory(
+        root,
+        package_id="tool",
+        version="1.0.0",
+        signer_node_id="master",
+    )
+    assert [artifact["path"] for artifact in built["artifacts"]] == ["bin/tool"]
+
+
+def test_directory_package_refuses_an_empty_or_symlink_only_root(tmp_path):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    with pytest.raises(package.PackageError) as refused:
+        package.make_package_from_directory(empty, package_id="tool", version="1.0.0", signer_node_id="master")
+    assert refused.value.code == "bad-artifact"
+
+    linked = tmp_path / "linked"
+    linked.mkdir()
+    outside = tmp_path / "outside"
+    outside.write_text("outside", encoding="utf-8")
+    (linked / "link").symlink_to(outside)
+    with pytest.raises(package.PackageError) as symlink_only:
+        package.make_package_from_directory(linked, package_id="tool", version="1.0.0", signer_node_id="master")
+    assert symlink_only.value.code == "bad-artifact"
 
 
 def test_package_is_canonical_and_artifact_verified():

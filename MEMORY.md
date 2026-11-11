@@ -2,12 +2,19 @@
 > Standing state only. Read at session start; **replace, never append**.
 > History belongs in `log.md` and `sessions/YYYY-MM-DD.md`; pre-2026-10-31
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
-Updated: 2026-11-10
+Updated: 2026-11-11
 ## Plan cursor
-- `PLAN.md` — `current: done`; Steps 91, 92 and 93 complete, including live Step 91/19/28 legs. goSpark `970d714`, peer `a5f80e7`, master `ea4822a`, root code `7b7ae6b`, goagx `c3efd98` published; the follow-up republish carries the console CSS/node-label fixes.
-- Step 91 and role Steps 19/28 are complete, including the live issue, triage and browser legs. Steps 18/27 are closed as delivered by Step 89.
-- Critical open items: run the 9G nocturnal window; peer precommit still reports `peer-node/02_Daily/2026-11-02.md`.
-- Phase 8 remains closed: 54 fixed, 186 reviewed-clean, 176 test-verified; register and inventory in `_archives/`.
+- `PLAN.md` — `current: done`; Step 95 closed the seven deep-module audit
+  findings (Go capability drift, registry acceptance seam, loader resolution,
+  console vector view, contract-test split, package artifacts, ADR-0014).
+- Source gates green: `make test-all`, `CI_QUICK=1 make ci`, contract/render/
+  SBOM/validate, lint/format/shellcheck. Role and Go submodule changes are
+  uncommitted; the cross-repo commit and submodule pin are not made.
+- Critical open items: goagx republish is pending (it also carries the earlier
+  sandbox-contract drift); run the 9G nocturnal window; peer precommit still
+  reports `peer-node/02_Daily/2026-11-02.md`.
+- Phase 8 remains closed: 54 fixed, 186 reviewed-clean, 176 test-verified;
+  register and inventory in `_archives/`.
 ## Live fabric
 - **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`). Peer egress only to Master.
 - Master: signer/ledger/parity, 8088 admin, 8098 console, 8090/8091 intake, 4220–4223, 4201/4202 share, 4204 engine, Qdrant 6333, teacher.

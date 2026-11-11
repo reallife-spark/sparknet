@@ -119,7 +119,7 @@
       "contract": "package-schema",
       "file": "package-schema.json",
       "schema_version": "1.0",
-      "sha256": "9d0e8bfefe84b150517c28aeccd85fe07ce8efd5a8820f5a38a8382fa05c6249"
+      "sha256": "cccce27751e594dffa07a27922ad8ef4b122ce47c60ea8b35347da8897268ae7"
     },
     {
       "contract": "pipeline-schema",

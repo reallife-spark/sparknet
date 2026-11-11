@@ -16,8 +16,16 @@ shared module reintroduces its own ``spec_from_file_location`` copy.
 Resolution order for ``filename`` (first hit wins):
 
 1. each explicit ``dirs`` entry, if given — else this module's own directory;
-2. ``$SPARKNET_SHARED_DIR/shared`` and its parent's ``shared/``;
-3. ``$VAULT_PATH/shared`` and its parent's ``shared/``.
+2. ``$SPARKNET_SHARED_DIR`` itself, then ``$SPARKNET_SHARED_DIR/shared`` and
+   its parent's ``shared/`` — the environment value may name the shared
+   directory or a root that contains one;
+3. ``$SPARKNET_FABRIC_ROOT/shared`` and its parent's ``shared/``;
+4. ``$VAULT_PATH/shared`` and its parent's ``shared/``;
+5. the standard role/bundle layouts beside this module and
+   ``/srv/sparknet/shared``.
+
+A candidate is deduplicated by its absolute path, so a value that matches an
+earlier rule does not cause a second probe.
 
 Modules are cached in ``sys.modules`` under ``modname`` and returned as-is on a
 second call, so two callers never end up with two module objects (two
@@ -39,8 +47,6 @@ from typing import Any
 #: This module's own directory — ``shared/`` in a checkout.
 DEFAULT_SHARED_DIR = Path(__file__).resolve().parent
 
-_ENV_DIRS = ("SPARKNET_SHARED_DIR", "VAULT_PATH")
-
 
 def _env(name: str) -> str | None:
     raw = os.environ.get(name, "").strip()
@@ -50,12 +56,29 @@ def _env(name: str) -> str | None:
 def candidates(filename: str, dirs: Iterable[Path] | None = None) -> list[Path]:
     """Every path ``filename`` might live at, in resolution order."""
     roots: list[Path] = [Path(d) for d in dirs] if dirs else [DEFAULT_SHARED_DIR]
-    for env in _ENV_DIRS:
-        raw = _env(env)
-        if raw:
-            roots.append(Path(raw) / "shared")
-            roots.append(Path(raw).parent / "shared")
-    return [root / filename for root in roots]
+    raw_shared = _env("SPARKNET_SHARED_DIR")
+    if raw_shared:
+        # The name says "shared directory", but a deployment may set it to the
+        # parent that contains ``shared/``. Accept both without making every
+        # caller carry its own resolver.
+        roots.extend([Path(raw_shared), Path(raw_shared) / "shared", Path(raw_shared).parent / "shared"])
+    raw_fabric = _env("SPARKNET_FABRIC_ROOT")
+    if raw_fabric:
+        roots.extend([Path(raw_fabric) / "shared", Path(raw_fabric).parent / "shared"])
+    raw_vault = _env("VAULT_PATH")
+    if raw_vault:
+        roots.extend([Path(raw_vault) / "shared", Path(raw_vault).parent / "shared"])
+    roots.extend([DEFAULT_SHARED_DIR.parent / "shared", Path("/srv/sparknet/shared")])
+
+    seen: set[Path] = set()
+    paths: list[Path] = []
+    for root in roots:
+        resolved = root.absolute()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        paths.append(resolved / filename)
+    return paths
 
 
 def load_by_path(name: str, path: Path, *, error: type[Exception] = ImportError, message: str | None = None) -> Any:

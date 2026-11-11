@@ -65,10 +65,28 @@
       "packages"
     ]
   },
+  "artifact_selection": {
+    "default_exclude_parts": [
+      ".git",
+      ".state",
+      "keys",
+      "manifests",
+      "__pycache__",
+      ".pytest_cache",
+      ".ruff_cache"
+    ],
+    "default_exclude_names": [
+      "secrets-index.json",
+      "user-env-manifest.json",
+      ".env"
+    ],
+    "rule": "A directory package walks the root, never follows a symlink, skips an excluded part or name, and refuses an empty result. The exclusions are a package-integrity rule, not a CLI convenience."
+  },
   "rules": [
     "A package is data; installation is an explicit operator action.",
     "Artifact paths are relative and stay inside the package root.",
     "Every artifact carries a sha256 and a size.",
+    "A directory package never follows a symlink and excludes the contracted host-local paths.",
     "Dependencies are closed: an index install plan refuses an unknown package or version.",
     "Dependency ordering is deterministic and cycle detection fails closed.",
     "A signature proves provenance; it grants no capability and executes nothing."

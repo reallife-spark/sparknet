@@ -332,3 +332,80 @@ def test_private_key_encodings_differ_by_design(tmp_path: Path) -> None:
     kp = _authz("generate-keypair", cwd=tmp_path)
     fab_priv = kp.stdout.split()[0]
     assert len(base64.b64decode(fab_priv)) == 32, "the fabric stores a 32-byte seed"
+
+
+@requires_tools
+@pytest.mark.parametrize("capability", ["issue-report", "sandbox-supervise"])
+def test_new_capabilities_cross_the_language_boundary(tmp_path: Path, capability: str) -> None:
+    """Both sides must know a capability before a valid grant can be used.
+
+    `issue-report` and `sandbox-supervise` were added to the contract after the
+    first Go snapshot. A registry entry carrying either one is a normal signed
+    grant; if Go's vocabulary is stale, the entry is refused as unknown even
+    though Python accepts it. Exercise both directions so the two vocabularies
+    cannot drift again without a red test.
+    """
+    _keygen(tmp_path, "node-a", "node.key", "-role", "peer", "-overlay", "10.100.0.7")
+    identity = _identity_json(tmp_path / "node.key")
+    (tmp_path / "node.identity.json").write_text(json.dumps(identity))
+
+    kp = _authz("generate-keypair", cwd=tmp_path)
+    priv_b64, pub_b64 = kp.stdout.split()
+    (tmp_path / "master.priv.b64").write_text(priv_b64)
+
+    # Leg A: Python signs, Go verifies.
+    sign = _authz(
+        "sign",
+        "node.identity.json",
+        "--master-key",
+        "master.priv.b64",
+        "--capabilities",
+        capability,
+        "--out",
+        "entry.py.json",
+        cwd=tmp_path,
+    )
+    assert sign.returncode == 0, sign.stderr
+    entry = json.loads((tmp_path / "entry.py.json").read_text())
+    _write_registry(tmp_path / "reg.py.json", pub_b64, entry)
+    verify = _ctl(
+        "registry",
+        "verify",
+        "-registry",
+        "reg.py.json",
+        "-master-pub",
+        pub_b64,
+        cwd=tmp_path,
+    )
+    assert verify.returncode == 0, verify.stdout + verify.stderr
+    assert "nodes=1" in verify.stdout
+
+    # Leg B: Go signs, Python verifies.
+    _keygen(tmp_path, "master", "master.key", "-role", "master")
+    sign = _ctl(
+        "registry",
+        "sign",
+        "-master-key",
+        "master.key",
+        "-node-key",
+        "node.key",
+        "-caps",
+        capability,
+        "-out",
+        "reg.go.json",
+        cwd=tmp_path,
+    )
+    assert sign.returncode == 0, sign.stderr
+    master_pub = json.loads((tmp_path / "master.key").read_text())["public_key_b64"]
+    (tmp_path / "master.pub.b64").write_text(master_pub)
+    verify = _authz(
+        "verify",
+        "node.identity.json",
+        "--registry",
+        "reg.go.json",
+        "--master-pubkey",
+        "master.pub.b64",
+        cwd=tmp_path,
+    )
+    assert verify.returncode == 0, verify.stdout + verify.stderr
+    assert json.loads(verify.stdout)["allowed"] is True

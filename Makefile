@@ -102,7 +102,7 @@ test: test-all ## Alias for test-all
 # master's parity and spec boundary, then the vendored skills.
 test-all: ## Run every suite in the repository
 	@echo "=== contract ==="
-	@$(PY) -m pytest tests/test_contracts.py -q
+	@$(PY) -m pytest tests/contracts -q
 	@echo
 	@echo "=== memory ==="
 	@$(MAKE) --no-print-directory memory-check

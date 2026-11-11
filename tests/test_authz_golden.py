@@ -1,7 +1,7 @@
 """Pinned, keyless deterministic outputs of the shared signing implementation.
 
-Split out of `tests/test_contracts.py`; shares its fixtures and `load` helper
-via `tests/contract_helpers.py`.
+Split out of the contract suite; shares its fixtures and `load` helper via
+`tests/contract_helpers.py`.
 """
 
 from __future__ import annotations

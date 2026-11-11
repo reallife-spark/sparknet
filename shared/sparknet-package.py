@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sys
 from collections.abc import Mapping, Sequence
@@ -25,6 +26,26 @@ INDEX_SCHEMA = "sparknet-package-index/1"
 PACKAGE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:[.-][0-9A-Za-z.-]+)?$")
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
+
+#: Directories a directory package never walks. The list is a package-integrity
+#: rule, not a CLI convenience: a leaked `.state`, key directory or cache would
+#: turn a signed package into a secret-distribution mechanism.
+DEFAULT_EXCLUDE_PARTS = frozenset(
+    {
+        ".git",
+        ".state",
+        "keys",
+        "manifests",
+        "__pycache__",
+        ".pytest_cache",
+        ".ruff_cache",
+    }
+)
+
+#: Files a directory package never includes. `.env`, the secrets index and the
+#: user-environment manifest are host-local or secret-shaped and must not ride a
+#: package manifest.
+DEFAULT_EXCLUDE_NAMES = frozenset({"secrets-index.json", "user-env-manifest.json", ".env"})
 
 
 class PackageError(Exception):
@@ -116,6 +137,75 @@ def _timestamp(value: Any) -> datetime:
 
 def _iso(moment: datetime) -> str:
     return moment.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def artifacts_from_directory(
+    root: Path | str,
+    *,
+    exclude_parts: Sequence[str] | None = None,
+    exclude_names: Sequence[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Build the artifact rows for every regular file under ``root``.
+
+    Symlinks are never followed: a link could point outside the package root,
+    and a package manifest must describe only bytes the packager actually read.
+    The default exclusions are the package-integrity rule; callers may narrow
+    them for a deliberate package but cannot make the walk follow a symlink.
+    """
+    base = Path(root).resolve()
+    if not base.is_dir():
+        raise PackageError("bad-artifact", f"root is not a directory: {base}")
+    excluded_parts = set(DEFAULT_EXCLUDE_PARTS if exclude_parts is None else exclude_parts)
+    excluded_names = set(DEFAULT_EXCLUDE_NAMES if exclude_names is None else exclude_names)
+    rows: list[dict[str, Any]] = []
+    for current, directories, filenames in os.walk(base, followlinks=False):
+        directories[:] = sorted(name for name in directories if name not in excluded_parts)
+        for name in sorted(filenames):
+            if name in excluded_names:
+                continue
+            path = Path(current) / name
+            if path.is_symlink() or not path.is_file():
+                continue
+            data = path.read_bytes()
+            rows.append(
+                {
+                    "path": path.relative_to(base).as_posix(),
+                    "sha256": hashlib.sha256(data).hexdigest(),
+                    "size": len(data),
+                    "mode": path.stat().st_mode & 0o777,
+                }
+            )
+    if not rows:
+        raise PackageError("bad-artifact", "root contains no artifacts")
+    return sorted(rows, key=lambda row: row["path"])
+
+
+def make_package_from_directory(
+    root: Path | str,
+    *,
+    package_id: str,
+    version: str,
+    signer_node_id: str,
+    description: str = "",
+    dependencies: Sequence[Mapping[str, Any]] = (),
+    created_at: datetime | None = None,
+    exclude_parts: Sequence[str] | None = None,
+    exclude_names: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    """Turn a directory into a validated package with one artifact walk."""
+    return make_package(
+        package_id=package_id,
+        version=version,
+        artifacts=artifacts_from_directory(
+            root,
+            exclude_parts=exclude_parts,
+            exclude_names=exclude_names,
+        ),
+        dependencies=dependencies,
+        description=description,
+        signer_node_id=signer_node_id,
+        created_at=created_at,
+    )
 
 
 def make_package(

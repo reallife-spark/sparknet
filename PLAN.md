@@ -1,6 +1,6 @@
 ---
 title: sparknet Plan
-updated: 2026-11-10
+updated: 2026-11-11
 current: done
 ---
 
@@ -265,6 +265,39 @@ current: done
   - **Status 2026-11-10 — COMPLETE.** The glossary, ADR-0012 and ADR-0013 are
     the settled model; `current: done`. No contract, code, manifest, submodule,
     goagx or live change.
+
+## Step 95 — Deep-module audit remediation
+
+- [x] **Step 95** — Close the seven findings from the 2026-11-10 deep-module
+  audit and record the one design decision that should not be rushed.
+  - [x] **95A — Go capability catalog.** Add `issue-report` and
+    `sandbox-supervise` to the Go vocabulary and sensitive set; pin the Go
+    known/sensitive/Master-implied sets to `contracts/capabilities.json`; add
+    cross-language grants for both capabilities.
+  - [x] **95B — Registry acceptance.** Add `authz.accept_entry` as the one
+    acceptance seam for a remote entry, make `evaluate` use it, and replace the
+    five service-local copies with typed refusal mapping.
+  - [x] **95C — Loader resolution.** Make `sparknet_loader` own the standard
+    shared-directory policy; remove the role-service resolvers; guard against a
+    new one.
+  - [x] **95D — Vector view.** Add the stdlib-only shared read view and make the
+    console use it instead of a second Qdrant HTTP client.
+  - [x] **95E — Contract tests.** Split `tests/test_contracts.py` by contract
+    boundary under `tests/contracts/`; keep the old path as a thin inventory
+    marker; update both Makefile entry points.
+  - [x] **95F — Package artifacts.** Move the directory artifact walk and
+    exclusions into the shared package module; the CLI only parses arguments.
+  - [x] **95G — Authz decision.** ADR-0014 keeps `sparknet-authz.py` as one deep
+    module for this release and records the staged-split trigger.
+  - **DoD**: `make test-all`, `CI_QUICK=1 make ci`, `make contract-test`,
+    `make render-check`, `make sbom-check`, `make format-check`,
+    `make shellcheck` and `git diff --check` are green. The goagx republish is
+    a separate release step and remains pending; it is not part of this
+    source-change DoD.
+  - **Status 2026-11-11 — COMPLETE.** All seven local issues are `done`.
+    Source gates are green; the role and Go submodules carry uncommitted
+    changes, and the published goagx tree is behind the fabric tree. No live
+    claim.
 
 ## Standing verification rules
 
