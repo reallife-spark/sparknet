@@ -4,8 +4,9 @@
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
 Updated: 2026-11-11
 ## Plan cursor
-- `PLAN.md` — `current: done`; Step 96 closed: skill-eval record, promotion
-  gate, reviewer rubric, golden-diff harness and language policy; pushed.
+- `PLAN.md` — `current: done`; Step 96 closed (skill-eval record, gate,
+  reviewer rubric, golden-diff harness, language policy) and Step 97
+  restored the fabric dependency guard with a mutation proof.
 - Commits: goSpark `2e8b2be`; fabric `8f9bb08` and `df5c46a`; goagx `c77170b`
   pinned. Peer `24bee7d`, master `edc45eb` unchanged. `make drift-check` green.
 - Critical open items: GitHub mirror blocked by the PAT (`createIssue`), so

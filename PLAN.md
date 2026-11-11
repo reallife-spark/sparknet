@@ -370,6 +370,20 @@ current: done
     write in GitHub settings. Local `.scratch/issues/` stays canonical. No
     live claim.
 
+## Step 97 — Restore the fabric dependency guard
+
+- [x] **Step 97** — Restore `tests/test_services.py` at the fabric root, the
+  path both `pyproject.toml` and `requirements.txt` cite, with the allow-list
+  and mirror guards; prove each can fail.
+  - **DoD**: the guard fails when a stray dependency is added to either file
+    and passes after reverting; `make lint`, `make format-check` and the fabric
+    suite are green; both prose citations resolve to a real file.
+  - **Status 2026-11-11 — COMPLETE.** `tests/test_services.py` restored at the
+    cited path. Mutation 1 (`requests>=2` in `pyproject.toml`) failed both
+    guards; mutation 2 (`httpx>=0.27` in `requirements.txt`) failed only the
+    mirror guard; each reverted green. Full fabric suite, lint and format
+    green. No live claim.
+
 ## Standing verification rules
 
 - A gate that cannot fail is not a gate. Every claim needs a named test or a
