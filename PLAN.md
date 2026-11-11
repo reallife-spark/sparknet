@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
 updated: 2026-11-11
-current: done
+current: 96
 ---
 
 # sparknet — Active Plan
@@ -298,6 +298,75 @@ current: done
     `503a2f7`; goagx republished as `dcb84b4` and pinned. All four remotes are
     pushed; the release-pin commit is `ff2cd12`. GitHub issue mirroring remains
     blocked by the current PAT's missing Issues write. No live claim.
+
+## Step 96 — Skill-based feedback loops and evaluations
+
+- [ ] **Step 96** — Turn the installed Matt Pocock skills into recorded,
+  gating evaluations of AI work products and of the skills themselves, and
+  file the work local-first in all five repositories. Task-tracked in
+  `.scratch/issues/`; no live claim is made from this host.
+  - [x] **96A — Issues.** File `sparknet-issue/1` items in the fabric,
+    peer-node, gospark, master-node and goagx trackers; `.scratch/` is
+    canonical until the GitHub mirror's PAT can create issues.
+    **DoD**: every issue parses and redacts through
+    `shared/sparknet-issue.py`; the gospark tracker is gitignored like the
+    others.
+    **Status 2026-11-11 — COMPLETE.** 13 issues filed (8 fabric, 1 peer, 1
+    Go, 1 master, 1 goagx follow-up); all validated through the canonical
+    parser and redactor; `.scratch/` ignored in gospark like the other trees.
+  - [x] **96B — Eval record.** Add `contracts/skill-eval-schema.json` and the
+    stdlib-only `shared/sparknet-skill-eval.py`: canonical projection,
+    validation, digest binding and refused authority-shaped fields.
+    **DoD**: `tests/test_skill_eval.py` fails before the module exists and
+    passes after; `make render-check` is green.
+    **Status 2026-11-11 — COMPLETE.** RED was `FileNotFoundError` for the
+    absent module; GREEN is 15 passing records tests. `make render` registered
+    the contract and `make render-check` is green.
+  - [x] **96C — Promotion gate.** In gate mode
+    `sparknet-self-improve.evaluate()` requires a passing skill-eval verdict in
+    addition to benchmark thresholds; non-gate callers keep today's behaviour.
+    **DoD**: a fail, missing or invalid verdict blocks promotion; tests cover
+    gate and non-gate modes.
+    **Status 2026-11-11 — COMPLETE.** Gate mode returns `pending` for a
+    missing/warn/fail/invalid record and `rollback` still wins on a threshold
+    regression; non-gate output is byte-identical to the legacy shape. CLI
+    gains `--require-review` and `--skill-eval`; 13 tests pass.
+  - [x] **96D — Reviewer rubric.** The project plan template and the
+    project-reviewer delegate emit the record; the Go delegate broker
+    validates and persists it. Cross-role commit series.
+    **DoD**: peer and gospark tests green; `make contract-test` green.
+    **Status 2026-11-11 — COMPLETE.** The template names the rubric; `project
+    report --require-review` validates a record from a file or the run result
+    and refuses missing/invalid/failing verdicts without writing a page. The
+    Go broker validates and stores `skill_eval`, fails the run on an invalid
+    record, and the contract snapshot/PROVENANCE moved with it. gospark
+    `make ci` and `make contract-test` green. Peer issue resolved as no
+    peer-local code path.
+  - [x] **96E — Skill self-eval.** Golden diffs under `tests/skill-evals/` and
+    the offline, deterministic `scripts/sparknet-skill-eval.py` runner with an
+    explicit abstain path.
+    **DoD**: a mutation check proves the eval can fail; results are
+    `sparknet-skill-eval/1` records.
+    **Status 2026-11-11 — COMPLETE.** Four golden cases; precision/recall
+    reported; records validate; `make skill-eval` is the entry point; disabling
+    a rule turns the run red (exit 2, verdict `fail`). Live model scoring stays
+    in the nocturnal issue.
+  - [x] **96F — Language policy.** Record the Go/Python/HTTP target and the
+    shell forward rule in `STYLE_GUIDE.md`; the shell migrations and the
+    nocturnal live loop remain open issues and get their own step when
+    scheduled, because their DoD needs dated target-host verification.
+    **DoD**: docs gates green; no behavior change.
+    **Status 2026-11-11 — COMPLETE.** `STYLE_GUIDE.md` now states the target
+    split and the forward rule: new logic in Python/Go, shell stays thin.
+  - **DoD**: `make test-all`, `CI_QUICK=1 make ci`, `make contract-test`,
+    `make render-check`, `make drift-check` and `git diff --check` are green;
+    no live claim is made from this host.
+  - **Status 2026-11-11 — slices complete; release pending.** 96A–96F are
+    verified. The step stays `current: 96` because the DoD includes a green
+    `make drift-check`: the only failing sub-gate is `goagx-drift-check`
+    (105 changed lines), expected until `make goagx-publish` republishes the
+    distribution. Commits and the release were not requested; the working
+    trees hold the verified changes. No live claim.
 
 ## Standing verification rules
 

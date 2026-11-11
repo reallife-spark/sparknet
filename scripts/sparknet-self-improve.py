@@ -60,6 +60,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--state-dir", default=os.environ.get("SPARKNET_SELF_IMPROVE_STATE", ""))
     parser.add_argument("--key-file", default="")
     parser.add_argument("--promote", action="store_true", help="fast-forward the managed repo only on pass")
+    parser.add_argument(
+        "--require-review",
+        action="store_true",
+        help="promote only when a valid, passing skill-eval record is supplied",
+    )
+    parser.add_argument("--skill-eval", default="", help="path to a sparknet-skill-eval/1 JSON record")
     parser.add_argument("--source-branch", default="", help="source branch for the GitFlow edge (default: current)")
     parser.add_argument("--target-branch", default="", help="target branch for the GitFlow edge (default: current)")
     parser.add_argument("--timeout", type=int, default=900)
@@ -107,7 +113,13 @@ def main(argv: list[str] | None = None) -> int:
                 "benchmark-missing", "benchmark did not write a metrics JSON object to stdout"
             )
         thresholds = _thresholds(args.thresholds)
-        verdict = IMPROVE.evaluate(metrics, thresholds)
+        skill_eval = None
+        if args.skill_eval:
+            try:
+                skill_eval = json.loads(Path(args.skill_eval).read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise IMPROVE.SelfImproveError("review-invalid", f"cannot read the skill-eval record: {exc}") from exc
+        verdict = IMPROVE.evaluate(metrics, thresholds, skill_eval=skill_eval, gate=args.require_review)
         decision = "pending" if verdict["decision"] == "promote" and not args.promote else verdict["decision"]
         promoted = None
         if decision == "promote":

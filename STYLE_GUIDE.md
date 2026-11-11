@@ -1,6 +1,6 @@
 ---
 title: sparknet Style Guide
-updated: 2026-10-17
+updated: 2026-11-11
 ---
 
 # sparknet — style guide
@@ -44,6 +44,23 @@ were working from, so the next agent can see the search happened.
   no side effects) — `tests/test_shell.py` runs all of them.
 - Runtime caches live in `$OPENCODE_DATA_DIR`; logs go to `/mnt/log/`; nothing
   is deleted from `_raw/`.
+
+### Language policy
+
+The supported target is **Go for the control/service plane, Python for the
+compute/services/vault plane, HTTP/QUIC for the channel between them**
+(goSpark ADR 0001). That split already holds: Go lives only in `gospark`,
+Python carries the fabric and both roles, and the TypeScript/JavaScript files
+are the two platform adapters (an OpenCode plugin and the Open WebUI console)
+that cannot be written in either.
+
+- **New logic goes in Python or Go.** Shell stays thin process orchestration:
+  argument handling, an `exec`, a systemd wrapper. Do not add parsing,
+  branching business logic, JSON handling or state machines to a `.sh` file.
+- The large existing shell scripts are migration candidates, not new homes:
+  anything moved out of them lands in Python with a thin exec wrapper.
+- Do not add another language. A new browser or editor surface is a platform
+  adapter and must justify its dependency surface in its own ADR.
 
 ## 3. Python
 

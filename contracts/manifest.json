@@ -182,6 +182,12 @@
       "sha256": "8be1e8f681630a7e1757d3db372f8e64a93abb8b6e75a71890f4cbb0c3fb6d2e"
     },
     {
+      "contract": "skill-eval",
+      "file": "skill-eval-schema.json",
+      "schema_version": "1.0",
+      "sha256": "6154545e6bcd905cb506b26129df221171876a2684b9431f5561279267acd346"
+    },
+    {
       "contract": "step89-admin-schema",
       "file": "step89-admin-schema.json",
       "schema_version": "1.0",

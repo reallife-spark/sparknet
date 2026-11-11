@@ -35,6 +35,7 @@ sys.path.insert(0, str(SHARED))
 from sparknet_loader import load_shared  # noqa: E402 - path-loaded shared implementation
 
 prov = load_shared("sparknet-provenance.py", "sparknet_provenance_project")
+SKILL_EVAL = load_shared("sparknet-skill-eval.py", "sparknet_skill_eval_project")
 
 
 def now() -> str:
@@ -147,7 +148,9 @@ delegates: [{delegates}]
 
 - `project-orchestrator` decomposes the request.
 - `project-researcher` gathers evidence.
-- `project-reviewer` checks the result.
+- `project-reviewer` applies the code-review, tdd and impl-validator rubrics
+  (`.opencode/skills/<name>/SKILL.md`) and returns one
+  `sparknet-skill-eval/1` record (`contracts/skill-eval-schema.json`).
 - `report-writer` drafts the report.
 """
     (directory / "PROJECT.md").write_text(project, encoding="utf-8")
@@ -162,8 +165,10 @@ updated: {now()}
 
 - [ ] Define the deliverable and its evidence.
 - [ ] Run the bounded delegate plan.
-- [ ] Review the result.
-- [ ] Approve and file the report.
+- [ ] Review the result against the code-review/tdd/impl-validator rubrics and
+      record a `sparknet-skill-eval/1` verdict.
+- [ ] Approve and file the report (blocked unless the verdict is `pass` when
+      `--require-review` is used).
 """
     (directory / "PLAN.md").write_text(plan, encoding="utf-8")
     sign_in_vault(root, directory / "PLAN.md")
@@ -273,6 +278,23 @@ def cmd_report(args: argparse.Namespace) -> int:
     run = _run_view(root, args.run_id)
     result = run.get("result") or {}
     task = run.get("task") or {}
+    if args.require_review:
+        record = None
+        if args.skill_eval:
+            try:
+                record = json.loads(Path(args.skill_eval).read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise SystemExit(f"cannot read the skill-eval record: {exc}") from exc
+        else:
+            record = result.get("skill_eval")
+        if record is None:
+            raise SystemExit("review required but no skill-eval record was supplied or returned")
+        try:
+            SKILL_EVAL.validate_record(record)
+        except SKILL_EVAL.SkillEvalError as exc:
+            raise SystemExit(f"invalid skill-eval record: {exc}") from exc
+        if record["verdict"] != "pass":
+            raise SystemExit(f"review verdict is {record['verdict']}; a report needs a pass")
     slug = re.sub(r"[^a-z0-9]+", "-", (args.title or "report").lower()).strip("-") or "report"
     destination = directory / "REPORTS" / f"{datetime.now(timezone.utc).strftime('%Y-%m-%d')}-{slug}.md"
     if destination.exists() and not args.force:
@@ -379,6 +401,16 @@ def parser() -> argparse.ArgumentParser:
     report.add_argument("--run-id", required=True)
     report.add_argument("--title", default="")
     report.add_argument("--force", action="store_true")
+    report.add_argument(
+        "--require-review",
+        action="store_true",
+        help="refuse to file the report without a valid, passing skill-eval record",
+    )
+    report.add_argument(
+        "--skill-eval",
+        default="",
+        help="path to a sparknet-skill-eval/1 JSON record (default: the run result's skill_eval field)",
+    )
     report.set_defaults(func=cmd_report)
 
     status = sub.add_parser("status", help="show project and run status")

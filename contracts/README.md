@@ -15,6 +15,7 @@ the tests then prove both roles still agree.
 | `registry-schema.json` | the shape of the registry document and its entries: required fields, types, the `signature_b64` field name, and the decided distribution channel (a pointer to `registry-publication.json`) |
 | `registry-publication.json` | the channel that carries a registry: the five-field publication, the signed projection and digest, the monotonic sequence, the peer's acceptance order and refusal codes, and the documented re-delivery window |
 | `reflex-schema.json` | the typed decision contract for the reflex layer — a local sensor, never authority; abstain first-class, and a backend vocabulary with no egress member |
+| `skill-eval-schema.json` | the skill-evaluation record: a digest-bound pass/warn/fail verdict from a named review skill over a delegate run, self-improve candidate, plan, RFI answer or another skill. Audit evidence for the promotion gate; never authority and never knowledge (Step 96) |
 | `rfi-schema.json` | the request-for-information channel: the peer's overlay-attributed request, the Master's signed answer, the digest that binds its content, the `01_Inbox/` destination rule, the acceptance order and the refusal vocabulary. Both halves are built: the 8090 peer-intake request route and the Master's signed answer transport (fabric Steps 69C/70) |
 | `ports.json` | every listener and dial target, with `implementation_state` (code) kept separate from `runtime` (observed on a given host) |
 | `guard-protocol.md` | the Master↔peer approval conversation |

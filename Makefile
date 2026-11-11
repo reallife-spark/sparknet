@@ -45,7 +45,7 @@ SCOPE ?= fabric
         devtools webui-console model-catalog-check model-pull model-verify model-bench model-runtime-status model-runtime-start model-runtime-stop model-runtime-reap model-survey model-update-status model-set-candidate model-promote model-rollback \
         vector-dev vector-init vector-inspect \
         vector-index vector-stamp vector-query vector-parity kv-export reflex-eval reflex-live-check reflex-live-query \
-        reflex-plan-eval verify-plans env-init wiki-sync wiki-verify \
+        reflex-plan-eval skill-eval verify-plans env-init wiki-sync wiki-verify \
         wiki-preflight bundle bundle-verify status-plan clean dist submodules \
         role-skills role-skills-check understand-check keys-check shims-check hooks self-improve package-install
 
@@ -100,6 +100,9 @@ test: test-all ## Alias for test-all
 # Every suite in the repo, in the order a failure would matter: the contract
 # first (both roles depend on it), then the peer implementation, then the
 # master's parity and spec boundary, then the vendored skills.
+skill-eval: ## Golden-diff evaluation for the review skills (offline, deterministic)
+	@$(PY) scripts/sparknet-skill-eval.py
+
 test-all: ## Run every suite in the repository
 	@echo "=== contract ==="
 	@$(PY) -m pytest tests/contracts -q

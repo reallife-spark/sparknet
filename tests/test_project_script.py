@@ -34,6 +34,7 @@ prov = _load("sparknet_provenance_project_test", "sparknet-provenance.py")
 
 class Gateway(BaseHTTPRequestHandler):
     calls: ClassVar[list[dict]] = []
+    review: ClassVar[dict | None] = None
 
     def log_message(self, *args):
         return
@@ -49,6 +50,13 @@ class Gateway(BaseHTTPRequestHandler):
     def do_GET(self):
         self.calls.append({"method": "GET", "path": self.path})
         if "/v1/delegates/runs/run-1" in self.path:
+            result = {
+                "summary": "Option B wins on latency.",
+                "files_changed": ["NOTES/option-b.md"],
+                "verification": "pytest -q",
+            }
+            if self.review is not None:
+                result["skill_eval"] = self.review
             self._reply(
                 200,
                 {
@@ -58,11 +66,7 @@ class Gateway(BaseHTTPRequestHandler):
                         "status": "succeeded",
                         "harness": "command",
                         "task": {"description": "compare three options"},
-                        "result": {
-                            "summary": "Option B wins on latency.",
-                            "files_changed": ["NOTES/option-b.md"],
-                            "verification": "pytest -q",
-                        },
+                        "result": result,
                         "error": "",
                     },
                 },
@@ -139,3 +143,127 @@ def test_project_and_report_lifecycle(tmp_path: Path, monkeypatch) -> None:
 def report_path_name(completed: subprocess.CompletedProcess[str]) -> str:
     payload = json.loads(completed.stdout)
     return Path(payload["report"]).name
+
+
+# --- the reviewer gate on report filing ---------------------------------------
+
+REVIEW_RECORD = {
+    "eval_id": "review-alpha-1",
+    "skill": {"name": "code-review", "origin": "mattpocock"},
+    "subject": {"kind": "delegate-run", "ref": "run-1"},
+    "verdict": "pass",
+    "findings": [],
+    "evaluator": {"kind": "agent", "id": "project-reviewer"},
+    "created_at": "2026-11-11T00:00:00Z",
+}
+
+
+def _skill_eval():
+    return _load("sparknet_skill_eval_project_test", "sparknet-skill-eval.py")
+
+
+def _review(**overrides):
+    fields = dict(REVIEW_RECORD)
+    fields.update(overrides)
+    return _skill_eval().make_record(**fields)
+
+
+def _gated_vault(tmp_path: Path, monkeypatch):
+    vault = tmp_path / "vault"
+    shutil.copytree(PEER, vault, ignore=shutil.ignore_patterns(".git", ".state", ".opencode", "__pycache__"))
+    state = tmp_path / "state"
+    env = {**os.environ, "SPARKNET_STATE_DIR": str(state), "SPARKNET_OWNER_ID": "U-12345"}
+    monkeypatch.setenv("SPARKNET_STATE_DIR", str(state))
+    monkeypatch.setenv("SPARKNET_OWNER_ID", "U-12345")
+    prov.user_init(vault, owner_id="U-12345", force=True)
+    assert _run(["new", "alpha", "--title", "Alpha project"], vault, env).returncode == 0
+    token = state / "memory.local.token"
+    token.parent.mkdir(parents=True, exist_ok=True)
+    token.write_text("local-token-1234567890\n")
+    gateway = ThreadingHTTPServer(("127.0.0.1", 0), Gateway)
+    thread = threading.Thread(target=gateway.serve_forever, daemon=True)
+    thread.start()
+    env["SPARKNET_MEMORY_GATEWAY_URL"] = f"http://127.0.0.1:{gateway.server_port}"
+    return vault, env, gateway
+
+
+def _reports(vault: Path) -> list[Path]:
+    return sorted((vault / "06_Projects" / "alpha" / "REPORTS").glob("*.md"))
+
+
+def test_report_requires_review_when_asked_and_a_missing_record_blocks(tmp_path, monkeypatch):
+    vault, env, gateway = _gated_vault(tmp_path, monkeypatch)
+    try:
+        result = _run(["report", "alpha", "--run-id", "run-1", "--require-review"], vault, env)
+        assert result.returncode != 0
+        assert "review" in (result.stdout + result.stderr).lower()
+        assert _reports(vault) == []
+    finally:
+        gateway.shutdown()
+        gateway.server_close()
+
+
+def test_report_with_a_passing_record_is_written_and_does_not_embed_the_record(tmp_path, monkeypatch):
+    vault, env, gateway = _gated_vault(tmp_path, monkeypatch)
+    record = _review()
+    path = tmp_path / "review.json"
+    path.write_text(json.dumps(record))
+    try:
+        result = _run(
+            ["report", "alpha", "--run-id", "run-1", "--require-review", "--skill-eval", str(path)],
+            vault,
+            env,
+        )
+        assert result.returncode == 0, result.stderr
+        reports = _reports(vault)
+        assert len(reports) == 1
+        assert "review-alpha-1" not in reports[0].read_text()
+        assert prov.verify_note(reports[0], vault=vault)[0] == "valid"
+    finally:
+        gateway.shutdown()
+        gateway.server_close()
+
+
+def test_report_with_a_failing_or_tampered_record_is_refused(tmp_path, monkeypatch):
+    vault, env, gateway = _gated_vault(tmp_path, monkeypatch)
+    try:
+        failing = _review(
+            verdict="fail",
+            findings=[{"severity": "block", "rule": "review.defect", "message": "broken path"}],
+        )
+        path = tmp_path / "failing.json"
+        path.write_text(json.dumps(failing))
+        result = _run(
+            ["report", "alpha", "--run-id", "run-1", "--require-review", "--skill-eval", str(path)],
+            vault,
+            env,
+        )
+        assert result.returncode != 0
+        assert _reports(vault) == []
+
+        tampered = _review()
+        tampered["verdict"] = "warn"
+        path.write_text(json.dumps(tampered))
+        result = _run(
+            ["report", "alpha", "--run-id", "run-1", "--require-review", "--skill-eval", str(path)],
+            vault,
+            env,
+        )
+        assert result.returncode != 0
+        assert _reports(vault) == []
+    finally:
+        gateway.shutdown()
+        gateway.server_close()
+
+
+def test_report_can_read_the_review_from_the_run_result(tmp_path, monkeypatch):
+    vault, env, gateway = _gated_vault(tmp_path, monkeypatch)
+    Gateway.review = _review()
+    try:
+        result = _run(["report", "alpha", "--run-id", "run-1", "--require-review"], vault, env)
+        assert result.returncode == 0, result.stderr
+        assert len(_reports(vault)) == 1
+    finally:
+        Gateway.review = None
+        gateway.shutdown()
+        gateway.server_close()

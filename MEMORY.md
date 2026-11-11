@@ -4,14 +4,15 @@
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
 Updated: 2026-11-11
 ## Plan cursor
-- `PLAN.md` — `current: done`; Step 95 closed the seven audit findings (Go capability drift, registry acceptance seam, loader resolution, console vector view, contract-test split, package artifacts, ADR-0014).
-- Committed: goSpark `cd2d72a`, peer `24bee7d`, master `edc45eb`, fabric
-  `503a2f7`; goagx republished as `dcb84b4` and pinned. `make goagx-drift-check`
-  reports no drift.
-- Critical open items: 9G nocturnal window; peer precommit reports
-  `peer-node/02_Daily/2026-11-02.md`; GitHub mirror blocked by the PAT
-  (`createIssue`) — local `.scratch/issues/` is canonical, all Step 95 issues
-  `done`.
+- `PLAN.md` — `current: 96`: skill-eval record, promotion gate, reviewer
+  rubric across fabric/Go, golden-diff harness and language policy landed.
+  Working trees are uncommitted by request.
+- Committed baseline: goSpark `cd2d72a`, peer `24bee7d`, master `edc45eb`,
+  fabric `503a2f7`, goagx `dcb84b4`. `make drift-check` fails only at goagx
+  until `make goagx-publish` runs in the release step.
+- Critical open items: commit/publish Step 96; GitHub mirror blocked by the PAT
+  (`createIssue`), so `.scratch/issues/` is canonical; 9G nocturnal window;
+  peer precommit reports `peer-node/02_Daily/2026-11-02.md`.
 - Phase 8 remains closed: 54 fixed, 186 reviewed-clean, 176 test-verified;
   register and inventory in `_archives/`.
 ## Live fabric
@@ -34,6 +35,7 @@ Updated: 2026-11-11
 - Understand graph is a build artifact (`.ua/`); issues are work items (`.scratch/issues/`). Neither is knowledge or authority.
 - Understand graph: Python is the sole producer (`scan`/`build`/`merge`/`validate`/`diff`); Go consumes `query`/`export`/MCP and adapts `scan`/`diff`/`parse` through `shared/sparknet-understand.py`. Python core is split into `schema.py`, `production.py`, `algebra.py` behind the path-stable `core.py` facade.
 - Issue model: `shared/sparknet-issue.py` owns parse, redaction, validation, ledger, triage and projection; `shared/sparknet-authz.py` still owns the envelope/signature. Triage history is append-only `triage.jsonl`, derived `triage.json`.
+- Skill-eval model: `contracts/skill-eval-schema.json` + `shared/sparknet-skill-eval.py` is the one digest-bound pass/warn/fail record. Gate mode in `sparknet-self-improve.evaluate()` and `project report --require-review` require a passing record; the Go broker validates and stores it. `make skill-eval` runs the offline golden harness. Records are audit evidence: never authority, never knowledge.
 - Skill catalog: `scripts/skill_catalog/` owns copy/digest/manifest/host-path mechanics; the four sync scripts remain adapters and keep their external manifest shapes.
 - Architecture decisions recorded: issue module (root ADR 0009), skill catalog (root ADR 0010), core split (root ADR 0011), sandbox policy authority (root ADR 0013), graph producer/consumer (goSpark ADR 0018).
 - Live Step 91 evidence: `live-step91-issue` delivered peer `agx32` → Master `agx64` on `10.100.0.1:8090`, triaged `done`/`wontfix`; Master Issues and both Understand tabs rendered in Chromium.
@@ -54,6 +56,5 @@ Updated: 2026-11-11
 - `make ci`/`make test-all` are authoritative; full run >120 s.
 - Rebuild before `bundle-verify`; run `wiki-preflight` before wiki suite.
 - A long-running service loads `shared/` at start; restart after changing shared modules.
-- Do not commit the four pre-existing goSpark authz/identity changes without inspecting them first — they were committed in `b528abf`/`ff5dce2`; keep the checkout clean.
 ## Local vs live
 This development host has no GPU/overlay. Code, tests, contracts, ledger and bundles are verifiable here; WireGuard, iptables, `chattr +i`, systemd, signer and live election are target-host checks.

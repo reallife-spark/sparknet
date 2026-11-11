@@ -66,6 +66,7 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/registry-schema.json` | the shape of the signed node-authorization registry — fields, types, the `signature_b64` name |
 | `contracts/registry-publication.json` | the Master→peer registry publication channel: envelope, digest, sequence, refusals, the 60 s re-delivery window |
 | `contracts/reflex-schema.json` | the typed decision contract for the reflex layer — a local sensor, never authority; abstain first-class |
+| `contracts/skill-eval-schema.json` | the skill-evaluation record: a digest-bound pass/warn/fail verdict from a named review skill over a delegate run, self-improve candidate, plan, RFI answer or another skill — audit evidence for the promotion gate, never authority and never knowledge (Step 96) |
 | `contracts/rfi-schema.json` | the request-for-information channel: overlay-attributed request, signed digest-bound answer into `01_Inbox/`, acceptance order and refusals. The answer transport and the 8090 request route are built; the peer client and Master responder are the user-node step |
 | `contracts/ports.json` | which role listens where |
 | `contracts/guard-protocol.md` | the approval conversation |

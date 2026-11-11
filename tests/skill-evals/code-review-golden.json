@@ -1,0 +1,27 @@
+{
+  "schema": "sparknet-skill-eval-golden/1",
+  "skill": "code-review",
+  "rules": ["tdd.missing-test", "security.shell-true", "authority.second-copy"],
+  "cases": [
+    {
+      "id": "tdd-missing-test",
+      "diff": "--- a/shared/sparknet-widget.py\n+++ b/shared/sparknet-widget.py\n@@ -1,3 +1,4 @@\n def widget():\n-    return 1\n+    value = 2\n+    return value\n",
+      "expected": ["tdd.missing-test"]
+    },
+    {
+      "id": "security-shell-true",
+      "diff": "--- a/scripts/sparknet-runner.py\n+++ b/scripts/sparknet-runner.py\n@@ -1,3 +1,4 @@\n import subprocess\n-def run(cmd): return cmd\n+def run(cmd):\n+    return subprocess.run(cmd, shell=True)\n",
+      "expected": ["security.shell-true"]
+    },
+    {
+      "id": "authority-second-copy",
+      "diff": "--- /dev/null\n+++ b/master-node/services/sparknet-authz.py\n@@ -0,0 +1,2 @@\n+# a second authz implementation\n+def sign(): pass\n",
+      "expected": ["authority.second-copy"]
+    },
+    {
+      "id": "clean-test-only-change",
+      "diff": "--- a/tests/test_widget.py\n+++ b/tests/test_widget.py\n@@ -1,2 +1,4 @@\n def test_widget():\n-    pass\n+    assert widget() == 2\n+    assert widget() != 1\n",
+      "expected": []
+    }
+  ]
+}

@@ -9,9 +9,16 @@ runs a model by itself.
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Mapping
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from sparknet_loader import load_shared
+
+SKILL_EVAL = load_shared("sparknet-skill-eval.py", "sparknet_skill_eval")
 
 SCHEMA = "sparknet-self-improvement/1"
 MODES = ("worktree", "firecracker")
@@ -35,12 +42,37 @@ def _number(value: Any, code: str, field: str) -> float:
     return float(value)
 
 
-def evaluate(metrics: Mapping[str, Any], thresholds: Mapping[str, Any]) -> dict[str, Any]:
+def _review_row(skill_eval: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Validate the reviewer verdict; any doubt is a block, never a pass."""
+    if skill_eval is None:
+        return {"passed": False, "reason": "missing"}
+    if not isinstance(skill_eval, Mapping):
+        return {"passed": False, "reason": "invalid", "detail": "record must be an object"}
+    try:
+        record = SKILL_EVAL.validate_record(dict(skill_eval))
+    except SKILL_EVAL.SkillEvalError as exc:
+        return {"passed": False, "reason": "invalid", "detail": str(exc)}
+    verdict = record["verdict"]
+    return {"passed": verdict == "pass", "reason": verdict}
+
+
+def evaluate(
+    metrics: Mapping[str, Any],
+    thresholds: Mapping[str, Any],
+    *,
+    skill_eval: Mapping[str, Any] | None = None,
+    gate: bool = False,
+) -> dict[str, Any]:
     """Return a deterministic decision and per-metric evidence.
 
     A threshold is either a number (minimum candidate) or `{ "min": number }`.
     A metric is either a number (candidate) or `{ "baseline": number,
     "candidate": number }`. Every threshold metric is required.
+
+    In gate mode a promotion also needs a valid, passing skill-evaluation
+    record. A missing, invalid, warn or fail verdict yields ``pending``: the
+    candidate is neither promoted nor called a regression. A failed benchmark
+    threshold still yields ``rollback``, whatever the review says.
     """
     _require(isinstance(metrics, Mapping), "benchmark-missing", "metrics must be an object")
     _require(
@@ -74,7 +106,17 @@ def evaluate(metrics: Mapping[str, Any], thresholds: Mapping[str, Any]) -> dict[
                 "passed": ok,
             }
         )
-    return {"decision": "promote" if passed else "rollback", "metrics": rows}
+    review = _review_row(skill_eval) if gate else None
+    if not passed:
+        decision = "rollback"
+    elif review is not None and not review["passed"]:
+        decision = "pending"
+    else:
+        decision = "promote"
+    result: dict[str, Any] = {"decision": decision, "metrics": rows}
+    if review is not None:
+        result["review"] = review
+    return result
 
 
 def run_message(record: Mapping[str, Any]) -> bytes:

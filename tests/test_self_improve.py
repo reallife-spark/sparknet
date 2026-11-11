@@ -42,7 +42,7 @@ def _repo(tmp_path):
     return repo, patch, bench, key
 
 
-def _run(repo, patch, bench, key, *, score, promote):
+def _run(repo, patch, bench, key, *, score, promote, require_review=False, skill_eval_path=None):
     command = [
         sys.executable,
         str(SCRIPT),
@@ -63,6 +63,10 @@ def _run(repo, patch, bench, key, *, score, promote):
     ]
     if promote:
         command.append("--promote")
+    if require_review:
+        command.append("--require-review")
+    if skill_eval_path is not None:
+        command.extend(["--skill-eval", str(skill_eval_path)])
     return subprocess.run(command, capture_output=True, text=True, check=False)
 
 
@@ -86,3 +90,111 @@ def test_failing_run_rolls_back_and_leaves_repo_unchanged(tmp_path):
     assert (repo / "app.txt").read_text() == "old\n"
     state = repo.parent / "state" / "self-improve"
     assert not list((state / "worktrees").glob("*")) if (state / "worktrees").is_dir() else True
+
+
+# --- the skill-evaluation gate ------------------------------------------------
+
+BLOCK = {"severity": "block", "rule": "review.defect", "message": "the patch leaves a broken path"}
+WARN = {"severity": "warn", "rule": "review.naming", "message": "the name hides the intent"}
+
+
+def _review(*, verdict="pass", findings=None, **overrides):
+    skill_eval = _load("skill_eval_for_improve_test", "sparknet-skill-eval.py")
+    fields = {
+        "eval_id": "review-1",
+        "skill": {"name": "code-review", "origin": "mattpocock"},
+        "subject": {"kind": "self-improve-candidate", "ref": "candidate/1"},
+        "verdict": verdict,
+        "findings": findings or [],
+        "evaluator": {"kind": "harness", "id": "test"},
+        "created_at": "2026-11-11T00:00:00Z",
+    }
+    fields.update(overrides)
+    return skill_eval.make_record(**fields)
+
+
+METRICS = {"score": 1.0}
+THRESHOLDS = {"score": 0.9}
+
+
+def test_non_gate_mode_is_byte_identical_to_the_legacy_decision():
+    verdict = improve.evaluate(METRICS, THRESHOLDS)
+    assert verdict["decision"] == "promote"
+    assert set(verdict) == {"decision", "metrics"}
+
+
+def test_gate_blocks_promotion_without_a_review():
+    verdict = improve.evaluate(METRICS, THRESHOLDS, gate=True)
+    assert verdict["decision"] == "pending"
+    assert verdict["review"] == {"passed": False, "reason": "missing"}
+
+
+def test_gate_blocks_a_warn_verdict():
+    verdict = improve.evaluate(METRICS, THRESHOLDS, gate=True, skill_eval=_review(verdict="warn", findings=[WARN]))
+    assert verdict["decision"] == "pending"
+    assert verdict["review"]["passed"] is False
+    assert verdict["review"]["reason"] == "warn"
+
+
+def test_gate_blocks_a_failing_verdict():
+    verdict = improve.evaluate(METRICS, THRESHOLDS, gate=True, skill_eval=_review(verdict="fail", findings=[BLOCK]))
+    assert verdict["decision"] == "pending"
+    assert verdict["review"]["reason"] == "fail"
+
+
+def test_gate_blocks_a_tampered_record():
+    record = _review()
+    record["verdict"] = "warn"
+    verdict = improve.evaluate(METRICS, THRESHOLDS, gate=True, skill_eval=record)
+    assert verdict["decision"] == "pending"
+    assert verdict["review"]["reason"] == "invalid"
+
+
+def test_gate_blocks_an_authority_shaped_record():
+    record = _review()
+    record["grant"] = {"scope": "vault"}
+    verdict = improve.evaluate(METRICS, THRESHOLDS, gate=True, skill_eval=record)
+    assert verdict["decision"] == "pending"
+    assert verdict["review"]["reason"] == "invalid"
+
+
+def test_gate_promotes_only_on_pass_and_thresholds():
+    verdict = improve.evaluate(METRICS, THRESHOLDS, gate=True, skill_eval=_review())
+    assert verdict["decision"] == "promote"
+    assert verdict["review"] == {"passed": True, "reason": "pass"}
+
+
+def test_a_benchmark_regression_still_rolls_back_with_a_passing_review():
+    verdict = improve.evaluate({"score": 0.5}, THRESHOLDS, gate=True, skill_eval=_review())
+    assert verdict["decision"] == "rollback"
+
+
+def test_cli_require_review_without_a_record_never_promotes(tmp_path):
+    repo, patch, bench, key = _repo(tmp_path)
+    result = _run(repo, patch, bench, key, score=1.0, promote=True, require_review=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads(result.stdout)
+    assert summary["decision"] == "pending"
+    assert (repo / "app.txt").read_text() == "old\n"
+
+
+def test_cli_require_review_with_a_passing_record_promotes(tmp_path):
+    repo, patch, bench, key = _repo(tmp_path)
+    record_path = tmp_path / "review.json"
+    record_path.write_text(json.dumps(_review()))
+    result = _run(repo, patch, bench, key, score=1.0, promote=True, require_review=True, skill_eval_path=record_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads(result.stdout)
+    assert summary["decision"] == "promote"
+    assert (repo / "app.txt").read_text() == "old\nnew\n"
+
+
+def test_cli_require_review_with_a_failing_record_never_promotes(tmp_path):
+    repo, patch, bench, key = _repo(tmp_path)
+    record_path = tmp_path / "review.json"
+    record_path.write_text(json.dumps(_review(verdict="fail", findings=[BLOCK])))
+    result = _run(repo, patch, bench, key, score=1.0, promote=True, require_review=True, skill_eval_path=record_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads(result.stdout)
+    assert summary["decision"] == "pending"
+    assert (repo / "app.txt").read_text() == "old\n"
