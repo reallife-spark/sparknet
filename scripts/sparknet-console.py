@@ -60,6 +60,16 @@ def load_vector_view() -> Any:
     )
 
 
+def load_skill_eval_module() -> Any:
+    return load_shared(
+        "sparknet-skill-eval.py",
+        "sparknet_console_skill_eval",
+        dirs=[ROOT / "shared"],
+        error=ConsoleError,
+        message="cannot find shared/sparknet-skill-eval.py; the console carries no eval implementation",
+    )
+
+
 ROLE_ROOT = {"peer": ROOT / "peer-node", "master": ROOT / "master-node"}
 ROLE_CONFIG = {
     "peer": ROOT / "peer-node" / "configs" / "webui" / "console.json",
@@ -263,6 +273,34 @@ def _frontmatter_value(text: str, key: str) -> str | None:
     return None
 
 
+def _local_gateway_runs(config: dict[str, Any], role_root: Path, limit: int) -> list[dict[str, Any]]:
+    """Read this node's delegate runs through the loopback gateway.
+
+    The console never reads the Go store directly: the gateway's owner-only
+    local token scopes the request to this role vault. Any transport failure is
+    an empty view, never a fallback to a second reader.
+    """
+    settings = config.get("memory") or {}
+    token_path = resolve(role_root, settings.get("local_token_file") or ".state/memory.local.token")
+    if token_path is None or not token_path.is_file():
+        return []
+    try:
+        token = token_path.read_text(encoding="utf-8").strip()
+        query = urllib.parse.urlencode({"limit": limit})
+        request = urllib.request.Request(
+            str(settings.get("gateway_url") or "http://127.0.0.1:4093").rstrip("/") + "/v1/delegates/runs?" + query
+        )
+        request.add_header("Accept", "application/json")
+        request.add_header("X-Sparknet-Local-Token", token)
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (OSError, urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError):
+        return []
+    runs = payload.get("runs") or []
+    return [run for run in runs if isinstance(run, dict)]
+
+
 def api_projects(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
     """Read-only project cards and the recent delegate ledger."""
     root = role_root / "06_Projects"
@@ -277,25 +315,7 @@ def api_projects(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
                 "path": str(path.parent),
             }
         )
-    runs = []
-    settings = config.get("memory") or {}
-    token_path = resolve(role_root, settings.get("local_token_file") or ".state/memory.local.token")
-    if token_path and token_path.is_file():
-        try:
-            token = token_path.read_text(encoding="utf-8").strip()
-            query = urllib.parse.urlencode({"limit": 50})
-            request = urllib.request.Request(
-                str(settings.get("gateway_url") or "http://127.0.0.1:4093").rstrip("/") + "/v1/delegates/runs?" + query
-            )
-            request.add_header("Accept", "application/json")
-            request.add_header("X-Sparknet-Local-Token", token)
-            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-            with opener.open(request, timeout=10) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-            runs = payload.get("runs") or []
-        except (OSError, urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError):
-            runs = []
-    return {"ok": True, "projects": projects, "runs": runs[:20]}
+    return {"ok": True, "projects": projects, "runs": _local_gateway_runs(config, role_root, 50)[:20]}
 
 
 def api_memory(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
@@ -700,6 +720,61 @@ def api_issues(config: dict[str, Any], role_root: Path) -> tuple[int, dict[str, 
     }
 
 
+EVAL_FINDINGS_LIMIT = 20
+
+
+def _project_eval(record: dict[str, Any], *, node: str, run_id: str) -> dict[str, Any]:
+    findings = record.get("findings") or []
+    return {
+        "eval_id": record.get("eval_id", ""),
+        "node": node,
+        "run_id": run_id,
+        "skill": (record.get("skill") or {}).get("name", ""),
+        "verdict": record.get("verdict", ""),
+        "subject": record.get("subject") or {},
+        "evaluator": record.get("evaluator") or {},
+        "created_at": record.get("created_at", ""),
+        "findings": findings[:EVAL_FINDINGS_LIMIT],
+        "findings_total": len(findings),
+    }
+
+
+def api_evals(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
+    """Read this node's skill-eval verdicts from its delegate runs.
+
+    A record is audit evidence: it never grants authority and never enters a
+    knowledge or KB path. Invalid or tampered records are counted, never shown.
+    """
+    skill_eval = load_skill_eval_module()
+    node = str(config.get("node") or config.get("role") or "local")
+    records = []
+    invalid = 0
+    for run in _local_gateway_runs(config, role_root, 100):
+        result = run.get("result") if isinstance(run.get("result"), dict) else {}
+        record = result.get("skill_eval")
+        if not isinstance(record, dict):
+            continue
+        try:
+            skill_eval.validate_record(record)
+        except skill_eval.SkillEvalError:
+            invalid += 1
+            continue
+        records.append(_project_eval(record, node=node, run_id=str(run.get("run_id") or "")))
+    counts = {"total": len(records), "pass": 0, "warn": 0, "fail": 0, "invalid": invalid}
+    for item in records:
+        if item["verdict"] in ("pass", "warn", "fail"):
+            counts[item["verdict"]] += 1
+    records.sort(key=lambda item: item.get("created_at", ""), reverse=True)
+    return {
+        "ok": True,
+        "node": node,
+        "records": records,
+        "counts": counts,
+        "read_only": True,
+        "note": "Audit evidence, not knowledge and not authority.",
+    }
+
+
 def api_understand(config: dict[str, Any], role_root: Path, *, summary: bool = False) -> tuple[int, dict[str, Any]]:
     """Read the derived graph from the role or fabric root.
 
@@ -839,6 +914,11 @@ SURFACES: tuple[Surface, ...] = (
         "issues",
         (Endpoint("/api/issues", _bind(api_issues), auth="admin"),),
         MenuSpec("Issues", "#issues", "issues"),
+    ),
+    Surface(
+        "evals",
+        (Endpoint("/api/evals", _bind(api_evals), auth="admin"),),
+        MenuSpec("Evals", "#evals", "evals"),
     ),
     Surface(
         "step89",

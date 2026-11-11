@@ -81,6 +81,7 @@ function initTabs() {
     if (allowed === "learning") loadLearning();
     if (allowed === "understand") loadUnderstand();
     if (allowed === "issues") loadIssues();
+    if (allowed === "evals") loadEvals();
   };
   addEventListener("hashchange", route);
   route();
@@ -899,6 +900,57 @@ async function loadIssues() {
         el("td", { text: issue.effective_status || issue.status || "—" }),
         el("td", { text: (issue.effective_labels || issue.labels || []).join(", ") || "—" }),
         el("td", { text: issue.updated_at || issue.received_at || "—" }),
+      ]));
+    }
+    table.append(body);
+    wrap.append(table);
+  } catch (error) { showError(error.message); }
+}
+
+async function loadEvals() {
+  try {
+    const data = await api("api/evals");
+    $("evals-status").textContent = data.ok ? `${data.counts?.total ?? 0} verdict(s)` : "Unavailable";
+    const cards = $("evals-cards");
+    clear(cards);
+    if (!data.ok) {
+      cards.append(metric("Status", data.error || "unavailable"));
+      return;
+    }
+    cards.append(
+      metric("Evaluated", data.counts?.total ?? 0),
+      metric("Pass", data.counts?.pass ?? 0),
+      metric("Warn", data.counts?.warn ?? 0),
+      metric("Fail", data.counts?.fail ?? 0),
+      metric("Invalid", data.counts?.invalid ?? 0),
+    );
+    const wrap = $("evals-list");
+    clear(wrap);
+    if (!data.records?.length) {
+      wrap.append(el("p", { class: "empty", text: "No skill-evaluation records on this node yet." }));
+      return;
+    }
+    const table = el("table");
+    table.append(
+      el("thead", {}, [
+        el("tr", {}, ["Verdict", "Skill", "Subject", "Evaluator", "Findings", "Created"].map((h) => el("th", { text: h }))),
+      ]),
+    );
+    const body = el("tbody");
+    for (const record of data.records) {
+      const detail = el("details", {}, [
+        el("summary", { text: `${record.findings_total || 0} finding(s)` }),
+        ...(record.findings || []).map((finding) =>
+          el("p", { class: "muted", text: `${fmt(finding.severity)} · ${fmt(finding.rule)} · ${fmt(finding.message)}` }),
+        ),
+      ]);
+      body.append(el("tr", {}, [
+        el("td", { text: fmt(record.verdict) }),
+        el("td", { text: fmt(record.skill) }),
+        el("td", { text: `${fmt(record.subject?.kind)} · ${fmt(record.subject?.ref)}` }),
+        el("td", { text: fmt(record.evaluator?.id) }),
+        el("td", {}, [detail]),
+        el("td", { text: fmt(record.created_at) }),
       ]));
     }
     table.append(body);

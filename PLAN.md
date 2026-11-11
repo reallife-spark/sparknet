@@ -424,6 +424,25 @@ current: done
     tracked symlink (mode 120000); no copy exists. Full fabric suite, lint and
     format green. No live claim.
 
+## Step 100 — Read-only eval audit surface
+
+- [x] **Step 100** — Surface skill-eval verdicts in the read-only console.
+  - [x] **100A — API.** `/api/evals` reads this node's delegate runs through
+    the loopback gateway, validates every record with the shared module, counts
+    invalid/tampered records without showing them, and projects
+    node/skill/verdict/subject/evaluator/findings (bounded).
+  - [x] **100B — Surface.** The `evals` menu and panel are wired through the one
+    `SURFACES` table, admin-only like Issues; both role configs list it.
+  - [x] **100C — Boundary.** Audit-only: no KB path, no knowledge write, no
+    authority. Cross-node aggregation is a transport decision and is filed
+    separately.
+  - **DoD**: console tests cover a valid record, a tampered record and the
+    projection; the full suite, lint, format and app.js syntax are green.
+  - **Status 2026-11-11 — COMPLETE.** `/api/evals` projects 1 pass and counts 1
+    tampered record as invalid in the new test; the panel is wired through the
+    surface table and both role menus. Full suite, lint and format green. No
+    live claim.
+
 ## Standing verification rules
 
 - A gate that cannot fail is not a gate. Every claim needs a named test or a

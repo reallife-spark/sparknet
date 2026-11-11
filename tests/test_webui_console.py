@@ -94,6 +94,27 @@ class _Qdrant(BaseHTTPRequestHandler):
         pass
 
 
+class _Gateway(BaseHTTPRequestHandler):
+    records: ClassVar[list[dict]] = []
+
+    def do_GET(self) -> None:
+        if self.path.startswith("/v1/delegates/runs"):
+            self._json({"ok": True, "runs": self.records})
+        else:
+            self._json({"error": "not found"}, status=404)
+
+    def _json(self, body: dict, status: int = 200) -> None:
+        payload = json.dumps(body).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def log_message(self, *args) -> None:
+        pass
+
+
 class _OpenWebUI(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         if self.path != "/api/v1/auths/":
@@ -225,7 +246,7 @@ def test_static_index_and_auth(tmp_path: Path, qdrant: str, openwebui: str) -> N
         status, body = _get(server.server_port, "/api/surface", "console-token-1234567890")
         assert status == 200
         surface = json.loads(body)
-        assert surface["menus"] == ["mesh", "vectors", "learning", "memory", "projects", "understand"]
+        assert surface["menus"] == ["mesh", "vectors", "learning", "memory", "projects", "understand", "evals"]
         assert surface["read_only"] is True
     finally:
         server.shutdown()
@@ -565,6 +586,7 @@ def test_surface_table_is_the_dispatch_and_menu_source() -> None:
         "projects",
         "understand",
         "issues",
+        "evals",
     ]
     for surface in console.MENU_SURFACES:
         assert surface.menu is not None
@@ -574,7 +596,7 @@ def test_surface_table_is_the_dispatch_and_menu_source() -> None:
 def test_surface_menus_and_menu_items_are_derived_from_the_table(tmp_path: Path, qdrant: str, openwebui: str) -> None:
     config, _role_root = _config(tmp_path, "peer", qdrant, openwebui)
     surface = console.api_surface(config)
-    assert surface["menus"] == ["mesh", "vectors", "learning", "memory", "projects", "understand"]
+    assert surface["menus"] == ["mesh", "vectors", "learning", "memory", "projects", "understand", "evals"]
     assert [item["id"] for item in surface["menu_items"]] == surface["menus"]
     assert surface["menu_items"][0] == {"id": "mesh", "label": "Mesh", "href": "#mesh", "icon": "mesh"}
 
@@ -616,3 +638,52 @@ def test_sidebar_and_tabs_use_menu_items() -> None:
     assert "menu_items" in sidebar and "var ITEMS =" not in sidebar
     assert "menu_items" in app
     assert 'id="tabs"' in (STATIC / "index.html").read_text()
+
+
+def test_evals_route_projects_valid_records_and_counts_invalid(tmp_path: Path, qdrant: str, openwebui: str) -> None:
+    skill_eval = console.load_skill_eval_module()
+    valid = skill_eval.make_record(
+        eval_id="review-1",
+        skill={"name": "code-review", "origin": "mattpocock"},
+        subject={"kind": "delegate-run", "ref": "run-1"},
+        verdict="pass",
+        findings=[],
+        evaluator={"kind": "agent", "id": "project-reviewer"},
+        created_at="2026-11-11T00:00:00Z",
+    )
+    tampered = dict(valid)
+    tampered["verdict"] = "warn"
+    gateway, _thread = _start(_Gateway)
+    try:
+        _Gateway.records = [
+            {"run_id": "run-1", "result": {"skill_eval": valid}},
+            {"run_id": "run-2", "result": {"skill_eval": tampered}},
+            {"run_id": "run-3", "result": {}},
+        ]
+        config, role_root = _config(tmp_path, "peer", qdrant, openwebui)
+        token_path = role_root / ".state" / "memory.local.token"
+        token_path.parent.mkdir(parents=True, exist_ok=True)
+        token_path.write_text("local-token-1234567890\n")
+        config["memory"] = {
+            "gateway_url": f"http://127.0.0.1:{gateway.server_port}",
+            "local_token_file": ".state/memory.local.token",
+            "vault_path": ".",
+        }
+        server = _serve(config, role_root)
+        try:
+            status, body = _get(server.server_port, "/api/evals", "console-token-1234567890")
+            payload = json.loads(body)
+            assert status == 200
+            assert payload["ok"] is True and payload["read_only"] is True
+            assert payload["counts"] == {"total": 1, "pass": 1, "warn": 0, "fail": 0, "invalid": 1}
+            assert payload["records"][0]["skill"] == "code-review"
+            assert payload["records"][0]["subject"]["kind"] == "delegate-run"
+            assert payload["records"][0]["node"] == "agx32"
+            assert "vault" not in payload and "kb" not in payload
+        finally:
+            server.shutdown()
+            server.server_close()
+    finally:
+        _Gateway.records = []
+        gateway.shutdown()
+        gateway.server_close()
