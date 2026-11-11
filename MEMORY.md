@@ -7,8 +7,8 @@ Updated: 2026-11-11
 - `PLAN.md` — `current: done`; Steps 96–100 closed: skill-eval record/gate/
   harness, dependency guard, test tiers, ADR-0015's boundary, and the
   read-only console eval view.
-- Commits: goSpark `2e8b2be`; fabric `8f9bb08` and `df5c46a`; goagx `c77170b`
-  pinned. Peer `24bee7d`, master `edc45eb` unchanged. `make drift-check` green.
+- Commits: goSpark `2e8b2be`; fabric `8f9bb08`/`962cf66`/pin; goagx `6b8d195`
+  pinned. Peer `a4d3835`, master `9435b65`. `make drift-check` green.
 - Critical open items: GitHub mirror blocked by the PAT (`createIssue`), so
   `.scratch/issues/` is canonical; 9G nocturnal window; shell migrations;
   dependency guard, tier markers, memory-filter boundary and master audit

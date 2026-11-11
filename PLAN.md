@@ -440,7 +440,8 @@ current: done
     projection; the full suite, lint, format and app.js syntax are green.
   - **Status 2026-11-11 — COMPLETE.** `/api/evals` projects 1 pass and counts 1
     tampered record as invalid in the new test; the panel is wired through the
-    surface table and both role menus. Full suite, lint and format green. No
+    surface table and both role menus. Full suite, lint and format green.
+    goagx republished as `6b8d195` and pinned; `make drift-check` green. No
     live claim.
 
 ## Standing verification rules
