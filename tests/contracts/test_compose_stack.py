@@ -137,7 +137,7 @@ def test_setup_script_advertises_only_profiles_compose_defines():
             defined.add(str(profile))
 
     advertised: set[str] = set()
-    for line in (REPO_ROOT / "sparknet-node-setup.sh").read_text().splitlines():
+    for line in (REPO_ROOT / "sparknet-node-setup.py").read_text().splitlines():
         if "--profiles A,B,C" in line:
             advertised = set(line.split(":", 1)[1].split())
             break
