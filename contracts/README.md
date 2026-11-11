@@ -19,7 +19,7 @@ the tests then prove both roles still agree.
 | `rfi-schema.json` | the request-for-information channel: the peer's overlay-attributed request, the Master's signed answer, the digest that binds its content, the `01_Inbox/` destination rule, the acceptance order and the refusal vocabulary. Both halves are built: the 8090 peer-intake request route and the Master's signed answer transport (fabric Steps 69C/70) |
 | `ports.json` | every listener and dial target, with `implementation_state` (code) kept separate from `runtime` (observed on a given host) |
 | `guard-protocol.md` | the Master↔peer approval conversation |
-| `guard-approval.json` | the approval envelope itself: the eight signed fields, the canonicalisation rule, where the capability comes from, and the transport (route, port, envelope fields) |
+| `guard-approval.json` | the approval envelope itself: the signed approval fields, the canonicalisation rule, where the capability comes from, and the transport (route, port, envelope fields) |
 | `health-protocol.md` | peer liveness and eviction: probe rhythm, activity-trumps-eviction, the full-dark rule, no-authority guarantee |
 | `service-health.md` | the one data-plane service health route (`/healthz`): plain by default, minimal payload, source policy inherited from the listener, never authority or knowledge |
 | `telemetry-schema.json` | peer→Master observability evidence (Phase 4): overlay-attributed, unsigned, `kind`-tagged reports the Master records and acts on nothing — no authority on the telemetry path. Envelope, the 8090 peer intake (telemetry + RFI request routes), the peer pusher and the per-kind consumers are built (Step 70) |

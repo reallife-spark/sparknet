@@ -53,9 +53,8 @@ def parse_diff(diff: str) -> dict[str, list[str]]:
             path = line[4:].strip()
             current = path[2:] if path.startswith("b/") else path
             files.setdefault(current, [])
-        elif line.startswith("+") and not line.startswith("+++"):
-            if current is not None:
-                files[current].append(line[1:])
+        elif line.startswith("+") and not line.startswith("+++") and current is not None:
+            files[current].append(line[1:])
     return files
 
 
