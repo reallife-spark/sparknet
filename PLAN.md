@@ -405,6 +405,25 @@ current: done
     the quick pre-merge gate are green. No test behavior changed; the change is
     additive marks plus the meta-guard.
 
+## Step 99 — Pin the memory-filter dependency boundary
+
+- [x] **Step 99** — Decide and enforce the boundary around the WebUI-only
+  adapter instead of letting a legitimate exception look like runtime drift.
+  - [x] **99A — Decision.** ADR-0015 records the filter as an adapter executed
+    by Open WebUI, the one-physical-file rule, and the lazy optional-extra
+    rule for the Understand extractor.
+  - [x] **99B — Guard.** `tests/test_dependency_boundary.py`: module-level
+    imports are stdlib plus `cryptography`, with `httpx`/`pydantic` allowed
+    only in the filter; lazy imports are only optional extras; the WebUI name
+    is a symlink to the shared file; no runtime module names the adapter.
+  - [x] **99C — Docs.** `webui/README.md` records the symlink and the reason.
+  - **DoD**: the guard fails on a stray shared import and passes after
+    reverting; the symlink resolves; the full suite, lint and format are green.
+  - **Status 2026-11-11 — COMPLETE.** The `requests` mutation failed the
+    module-level guard and reverted green. The WebUI file was already a
+    tracked symlink (mode 120000); no copy exists. Full fabric suite, lint and
+    format green. No live claim.
+
 ## Standing verification rules
 
 - A gate that cannot fail is not a gate. Every claim needs a named test or a

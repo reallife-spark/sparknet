@@ -148,7 +148,10 @@ RAG allow-list and requests a knowledge reindex.
 
 ## Memory filter
 
-`functions/sparknet_memory_filter.py` is an Open WebUI Filter Function. It adds
+`functions/sparknet_memory_filter.py` is a symlink to
+`../shared/sparknet-memory-filter.py` — one physical implementation, so the
+peer bundle and the WebUI installer cannot drift (ADR-0015). It is an Open WebUI
+Filter Function. It adds
 scoped recall to `inlet` and captures the turn in `outlet` through the loopback
 Python memory gateway; it never reads a vault or the Go store directly. Install
 it with `install-memory-filter.py` using the node's WebUI admin token. The

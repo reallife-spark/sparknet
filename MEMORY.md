@@ -4,9 +4,9 @@
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
 Updated: 2026-11-11
 ## Plan cursor
-- `PLAN.md` — `current: done`; Step 96 closed (skill-eval record, gate,
-  reviewer rubric, golden-diff harness, language policy), Step 97 restored
-  the dependency guard and Step 98 made the test tiers selectable.
+- `PLAN.md` — `current: done`; Steps 96–99 closed: skill-eval record/gate/
+  harness, dependency guard, test tiers, and ADR-0015's shared dependency
+  boundary.
 - Commits: goSpark `2e8b2be`; fabric `8f9bb08` and `df5c46a`; goagx `c77170b`
   pinned. Peer `24bee7d`, master `edc45eb` unchanged. `make drift-check` green.
 - Critical open items: GitHub mirror blocked by the PAT (`createIssue`), so
