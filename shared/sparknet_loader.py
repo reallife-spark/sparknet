@@ -105,6 +105,11 @@ def load_by_path(name: str, path: Path, *, error: type[Exception] = ImportError,
     return module
 
 
+def _search_summary(paths: Iterable[Path]) -> str:
+    """Render the candidate paths in search order for a refusal message."""
+    return "\n  ".join(str(path) for path in paths)
+
+
 def load_shared(
     filename: str,
     modname: str,
@@ -125,26 +130,26 @@ def load_shared(
     """
     if modname in sys.modules:
         return sys.modules[modname]
-    for path in candidates(filename, dirs):
+    search_paths = candidates(filename, dirs)
+    searched = _search_summary(search_paths)
+    for path in search_paths:
         if path.is_file():
             missing = [dep for dep in required if not (path.parent / dep).is_file()]
             if missing:
                 raise error(
-                    f"cannot locate {', '.join(missing)} beside {filename}; "
+                    f"cannot locate {', '.join(missing)} beside {filename} "
+                    f"(probed {path}); searched, in order:\n  {searched}\n"
                     "the fabric carries exactly one implementation and this tool "
                     "does not carry a fallback"
                 )
             return load_by_path(modname, path, error=error, message=_text(message))
     if missing_ok:
         return None
-    if callable(message):
-        raise error(message())
+    base = message() if callable(message) else (_text(message) or f"cannot locate {filename}")
     raise error(
-        _text(message)
-        or (
-            f"cannot locate {filename}; the fabric carries exactly one "
-            "implementation and this tool does not carry a fallback"
-        )
+        f"{base}; searched, in order:\n  {searched}\n"
+        "the fabric carries exactly one implementation and this tool "
+        "does not carry a fallback"
     )
 
 
