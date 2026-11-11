@@ -466,6 +466,27 @@ current: done
     goagx republished as `59a83e7` and pinned; `make drift-check` green.
     No live claim.
 
+## Step 102 — Refuse a malformed delegate run record
+
+- [x] **Step 102** — Diagnose and fix `project report` aborting with a raw
+  traceback when the run view carries a non-object `result` or `task`.
+  - **Symptom.** `project report` exits with
+    `AttributeError: 'list' object has no attribute 'get'` instead of a clean
+    refusal; no report page is written.
+  - **Loop.** `tests/test_project_script.py::test_report_refuses_a_malformed_run_record`
+    with a fake gateway returning `result: []` and then `task: "..."`.
+  - **Hypotheses.** (1) a non-dict `result` reaches `.get()` in the report body
+    — confirmed by the traceback at line 428; (2) a non-dict `task` reaches
+    `.get()` in the Task section; (3) missing values are already handled by the
+    old `or {}`.
+  - **Fix.** `cmd_report` refuses a run whose `result` or `task` is not an
+    object, before the review gate and before any write.
+  - **DoD**: both malformed variants refuse cleanly with no report file; the
+    project suite, full suite, lint and format are green; goagx republished.
+  - **Status 2026-11-11 — COMPLETE.** Both variants refuse with
+    `run record is malformed: result and task must be objects`; the full suite,
+    lint and format are green. No live claim.
+
 ## Standing verification rules
 
 - A gate that cannot fail is not a gate. Every claim needs a named test or a

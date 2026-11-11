@@ -276,8 +276,10 @@ def cmd_report(args: argparse.Namespace) -> int:
     root = vault(args.vault)
     directory = find_project(root, args.slug)
     run = _run_view(root, args.run_id)
-    result = run.get("result") or {}
-    task = run.get("task") or {}
+    result = run.get("result")
+    task = run.get("task")
+    if not isinstance(result, dict) or not isinstance(task, dict):
+        raise SystemExit("run record is malformed: result and task must be objects")
     if args.require_review:
         record = None
         if args.skill_eval:

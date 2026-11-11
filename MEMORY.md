@@ -4,9 +4,9 @@
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
 Updated: 2026-11-11
 ## Plan cursor
-- `PLAN.md` — `current: done`; Steps 96–101 closed: skill-eval record/gate/
+- `PLAN.md` — `current: done`; Steps 96–102 closed: skill-eval record/gate/
   harness, dependency guard, test tiers, ADR-0015's boundary, the console
-  eval view and its malformed-gateway degradation fix.
+  eval view, and two malformed-payload refusals.
 - Commits: goSpark `2e8b2be`; fabric `7135b83`/pin; goagx `59a83e7` pinned.
   Peer `a4d3835`, master `9435b65`. `make drift-check` green.
 - Critical open items: mirror complete (21 issues/5 repos, 18 closed); 9G

@@ -39,6 +39,7 @@ prov = _load("sparknet_provenance_project_test", "sparknet-provenance.py")
 class Gateway(BaseHTTPRequestHandler):
     calls: ClassVar[list[dict]] = []
     review: ClassVar[dict | None] = None
+    malformed: ClassVar[str | None] = None
 
     def log_message(self, *args):
         return
@@ -61,6 +62,11 @@ class Gateway(BaseHTTPRequestHandler):
             }
             if self.review is not None:
                 result["skill_eval"] = self.review
+            task: object = {"description": "compare three options"}
+            if self.malformed == "result":
+                result = ["not-an-object"]
+            if self.malformed == "task":
+                task = "not-an-object"
             self._reply(
                 200,
                 {
@@ -69,7 +75,7 @@ class Gateway(BaseHTTPRequestHandler):
                         "run_id": "run-1",
                         "status": "succeeded",
                         "harness": "command",
-                        "task": {"description": "compare three options"},
+                        "task": task,
                         "result": result,
                         "error": "",
                     },
@@ -269,5 +275,22 @@ def test_report_can_read_the_review_from_the_run_result(tmp_path, monkeypatch):
         assert len(_reports(vault)) == 1
     finally:
         Gateway.review = None
+        gateway.shutdown()
+        gateway.server_close()
+
+
+def test_report_refuses_a_malformed_run_record(tmp_path, monkeypatch):
+    vault, env, gateway = _gated_vault(tmp_path, monkeypatch)
+    try:
+        for malformed in ("result", "task"):
+            Gateway.malformed = malformed
+            result = _run(["report", "alpha", "--run-id", "run-1"], vault, env)
+            assert result.returncode != 0, f"{malformed}: report unexpectedly succeeded"
+            assert "malformed" in (result.stdout + result.stderr).lower(), (
+                f"{malformed}: expected a clean refusal, got:\n{result.stderr}"
+            )
+            assert _reports(vault) == []
+    finally:
+        Gateway.malformed = None
         gateway.shutdown()
         gateway.server_close()
