@@ -297,7 +297,11 @@ def _local_gateway_runs(config: dict[str, Any], role_root: Path, limit: int) -> 
             payload = json.loads(response.read().decode("utf-8"))
     except (OSError, urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError):
         return []
-    runs = payload.get("runs") or []
+    if not isinstance(payload, dict):
+        return []
+    runs = payload.get("runs")
+    if not isinstance(runs, list):
+        return []
     return [run for run in runs if isinstance(run, dict)]
 
 

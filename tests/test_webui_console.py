@@ -115,6 +115,19 @@ class _Gateway(BaseHTTPRequestHandler):
         pass
 
 
+class _BrokenGateway(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:
+        payload = b"[]"
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def log_message(self, *args) -> None:
+        pass
+
+
 class _OpenWebUI(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         if self.path != "/api/v1/auths/":
@@ -685,5 +698,38 @@ def test_evals_route_projects_valid_records_and_counts_invalid(tmp_path: Path, q
             server.server_close()
     finally:
         _Gateway.records = []
+        gateway.shutdown()
+        gateway.server_close()
+
+
+def test_evals_route_degrades_when_the_gateway_returns_a_non_object(
+    tmp_path: Path, qdrant: str, openwebui: str
+) -> None:
+    gateway, _thread = _start(_BrokenGateway)
+    try:
+        config, role_root = _config(tmp_path, "peer", qdrant, openwebui)
+        token_path = role_root / ".state" / "memory.local.token"
+        token_path.parent.mkdir(parents=True, exist_ok=True)
+        token_path.write_text("local-token-1234567890\n")
+        config["memory"] = {
+            "gateway_url": f"http://127.0.0.1:{gateway.server_port}",
+            "local_token_file": ".state/memory.local.token",
+            "vault_path": ".",
+        }
+        server = _serve(config, role_root)
+        try:
+            status, body = _get(server.server_port, "/api/evals", "console-token-1234567890")
+            payload = json.loads(body)
+            assert status == 200
+            assert payload["ok"] is True
+            assert payload["records"] == []
+            assert payload["counts"]["total"] == 0
+            status, body = _get(server.server_port, "/api/projects", "console-token-1234567890")
+            payload = json.loads(body)
+            assert status == 200 and payload["ok"] is True and payload["runs"] == []
+        finally:
+            server.shutdown()
+            server.server_close()
+    finally:
         gateway.shutdown()
         gateway.server_close()

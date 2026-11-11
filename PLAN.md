@@ -444,6 +444,27 @@ current: done
     goagx republished as `6b8d195` and pinned; `make drift-check` green. No
     live claim.
 
+## Step 101 — Console degrades on a malformed gateway payload
+
+- [x] **Step 101** — Diagnose and fix the console endpoints that drop the
+  connection when the local memory gateway answers with a non-object JSON
+  value.
+  - **Symptom.** `/api/evals` and `/api/projects` error instead of showing an
+    empty view when the gateway returns `[]`; the dispatcher does not catch
+    handler exceptions.
+  - **Loop.** `tests/test_webui_console.py::test_evals_route_degrades_when_the_gateway_returns_a_non_object`
+    with a fake gateway returning `[]`. RED:
+    `AttributeError: 'list' object has no attribute 'get'` at
+    `_local_gateway_runs`; GREEN after the shape guard.
+  - **Hypothesis.** A non-dict payload reaches `payload.get("runs")`; the data
+    path, not the transport exceptions, is the defect.
+  - **Fix.** `_local_gateway_runs` returns an empty view unless the payload is a
+    dict and `runs` is a list; both consumers are covered.
+  - **DoD**: the regression test, the console file, the full suite, lint and
+    format are green; `make drift-check` green after the goagx republish.
+  - **Status 2026-11-11 — COMPLETE.** Regression test and full suite green;
+    goagx republished and pinned; `make drift-check` green. No live claim.
+
 ## Standing verification rules
 
 - A gate that cannot fail is not a gate. Every claim needs a named test or a
