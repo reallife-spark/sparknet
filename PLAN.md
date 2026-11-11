@@ -515,7 +515,9 @@ current: done
     window remains issue #8 (`DoD: confirm: user`) and is not claimed here.
   - **Status 2026-11-11 — COMPLETE (code and rehearsal).** Fabric suite, peer
     648/1 skipped, master suite, lint, format, contract-test, render-check and
-    the rehearsal are green. Live window still pending.
+    the rehearsal are green. Commits: peer `89afef4`, master `b93f077`, fabric
+    `ab9be7a`; goagx republished as `2b4de0f` and pinned. Live window still
+    pending (issue #8).
 
 ## Standing verification rules
 
