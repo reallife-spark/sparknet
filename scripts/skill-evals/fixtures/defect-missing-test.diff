@@ -1,0 +1,7 @@
+--- a/shared/sparknet-widget.py
++++ b/shared/sparknet-widget.py
+@@ -1,3 +1,4 @@
+ def widget():
+-    return 1
++    value = 2
++    return value

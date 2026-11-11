@@ -23,7 +23,8 @@ REQUIRED_JOB_FIELDS = (
     "mode",
     "prompt",
 )
-SUBTASK_FIELDS = ("node_id", "subtask_id", "instruction", "context_refs")
+SUBTASK_FIELDS = ("node_id", "subtask_id", "instruction", "context_refs", "mode")
+SUBTASK_MODES = ("model", "skill-eval")
 
 
 class ClusterError(Exception):
@@ -50,11 +51,17 @@ def _subtask(item: Any, index: int) -> dict[str, Any]:
         isinstance(refs, list) and all(isinstance(ref, str) for ref in refs),
         f"subtasks[{index}].context_refs must be a list of strings",
     )
+    mode = item.get("mode", "model")
+    _require(
+        isinstance(mode, str) and mode in SUBTASK_MODES,
+        f"subtasks[{index}].mode must be one of {', '.join(SUBTASK_MODES)}",
+    )
     return {
         "node_id": node_id,
         "subtask_id": subtask_id,
         "instruction": instruction,
         "context_refs": list(refs),
+        "mode": mode,
     }
 
 
@@ -68,6 +75,8 @@ def validate_job(job: dict[str, Any]) -> dict[str, Any]:
     normalised = [_subtask(item, index) for index, item in enumerate(subtasks)]
     ids = [item["subtask_id"] for item in normalised]
     _require(len(ids) == len(set(ids)), "subtask ids must be unique")
+    modes = {item["mode"] for item in normalised}
+    _require(len(modes) == 1, "a job must not mix model and skill-eval subtasks")
     budget = job.get("budget")
     if budget is not None:
         _require(isinstance(budget, dict), "budget must be an object")

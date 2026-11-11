@@ -102,5 +102,29 @@
     "commit": "Commit only this directory in the node's local artifact repository, with a message naming the lease. Never push, never rewrite history, never touch a protected path."
   },
   "inbox_rule": "Artefacts stay in 01_Inbox/nocturnal/ until the existing inbox review path accepts them. Nothing in this contract promotes, indexes, or serves an artefact as knowledge.",
-  "secret_rule": "No keys, tokens, .env contents, or unredacted personal pages are eligible inputs or outputs. The existing vault allow-list and guard rules still apply."
+  "secret_rule": "No keys, tokens, .env contents, or unredacted personal pages are eligible inputs or outputs. The existing vault allow-list and guard rules still apply.",
+  "skill_eval_subtasks": {
+    "purpose": "A cluster subtask may run the deterministic skill-evaluation harness on the participant host instead of a model prompt, so the nocturnal aggregate carries signed review verdicts as audit evidence.",
+    "cluster_subtask": {
+      "mode_field": "mode",
+      "values": [
+        "model",
+        "skill-eval"
+      ],
+      "default": "model",
+      "homogeneous": "a job must not mix modes; the nocturnal manifest carries one model label"
+    },
+    "candidate_ref": "exactly one context_refs entry of the form fixture:<name>; <name> is a file stem under scripts/skill-evals/fixtures/ and must not contain a path separator",
+    "output": "the signed result output is one sparknet-skill-eval/1 record; output_sha256 binds it and the Master validates it before including it in network_evals",
+    "model_label": "skill-eval-rules/1 (the harness, not a model)"
+  },
+  "master_aggregate": {
+    "file": "aggregate.json",
+    "written_by": "the Master scheduler's dispatch after every participant result verifies",
+    "extra_keys": [
+      "network_evals"
+    ],
+    "network_evals": "records and counts (pass, warn, fail, invalid) derived from verified participant outputs",
+    "rule": "derived audit evidence; never a promotion and never knowledge"
+  }
 }

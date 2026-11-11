@@ -8,14 +8,17 @@ to the diff, so it is deterministic, needs no model and reads nothing outside
 the checkout.
 
 The result is a ``sparknet-skill-eval/1`` record: a skill verdict bound to the
-digest of the golden set. Live scoring with a local model is a later slice and
-must be operator-gated like ``REFLEX_LIVE=1``.
+digest of the golden set. ``--candidate`` evaluates one real diff instead of the
+golden set; that is the mode the nocturnal peer executor uses. Live scoring with
+a local model is a later slice and must be operator-gated like ``REFLEX_LIVE=1``.
 
 Usage::
 
     scripts/sparknet-skill-eval.py [--golden FILE] [--disable-rule RULE] [--json FILE]
+    scripts/sparknet-skill-eval.py --candidate scripts/skill-evals/fixtures/<name>.diff
 
-Exit codes: 0 the golden set passes, 1 input error, 2 the evaluation failed.
+Exit codes: 0 the evaluation completed (golden pass or candidate verdict),
+1 input error, 2 the golden set failed.
 """
 
 from __future__ import annotations
@@ -38,6 +41,7 @@ SKILL_EVAL = load_shared("sparknet-skill-eval.py", "sparknet_skill_eval_runner")
 RULES = ("tdd.missing-test", "security.shell-true", "authority.second-copy")
 PRODUCTION_PREFIXES = ("shared/", "services/", "internal/")
 SHELL_PATTERN = re.compile(r"shell\s*=\s*True|os\.system\(")
+FIXTURE_ROOT = ROOT / "scripts" / "skill-evals" / "fixtures"
 
 
 def parse_diff(diff: str) -> dict[str, list[str]]:
@@ -191,12 +195,77 @@ def make_record(golden: dict[str, Any], golden_path: Path, findings: list[dict[s
     )
 
 
+def evaluate_candidate(candidate_path: Path) -> list[dict[str, Any]]:
+    """Apply every rule to one real diff; the verdict follows the findings."""
+    files = parse_diff(candidate_path.read_text(encoding="utf-8"))
+    if not files:
+        raise ValueError("candidate has no parsed file changes")
+    findings: list[dict[str, Any]] = []
+    for rule in RULES:
+        RULE_CHECKS[rule](files, findings)
+    return findings
+
+
+def make_candidate_record(candidate_path: Path, subject_ref: str, findings: list[dict[str, Any]]) -> dict[str, Any]:
+    severities = {finding["severity"] for finding in findings}
+    verdict = "fail" if "block" in severities else ("warn" if severities else "pass")
+    skill = {"name": "code-review", "origin": "mattpocock"}
+    skill_md = ROOT / ".opencode" / "skills" / "code-review" / "SKILL.md"
+    if skill_md.is_file():
+        skill["digest"] = hashlib.sha256(skill_md.read_bytes()).hexdigest()
+    return SKILL_EVAL.make_record(
+        eval_id=f"skill-eval-{candidate_path.stem}"[:120],
+        skill=skill,
+        subject={
+            "kind": "self-improve-candidate",
+            "ref": subject_ref,
+            "digest": hashlib.sha256(candidate_path.read_bytes()).hexdigest(),
+        },
+        verdict=verdict,
+        findings=findings,
+        evaluator={"kind": "harness", "id": "sparknet-skill-eval"},
+        created_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="offline golden-diff evaluation for a review skill")
     parser.add_argument("--golden", default=str(ROOT / "tests" / "skill-evals" / "code-review-golden.json"))
     parser.add_argument("--disable-rule", action="append", default=[], help="mutation check: omit one rule")
     parser.add_argument("--json", default="", help="also write the payload to this file")
+    parser.add_argument("--candidate", default="", help="evaluate one fixture diff instead of the golden set")
+    parser.add_argument("--subject-ref", default="", help="record subject ref (default: fixture:<stem>)")
     args = parser.parse_args(argv)
+
+    if args.candidate:
+        candidate = Path(args.candidate).resolve()
+        try:
+            candidate.relative_to(FIXTURE_ROOT.resolve())
+        except ValueError:
+            print(json.dumps({"ok": False, "error": "candidate must be a fixture under scripts/skill-evals/fixtures"}))
+            return 1
+        if not candidate.is_file():
+            print(json.dumps({"ok": False, "error": f"candidate not found: {args.candidate}"}))
+            return 1
+        try:
+            findings = evaluate_candidate(candidate)
+        except (OSError, ValueError) as exc:
+            print(json.dumps({"ok": False, "error": str(exc)}))
+            return 1
+        subject_ref = args.subject_ref or f"fixture:{candidate.stem}"
+        record = make_candidate_record(candidate, subject_ref, findings)
+        payload = {
+            "ok": True,
+            "candidate": subject_ref,
+            "verdict": record["verdict"],
+            "findings": findings,
+            "record": record,
+        }
+        text = json.dumps(payload, indent=2, sort_keys=True)
+        if args.json:
+            Path(args.json).write_text(text + "\n", encoding="utf-8")
+        print(text)
+        return 0
 
     golden_path = Path(args.golden)
     try:

@@ -107,7 +107,7 @@
       "contract": "nocturnal-artifact-schema",
       "file": "nocturnal-artifact-schema.json",
       "schema_version": "1.0",
-      "sha256": "3fae87633463cdb972246fedbc5274b9e121a47cd7c814d25544ae165f755459"
+      "sha256": "b1c2576319d76973641e1565ff3d6fc0e6d22395601d9cda1b8772d302068f8a"
     },
     {
       "contract": "overlay",

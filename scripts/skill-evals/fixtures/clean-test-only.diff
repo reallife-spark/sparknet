@@ -1,0 +1,7 @@
+--- a/tests/test_widget.py
++++ b/tests/test_widget.py
+@@ -1,2 +1,4 @@
+ def test_widget():
+-    pass
++    assert widget() == 2
++    assert widget() != 1

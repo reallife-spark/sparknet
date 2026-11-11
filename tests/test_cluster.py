@@ -80,3 +80,28 @@ def test_reduce_refuses_duplicates_and_unknown_subtasks(cluster: ModuleType) -> 
         cluster.reduce_results([{"subtask_id": "s1", "output": "one"}] * 2, ["s1"])
     with pytest.raises(cluster.ClusterError):
         cluster.reduce_results([{"subtask_id": "s9", "output": "nine"}], ["s1"])
+
+
+def test_subtask_mode_defaults_to_model_and_accepts_skill_eval(cluster: ModuleType) -> None:
+    default = cluster.validate_job(_job())
+    assert {item["mode"] for item in default["subtasks"]} == {"model"}
+
+    eval_job = _job()
+    for item in eval_job["subtasks"]:
+        item["mode"] = "skill-eval"
+        item["context_refs"] = ["fixture:defect-shell-true"]
+    built = cluster.construct(eval_job, ["node-a", "node-b"])
+    assert {item["mode"] for item in built["subtasks"]} == {"skill-eval"}
+    assert built["subtasks"][0]["context_refs"] == ["fixture:defect-shell-true"]
+
+
+def test_unknown_or_mixed_subtask_mode_is_refused(cluster: ModuleType) -> None:
+    unknown = _job()
+    unknown["subtasks"][0]["mode"] = "remote-shell"
+    with pytest.raises(cluster.ClusterError):
+        cluster.validate_job(unknown)
+
+    mixed = _job()
+    mixed["subtasks"][0]["mode"] = "skill-eval"
+    with pytest.raises(cluster.ClusterError, match="mix"):
+        cluster.validate_job(mixed)

@@ -82,3 +82,56 @@ def test_the_runner_needs_no_network() -> None:
     source = SCRIPT.read_text()
     for forbidden in ("urllib", "requests", "http.client", "socket"):
         assert forbidden not in source, f"offline runner reaches the network via {forbidden}"
+
+
+def _candidate(name: str, *extra: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(SCRIPT), "--candidate", str(ROOT / "scripts" / "skill-evals" / "fixtures" / name), *extra],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_a_defect_fixture_fails_with_the_named_rule() -> None:
+    result = _candidate("defect-shell-true.diff")
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+    assert payload["verdict"] == "fail"
+    record = payload["record"]
+    assert record["verdict"] == "fail"
+    assert record["subject"]["kind"] == "self-improve-candidate"
+    assert record["subject"]["ref"] == "fixture:defect-shell-true"
+    assert any(finding["rule"] == "security.shell-true" for finding in record["findings"])
+    assert _skill_eval().validate_record(record) == record
+
+
+def test_a_missing_test_fixture_fails_the_tdd_rule() -> None:
+    result = _candidate("defect-missing-test.diff")
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["verdict"] == "fail"
+    assert any(finding["rule"] == "tdd.missing-test" for finding in payload["record"]["findings"])
+
+
+def test_a_clean_fixture_passes() -> None:
+    result = _candidate("clean-test-only.diff")
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["verdict"] == "pass"
+    assert payload["record"]["findings"] == []
+    assert _skill_eval().validate_record(payload["record"]) == payload["record"]
+
+
+def test_a_candidate_outside_the_fixture_root_is_refused(tmp_path) -> None:
+    outside = tmp_path / "outside.diff"
+    outside.write_text("--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n")
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--candidate", str(outside)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "fixture" in result.stdout.lower()

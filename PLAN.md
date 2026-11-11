@@ -488,6 +488,35 @@ current: done
     lint and format are green. goagx republished as `62797c6` and pinned. No
     live claim.
 
+## Step 103 — Nocturnal skill-eval subtasks and network summary
+
+- [x] **Step 103** — Give the nocturnal window a deterministic eval mode
+  without breaking model-prompt subtasks.
+  - [x] **103A — Cluster contract.** `shared/sparknet-cluster.py` accepts a
+    per-subtask `mode` (`model` default, `skill-eval`), refuses unknown or
+    mixed modes, and the nocturnal artifact contract documents the mode, the
+    `fixture:<name>` ref, the signed record output and the Master
+    `network_evals` summary.
+  - [x] **103B — Harness.** `scripts/sparknet-skill-eval.py --candidate`
+    evaluates one fixture diff under `scripts/skill-evals/fixtures/`, refuses
+    paths outside it, and emits a valid record; defect and clean fixtures.
+  - [x] **103C — Peer executor.** The dispatch bridge runs the harness for a
+    `skill-eval` subtask with a fixed argv and a `fixture:<name>` ref only;
+    model prompts keep the Ollama path. Results stay signed with
+    `model: skill-eval-rules/1`.
+  - [x] **103D — Master summary.** The scheduler validates every eval output
+    and writes `network_evals` (records plus pass/warn/fail/invalid counts)
+    into the signed aggregate; a tampered record counts invalid, never pass.
+  - [x] **103E — Rehearsal.** `make nocturnal-rehearsal` runs the offline
+    scheduler suite: plan/arm/abort/drain, a trivial model job, an eval job and
+    a tampered record.
+  - **DoD**: fabric, peer and master suites, lint, format, contract-test,
+    render-check and `make nocturnal-rehearsal` are green. The live 02:00–05:00
+    window remains issue #8 (`DoD: confirm: user`) and is not claimed here.
+  - **Status 2026-11-11 — COMPLETE (code and rehearsal).** Fabric suite, peer
+    648/1 skipped, master suite, lint, format, contract-test, render-check and
+    the rehearsal are green. Live window still pending.
+
 ## Standing verification rules
 
 - A gate that cannot fail is not a gate. Every claim needs a named test or a
