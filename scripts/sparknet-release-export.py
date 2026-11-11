@@ -130,6 +130,7 @@ SURFACES: dict[str, dict[str, Any]] = {
             "spark-vllm-l4t-patch.py",
             "spark-vllm-xformers-gqa-patch.py",
             "sparknet-node-setup.sh",
+            "sparknet-node-setup.py",
             "bootstrap-agx.sh",
             "spark.docker",
             "spark.compose.yml",
