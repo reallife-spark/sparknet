@@ -7,11 +7,10 @@ Updated: 2026-11-11
 - `PLAN.md` — `current: done`; Step 95 closed the seven deep-module audit
   findings (Go capability drift, registry acceptance seam, loader resolution,
   console vector view, contract-test split, package artifacts, ADR-0014).
-- Source gates green: `make test-all`, `CI_QUICK=1 make ci`, contract/render/
-  SBOM/validate, lint/format/shellcheck. Role and Go submodule changes are
-  uncommitted; the cross-repo commit and submodule pin are not made.
-- Critical open items: goagx republish is pending (it also carries the earlier
-  sandbox-contract drift); run the 9G nocturnal window; peer precommit still
+- Committed: goSpark `cd2d72a`, peer `24bee7d`, master `edc45eb`, fabric
+  `503a2f7`; goagx republished as `dcb84b4` and pinned. `make goagx-drift-check`
+  reports no drift.
+- Critical open items: run the 9G nocturnal window; peer precommit still
   reports `peer-node/02_Daily/2026-11-02.md`.
 - Phase 8 remains closed: 54 fixed, 186 reviewed-clean, 176 test-verified;
   register and inventory in `_archives/`.

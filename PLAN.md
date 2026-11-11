@@ -291,13 +291,11 @@ current: done
     module for this release and records the staged-split trigger.
   - **DoD**: `make test-all`, `CI_QUICK=1 make ci`, `make contract-test`,
     `make render-check`, `make sbom-check`, `make format-check`,
-    `make shellcheck` and `git diff --check` are green. The goagx republish is
-    a separate release step and remains pending; it is not part of this
-    source-change DoD.
+    `make shellcheck` and `git diff --check` are green; the goagx release is
+    published and its pointer pinned.
   - **Status 2026-11-11 — COMPLETE.** All seven local issues are `done`.
-    Source gates are green; the role and Go submodules carry uncommitted
-    changes, and the published goagx tree is behind the fabric tree. No live
-    claim.
+    Commits: goSpark `cd2d72a`, peer `24bee7d`, master `edc45eb`, fabric
+    `503a2f7`; goagx republished as `dcb84b4` and pinned. No live claim.
 
 ## Standing verification rules
 

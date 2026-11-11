@@ -269,9 +269,9 @@ All seven findings are closed locally:
 
 Verification after the changes: `make test-all`, `make lint`,
 `make format-check`, `make shellcheck`, `make render-check` and
-`make context-check` pass. The published `goagx` distribution is still behind
-the fabric tree (a pre-existing drift that now also contains these changes);
-republishing it needs the release key and is a separate release step.
+`make context-check` pass. The source commits are goSpark `cd2d72a`, peer
+`24bee7d`, master `edc45eb` and fabric `503a2f7`; the goagx distribution was
+republished as `dcb84b4` and the pointer is pinned.
 
 ## Verification performed
 
