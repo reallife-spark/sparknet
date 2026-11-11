@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
 updated: 2026-11-11
-current: 96
+current: done
 ---
 
 # sparknet — Active Plan
@@ -301,7 +301,7 @@ current: 96
 
 ## Step 96 — Skill-based feedback loops and evaluations
 
-- [ ] **Step 96** — Turn the installed Matt Pocock skills into recorded,
+- [x] **Step 96** — Turn the installed Matt Pocock skills into recorded,
   gating evaluations of AI work products and of the skills themselves, and
   file the work local-first in all five repositories. Task-tracked in
   `.scratch/issues/`; no live claim is made from this host.
@@ -361,12 +361,14 @@ current: 96
   - **DoD**: `make test-all`, `CI_QUICK=1 make ci`, `make contract-test`,
     `make render-check`, `make drift-check` and `git diff --check` are green;
     no live claim is made from this host.
-  - **Status 2026-11-11 — slices complete; release pending.** 96A–96F are
-    verified. The step stays `current: 96` because the DoD includes a green
-    `make drift-check`: the only failing sub-gate is `goagx-drift-check`
-    (105 changed lines), expected until `make goagx-publish` republishes the
-    distribution. Commits and the release were not requested; the working
-    trees hold the verified changes. No live claim.
+  - **Status 2026-11-11 — COMPLETE.** 96A–96F verified. Pushed goSpark
+    `2e8b2be` and fabric `8f9bb08`; goagx republished as `c77170b` from
+    sparknet `df5c46a`, with the goSpark pin bumped and the superproject
+    pointer pinned. `make drift-check` is green. The GitHub mirror remains
+    blocked: `gh issue create` returns `Resource not accessible by personal
+    access token (createIssue)`; the fine-grained PAT needs Issues: Read and
+    write in GitHub settings. Local `.scratch/issues/` stays canonical. No
+    live claim.
 
 ## Standing verification rules
 

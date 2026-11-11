@@ -4,15 +4,14 @@
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
 Updated: 2026-11-11
 ## Plan cursor
-- `PLAN.md` — `current: 96`: skill-eval record, promotion gate, reviewer
-  rubric across fabric/Go, golden-diff harness and language policy landed.
-  Working trees are uncommitted by request.
-- Committed baseline: goSpark `cd2d72a`, peer `24bee7d`, master `edc45eb`,
-  fabric `503a2f7`, goagx `dcb84b4`. `make drift-check` fails only at goagx
-  until `make goagx-publish` runs in the release step.
-- Critical open items: commit/publish Step 96; GitHub mirror blocked by the PAT
-  (`createIssue`), so `.scratch/issues/` is canonical; 9G nocturnal window;
-  peer precommit reports `peer-node/02_Daily/2026-11-02.md`.
+- `PLAN.md` — `current: done`; Step 96 closed: skill-eval record, promotion
+  gate, reviewer rubric, golden-diff harness and language policy; pushed.
+- Commits: goSpark `2e8b2be`; fabric `8f9bb08` and `df5c46a`; goagx `c77170b`
+  pinned. Peer `24bee7d`, master `edc45eb` unchanged. `make drift-check` green.
+- Critical open items: GitHub mirror blocked by the PAT (`createIssue`), so
+  `.scratch/issues/` is canonical; 9G nocturnal window; shell migrations;
+  dependency guard, tier markers, memory-filter boundary and master audit
+  view open; peer precommit reports `peer-node/02_Daily/2026-11-02.md`.
 - Phase 8 remains closed: 54 fixed, 186 reviewed-clean, 176 test-verified;
   register and inventory in `_archives/`.
 ## Live fabric
