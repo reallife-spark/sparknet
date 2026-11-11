@@ -72,12 +72,14 @@ def _submodule(tmp_path: Path, root: Path, name: str, files: dict[str, str]) -> 
 
 GOAGX_ROOT_FILES = (
     "spark-entrypoint.sh",
+    "spark-entrypoint.py",
     "spark-precontext.py",
     "spark.compose.cpu.yml",
     "torch-dist-l4t-compat.py",
     "spark-vllm-l4t-patch.py",
     "spark-vllm-xformers-gqa-patch.py",
     "sparknet-node-setup.sh",
+    "sparknet-node-setup.py",
     "bootstrap-agx.sh",
     "spark.docker",
     "spark.compose.yml",

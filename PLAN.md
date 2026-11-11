@@ -519,6 +519,32 @@ current: done
     `ab9be7a`; goagx republished as `2b4de0f` and pinned. Live window still
     pending (issue #8).
 
+## Step 104 — Migrate the two large node scripts to Python
+
+- [ ] **Step 104** — Replace the logic in `spark-entrypoint.sh` and
+  `sparknet-node-setup.sh` with Python implementations behind thin exec
+  wrappers, keeping the names, flags and output stable.
+  - [x] **104A — Behavioural tests.** `tests/test_entrypoint.py` exercises the
+    dispatcher argv/env construction, the boot helpers and the fail-closed
+    key/secret paths in the unit tier; the node-setup join suite covers the
+    env-file and join contracts through the wrapper.
+  - [x] **104B — Entrypoint.** `spark-entrypoint.py` (3.8-compatible) is the
+    implementation; the shell file is a five-line exec wrapper. Both
+    Dockerfiles copy and byte-compile it; the release-export, goagx-publish and
+    layout lists carry the new file.
+  - [x] **104C — Node setup.** `sparknet-node-setup.py` owns args, preflight,
+    compose, bundle staging, join, env-file rendering, the GPU fixture and the
+    actions; the shell file is the same thin wrapper.
+  - [ ] **104D — Target-host verification.** Build and run the image and the
+    setup flows on agx64/agx32, including SIGTERM drain, a join and a second
+    idempotent run. `DoD: confirm: user`; no live claim from this host.
+  - **DoD**: the fabric suite, peer and master suites, lint, format, shellcheck,
+    contract-test, render-check and `make drift-check` are green; the two
+    live checks are recorded with host and date.
+  - **Status 2026-11-11 — code complete; target-host verification pending.**
+    The Python ports and wrappers are in place; all local gates are green.
+    Step 104D remains open.
+
 ## Standing verification rules
 
 - A gate that cannot fail is not a gate. Every claim needs a named test or a

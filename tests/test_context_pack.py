@@ -55,7 +55,7 @@ def test_the_consumers_all_name_the_context_pack() -> None:
     assert '"CONTEXT.md"' in rag
     provisioner = (REPO_ROOT / "peer-node" / "services" / "sparknet-vault-provisioner.py").read_text()
     assert '"CONTEXT.md"' in provisioner
-    entrypoint = (REPO_ROOT / "spark-entrypoint.sh").read_text()
+    entrypoint = (REPO_ROOT / "spark-entrypoint.py").read_text()
     assert "CONTEXT.md" in entrypoint
 
 

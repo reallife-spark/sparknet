@@ -106,10 +106,12 @@ EXPECTED_TOP_LEVEL = {
     # build context IS the root (BuildKit named context gospark is separate).
     "spark.docker",
     "spark-entrypoint.sh",
+    "spark-entrypoint.py",
     "spark.compose.yml",
     "spark.compose.cpu.yml",
     "spark-precontext.py",
     "sparknet-node-setup.sh",
+    "sparknet-node-setup.py",
     # the AGX Xavier twin of the node surface: image + compose + audio shim +
     # README, retargeted from GB10 to sm_72 with the same service contract.
     "goagx",

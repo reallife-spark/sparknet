@@ -184,8 +184,10 @@ RUN mkdir -p "${SPARKNET_CONTEXT_DIR}" \
 
 # --- entrypoint + dispatcher -------------------------------------------------
 COPY spark-entrypoint.sh /usr/local/bin/spark-entrypoint
+COPY spark-entrypoint.py /usr/local/bin/spark-entrypoint.py
 RUN chmod 0755 /usr/local/bin/spark-entrypoint \
  && ln -sf /opt/sparknet/venv/bin/python /usr/local/bin/sparknet-python \
+ && python3 -m py_compile /usr/local/bin/spark-entrypoint.py \
  && /usr/local/bin/spark-entrypoint help >/dev/null
 
 WORKDIR /srv/sparknet/peer-node

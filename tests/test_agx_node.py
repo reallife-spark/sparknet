@@ -26,8 +26,8 @@ AGX_COMPOSE = AGX_DIR / "sparknet.agx.compose.yml"
 AGX_DOCKER = AGX_DIR / "sparknet.agx.docker"
 SPARK_COMPOSE = REPO_ROOT / "spark.compose.yml"
 SPARK_DOCKER = REPO_ROOT / "spark.docker"
-SETUP = REPO_ROOT / "sparknet-node-setup.sh"
-ENTRYPOINT = REPO_ROOT / "spark-entrypoint.sh"
+SETUP = REPO_ROOT / "sparknet-node-setup.py"
+ENTRYPOINT = REPO_ROOT / "spark-entrypoint.py"
 SHIM = AGX_DIR / "sparknet-audio-shim.py"
 
 # The engine layer is the one place the two stacks may differ. Everything
@@ -222,18 +222,13 @@ def test_setup_script_wires_the_platform_flag():
     fixture and existing habits stay valid, and advertise itself."""
     text = SETUP.read_text(encoding="utf-8")
 
-    assert 'PLATFORM="${SPARKNET_PLATFORM:-spark}"' in text, "the default platform must remain spark"
-    assert "--platform)" in text, "the setup script does not parse --platform"
+    assert 'os.environ.get("SPARKNET_PLATFORM") or "spark"' in text, "the default platform must remain spark"
+    assert '"--platform"' in text, "the setup script does not parse --platform"
     assert "--platform spark|agx" in text, "the usage text does not advertise --platform"
-
-    agx_block = re.search(r"agx\)\s*\n(.*?)\n\s*;;", text, re.S)
-    assert agx_block, "no agx branch in the platform case"
-    assert "goagx/sparknet.agx.compose.yml" in agx_block.group(1), "agx must build against the AGX compose"
-    assert "spark-agx.env" in agx_block.group(1), "agx needs its own env-file (never inherits spark.env)"
-
-    spark_block = re.search(r"spark\)\s*\n(.*?)\n\s*;;", text, re.S)
-    assert spark_block, "no spark branch in the platform case"
-    assert "spark.compose.yml" in spark_block.group(1) and "spark.env" in spark_block.group(1)
+    assert 'PLATFORM == "agx"' in text and 'REPO / "goagx" / "sparknet.agx.compose.yml"' in text
+    assert '"spark-agx.env"' in text, "agx needs its own env-file (never inherits spark.env)"
+    assert 'PLATFORM == "spark"' in text and 'REPO / "spark.compose.yml"' in text
+    assert '"spark.env"' in text
 
 
 def test_entrypoint_dispatches_the_aux_engines():
@@ -246,20 +241,20 @@ def test_entrypoint_dispatches_the_aux_engines():
 
     for subcommand in ("llama-embed", "llama-rerank", "whisper-asr"):
         impl = f"cmd_{subcommand.replace('-', '_')}"
-        assert re.search(rf"^\s+{re.escape(subcommand)}\)", text, re.M), f"dispatch case is missing {subcommand}"
-        assert f"{impl}()" in text, f"missing {impl} implementation"
-        usage_body = text.split("usage() {", 1)[1].split("\n}", 1)[0]
-        assert subcommand in usage_body, f"usage() does not document {subcommand}"
+        assert f'"{subcommand}": {impl}' in text, f"dispatch entry is missing {subcommand}"
+        assert f"def {impl}(" in text, f"missing {impl} implementation"
+        usage_body = text.split('USAGE = """', 1)[1].split('"""', 1)[0]
+        assert subcommand in usage_body, f"usage does not document {subcommand}"
 
-    assert "VLLM_CLI" in text and "cli=(${VLLM_CLI:-vllm serve})" in text, "the engine command must come from VLLM_CLI"
-    assert 'args=(--model "$model")' in text, "a non-`serve` engine must receive --model, not a positional"
-    assert '[ "$modern" = 1 ]' in text, "the newer-engine flags must be gated on the modern CLI branch"
-    assert text.count('[ "$modern" = 1 ]') == 2, "both --enable-prefix-caching and --limit-mm-per-prompt must be gated"
+    assert "VLLM_CLI" in text
+    assert 'os.environ.get("VLLM_CLI") or "vllm serve"' in text, "the engine command must come from VLLM_CLI"
+    assert '["--model", model]' in text, "a non-`serve` engine must receive --model, not a positional"
+    assert text.count("if modern and") == 2, "both --enable-prefix-caching and --limit-mm-per-prompt must be gated"
 
     # baked-model guards: a missing GGUF is a build error, not a crash loop
-    assert 'die "embed model missing' in text
-    assert 'die "rerank model missing' in text
-    assert 'die "whisper model missing' in text
+    assert "embed model missing" in text
+    assert "rerank model missing" in text
+    assert "whisper model missing" in text
 
 
 def test_aux_engines_are_baked_and_healthchecked(agx: dict):
@@ -299,8 +294,9 @@ def test_audio_keeps_the_openai_surface():
     assert re.search(r"\bffmpeg\b", docker), "whisper --convert needs ffmpeg for non-WAV uploads"
 
     entrypoint = ENTRYPOINT.read_text(encoding="utf-8")
-    assert "--app-dir /opt/sparknet audio_shim:app" in entrypoint, "the dispatcher must launch the shim module"
-    assert "--host 127.0.0.1" in entrypoint, "whisper itself must stay on loopback; only the shim is published"
+    assert '"--app-dir"' in entrypoint
+    assert '"audio_shim:app"' in entrypoint, "the dispatcher must launch the shim module"
+    assert '"127.0.0.1"' in entrypoint, "whisper itself must stay on loopback; only the shim is published"
 
 
 # --- 5. build-time ARG scope ---------------------------------------------------
@@ -469,8 +465,8 @@ def test_memory_binary_is_in_both_images_and_the_entrypoint():
         text = docker.read_text(encoding="utf-8")
         assert "test -x /usr/local/bin/sparknet-memory" in text, f"{docker}: memory binary is not asserted"
     entrypoint = ENTRYPOINT.read_text(encoding="utf-8")
-    assert re.search(r"^\s+memory\)", entrypoint, re.M), "dispatcher has no memory subcommand"
-    assert "cmd_memory()" in entrypoint
+    assert '"memory": cmd_memory' in entrypoint, "dispatcher has no memory subcommand"
+    assert "def cmd_memory(" in entrypoint
     assert "sparknet-memory" in entrypoint
 
 
@@ -491,6 +487,6 @@ def test_memory_gateway_is_the_only_front_door(agx: dict, spark: dict):
     for key in keys:
         assert agx["memory-gateway"]["environment"][key] == spark["memory-gateway"]["environment"][key]
     entrypoint = ENTRYPOINT.read_text(encoding="utf-8")
-    assert re.search(r"^\s+memory-gateway\)", entrypoint, re.M)
-    assert "cmd_memory_gateway()" in entrypoint
+    assert '"memory-gateway": cmd_memory_gateway' in entrypoint
+    assert "def cmd_memory_gateway(" in entrypoint
     assert "sparknet-memory-gateway.py" in entrypoint

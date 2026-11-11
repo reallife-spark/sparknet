@@ -44,7 +44,7 @@ MASTER_PUB = "I+8r6I3PR/sAHD5zphk5U2fPzCMGBrGZYMPf6AJMpeU="
 @pytest.fixture()
 def node(tmp_path: Path) -> Path:
     """A throwaway repo holding the setup script, compose files and stub docker."""
-    for name in ("sparknet-node-setup.sh", "spark.compose.yml", "spark.compose.cpu.yml"):
+    for name in ("sparknet-node-setup.sh", "sparknet-node-setup.py", "spark.compose.yml", "spark.compose.cpu.yml"):
         shutil.copy(REPO_ROOT / name, tmp_path / name)
     (tmp_path / "sparknet-node-setup.sh").chmod(0o755)
 

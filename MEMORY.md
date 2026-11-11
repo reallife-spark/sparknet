@@ -4,15 +4,14 @@
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
 Updated: 2026-11-11
 ## Plan cursor
-- `PLAN.md` — `current: done`; Steps 96–103 closed: skill-eval record/gate/
-  harness, dependency guard, test tiers, ADR-0015's boundary, the console
-  eval view, two malformed-payload refusals, and nocturnal eval subtasks.
+- `PLAN.md` — `current: 104`; Steps 96–103 closed; Step 104 (node-script
+  migrations) is code-complete with target-host verification open.
 - Commits: goSpark `2e8b2be`; fabric `ab9be7a`/pin; goagx `2b4de0f`; peer
-  `89afef4`, master `b93f077`. `make drift-check` green.
-- Critical open items: live nocturnal window tonight 02:00–05:00 (issue #8,
-  operator raxxar); shell migrations (#11); peer→Master eval transport (#9);
-  mirror complete (21 issues/5 repos, 18 closed); peer precommit reports
-  `peer-node/02_Daily/2026-11-02.md`.
+  `89afef4`, master `b93f077`. `make drift-check` green before Step 104.
+- Critical open items: Step 104D target-host verification (#11); live
+  nocturnal window tonight 02:00–05:00 (#8, operator raxxar); peer→Master eval
+  transport (#9); mirror complete (21 issues/5 repos, 18 closed); peer
+  precommit reports `peer-node/02_Daily/2026-11-02.md`.
 - Phase 8 remains closed: 54 fixed, 186 reviewed-clean, 176 test-verified;
   register and inventory in `_archives/`.
 ## Live fabric

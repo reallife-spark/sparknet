@@ -235,7 +235,7 @@ verify_tree() {  # <root>
     goagx/sparknet.agx.docker goagx/sparknet.agx.compose.yml \
     goagx/sparknet-audio-shim.py goagx/bootstrap-agx.sh goagx/GOSPARK_PIN \
     goagx/README.md goagx/USER_MANUAL.md \
-    sparknet-node-setup.sh spark-entrypoint.sh spark-precontext.py \
+    sparknet-node-setup.sh sparknet-node-setup.py spark-entrypoint.sh spark-entrypoint.py spark-precontext.py \
     spark.compose.cpu.yml bootstrap-agx.sh \
     contracts shared scripts peer-node master-node \
     .opencode/skills .opencode/agents opencode.json requirements.txt \

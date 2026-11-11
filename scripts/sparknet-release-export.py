@@ -101,12 +101,14 @@ SURFACES: dict[str, dict[str, Any]] = {
         ),
         "root_files": (
             "spark-entrypoint.sh",
+            "spark-entrypoint.py",
             "spark-precontext.py",
             "spark.compose.cpu.yml",
             "torch-dist-l4t-compat.py",
             "spark-vllm-l4t-patch.py",
             "spark-vllm-xformers-gqa-patch.py",
             "sparknet-node-setup.sh",
+            "sparknet-node-setup.py",
             "bootstrap-agx.sh",
             "spark.docker",
             "spark.compose.yml",
@@ -121,6 +123,7 @@ SURFACES: dict[str, dict[str, Any]] = {
         "release_data": (),
         "from_git_root_files": (
             "spark-entrypoint.sh",
+            "spark-entrypoint.py",
             "spark-precontext.py",
             "spark.compose.cpu.yml",
             "torch-dist-l4t-compat.py",
