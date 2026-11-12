@@ -44,6 +44,12 @@
       "sha256": "0b15bff116dc200e61d2e9dbcde579fc3d699b75e21dfcb7f34e98044c16fbdf"
     },
     {
+      "contract": "eval-report",
+      "file": "eval-report-schema.json",
+      "schema_version": "1.0",
+      "sha256": "91815021edfdeb536dc6629c12006b892a9b0311055e77cad5f1dbbb86d3b50d"
+    },
+    {
       "contract": "event-schema",
       "file": "event-schema.json",
       "schema_version": "1.0",

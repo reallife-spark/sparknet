@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "contract": "eval-report",
+  "description": "Signed peer→Master audit report carrying skill-eval records. The report is audit evidence: it never grants authority, never becomes knowledge, and never enters a vault, KB, corpus or RFI answer. The Master stores it append-only and the read-only /api/evals view projects it.",
+  "direction": "peer -> Master",
+  "method": "POST",
+  "path": "/api/v1/evals",
+  "port": 8090,
+  "capability": "telemetry",
+  "schema": "sparknet-eval-report/1",
+  "fields": [
+    "schema",
+    "report_id",
+    "node_id",
+    "peer_fingerprint",
+    "records",
+    "records_sha256",
+    "generated_at",
+    "issued_at",
+    "expires_at",
+    "nonce"
+  ],
+  "required": [
+    "schema",
+    "report_id",
+    "node_id",
+    "peer_fingerprint",
+    "records",
+    "records_sha256",
+    "generated_at",
+    "issued_at",
+    "expires_at",
+    "nonce"
+  ],
+  "limits": {
+    "max_records": 100,
+    "max_body_bytes": 262144
+  },
+  "records": {
+    "schema": "sparknet-skill-eval/1",
+    "validator": "shared/sparknet-skill-eval.py",
+    "rule": "Each record is validated independently; invalid or tampered records are counted as invalid and never treated as pass."
+  },
+  "report_id": "sha256(node_id + NUL + records_sha256), hex; stable while the records are unchanged, so a re-send is idempotent.",
+  "records_sha256": "sha256 of canonical JSON (sort_keys=true, separators=(',', ':'), ASCII) over the records array.",
+  "authentication": "The peer node key signs the raw request body; the Master verifies it, attributes the overlay source through the signed registry and requires the peer-held telemetry capability.",
+  "implementation": "shared/sparknet-eval-report.py; peer pusher in peer-node/services/sparknet-eval-push.py; Master intake route in master-node/services/sparknet-peer-intake.py; read view /api/evals.",
+  "storage": "/mnt/log/sparknet-evals.jsonl",
+  "read_surface": "/api/evals",
+  "rules": [
+    "A report is audit evidence, never authority and never knowledge.",
+    "A tampered or invalid record is counted as invalid; it is never promoted.",
+    "A re-send with the same node_id and report_id is idempotent.",
+    "The report is bounded in records and bytes.",
+    "The Master never reads a peer vault, KB or delegate store for this report."
+  ],
+  "refusals": {
+    "malformed": "missing/extra field, bad type, over-limit records or body",
+    "bad_signature": "the node-key signature does not verify",
+    "wrong_peer": "peer_fingerprint does not match the overlay-derived fingerprint",
+    "stale": "issued_at/expires_at outside the freshness window",
+    "replayed": "nonce already seen",
+    "digest_mismatch": "records_sha256 or report_id does not match the records",
+    "capability_missing": "the source lacks telemetry"
+  }
+}
