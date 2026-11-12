@@ -4,16 +4,16 @@
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
 Updated: 2026-11-12
 ## Plan cursor
-- `PLAN.md` — `current: 105` (skill catalog access); Step 104D target-host
-  verification is still open. `master-node/PLAN.md` — `current: 9`; Step 9G live
-  nocturnal window is open.
+- `PLAN.md` — `current: done` (Step 104D and Step 106 complete).
+  `master-node/PLAN.md` — `current: 9`; Step 9G live nocturnal window is
+  armed for 2026-11-13 01:59:30 CET (`sparknet-nocturnal-window-20261113` runner on agx64).
 - Merged: fabric #18 (review triage), #19 (loader diagnostics), #20 (peer
   guard-status pin), #21 (AGX digest pin), #22 (KV/GPU ADRs); peer #2
   (guard-status); goagx signed release `2a925a6`; master plan truth `d227733`.
-- Critical open items: 104D target-host deployment/image rebuild (#11); 9G
-  next window 2026-11-13 02:00–05:00 (#8); peer→Master eval transport (#9);
-  sandbox 20E/20F code; Step 10 live 4203 needs a third host; Phase 9
-  destructive legs; KV/GPU ADR backlog. Mirror has 3 open issues (#8/#9/#11).
+- Critical open items: 9G live window 2026-11-13 02:00–05:00 (#8) only.
+  #11 (104D) and #9 are closed with dated agx32/agx64 evidence; sandbox
+  20E/20F code; Step 10 live 4203 needs a third host; Phase 9 destructive
+  legs; KV/GPU ADR backlog. Mirror has 1 open issue (#8).
 - Phase 8 remains closed: 54 fixed, 186 reviewed-clean, 176 test-verified;
   register and inventory in `_archives/`.
 ## Live fabric
@@ -21,9 +21,11 @@ Updated: 2026-11-12
   `red-team`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`,
   hostname `blue-team`). Peer egress only to Master. The overlay is `wg1`, not
   `wg0`.
-- Both hosts still carry the pre-104 shell entrypoint at
-  `/home/raxxar/sparknet`; `sparknet-agx-node:dev` was built 2026-10-21. 104D
-  needs a deployment/image rebuild, not just a command run.
+- Both hosts now carry the post-104 wrappers/Python, the eval-audit and Step
+  103 code, and refreshed contexts. The live checks used a thin `:py104` layer
+  over the existing AGX image; the from-source image rebuild remains a release
+  task. Preflight on 2026-11-12: a signed eval job reached the peer through the
+  signer and bridge; `network_evals` `fail:1`; window timer armed.
 - Master: signer/ledger/parity, 8088 admin, 8098 console, 8090/8091 intake, 4220–4223, 4201/4202 share, 4204 engine, Qdrant 6333, teacher.
 - Peer: 9090 guard, 4096 bridge, 4201/4202 share, 4110/4093 memory, 8181 WebUI, 8099 console, 4204 engine, Qdrant 6333, student.
 - **agx32 disk hygiene (2026-11-12):** root 869G→70G used. Qdrant snapshots live at `/mnt/ai/qdrant-snapshots` (keep 1/collection); Ollama store merged into `/mnt/ai/ollama/models`; `~/.cache/huggingface` → `/mnt/ai/hf-cache`; uplift outbox capped at 5 GiB; `sparknet-console@master` disabled. `sparknet-uplift-sync.timer` (user) runs daily at 06:15; goagx is pinned at `7656de8` and drift-clean from HEAD; `/mnt/data` MinIO PCAP orphans reclaimed (77G→4.4G).
