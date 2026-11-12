@@ -89,3 +89,27 @@ def test_loader_accepts_the_deployed_shared_path() -> None:
 
     paths = [str(path) for path in candidates("sparknet-authz.py")]
     assert "/srv/sparknet/shared/sparknet-authz.py" in paths
+
+
+def test_missing_file_reports_candidate_paths(tmp_path):
+    with pytest.raises(FileNotFoundError) as excinfo:
+        load_shared("absent.py", "sparknet_absent_paths_module", dirs=[tmp_path])
+    message = str(excinfo.value)
+    assert "searched, in order" in message
+    assert str(tmp_path / "absent.py") in message
+
+
+def test_missing_required_sibling_reports_the_probed_directory(tmp_path):
+    module_path = tmp_path / "needs.py"
+    module_path.write_text("VALUE = 1\n", encoding="utf-8")
+    with pytest.raises(FileNotFoundError) as excinfo:
+        load_shared(
+            "needs.py",
+            "sparknet_needs_paths_module",
+            dirs=[tmp_path],
+            required=("sparknet-missing.py",),
+        )
+    message = str(excinfo.value)
+    assert "sparknet-missing.py" in message
+    assert f"probed {module_path}" in message
+    assert "searched, in order" in message
