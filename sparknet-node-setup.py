@@ -148,7 +148,10 @@ def stage_bundle() -> None:
 
 def _secret(path: Path, size: int = 32) -> str:
     if path.is_file() and path.stat().st_size:
-        return path.read_text(encoding="utf-8")
+        # Command substitution stripped the trailing newline in the shell
+        # implementation; keep the rendered env byte-identical when a secret
+        # file was written by hand or by an older tool.
+        return path.read_text(encoding="utf-8").strip()
     value = base64.b64encode(os.urandom(size)).decode()
     path.write_text(value, encoding="utf-8")
     path.chmod(0o600)
@@ -217,7 +220,11 @@ def render_env_file() -> None:
     admin_secret = NODE_STATE / "webui-admin-password"
     if ROLE == "master" and not (admin_secret.is_file() and admin_secret.stat().st_size):
         _secret(admin_secret, 24)
-    admin = admin_secret.read_text(encoding="utf-8") if admin_secret.is_file() and admin_secret.stat().st_size else ""
+    admin = (
+        admin_secret.read_text(encoding="utf-8").strip()
+        if admin_secret.is_file() and admin_secret.stat().st_size
+        else ""
+    )
 
     (NODE_STATE / "opencode-engine").mkdir(parents=True, exist_ok=True)
     (NODE_STATE / "opencode-engine").chmod(0o700)
@@ -358,6 +365,9 @@ def act_up() -> None:
         act_build()
     if not ENV_FILE.is_file() or MASTER_PUB or REGISTRY:
         render_env_file()
+    # --no-build skips act_build, but the compose mounts still need the state
+    # subdirectories and the role .env; create them on every up.
+    ensure_vault_env()
     write_gpu_fixture()
     log(f"starting services (role={ROLE} engine={ENGINE} profiles={PROFILES or 'none'})")
     if compose("up", "-d") != 0:
