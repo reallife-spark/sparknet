@@ -56,6 +56,10 @@
       "sha256": "c6e0b7efb948bcdd5712e922204451db1c2634964c502e24b9433a6c6e98acf9",
       "source": "/mnt/nvme/skills/wiki/obsidian-markdown"
     },
+    "setup-deep-modules": {
+      "sha256": "local",
+      "source": "local"
+    },
     "skill-creator": {
       "sha256": "c8dc8d041b48fca472f7ad41911078513a5b356f5f117ac472b59b7b04cdd1e5",
       "source": "/mnt/nvme/github/obsidian-wiki/.skills/skill-creator"

@@ -1,0 +1,53 @@
+# Starter [tool.importlinter] block for a deep-module Python repository.
+#
+# Append to pyproject.toml, or translate to INI if the repository uses a
+# .importlinter file. Replace `example` with the package name. Duplicate the
+# _lib block for each package that has a _lib folder; duplicate the tests block
+# only for packages that have a tests package. Keep the generic forbidden and
+# acyclic_siblings contracts once.
+#
+# For a src/ layout, run with PYTHONPATH=src (or install the project editable).
+
+[tool.importlinter]
+root_package = "packages"
+
+[[tool.importlinter.contracts]]
+name = "example internals are private"
+type = "protected"
+protected_modules = ["packages.example._lib"]
+allowed_importers = [
+    "packages.example",
+    "packages.example.*",
+    "packages.example.**",
+]
+
+[[tool.importlinter.contracts]]
+name = "example tests are private"
+type = "protected"
+protected_modules = ["packages.example.tests"]
+allowed_importers = [
+    "packages.example.tests",
+    "packages.example.tests.*",
+    "packages.example.tests.**",
+]
+
+[[tool.importlinter.contracts]]
+name = "tests never import implementation"
+type = "forbidden"
+source_modules = ["packages.*.tests"]
+forbidden_modules = ["packages.*._lib"]
+# A test -> entry point -> _lib is the public path. Without this, the clean
+# example fails on the indirect import through the entry point.
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "no package cycles"
+type = "acyclic_siblings"
+ancestors = ["packages"]
+
+# Layering is a separate concern; uncomment and fill in only when the
+# repository has decided its dependency direction.
+# [[tool.importlinter.contracts]]
+# name = "package layers"
+# type = "layers"
+# layers = ["packages.api", "packages.service", "packages.storage"]

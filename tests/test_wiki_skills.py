@@ -44,6 +44,7 @@ EXPECTED_EXCLUSIONS = {
 # scripts/sync-wiki-skills.py by test_local_skill_list_matches_the_sync_script.
 EXPECTED_LOCAL_SKILLS = {
     "wiki-audit",
+    "setup-deep-modules",
 }
 
 # Referenced by vendored skills but deliberately not shipped. Pre-existing

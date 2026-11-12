@@ -10,7 +10,7 @@ that has never seen `/mnt/nvme`.
 - **Pinned commit**: `ec2b6bc` — "fix(wiki-ingest): archive promoted _raw/ drafts instead of deleting them"
 - **License**: MIT, © 2026 Ar9av — see [`LICENSE`](LICENSE)
 - **Farm source** (what this cluster runs today): `/mnt/nvme/skills/wiki`
-- **Shipped**: 32 skills · **Withheld**: 4 · **Local**: 1
+- **Shipped**: 32 skills · **Withheld**: 4 · **Local**: 2
 
 ## Where they live and why not in `skills/`
 
@@ -53,6 +53,8 @@ against, so the sync never copies it, never prunes it, and `--check` accepts it
 at face value. It exists at `.opencode/skills/<name>/SKILL.md` in the repo
 itself. To add one, author the directory first, then add the name to
 `LOCAL_SKILLS` (in the same edit) so the next sync does not prune it.
+
+The current local skills are `wiki-audit` and `setup-deep-modules`.
 
 State after each sync lives in [`.sync.json`](.sync.json): source path and
 content hash per skill, the pinned commit, the exclusion reasons, and which

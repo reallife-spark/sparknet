@@ -80,6 +80,7 @@ GIT_SOURCES: dict[str, tuple[str, str]] = {
 # suite. The dir lives here in the repo: `.opencode/skills/<name>/SKILL.md`.
 LOCAL_SKILLS: set[str] = {
     "wiki-audit",
+    "setup-deep-modules",
 }
 
 # Farm directory names that are vendored under a *different* dest name. Used

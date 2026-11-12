@@ -86,7 +86,7 @@ SUITE_LICENSE = "MIT"
 #: ``scripts/sync-wiki-skills.py`` (the authoritative list) and is drift-gated by
 #: ``tests/test_release.py``. A local skill has no upstream license grant, so
 #: until C1 chooses a repo license the honest value is NOASSERTION.
-LOCAL_SKILLS = frozenset({"wiki-audit"})
+LOCAL_SKILLS = frozenset({"wiki-audit", "setup-deep-modules"})
 
 #: SPDX's "no assertion" value, used where a license is genuinely undecided.
 NOASSERTION = "NOASSERTION"

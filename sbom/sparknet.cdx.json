@@ -1529,6 +1529,48 @@
       "type": "data"
     },
     {
+      "bom-ref": "vendored-wiki-skill:setup-deep-modules",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "330b5c65096f86e03e0a158feb45e53fa62b9a39815bd6ed5dd2d85ed9487fcc"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "NOASSERTION"
+        }
+      ],
+      "name": "setup-deep-modules",
+      "properties": [
+        {
+          "name": "sparknet:kind",
+          "value": "vendored-wiki-skill"
+        },
+        {
+          "name": "sparknet:path",
+          "value": ".opencode/skills/setup-deep-modules"
+        },
+        {
+          "name": "sparknet:entrypoint",
+          "value": ".opencode/skills/setup-deep-modules/SKILL.md"
+        },
+        {
+          "name": "sparknet:hash-scope",
+          "value": "tree"
+        },
+        {
+          "name": "sparknet:license",
+          "value": "NOASSERTION"
+        },
+        {
+          "name": "sparknet:license-source",
+          "value": "local skill (repo license deferred)"
+        }
+      ],
+      "type": "data"
+    },
+    {
       "bom-ref": "vendored-wiki-skill:setup-matt-pocock-skills",
       "hashes": [
         {

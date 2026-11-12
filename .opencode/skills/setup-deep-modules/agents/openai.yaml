@@ -1,0 +1,5 @@
+interface:
+  display_name: "Setup Deep Modules"
+  short_description: "Enforce deep Go and Python modules"
+policy:
+  allow_implicit_invocation: false

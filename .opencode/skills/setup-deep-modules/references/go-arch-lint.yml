@@ -1,0 +1,36 @@
+# Starter .go-arch-lint.yml for a deep-module Go repository.
+#
+# Copy to the repository root. Set `workdir` to the packages root. List every
+# immediate package directory under that root as a component; a Go file that
+# is not attached to a component makes `go-arch-lint check` fail.
+#
+# The starter is permissive: each component may import any project package.
+# That keeps the first run green. Replace `anyProjectDeps: true` with
+# `mayDependOn` only when the repository has decided its layering. A component
+# that should use its own private tree must include itself in `mayDependOn`,
+# for example: `example: { mayDependOn: [example] }`.
+version: 3
+workdir: internal
+allow:
+  # The compiler already enforces the deep-module boundary. This gate is about
+  # package layering, so do not fail on every third-party import.
+  depOnAnyVendor: true
+excludeFiles:
+  # Tests are covered by the black-box test check; they may import entry
+  # points across packages.
+  - "^.*_test\\.go$"
+
+components:
+  example: { in: example/** }
+  # Add one entry per immediate package directory under `workdir`:
+  # other: { in: other/** }
+
+deps:
+  example:
+    anyProjectDeps: true
+  # other:
+  #   anyProjectDeps: true
+
+  # Layering example: `example` may use only itself and `other`.
+  # example:
+  #   mayDependOn: [example, other]

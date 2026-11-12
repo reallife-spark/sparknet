@@ -46,7 +46,7 @@ Updated: 2026-11-12
 - Skill-eval model: `contracts/skill-eval-schema.json` + `shared/sparknet-skill-eval.py` is the one digest-bound pass/warn/fail record. Gate mode in `sparknet-self-improve.evaluate()` and `project report --require-review` require a passing record; the Go broker validates and stores it. `make skill-eval` runs the offline golden harness. Records are audit evidence: never authority, never knowledge.
 - Skill access: `.opencode/skills/.catalog.json` (base/peer/master) is the sorted index; `shared/sparknet-skills-mcp.py` is the one read-only search/load surface. `permission.skill` advertises only the featured ids from `contracts/skill-policy.json`; the full tree stays in place. The catalog is not authority and not knowledge.
 - Architecture decisions recorded: issue module (root ADR 0009), skill catalog (root ADR 0010), core split (root ADR 0011), sandbox policy authority (root ADR 0013), graph producer/consumer (goSpark ADR 0018).
-- Base skill tree: 80 skills (33 wiki, 9 understand, 38 mattpocock); role catalogs peer 125 / master 1614.
+- Base skill tree: 81 skills (32 vendored wiki, 2 local, 9 understand, 38 mattpocock); role catalogs peer 125 / master 1614.
 ## Security hardening 2026-11-08
 - Signer live on agx64 as root, operational key 0600, socket 0660/allowlist, ledger pinned before signing. Ledger `verify_chain` pins the key and refuses a return to an old key; live 54-block ledger verified. goSpark uses pinned mTLS and a bearer-gated admin listener.
 ## Phase 8 state

@@ -1,7 +1,7 @@
 {
   "counts": {
     "groups": 3,
-    "skills": 80
+    "skills": 81
   },
   "generated_by": "scripts/sparknet-skills.py",
   "groups": {
@@ -76,6 +76,7 @@
         "orchestrator-bases",
         "orchestrator-cli",
         "orchestrator-markdown",
+        "setup-deep-modules",
         "skill-creator",
         "tag-taxonomy",
         "vault-skill-factory",
@@ -113,6 +114,7 @@
     "orchestrator-bases",
     "orchestrator-cli",
     "orchestrator-markdown",
+    "setup-deep-modules",
     "skill-creator",
     "tag-taxonomy",
     "vault-skill-factory",
@@ -679,6 +681,25 @@
       "role": "base",
       "sha256": "75f5c9d771606fb9762f16522efc954df11c324f87148d8ff069bce166257de9",
       "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "setup-deep-modules": {
+      "description": "Set up deep-module boundaries in a Go or Python repo, with implementation hidden behind entry points, tests reaching only those entry points, and no cycles. Use when adding module boundaries, internal packages, import-linter or go-arch-lint, or when asked to make packages deep modules. For TypeScript, use setup-ts-deep-modules. User-invoked.",
+      "group": "wiki",
+      "id": "setup-deep-modules",
+      "license": "MIT",
+      "name": "setup-deep-modules",
+      "path": "setup-deep-modules/SKILL.md",
+      "references": [
+        "agents/openai.yaml",
+        "references/go-arch-lint.yml",
+        "references/go.md",
+        "references/importlinter.toml",
+        "references/python.md"
+      ],
+      "role": "base",
+      "sha256": "d46c50f4531e3b64dc89e78af69198e21d57189d39dabf5a4bc41cdc80d38e66",
+      "source_repo": "farm:wiki",
       "tier": "standard"
     },
     "setup-matt-pocock-skills": {

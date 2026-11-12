@@ -68,6 +68,13 @@ SKIP_DIRS = PROVENANCE_DIRS | {
     ".opencode",
     "tests",
     "_staging",
+    # Independent repositories with their own baselines and release trains.
+    # The fabric's live-surface audit must not compare their counts to this
+    # checkout's base skill tree.
+    "peer-node",
+    "master-node",
+    "goagx",
+    "gospark",
 }
 
 #: Files excluded by name (not directory), each with the reason it is exempt.
