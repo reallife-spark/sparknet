@@ -462,7 +462,12 @@ def cmd_memory_gateway(_args: list[str]) -> NoReturn:
         webui,
     ]
     log(f"memory-gateway {role} on {bind} -> {os.environ.get('SPARKNET_MEMORY_URL') or 'http://127.0.0.1:4110'}")
-    _exec(sys.executable, [str(FABRIC / "shared" / "sparknet-memory-gateway.py"), *args])
+    # The gateway imports cryptography, which lives in the image venv, not in
+    # the system interpreter that launches the thin dispatcher wrapper.
+    interpreter = VENV / "bin" / "python"
+    if not interpreter.is_file():
+        interpreter = Path(sys.executable)
+    _exec(str(interpreter), [str(FABRIC / "shared" / "sparknet-memory-gateway.py"), *args])
 
 
 def cmd_memory(_args: list[str]) -> NoReturn:
