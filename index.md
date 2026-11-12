@@ -76,6 +76,7 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/health-protocol.md` | peer liveness and eviction (probe rhythm, activity-trumps-eviction) |
 | `contracts/service-health.md` | the one data-plane service health route (`/healthz`) and its no-authority rule |
 | `contracts/telemetry-schema.json` | peer→Master observability evidence (Phase 4): overlay-attributed, unsigned, `kind`-tagged reports the Master records and acts on nothing. Envelope, the 8090 peer intake (telemetry + RFI request routes), the peer pusher and the per-kind consumers were built and gated in Step 70 (2026-10-25) |
+| `contracts/eval-report-schema.json` | signed peer→Master eval-audit report |
 | `contracts/issue-schema.json` | local markdown work-item tracker and the signed peer→Master issue report on 8090: identity, redaction, `issue-report` capability, refusals and the store (Step 91) |
 | `contracts/understand-schema.json` | derived code-understanding graph under `.ua/`: 27 node types, 38 edge types in 10 families, aliases, metadata, incremental fingerprints and the node-local console transport (Step 91) |
 | `contracts/provenance-protocol.md` | signed note chain and approvals |

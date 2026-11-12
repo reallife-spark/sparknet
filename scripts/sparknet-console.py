@@ -764,6 +764,24 @@ def api_evals(config: dict[str, Any], role_root: Path) -> dict[str, Any]:
             invalid += 1
             continue
         records.append(_project_eval(record, node=node, run_id=str(run.get("run_id") or "")))
+    reported_path = resolve(role_root, (config.get("evals") or {}).get("reported")) or Path(
+        "/mnt/log/sparknet-evals.jsonl"
+    )
+    for row in tail_jsonl(reported_path):
+        report = row.get("report") if isinstance(row, dict) else None
+        if not isinstance(report, dict):
+            continue
+        reported_node = str(report.get("node_id") or "remote")
+        report_ref = str(report.get("report_id") or "")
+        for record in report.get("records") or []:
+            if not isinstance(record, dict):
+                continue
+            try:
+                skill_eval.validate_record(record)
+            except skill_eval.SkillEvalError:
+                invalid += 1
+                continue
+            records.append(_project_eval(record, node=reported_node, run_id=report_ref))
     counts = {"total": len(records), "pass": 0, "warn": 0, "fail": 0, "invalid": invalid}
     for item in records:
         if item["verdict"] in ("pass", "warn", "fail"):
