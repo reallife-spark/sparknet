@@ -41,6 +41,7 @@ from sparknet_loader import load_shared  # noqa: E402 - shared/ is added by path
 DEFAULT_ENDPOINT = os.environ.get("SPARKNET_UPLIFT_ENDPOINT", "http://10.100.0.1:8091")
 DEFAULT_QDRANT = os.environ.get("SPARKNET_QDRANT_URL", "http://127.0.0.1:6333")
 TIMEOUT = float(os.environ.get("SPARKNET_UPLIFT_TIMEOUT", "60"))
+OUTBOX_MAX_BYTES = int(os.environ.get("SPARKNET_UPLIFT_OUTBOX_MAX_BYTES", str(5 * 1024**3)))
 
 
 class PushError(RuntimeError):
@@ -163,7 +164,24 @@ def qdrant_collections(*, qdrant: str = DEFAULT_QDRANT) -> list[str]:
     return sorted(collections)
 
 
+def _snapshot_dir_guard() -> None:
+    """Refuse to snapshot when the data disk is not mounted.
+
+    The compose file bind-mounts /qdrant/snapshots to /mnt/ai/qdrant-snapshots.
+    If /mnt/ai is absent, Docker silently creates that path on the root
+    filesystem and a busy timer fills it again. Fail closed instead.
+    """
+    path = Path(os.environ.get("SPARKNET_QDRANT_SNAPSHOT_DIR", "/mnt/ai/qdrant-snapshots"))
+    try:
+        on_root = path.stat().st_dev == Path("/").stat().st_dev
+    except OSError:
+        return
+    if on_root:
+        raise PushError(f"snapshot dir {path} is on the root filesystem; mount the data disk first")
+
+
 def qdrant_snapshot(collection: str, *, qdrant: str = DEFAULT_QDRANT) -> tuple[bytes, dict[str, Any]]:
+    _snapshot_dir_guard()
     key = os.environ.get("SPARKNET_QDRANT_API_KEY", "").strip()
     headers = {"Content-Type": "application/json"}
     if key:
@@ -185,22 +203,111 @@ def qdrant_snapshot(collection: str, *, qdrant: str = DEFAULT_QDRANT) -> tuple[b
     return body, {"collection": collection, "snapshot_name": name}
 
 
+def qdrant_snapshots(collection: str, *, qdrant: str = DEFAULT_QDRANT) -> list[dict[str, Any]]:
+    key = os.environ.get("SPARKNET_QDRANT_API_KEY", "").strip()
+    headers = {"api-key": key} if key else {}
+    request = urllib.request.Request(f"{qdrant.rstrip('/')}/collections/{collection}/snapshots", headers=headers)
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    with opener.open(request, timeout=TIMEOUT) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    rows = payload.get("result") if isinstance(payload, dict) else None
+    return [row for row in rows or [] if isinstance(row, dict) and row.get("name")]
+
+
+def delete_qdrant_snapshot(collection: str, snapshot_name: str, *, qdrant: str = DEFAULT_QDRANT) -> bool:
+    key = os.environ.get("SPARKNET_QDRANT_API_KEY", "").strip()
+    headers = {"api-key": key} if key else {}
+    request = urllib.request.Request(
+        f"{qdrant.rstrip('/')}/collections/{collection}/snapshots/{snapshot_name}?wait=true",
+        method="DELETE",
+        headers=headers,
+    )
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        with opener.open(request, timeout=TIMEOUT) as response:
+            return 200 <= response.status < 300
+    except (urllib.error.URLError, OSError) as exc:
+        print(f"uplift: could not delete snapshot {snapshot_name}: {exc}", file=sys.stderr)
+        return False
+
+
+def prune_qdrant_snapshots(keep: int = 1, *, qdrant: str = DEFAULT_QDRANT, collections: list[str] | None = None) -> int:
+    """Delete all but the newest *keep* snapshots per collection.
+
+    Snapshots are transport for the uplift push, not a backup history. Without
+    this the fifteen-minute timer leaves a fresh snapshot in the container's
+    writable layer on every run.
+    """
+    keep = max(1, keep)
+    names = collections if collections is not None else qdrant_collections(qdrant=qdrant)
+    removed = 0
+    for collection in names:
+        rows = qdrant_snapshots(collection, qdrant=qdrant)
+        rows.sort(key=lambda row: str(row.get("creation_time") or row.get("name") or ""))
+        for row in rows[:-keep]:
+            if delete_qdrant_snapshot(collection, str(row["name"]), qdrant=qdrant):
+                removed += 1
+    return removed
+
+
 def _outbox() -> Path:
     path = state_dir() / "uplift" / "outbox"
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
     return path
 
 
+def _prune_outbox(outbox: Path, *, max_bytes: int | None = None) -> int:
+    """Drop the oldest spooled rows once the outbox exceeds its size cap.
+
+    A Master that stays unreachable must not grow the peer's disk without
+    bound. Five GiB holds about a dozen snapshots, which is enough to ride out
+    an outage without turning the transport into a months-long archive.
+    """
+    limit = OUTBOX_MAX_BYTES if max_bytes is None else max_bytes
+    rows: list[tuple[str, Path, Path, int]] = []
+    for job in outbox.glob("*.json"):
+        try:
+            row = json.loads(job.read_text(encoding="utf-8"))
+            payload = Path(str(row.get("payload") or ""))
+            size = payload.stat().st_size if payload.is_file() else 0
+            rows.append((str(row.get("created_at") or ""), job, payload, size))
+        except (OSError, ValueError):
+            continue
+    total = sum(size for _, _, _, size in rows)
+    removed = 0
+    for _, job, payload, size in sorted(rows):
+        if total <= limit:
+            break
+        try:
+            payload.unlink(missing_ok=True)
+            job.unlink(missing_ok=True)
+            total -= size
+            removed += 1
+        except OSError:
+            continue
+    return removed
+
+
 def spool(kind: str, body: bytes, manifest: dict[str, Any], endpoint: str) -> Path:
+    digest = _sha256(body)
+    outbox = _outbox()
+    for job in outbox.glob("*.json"):
+        try:
+            existing = json.loads(job.read_text(encoding="utf-8"))
+            existing_payload = Path(str(existing.get("payload") or ""))
+        except (OSError, ValueError):
+            continue
+        if existing.get("kind") == kind and existing.get("sha256") == digest and existing_payload.is_file():
+            return job
     row = {
         "kind": kind,
         "endpoint": endpoint,
         "manifest": manifest,
-        "sha256": _sha256(body),
+        "sha256": digest,
         "size": len(body),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    path = _outbox() / f"{kind}-{int(time.time() * 1000)}-{os.getpid()}.json"
+    path = outbox / f"{kind}-{int(time.time() * 1000)}-{os.getpid()}.json"
     payload = path.with_suffix(".bin")
     payload.write_bytes(body)
     os.chmod(payload, 0o600)
@@ -209,10 +316,18 @@ def spool(kind: str, body: bytes, manifest: dict[str, Any], endpoint: str) -> Pa
     temporary.write_text(json.dumps(row, sort_keys=True) + "\n", encoding="utf-8")
     os.chmod(temporary, 0o600)
     temporary.replace(path)
+    _prune_outbox(outbox)
     return path
 
 
-def send(kind: str, body: bytes, manifest: dict[str, Any], *, endpoint: str = DEFAULT_ENDPOINT) -> bool:
+def send(
+    kind: str,
+    body: bytes,
+    manifest: dict[str, Any],
+    *,
+    endpoint: str = DEFAULT_ENDPOINT,
+    spool_failures: bool = True,
+) -> bool:
     route = {
         "inventory": "/api/v1/inventory",
         "trace": "/api/v1/trace-batch",
@@ -223,25 +338,71 @@ def send(kind: str, body: bytes, manifest: dict[str, Any], *, endpoint: str = DE
     status, result = post(route, body, endpoint=endpoint, extra=extra)
     if 200 <= status < 300:
         return True
-    spool(kind, body, manifest, endpoint)
-    print(f"uplift: push failed HTTP {status}: {result}; spooled", file=sys.stderr)
+    if spool_failures:
+        spool(kind, body, manifest, endpoint)
+        print(f"uplift: push failed HTTP {status}: {result}; spooled", file=sys.stderr)
+    else:
+        print(f"uplift: push failed HTTP {status}: {result}; will retry", file=sys.stderr)
     return False
 
 
 def drain(*, endpoint: str = DEFAULT_ENDPOINT) -> int:
     pushed = 0
-    for job in sorted(_outbox().glob("*.json")):
+    outbox = _outbox()
+    _prune_outbox(outbox)
+    for job in sorted(outbox.glob("*.json")):
+        payload: Path | None = None
         try:
             row = json.loads(job.read_text(encoding="utf-8"))
-            body = Path(row["payload"]).read_bytes()
-            if send(str(row["kind"]), body, dict(row.get("manifest") or {}), endpoint=endpoint):
-                Path(row["payload"]).unlink(missing_ok=True)
+            payload = Path(row["payload"])
+            body = payload.read_bytes()
+            if send(
+                str(row["kind"]),
+                body,
+                dict(row.get("manifest") or {}),
+                endpoint=endpoint,
+                spool_failures=False,
+            ):
+                payload.unlink(missing_ok=True)
                 job.unlink(missing_ok=True)
                 pushed += 1
         except (OSError, ValueError, KeyError) as exc:
             print(f"uplift: unreadable outbox row {job.name}: {exc}", file=sys.stderr)
             job.unlink(missing_ok=True)
+            if payload is not None:
+                payload.unlink(missing_ok=True)
+            else:
+                job.with_suffix(".bin").unlink(missing_ok=True)
+    _sweep_orphans(outbox)
     return pushed
+
+
+def _sweep_orphans(outbox: Path, *, max_age_seconds: int = 3600) -> int:
+    """Remove spooled payloads that no outbox row references.
+
+    A row that failed to parse used to be dropped while its .bin stayed behind,
+    where drain could never reclaim it.
+    """
+    referenced: set[str] = set()
+    for job in outbox.glob("*.json"):
+        try:
+            row = json.loads(job.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        name = Path(str(row.get("payload") or "")).name
+        if name:
+            referenced.add(name)
+    removed = 0
+    now = time.time()
+    for payload in outbox.glob("*.bin"):
+        try:
+            if payload.name in referenced or now - payload.stat().st_mtime < max_age_seconds:
+                continue
+            payload.unlink()
+            removed += 1
+        except OSError:
+            continue
+    return removed
 
 
 def _read_traces(path: Path) -> list[dict[str, Any]]:
@@ -272,8 +433,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--architecture", default="")
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
     parser.add_argument("--qdrant", default=DEFAULT_QDRANT)
+    parser.add_argument(
+        "--keep-snapshots",
+        type=int,
+        default=1,
+        help="retain the newest N Qdrant snapshots per collection after a push (default: 1)",
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
+    created_from_qdrant = False
     try:
         if args.kind == "drain":
             count = drain(endpoint=args.endpoint)
@@ -296,6 +464,9 @@ def main(argv: list[str] | None = None) -> int:
                         )
                     elif send("snapshot", body, manifest, endpoint=args.endpoint):
                         pushed += 1
+                removed = prune_qdrant_snapshots(max(1, args.keep_snapshots), qdrant=args.qdrant)
+                if removed:
+                    print(f"uplift: pruned {removed} old collection snapshots", file=sys.stderr)
                 print(f"uplift: pushed {pushed} collection snapshots")
                 return 0
             if args.file:
@@ -303,6 +474,7 @@ def main(argv: list[str] | None = None) -> int:
                 info = {"collection": args.collection, "snapshot_name": args.file.name}
             else:
                 body, info = qdrant_snapshot(args.collection, qdrant=args.qdrant)
+                created_from_qdrant = True
             manifest = {
                 **info,
                 "sha256": _sha256(body),
@@ -345,8 +517,12 @@ def main(argv: list[str] | None = None) -> int:
             }
         if args.dry_run:
             print(json.dumps({"kind": args.kind, "manifest": manifest, "bytes": len(body)}, indent=2, sort_keys=True))
+            if created_from_qdrant:
+                prune_qdrant_snapshots(max(1, args.keep_snapshots), qdrant=args.qdrant, collections=[args.collection])
             return 0
         ok = send(args.kind, body, manifest, endpoint=args.endpoint)
+        if created_from_qdrant:
+            prune_qdrant_snapshots(max(1, args.keep_snapshots), qdrant=args.qdrant, collections=[args.collection])
         return 0 if ok else 1
     except (OSError, ValueError, PushError) as exc:
         print(f"uplift: {exc}", file=sys.stderr)
