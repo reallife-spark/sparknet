@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
 updated: 2026-11-11
-current: done
+current: 104
 ---
 
 # sparknet — Active Plan
@@ -545,6 +545,10 @@ current: done
     The Python ports and wrappers are in place; all local gates are green.
     Commits: peer `633fef9`, fabric `00883a5`; goagx republished as `d6930f6`
     and pinned. Step 104D remains open (`DoD: confirm: user`).
+  - **Status 2026-11-12 — target hosts still run the pre-104 shell entrypoint
+    and an image built 2026-10-21.** The live pair is healthy on `wg1`, but
+    104D needs a maintenance deployment + image rebuild; it is not claimable
+    from this development host.
 
 ## Standing verification rules
 

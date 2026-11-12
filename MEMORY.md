@@ -2,20 +2,28 @@
 > Standing state only. Read at session start; **replace, never append**.
 > History belongs in `log.md` and `sessions/YYYY-MM-DD.md`; pre-2026-10-31
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
-Updated: 2026-11-11
+Updated: 2026-11-12
 ## Plan cursor
-- `PLAN.md` — `current: 104`; Steps 96–103 closed; Step 104 (node-script
-  migrations) is code-complete with target-host verification open.
-- Commits: goSpark `2e8b2be`; fabric `00883a5`/pin; goagx `d6930f6`; peer
-  `633fef9`, master `b93f077`. `make drift-check` green.
-- Critical open items: Step 104D target-host verification (#11); live
-  nocturnal window tonight 02:00–05:00 (#8, operator raxxar); peer→Master eval
-  transport (#9); mirror complete (21 issues/5 repos, 18 closed); peer
-  precommit reports `peer-node/02_Daily/2026-11-02.md`.
+- `PLAN.md` — `current: 104` (restored from `done`); Step 104D target-host
+  verification is open. `master-node/PLAN.md` — `current: 9`; Step 9G live
+  nocturnal window is open.
+- Merged: fabric #18 (review triage), #19 (loader diagnostics), #20 (peer
+  guard-status pin), #21 (AGX digest pin), #22 (KV/GPU ADRs); peer #2
+  (guard-status); goagx signed release `2a925a6`; master plan truth `d227733`.
+- Critical open items: 104D target-host deployment/image rebuild (#11); 9G
+  next window 2026-11-13 02:00–05:00 (#8); peer→Master eval transport (#9);
+  sandbox 20E/20F code; Step 10 live 4203 needs a third host; Phase 9
+  destructive legs; KV/GPU ADR backlog. Mirror has 3 open issues (#8/#9/#11).
 - Phase 8 remains closed: 54 fixed, 186 reviewed-clean, 176 test-verified;
   register and inventory in `_archives/`.
 ## Live fabric
-- **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`). Peer egress only to Master.
+- **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`, hostname
+  `red-team`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`,
+  hostname `blue-team`). Peer egress only to Master. The overlay is `wg1`, not
+  `wg0`.
+- Both hosts still carry the pre-104 shell entrypoint at
+  `/home/raxxar/sparknet`; `sparknet-agx-node:dev` was built 2026-10-21. 104D
+  needs a deployment/image rebuild, not just a command run.
 - Master: signer/ledger/parity, 8088 admin, 8098 console, 8090/8091 intake, 4220–4223, 4201/4202 share, 4204 engine, Qdrant 6333, teacher.
 - Peer: 9090 guard, 4096 bridge, 4201/4202 share, 4110/4093 memory, 8181 WebUI, 8099 console, 4204 engine, Qdrant 6333, student.
 - **Teacher/student:** agx64 Qwen3.6-35B-A3B Q4_K_M; agx32 Qwen3.5-9B Q8.
