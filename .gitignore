@@ -72,3 +72,6 @@ id_ed25519*
 
 # Downloaded OpenCode sandbox runtime tarball (make opencode-runtime).
 peer-node/configs/opencode-runtime/opencode-linux-*.tar.gz
+
+# Teaching workspace (personal course artifacts; never part of the fabric).
+/learn/
