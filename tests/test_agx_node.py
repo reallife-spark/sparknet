@@ -166,6 +166,9 @@ def test_agx_builds_its_own_image_from_the_repo_root(agx: dict):
     assert args["L4T_BASE"].startswith("${L4T_BASE:-nvcr.io/nvidia/l4t-pytorch:r35."), (
         "the AGX base must be a pinned L4T r35 PyTorch image, never a moving tag"
     )
+    assert re.search(r"@sha256:[0-9a-f]{64}\}$", args["L4T_BASE"]), (
+        "the AGX base must be pinned by digest, not only by tag"
+    )
     spark_build = _services(SPARK_COMPOSE)["vllm"]["build"]
     for key in ("OPENCODE_VERSION", "NATS_VERSION"):
         assert args[key] == spark_build["args"][key], f"{key} must be the same pin on both platforms"
@@ -180,6 +183,9 @@ def test_agx_dockerfile_pins_hold():
     text = AGX_DOCKER.read_text(encoding="utf-8")
 
     assert re.search(r"ARG L4T_BASE=nvcr\.io/nvidia/l4t-pytorch:r35\.", text), "base must stay on the L4T r35 branch"
+    assert re.search(r"ARG L4T_BASE=nvcr\.io/nvidia/l4t-pytorch:r35\.[^\n]+@sha256:[0-9a-f]{64}", text), (
+        "the AGX base must be pinned by digest"
+    )
     assert re.search(r'ARG TORCH_CUDA_ARCH_LIST="7\.0\+PTX"', text), (
         "sm_70+PTX is the only arch list v0.2.7 accepts for Xavier"
     )
