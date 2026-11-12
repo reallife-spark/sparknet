@@ -140,10 +140,13 @@ for n in "${NODES[@]}"; do
   mkdir -p "$WORK/node-$n"
   mkdir -p "$WORK/node-$n"
   python3 "$REPO_ROOT/scripts/sparknet-safe-extract.py" "$TGZ" "$WORK/node-$n"
-  if [ -d "$WORK/node-$n/sparknet-peer" ]; then
-    cp -a "$WORK/node-$n/sparknet-peer/." "$WORK/node-$n/"
-    rm -rf "$WORK/node-$n/sparknet-peer"
-  fi
+  # A bundle unpacks under sparknet-<role>/; the role in the archive depends on
+  # the bundle used (the wrapper ships a master bundle, older notes a peer one).
+  for extracted in "$WORK/node-$n"/sparknet-*; do
+    [ -d "$extracted" ] || continue
+    cp -a "$extracted/." "$WORK/node-$n/"
+    rm -rf "$extracted"
+  done
   check "node-$n extracted" test -f "$(node "$n")/master-node/AGENTS.md"
 done
 

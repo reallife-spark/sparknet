@@ -129,6 +129,7 @@ def test_cpu_graph_boots_and_answers(tmp_path: Path) -> None:
         "SPARKNET_ROLE": "peer",
         "SPARKNET_OVERLAY_IPV4": "10.100.0.9",
         "SPARKNET_SHARED_SECRET": "smoke-secret",
+        "SPARKNET_QDRANT_API_KEY": "smoke-qdrant-key",
         "VLLM_SERVICE_CMD": "vllm-stub",
         "SPARKNET_BIND_LOCAL": "127.0.0.1",
         "SPARKNET_BIND_API": "127.0.0.1",
