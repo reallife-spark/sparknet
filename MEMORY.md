@@ -26,7 +26,7 @@ Updated: 2026-11-12
   needs a deployment/image rebuild, not just a command run.
 - Master: signer/ledger/parity, 8088 admin, 8098 console, 8090/8091 intake, 4220–4223, 4201/4202 share, 4204 engine, Qdrant 6333, teacher.
 - Peer: 9090 guard, 4096 bridge, 4201/4202 share, 4110/4093 memory, 8181 WebUI, 8099 console, 4204 engine, Qdrant 6333, student.
-- **agx32 disk hygiene (2026-11-12):** root 869G→70G used. Qdrant snapshots live at `/mnt/ai/qdrant-snapshots` (keep 1/collection); Ollama store merged into `/mnt/ai/ollama/models`; `~/.cache/huggingface` → `/mnt/ai/hf-cache`; uplift outbox capped at 5 GiB; `sparknet-console@master` disabled. `sparknet-uplift-sync.timer` remains disabled pending a decision; goagx republish is the only drift.
+- **agx32 disk hygiene (2026-11-12):** root 869G→70G used. Qdrant snapshots live at `/mnt/ai/qdrant-snapshots` (keep 1/collection); Ollama store merged into `/mnt/ai/ollama/models`; `~/.cache/huggingface` → `/mnt/ai/hf-cache`; uplift outbox capped at 5 GiB; `sparknet-console@master` disabled. `sparknet-uplift-sync.timer` runs daily at 06:15; goagx republish is the only drift.
 - **Teacher/student:** agx64 Qwen3.6-35B-A3B Q4_K_M; agx32 Qwen3.5-9B Q8.
 - **Agents:** agx32 `sparknet-agent@engineering` and `@cyber` user units; agx64 `sparknet-orchestrator.service`. Live task returned `engineering.result` `summary=OK`.
 - **Exec:** agx32 daemon live with exact allowlist `pwd`, `ls -la`, `git status --short`; cwd `01_Inbox`/`05_Knowledge`; audit `.state/exec-audit.jsonl`; no shell.
