@@ -45,20 +45,11 @@ Updated: 2026-11-12
 - Skill-eval model: `contracts/skill-eval-schema.json` + `shared/sparknet-skill-eval.py` is the one digest-bound pass/warn/fail record. Gate mode in `sparknet-self-improve.evaluate()` and `project report --require-review` require a passing record; the Go broker validates and stores it. `make skill-eval` runs the offline golden harness. Records are audit evidence: never authority, never knowledge.
 - Skill catalog: `scripts/skill_catalog/` owns copy/digest/manifest/host-path mechanics; the four sync scripts remain adapters and keep their external manifest shapes.
 - Architecture decisions recorded: issue module (root ADR 0009), skill catalog (root ADR 0010), core split (root ADR 0011), sandbox policy authority (root ADR 0013), graph producer/consumer (goSpark ADR 0018).
-- Live Step 91 evidence: `live-step91-issue` delivered peer `agx32` → Master `agx64` on `10.100.0.1:8090`, triaged `done`/`wontfix`; Master Issues and both Understand tabs rendered in Chromium.
 - Base skill tree: 80 skills (33 wiki, 9 understand, 38 mattpocock); role catalogs peer 125 / master 1614.
 ## Security hardening 2026-11-08
-- Signer: **live on agx64** as root with a root-owned 0600 operational key, socket group `sparknet-signer` at 0660, and the exact caller allowlist; probe succeeds, direct `python3 -c` is refused. Verifies ledger against the pinned operational key before signing. See `master-node/docs/signer-isolation.md`.
-- Ledger: `verify_chain(..., expected_pubkey_b64)`; CLI pins from `--pubkey` or the trust root. Forward key rotation is accepted; a return to an old key after the current key took over is refused. Live 54-block ledger verified 2026-11-08.
-- goSpark: pinned mutual TLS (`Server.ClientFingerprint`, `DialOptions.ClientCertificate`), cert→node origin binding, 64 incoming QUIC streams per connection; `sparknetctl send-block` requires `-pin`. Admin listener requires `GOSPARK_ADMIN_TOKEN` and fails closed without it; `sparknetctl`/MCP send the bearer token.
+- Signer live on agx64 as root, operational key 0600, socket 0660/allowlist, ledger pinned before signing. Ledger `verify_chain` pins the key and refuses a return to an old key; live 54-block ledger verified. goSpark uses pinned mTLS and a bearer-gated admin listener.
 ## Phase 8 state
-- Wave A: shared boundary/fail-closed fixes, live-deployed to memory gateway.
-- Wave B: scripts/goagx targeted rewrites, including safe tar extraction and master from-git bundle fix.
-- Wave C: peer provisioner no longer copies personal categories; RFI SSRF, cluster job-id traversal, mesh/share fixes, anchor and helper repairs.
-- Wave D: master uplift signed-entry/consent checks, vector reindex auth, proxy-disabled admin delivery; distill split/publish hardening.
-- Wave E: WebUI capture redaction, query encoding, memory-filter status, installer token checks.
-- Wave F: goSpark authz/registry/transport/memory race fixes.
-- Wave G: focused tests added; full gate green.
+- Closed: 54 fixed, 186 reviewed-clean, 176 test-verified; waves A–G hardened shared boundaries, scripts/goagx, peer provisioner/share, master uplift/vector, WebUI, goSpark and tests. Register/inventory in `_archives/`.
 ## Command gotchas
 - `make ci`/`make test-all` are authoritative; full run >120 s.
 - Rebuild before `bundle-verify`; run `wiki-preflight` before wiki suite.
