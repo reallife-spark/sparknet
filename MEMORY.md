@@ -2,20 +2,28 @@
 > Standing state only. Read at session start; **replace, never append**.
 > History belongs in `log.md` and `sessions/YYYY-MM-DD.md`; pre-2026-10-31
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
-Updated: 2026-11-11
+Updated: 2026-11-12
 ## Plan cursor
-- `PLAN.md` — `current: 104`; Steps 96–103 closed; Step 104 (node-script
-  migrations) is code-complete with target-host verification open.
-- Commits: goSpark `2e8b2be`; fabric `00883a5`/pin; goagx `d6930f6`; peer
-  `633fef9`, master `b93f077`. `make drift-check` green.
-- Critical open items: Step 104D target-host verification (#11); live
-  nocturnal window tonight 02:00–05:00 (#8, operator raxxar); peer→Master eval
-  transport (#9); mirror complete (21 issues/5 repos, 18 closed); peer
-  precommit reports `peer-node/02_Daily/2026-11-02.md`.
+- `PLAN.md` — `current: 104` (restored from `done`); Step 104D target-host
+  verification is open. `master-node/PLAN.md` — `current: 9`; Step 9G live
+  nocturnal window is open.
+- Merged: fabric #18 (review triage), #19 (loader diagnostics), #20 (peer
+  guard-status pin), #21 (AGX digest pin), #22 (KV/GPU ADRs); peer #2
+  (guard-status); goagx signed release `2a925a6`; master plan truth `d227733`.
+- Critical open items: 104D target-host deployment/image rebuild (#11); 9G
+  next window 2026-11-13 02:00–05:00 (#8); peer→Master eval transport (#9);
+  sandbox 20E/20F code; Step 10 live 4203 needs a third host; Phase 9
+  destructive legs; KV/GPU ADR backlog. Mirror has 3 open issues (#8/#9/#11).
 - Phase 8 remains closed: 54 fixed, 186 reviewed-clean, 176 test-verified;
   register and inventory in `_archives/`.
 ## Live fabric
-- **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`). Peer egress only to Master.
+- **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`, hostname
+  `red-team`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`,
+  hostname `blue-team`). Peer egress only to Master. The overlay is `wg1`, not
+  `wg0`.
+- Both hosts still carry the pre-104 shell entrypoint at
+  `/home/raxxar/sparknet`; `sparknet-agx-node:dev` was built 2026-10-21. 104D
+  needs a deployment/image rebuild, not just a command run.
 - Master: signer/ledger/parity, 8088 admin, 8098 console, 8090/8091 intake, 4220–4223, 4201/4202 share, 4204 engine, Qdrant 6333, teacher.
 - Peer: 9090 guard, 4096 bridge, 4201/4202 share, 4110/4093 memory, 8181 WebUI, 8099 console, 4204 engine, Qdrant 6333, student.
 - **Teacher/student:** agx64 Qwen3.6-35B-A3B Q4_K_M; agx32 Qwen3.5-9B Q8.
@@ -37,20 +45,11 @@ Updated: 2026-11-11
 - Skill-eval model: `contracts/skill-eval-schema.json` + `shared/sparknet-skill-eval.py` is the one digest-bound pass/warn/fail record. Gate mode in `sparknet-self-improve.evaluate()` and `project report --require-review` require a passing record; the Go broker validates and stores it. `make skill-eval` runs the offline golden harness. Records are audit evidence: never authority, never knowledge.
 - Skill catalog: `scripts/skill_catalog/` owns copy/digest/manifest/host-path mechanics; the four sync scripts remain adapters and keep their external manifest shapes.
 - Architecture decisions recorded: issue module (root ADR 0009), skill catalog (root ADR 0010), core split (root ADR 0011), sandbox policy authority (root ADR 0013), graph producer/consumer (goSpark ADR 0018).
-- Live Step 91 evidence: `live-step91-issue` delivered peer `agx32` → Master `agx64` on `10.100.0.1:8090`, triaged `done`/`wontfix`; Master Issues and both Understand tabs rendered in Chromium.
 - Base skill tree: 80 skills (33 wiki, 9 understand, 38 mattpocock); role catalogs peer 125 / master 1614.
 ## Security hardening 2026-11-08
-- Signer: **live on agx64** as root with a root-owned 0600 operational key, socket group `sparknet-signer` at 0660, and the exact caller allowlist; probe succeeds, direct `python3 -c` is refused. Verifies ledger against the pinned operational key before signing. See `master-node/docs/signer-isolation.md`.
-- Ledger: `verify_chain(..., expected_pubkey_b64)`; CLI pins from `--pubkey` or the trust root. Forward key rotation is accepted; a return to an old key after the current key took over is refused. Live 54-block ledger verified 2026-11-08.
-- goSpark: pinned mutual TLS (`Server.ClientFingerprint`, `DialOptions.ClientCertificate`), cert→node origin binding, 64 incoming QUIC streams per connection; `sparknetctl send-block` requires `-pin`. Admin listener requires `GOSPARK_ADMIN_TOKEN` and fails closed without it; `sparknetctl`/MCP send the bearer token.
+- Signer live on agx64 as root, operational key 0600, socket 0660/allowlist, ledger pinned before signing. Ledger `verify_chain` pins the key and refuses a return to an old key; live 54-block ledger verified. goSpark uses pinned mTLS and a bearer-gated admin listener.
 ## Phase 8 state
-- Wave A: shared boundary/fail-closed fixes, live-deployed to memory gateway.
-- Wave B: scripts/goagx targeted rewrites, including safe tar extraction and master from-git bundle fix.
-- Wave C: peer provisioner no longer copies personal categories; RFI SSRF, cluster job-id traversal, mesh/share fixes, anchor and helper repairs.
-- Wave D: master uplift signed-entry/consent checks, vector reindex auth, proxy-disabled admin delivery; distill split/publish hardening.
-- Wave E: WebUI capture redaction, query encoding, memory-filter status, installer token checks.
-- Wave F: goSpark authz/registry/transport/memory race fixes.
-- Wave G: focused tests added; full gate green.
+- Closed: 54 fixed, 186 reviewed-clean, 176 test-verified; waves A–G hardened shared boundaries, scripts/goagx, peer provisioner/share, master uplift/vector, WebUI, goSpark and tests. Register/inventory in `_archives/`.
 ## Command gotchas
 - `make ci`/`make test-all` are authoritative; full run >120 s.
 - Rebuild before `bundle-verify`; run `wiki-preflight` before wiki suite.
