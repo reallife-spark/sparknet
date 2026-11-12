@@ -444,3 +444,4 @@ file, not here.
 - [2026-11-12] **PCAP orphans reclaimed safely.** Full SHA256 manifest for the 151-file plain archive (`81,760,351,416` bytes); all 5 live MinIO objects matched; 146 unregistered orphan dirs (`77,851,648,952` bytes) quarantined, re-verified by `mc` and deleted. `/mnt/data` 77G→4.4G. Plain archive kept; MinIO returned to inactive.
 - [2026-11-12] **Teaching workspace ignored.** `.gitignore` now excludes `/learn/` (personal course artifacts).
 - [2026-11-12] **goagx republished after the workspace ignore.** Release `7656de8` (`sparknet 72ea5f3`) pushed and pinned in `941e1b8`; `make drift-check` is green from the clean tree.
+- [2026-11-12] **CI green after the workspace ignore.** Added `learn` to the layout's untracked top-level allow-list (`tests/test_layout.py`); `make ci` passes (656 passed, 1 skipped in peer-node; all gates green).

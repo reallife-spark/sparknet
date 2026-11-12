@@ -174,6 +174,8 @@ UNTRACKED_TOP_LEVEL = {
     ".scratch",
     ".ua",
     ".understand-anything",
+    # Personal teaching workspace; gitignored by design, never part of the fabric.
+    "learn",
 }
 
 # Files that record what one machine looked like, rather than describing the
