@@ -576,8 +576,9 @@ current: 104
   - **Status 2026-11-12 — COMPLETE (local).** Base/peer/master catalogs are
     sorted and current; OpenCode advertises 36 entries on master (35 featured +
     built-in) and the MCP search/load round-trip passes. Both role bundles
-    build and verify. `goagx` needs a signed republish before `drift-check` is
-    green; no live node claim. Cursor returns to 104D, the only open step.
+    build and verify. Commits: peer `16b4c66`, master `abbc8db`, fabric
+    `21edb5e`; signed goagx release `9e80adf`, pinned in `4c2a1f2`. No live node
+    claim. Cursor returns to 104D, the only open step.
 
 ## Standing verification rules
 
