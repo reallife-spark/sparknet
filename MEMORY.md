@@ -4,9 +4,8 @@
 > detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
 Updated: 2026-11-12
 ## Plan cursor
-- `PLAN.md` — `current: done` (Step 104D and Step 106 complete).
-  `master-node/PLAN.md` — `current: 9`; Step 9G live nocturnal window is
-  armed for 2026-11-13 01:59:30 CET (`sparknet-nocturnal-window-20261113` runner on agx64).
+- `PLAN.md` — `current: done` (104D/106 complete). `master-node/PLAN.md` —
+  `current: 9`; 9G window armed 2026-11-13 01:59:30 CET (runner on agx64).
 - Merged: fabric #18 (review triage), #19 (loader diagnostics), #20 (peer
   guard-status pin), #21 (AGX digest pin), #22 (KV/GPU ADRs); peer #2
   (guard-status); goagx signed release `2a925a6`; master plan truth `d227733`.
