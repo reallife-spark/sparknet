@@ -1,0 +1,79 @@
+{
+  "contract": "skill-catalog",
+  "schema_version": "1.0",
+  "description": "The deterministic, node-local index of installed agent skills. A catalog records what a role may search and load; it grants no authority, carries no vault knowledge and is not a channel. The index is a build artifact derived from the installed SKILL.md files and their manifests.",
+  "why": "OpenCode and Open WebUI discover skills by filesystem walk; a large catalog floods the model prompt and has no stable order. One sorted catalog gives every surface the same names, groups, provenance and load path without changing the vendored skill tree.",
+  "catalog": {
+    "schema": "sparknet-skill-catalog/1",
+    "fields": [
+      "schema",
+      "role",
+      "root",
+      "generated_by",
+      "counts",
+      "groups",
+      "order",
+      "skills"
+    ],
+    "required": [
+      "schema",
+      "role",
+      "root",
+      "generated_by",
+      "counts",
+      "groups",
+      "order",
+      "skills"
+    ],
+    "skill": {
+      "fields": [
+        "id",
+        "name",
+        "description",
+        "group",
+        "source_repo",
+        "license",
+        "tier",
+        "role",
+        "path",
+        "references",
+        "sha256"
+      ],
+      "required": [
+        "id",
+        "name",
+        "description",
+        "group",
+        "license",
+        "role",
+        "path",
+        "sha256"
+      ],
+      "id": "the path-derived skill id: lowercase kebab-case, 1..64 characters",
+      "path": "skill-relative POSIX path to SKILL.md; the loader refuses an absolute path or a parent escape",
+      "references": "supporting files beside SKILL.md, relative to the skill directory",
+      "sha256": "sha256 of SKILL.md at index time"
+    },
+    "group": {
+      "fields": ["description", "skills"],
+      "rule": "group names are stable lowercase kebab-case; skills are sorted by id"
+    },
+    "order": "skill ids sorted by (group order, id); the display order for every adapter"
+  },
+  "rules": [
+    "The catalog is data, not authority and not knowledge.",
+    "A catalog entry never names a path outside its catalog root.",
+    "A skill without a description is not indexable.",
+    "The index is sorted deterministically: groups by policy order, skills by id.",
+    "The vendored SKILL.md bytes are not rewritten to hide a skill; visibility is a runtime permission.",
+    "A role catalog excludes skills that role may not read; a WebUI catalog also excludes denied groups."
+  ],
+  "refusal_codes": [
+    "malformed-catalog",
+    "bad-entry",
+    "bad-path",
+    "missing-skill",
+    "duplicate-id",
+    "bad-group"
+  ]
+}

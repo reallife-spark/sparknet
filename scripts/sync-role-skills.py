@@ -886,15 +886,22 @@ of `SKILL.md`, copied file count, skipped large/nested files, and variant
 bodies. `THIRD_PARTY_NOTICES.md` is the human-readable companion. `LICENSES/`
 holds the distinct license texts.
 
+`.catalog.json` is the deterministic search/load index. OpenCode advertises only
+the featured ids from `contracts/skill-policy.json`; the rest are reachable
+through the read-only `sparknet-skills` MCP (`skills_search`, `skills_load`).
+
 ## Refresh and check
 
 ```bash
 make -C {role}-node skills-sync
 make -C {role}-node skills-check
+make skills-index
+make skills-check
 ```
 
 The check fails on a missing skill, a name/frontmatter mismatch, a nested
-`SKILL.md`, a symlink, a restricted license, or a manifest hash mismatch.
+`SKILL.md`, a symlink, a restricted license, a manifest hash mismatch or a
+catalog that no longer matches the installed skills.
 """
     (role_dir / "README.md").write_text(text, encoding="utf-8")
 
@@ -956,7 +963,7 @@ def apply(role: str) -> int:
     for child in sorted(role_dir.iterdir()):
         if child.is_dir() and child.name not in {"skill-template"}:
             shutil.rmtree(child)
-        elif child.is_file() and child.name != ".inventory.json":
+        elif child.is_file() and child.name not in {".inventory.json", ".catalog.json"}:
             child.unlink()
     if role == "peer":
         selected: dict[str, list[Entry]] = {}

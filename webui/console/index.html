@@ -194,6 +194,24 @@
         </article>
         <p class="muted">Evaluation records are audit evidence from the review skills: not knowledge, not authority, and never a KB or answer source.</p>
       </section>
+
+      <section id="skills" class="panel" hidden>
+        <div class="section-head">
+          <h2>Skills</h2>
+          <span class="pill" id="skills-status">—</span>
+        </div>
+        <div id="skills-cards" class="card-grid"></div>
+        <div class="understand-toolbar" aria-label="Skill catalog filters">
+          <label>Search <input id="skills-query" type="search" placeholder="id, name or description" autocomplete="off" /></label>
+          <label>Group <select id="skills-group"><option value="">All groups</option></select></label>
+          <button id="skills-run" type="button">Filter</button>
+        </div>
+        <article class="card">
+          <h3>Catalog</h3>
+          <div id="skills-list" class="table-wrap"></div>
+        </article>
+        <p class="muted">Skill instructions are not knowledge and grant no authority. OpenCode advertises only the featured set from <code>contracts/skill-policy.json</code>; the rest is reached through the read-only skill MCP.</p>
+      </section>
     </main>
 
     <footer class="footer">

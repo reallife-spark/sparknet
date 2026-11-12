@@ -1,0 +1,1368 @@
+{
+  "counts": {
+    "groups": 3,
+    "skills": 80
+  },
+  "generated_by": "scripts/sparknet-skills.py",
+  "groups": {
+    "engineering": {
+      "description": "Planning, implementation, review, testing and repository work.",
+      "skills": [
+        "ask-matt",
+        "chief-of-staff",
+        "claude-handoff",
+        "code-review",
+        "codebase-design",
+        "diagnosing-bugs",
+        "domain-modeling",
+        "git-guardrails-claude-code",
+        "grill-me",
+        "grill-with-docs",
+        "grilling",
+        "handoff",
+        "implement",
+        "implement-spec",
+        "improve-codebase-architecture",
+        "loop-me",
+        "migrate-to-shoehorn",
+        "pr",
+        "prototype",
+        "research",
+        "retro",
+        "scaffold-exercises",
+        "setup-matt-pocock-skills",
+        "setup-pre-commit",
+        "setup-ts-deep-modules",
+        "tdd",
+        "teach",
+        "to-questionnaire",
+        "to-spec",
+        "to-tickets",
+        "triage",
+        "wait-what",
+        "wayfinder",
+        "wizard",
+        "writing-beats",
+        "writing-for-agents",
+        "writing-fragments",
+        "writing-shape"
+      ]
+    },
+    "understand": {
+      "description": "The /understand* code-understanding family.",
+      "skills": [
+        "understand",
+        "understand-chat",
+        "understand-dashboard",
+        "understand-diff",
+        "understand-domain",
+        "understand-explain",
+        "understand-figma",
+        "understand-knowledge",
+        "understand-onboard"
+      ]
+    },
+    "wiki": {
+      "description": "Knowledge capture, retrieval, linting and the vendored wiki suite.",
+      "skills": [
+        "computer-user",
+        "cross-linker",
+        "daily-update",
+        "defuddle",
+        "graph-colorize",
+        "impl-validator",
+        "json-canvas",
+        "llm-wiki",
+        "orchestrator-bases",
+        "orchestrator-cli",
+        "orchestrator-markdown",
+        "skill-creator",
+        "tag-taxonomy",
+        "vault-skill-factory",
+        "wiki-audit",
+        "wiki-capture",
+        "wiki-context-pack",
+        "wiki-dashboard",
+        "wiki-dedup",
+        "wiki-digest",
+        "wiki-export",
+        "wiki-import",
+        "wiki-ingest",
+        "wiki-lint",
+        "wiki-query",
+        "wiki-rebuild",
+        "wiki-research",
+        "wiki-setup",
+        "wiki-stage-commit",
+        "wiki-status",
+        "wiki-switch",
+        "wiki-synthesize",
+        "wiki-update"
+      ]
+    }
+  },
+  "order": [
+    "computer-user",
+    "cross-linker",
+    "daily-update",
+    "defuddle",
+    "graph-colorize",
+    "impl-validator",
+    "json-canvas",
+    "llm-wiki",
+    "orchestrator-bases",
+    "orchestrator-cli",
+    "orchestrator-markdown",
+    "skill-creator",
+    "tag-taxonomy",
+    "vault-skill-factory",
+    "wiki-audit",
+    "wiki-capture",
+    "wiki-context-pack",
+    "wiki-dashboard",
+    "wiki-dedup",
+    "wiki-digest",
+    "wiki-export",
+    "wiki-import",
+    "wiki-ingest",
+    "wiki-lint",
+    "wiki-query",
+    "wiki-rebuild",
+    "wiki-research",
+    "wiki-setup",
+    "wiki-stage-commit",
+    "wiki-status",
+    "wiki-switch",
+    "wiki-synthesize",
+    "wiki-update",
+    "understand",
+    "understand-chat",
+    "understand-dashboard",
+    "understand-diff",
+    "understand-domain",
+    "understand-explain",
+    "understand-figma",
+    "understand-knowledge",
+    "understand-onboard",
+    "ask-matt",
+    "chief-of-staff",
+    "claude-handoff",
+    "code-review",
+    "codebase-design",
+    "diagnosing-bugs",
+    "domain-modeling",
+    "git-guardrails-claude-code",
+    "grill-me",
+    "grill-with-docs",
+    "grilling",
+    "handoff",
+    "implement",
+    "implement-spec",
+    "improve-codebase-architecture",
+    "loop-me",
+    "migrate-to-shoehorn",
+    "pr",
+    "prototype",
+    "research",
+    "retro",
+    "scaffold-exercises",
+    "setup-matt-pocock-skills",
+    "setup-pre-commit",
+    "setup-ts-deep-modules",
+    "tdd",
+    "teach",
+    "to-questionnaire",
+    "to-spec",
+    "to-tickets",
+    "triage",
+    "wait-what",
+    "wayfinder",
+    "wizard",
+    "writing-beats",
+    "writing-for-agents",
+    "writing-fragments",
+    "writing-shape"
+  ],
+  "role": "base",
+  "root": "skills",
+  "schema": "sparknet-skill-catalog/1",
+  "skills": {
+    "ask-matt": {
+      "description": "Ask which skill or flow fits your situation. A router over the skills in this repo.",
+      "group": "engineering",
+      "id": "ask-matt",
+      "license": "MIT",
+      "name": "ask-matt",
+      "path": "ask-matt/SKILL.md",
+      "references": [
+        "PHASE-BOUNDARIES.md",
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "1371f5ce005de0992a44b137748bfb960a56948aa9871b405fe9d90b24332e3c",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "chief-of-staff": {
+      "description": "Pursue a long-running goal in a single session by co-ordinating subagents.",
+      "group": "engineering",
+      "id": "chief-of-staff",
+      "license": "MIT",
+      "name": "chief-of-staff",
+      "path": "chief-of-staff/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "a187d9e36e65373d2d1f469790858dd57d6eb72b6ea16932df9c40616ac9f720",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "claude-handoff": {
+      "description": "Hand the current conversation off to a fresh background agent that picks up the work immediately.",
+      "group": "engineering",
+      "id": "claude-handoff",
+      "license": "MIT",
+      "name": "claude-handoff",
+      "path": "claude-handoff/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "79357a18425d66d4c24048bedf83dceb79d3bba356f38014950f764a7fab4026",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "code-review": {
+      "description": "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \\\"review since X\\\".",
+      "group": "engineering",
+      "id": "code-review",
+      "license": "MIT",
+      "name": "code-review",
+      "path": "code-review/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "09eb147f793e4647949edd32dbad278f0554dfb56e0d46b699cd4c2c55bf0357",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "codebase-design": {
+      "description": "Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary.",
+      "group": "engineering",
+      "id": "codebase-design",
+      "license": "MIT",
+      "name": "codebase-design",
+      "path": "codebase-design/SKILL.md",
+      "references": [
+        "DEEPENING.md",
+        "DESIGN-IT-TWICE.md",
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "2c20617f87ec8af6a434859f381b2f061a69b530444e74eb39e78bb016a6d1e2",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "computer-user": {
+      "description": "Use a computer the way a person does \u2014 see a screen, aim at a target, click or type, and remember how the run went. Based on the Agent-Computer Interface pattern from Agent-S (simular-ai): screen observation, UI grounding, mouse/keyboard input, and experience memory (narrative + episodic). Use this skill when the user says \"use the computer\", \"control the desktop\", \"click that\", \"drive the GUI\", \"automate this app\", \"take over the screen\", \"computer-use\", \"Agent-S\", \"ACI\", \"screen control\", \"UI automation\", or wants any task done by operating a graphical interface rather than a shell. Triggers for both local desktops and remote/virtual displays. This skill is about *operating* a GUI; it does not run web searches or produce plans \u2014 those are separate skills.",
+      "group": "wiki",
+      "id": "computer-user",
+      "license": "MIT",
+      "name": "computer-user",
+      "path": "computer-user/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "65437642e504efd8c13fcd82948b6b388ea39db0ff0747550e7a67a3bc85f325",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "cross-linker": {
+      "description": "Scan the orchestrator wiki and automatically discover missing cross-references between pages. Use this skill when the user says \"link my pages\", \"find missing links\", \"cross-reference\", \"connect my wiki\", \"add wikilinks\", \"what pages should be linked\", or after any large ingestion to ensure new pages are woven into the existing knowledge graph. Also trigger when the user mentions \"orphan pages\" in the context of wanting to connect them, or says things like \"my wiki feels disconnected\" or \"pages aren't linked well\". This is a write-heavy skill \u2014 it actually modifies pages to add links, unlike wiki-lint which just reports issues.",
+      "group": "wiki",
+      "id": "cross-linker",
+      "license": "MIT",
+      "name": "cross-linker",
+      "path": "cross-linker/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "9ca4176c4a20922880ec5e4e325fc00d4b197100b931ca41e288fea24e83aa3c",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "daily-update": {
+      "description": "Run the daily wiki maintenance cycle: check all source freshness, update the index, and regenerate hot.md. Use this skill when the user says \"/daily-update\", \"run the daily update\", \"update everything\", \"morning sync\", \"refresh the wiki index\", or when triggered by the launchd cron at 9 AM. Also use to set up or verify the cron + terminal notification infrastructure for the first time (\"set up the daily cron\", \"install the terminal notification\", \"how do I get the morning reminder?\").",
+      "group": "wiki",
+      "id": "daily-update",
+      "license": "MIT",
+      "name": "daily-update",
+      "path": "daily-update/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "d2ef2fad3752a2e8baa1a38b8f8a78a48765bbeaeee35f08811e2f24886f0de4",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "defuddle": {
+      "description": "Extract clean markdown content from web pages using Defuddle CLI, removing clutter and navigation to save tokens. Use instead of WebFetch when the user provides a URL to read or analyze, for online documentation, articles, blog posts, or any standard web page. Do NOT use for URLs ending in .md \u2014 those are already markdown, use WebFetch directly.",
+      "group": "wiki",
+      "id": "defuddle",
+      "license": "MIT",
+      "name": "defuddle",
+      "path": "defuddle/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "10673a4dc70a0a057612d443243ab7a5aa4abdd4a0fadc3f6eec5fd71ad5a971",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "diagnosing-bugs": {
+      "description": "Diagnosis loop for hard bugs and performance regressions. Use when the user says \"diagnose\"/\"debug this\", or reports something broken/throwing/failing/slow.",
+      "group": "engineering",
+      "id": "diagnosing-bugs",
+      "license": "MIT",
+      "name": "diagnosing-bugs",
+      "path": "diagnosing-bugs/SKILL.md",
+      "references": [
+        "agents/openai.yaml",
+        "scripts/hitl-loop.template.sh"
+      ],
+      "role": "base",
+      "sha256": "849198df88cdb65fd0d97236604c1fca7ff2f22d2f705f9724a800d0266b118d",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "domain-modeling": {
+      "description": "Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a GLOSSARY.md, or recording or editing an ADR.",
+      "group": "engineering",
+      "id": "domain-modeling",
+      "license": "MIT",
+      "name": "domain-modeling",
+      "path": "domain-modeling/SKILL.md",
+      "references": [
+        "ADR-FORMAT.md",
+        "GLOSSARY-FORMAT.md",
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "7b925d7b1e341a2eeae33ad68a8a8c0ab889a38ddd22a7598e4c240e5a7556a3",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "git-guardrails-claude-code": {
+      "description": "Set up Claude Code hooks to block dangerous git commands (push, reset --hard, clean, branch -D, etc.) before they execute. Use when user wants to prevent destructive git operations, add git safety hooks, or block git push/reset in Claude Code.",
+      "group": "engineering",
+      "id": "git-guardrails-claude-code",
+      "license": "MIT",
+      "name": "git-guardrails-claude-code",
+      "path": "git-guardrails-claude-code/SKILL.md",
+      "references": [
+        "agents/openai.yaml",
+        "scripts/block-dangerous-git.sh"
+      ],
+      "role": "base",
+      "sha256": "69b291d655626a01602b998a1836fcb93c058ede68dfafddfd71e87f17074764",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "graph-colorize": {
+      "description": "Color-code the orchestrator graph view by rewriting `.obsidian/graph.json` colorGroups. Use this skill when the user says \"color my graph\", \"color code obsidian\", \"colorize the graph\", \"color the graph by tag\", \"color by category\", \"highlight visibility in graph\", \"make the graph colorful\", \"distinguish tags in graph\", or wants nodes in orchestrator's graph view tinted by tag, folder, or visibility. Generates a `colorGroups` array from the vault's actual tags/categories and merges it into the existing graph.json without clobbering other graph settings. Always backs up first.",
+      "group": "wiki",
+      "id": "graph-colorize",
+      "license": "MIT",
+      "name": "graph-colorize",
+      "path": "graph-colorize/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "ffeb49a573cb5e19b32f3f53f679c560b940786ba9db92ac29403d40ef6de48d",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "grill-me": {
+      "description": "A relentless interview to sharpen a plan or design.",
+      "group": "engineering",
+      "id": "grill-me",
+      "license": "MIT",
+      "name": "grill-me",
+      "path": "grill-me/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "caaf8b8de1684f96e26b28f3c29189db5c89cce4b73e1c93d86164f66ef88637",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "grill-with-docs": {
+      "description": "A relentless interview to sharpen a plan or design, which also creates docs (ADR's and glossary) as we go.",
+      "group": "engineering",
+      "id": "grill-with-docs",
+      "license": "MIT",
+      "name": "grill-with-docs",
+      "path": "grill-with-docs/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "7de372c13488f1ee96cc11cd8907b56b6809cc93eef776eeddd37de6b6cbe3fe",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "grilling": {
+      "description": "Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases.",
+      "group": "engineering",
+      "id": "grilling",
+      "license": "MIT",
+      "name": "grilling",
+      "path": "grilling/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "befdff1e27a1dfe2a294d5871169ac1afe16d983911daa4f32627514a48c1e15",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "handoff": {
+      "description": "Compact the current conversation into a handoff document for another agent to pick up.",
+      "group": "engineering",
+      "id": "handoff",
+      "license": "MIT",
+      "name": "handoff",
+      "path": "handoff/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "4cbb043950dad2ffd3662ff1a5a0b51ae676004b5cae10e3787e8ee7a4ee69d3",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "impl-validator": {
+      "description": "Validate whether an implementation matches its stated goal. Use this skill when a skill or agent wants a second opinion on its own output, when the user says \"check this implementation\", \"validate what you did\", \"is this correct?\", \"review the output\", or \"did you do this right?\". Also spawned automatically as a subagent by other skills (memory-bridge, daily-update) to self-check their outputs before presenting to the user. Returns a structured pass/warn/fail verdict with specific actionable issues.",
+      "group": "wiki",
+      "id": "impl-validator",
+      "license": "MIT",
+      "name": "impl-validator",
+      "path": "impl-validator/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "31d2548ec1b144515ebefd30d74c51fb9938709d268750f83b4fd7f260c66ff5",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "implement": {
+      "description": "Implement a piece of work based on a spec or set of tickets.",
+      "group": "engineering",
+      "id": "implement",
+      "license": "MIT",
+      "name": "implement",
+      "path": "implement/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "483bdc4ccf4ac31d86ac7beeaa0d0db80313e71e120bb8c59b3196ae5decd53d",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "implement-spec": {
+      "description": "Implement the result of /to-spec and /to-tickets in code.",
+      "group": "engineering",
+      "id": "implement-spec",
+      "license": "MIT",
+      "name": "implement-spec",
+      "path": "implement-spec/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "7a22dd2e60b8fcece478ced9d2533582adf3520d695acd3ab715341535c9e56d",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "improve-codebase-architecture": {
+      "description": "Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick.",
+      "group": "engineering",
+      "id": "improve-codebase-architecture",
+      "license": "MIT",
+      "name": "improve-codebase-architecture",
+      "path": "improve-codebase-architecture/SKILL.md",
+      "references": [
+        "HTML-REPORT.md",
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "552240a5ab5cec6b67c15dd1ad6e9f6962b1bca6ce870059a8c2713760c20392",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "json-canvas": {
+      "description": "Create and edit JSON Canvas files (.canvas) with nodes, edges, groups, and connections. Use when working with .canvas files, creating visual canvases, mind maps, flowcharts, or when the user mentions Canvas files in orchestrator.",
+      "group": "wiki",
+      "id": "json-canvas",
+      "license": "MIT",
+      "name": "json-canvas",
+      "path": "json-canvas/SKILL.md",
+      "references": [
+        "references/EXAMPLES.md"
+      ],
+      "role": "base",
+      "sha256": "c1a882f60344a92a6c265c36b91e93810f64a277c6eb12fa53b12b923cc51dad",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "llm-wiki": {
+      "description": "The foundational knowledge distillation pattern for building and maintaining an AI-powered orchestrator wiki. Based on Andrej Karpathy's LLM Wiki architecture. Use this skill whenever the user wants to understand the wiki pattern, set up a new knowledge base, or needs guidance on the three-layer architecture (raw sources \u2192 wiki \u2192 schema). Also use when discussing knowledge management strategy, wiki structure decisions, or how to organize distilled knowledge. This is the \"theory\" skill \u2014 other skills handle specific operations (ingesting, querying, linting).",
+      "group": "wiki",
+      "id": "llm-wiki",
+      "license": "MIT",
+      "name": "llm-wiki",
+      "path": "llm-wiki/SKILL.md",
+      "references": [
+        "references/karpathy-pattern.md"
+      ],
+      "role": "base",
+      "sha256": "7eeaf83ba02beafceec9480f6a0b683188da3a06400237c673059b93682ac233",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "loop-me": {
+      "description": "Grill me about specs for the workflows I want to build, within this workspace.",
+      "group": "engineering",
+      "id": "loop-me",
+      "license": "MIT",
+      "name": "loop-me",
+      "path": "loop-me/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "e44d1cc3e760fb86ac42964c2a5f1fcac511715db50fb375f3f7be814de1eaa7",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "migrate-to-shoehorn": {
+      "description": "Migrate test files from `as` type assertions to @total-typescript/shoehorn. Use when user mentions shoehorn, wants to replace `as` in tests, or needs partial test data.",
+      "group": "engineering",
+      "id": "migrate-to-shoehorn",
+      "license": "MIT",
+      "name": "migrate-to-shoehorn",
+      "path": "migrate-to-shoehorn/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "de4da4c11d924fac79c924b2ee3d2db4a5cb98386eb490a599119463d036ae72",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "orchestrator-bases": {
+      "description": "Create and edit orchestrator Bases (.base files) with views, filters, formulas, and summaries. Use when working with .base files, creating database-like views of notes, or when the user mentions Bases, table views, card views, filters, or formulas in orchestrator.",
+      "group": "wiki",
+      "id": "orchestrator-bases",
+      "license": "MIT",
+      "name": "orchestrator-bases",
+      "path": "orchestrator-bases/SKILL.md",
+      "references": [
+        "references/FUNCTIONS_REFERENCE.md"
+      ],
+      "role": "base",
+      "sha256": "9c9878863589d56f60599bb5f43f7e81b8c985e66bb06984e2618bf9492f7ef7",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "orchestrator-cli": {
+      "description": "Interact with orchestrator vaults using the Obsidian CLI to read, create, search, and manage notes, tasks, properties, and more. Also supports plugin and theme development with commands to reload plugins, run JavaScript, capture errors, take screenshots, and inspect the DOM. Use when the user asks to interact with their orchestrator vault, manage notes, search vault content, perform vault operations from the command line, or develop and debug orchestrator plugins and themes.",
+      "group": "wiki",
+      "id": "orchestrator-cli",
+      "license": "MIT",
+      "name": "orchestrator-cli",
+      "path": "orchestrator-cli/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "52215d4fded41ad31024043543729fc575f0faa1e25ba4c583172cee2523138d",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "orchestrator-markdown": {
+      "description": "Create and edit orchestrator Flavored Markdown with wikilinks, embeds, callouts, properties, and other orchestrator-specific syntax. Use when working with .md files in orchestrator, or when the user mentions wikilinks, callouts, frontmatter, tags, embeds, or orchestrator notes.",
+      "group": "wiki",
+      "id": "orchestrator-markdown",
+      "license": "MIT",
+      "name": "orchestrator-markdown",
+      "path": "orchestrator-markdown/SKILL.md",
+      "references": [
+        "references/CALLOUTS.md",
+        "references/EMBEDS.md",
+        "references/PROPERTIES.md"
+      ],
+      "role": "base",
+      "sha256": "6fd1db113af6a1ec857aba96621a9b989beb6f51ad34f86d323f2e37f76770ac",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "pr": {
+      "description": "Draft, review and open a pull request with a scoped diff, a test note and linked issues.",
+      "group": "engineering",
+      "id": "pr",
+      "license": "MIT",
+      "name": "pr",
+      "path": "pr/SKILL.md",
+      "references": [
+        "CREDITS.md",
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "ace2c64d20a56fcc96b15f471b7d67ce519bbfb9c3647cebadcf800ea7d16703",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "prototype": {
+      "description": "Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like.",
+      "group": "engineering",
+      "id": "prototype",
+      "license": "MIT",
+      "name": "prototype",
+      "path": "prototype/SKILL.md",
+      "references": [
+        "LOGIC.md",
+        "UI.md",
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "714de632d116bb73f65cdb5a882db15b9369a6713b9a47c0fad827848f0bfbe3",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "research": {
+      "description": "Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent.",
+      "group": "engineering",
+      "id": "research",
+      "license": "MIT",
+      "name": "research",
+      "path": "research/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "985569f15739c713d6784887c3d186d4ef9ac85bec5ad9c068d25bf0739928e4",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "retro": {
+      "description": "Conduct a retrospective on a coding session.",
+      "group": "engineering",
+      "id": "retro",
+      "license": "MIT",
+      "name": "retro",
+      "path": "retro/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "33fbc28568e3146f20fd908b12998bc0ab30aa4f4c87288199a40793efa94696",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "scaffold-exercises": {
+      "description": "Create exercise directory structures with sections, problems, solutions, and explainers that pass linting. Use when user wants to scaffold exercises, create exercise stubs, or set up a new course section.",
+      "group": "engineering",
+      "id": "scaffold-exercises",
+      "license": "MIT",
+      "name": "scaffold-exercises",
+      "path": "scaffold-exercises/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "75f5c9d771606fb9762f16522efc954df11c324f87148d8ff069bce166257de9",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "setup-matt-pocock-skills": {
+      "description": "Configure this repo for the engineering skills: set up its issue tracker, triage label vocabulary, and domain doc layout. Run once before first use of the other engineering skills.",
+      "group": "engineering",
+      "id": "setup-matt-pocock-skills",
+      "license": "MIT",
+      "name": "setup-matt-pocock-skills",
+      "path": "setup-matt-pocock-skills/SKILL.md",
+      "references": [
+        "agents/openai.yaml",
+        "domain.md",
+        "issue-tracker-github.md",
+        "issue-tracker-gitlab.md",
+        "issue-tracker-local.md",
+        "triage-labels.md"
+      ],
+      "role": "base",
+      "sha256": "b01e05bfe8c323171275c6ceec78b12f1bd4c62dfd26c2cfe8be806d3883f1ed",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "setup-pre-commit": {
+      "description": "Set up Husky pre-commit hooks with lint-staged (Prettier), type checking, and tests in the current repo. Use when user wants to add pre-commit hooks, set up Husky, configure lint-staged, or add commit-time formatting/typechecking/testing.",
+      "group": "engineering",
+      "id": "setup-pre-commit",
+      "license": "MIT",
+      "name": "setup-pre-commit",
+      "path": "setup-pre-commit/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "c9819d7f1e3b198064edc1faa3154224ed67395e9f07f5d3cea4b67cf0a11a98",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "setup-ts-deep-modules": {
+      "description": "Wire dependency-cruiser into a TypeScript repo so each package is a deep module, with implementation hidden in subfolders and reachable only through its entry-point files. User-invoked.",
+      "group": "engineering",
+      "id": "setup-ts-deep-modules",
+      "license": "MIT",
+      "name": "setup-ts-deep-modules",
+      "path": "setup-ts-deep-modules/SKILL.md",
+      "references": [
+        "agents/openai.yaml",
+        "dependency-cruiser.config.cjs"
+      ],
+      "role": "base",
+      "sha256": "29acca66ac99d4532e2a6f0370d8125d7cba1e87c9ac66573203c75189d3e6c7",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "skill-creator": {
+      "description": "Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better triggering accuracy.",
+      "group": "wiki",
+      "id": "skill-creator",
+      "license": "MIT",
+      "name": "skill-creator",
+      "path": "skill-creator/SKILL.md",
+      "references": [
+        "LICENSE.txt",
+        "agents/analyzer.md",
+        "agents/comparator.md",
+        "agents/grader.md",
+        "assets/eval_review.html",
+        "eval-viewer/generate_review.py",
+        "eval-viewer/viewer.html",
+        "references/schemas.md",
+        "scripts/__init__.py",
+        "scripts/aggregate_benchmark.py",
+        "scripts/generate_report.py",
+        "scripts/improve_description.py",
+        "scripts/package_skill.py",
+        "scripts/quick_validate.py",
+        "scripts/run_eval.py",
+        "scripts/run_loop.py",
+        "scripts/utils.py"
+      ],
+      "role": "base",
+      "sha256": "dcd4803e61e913e6fc27294184cd3a71f09f5e924ff20c8a9a20173e7b3c2bcf",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "tag-taxonomy": {
+      "description": "Enforce consistent tagging across the orchestrator wiki using a controlled vocabulary. Use this skill when the user says \"fix my tags\", \"normalize tags\", \"clean up tags\", \"tag audit\", \"what tags should I use\", \"tag taxonomy\", or whenever you're creating or updating wiki pages and need to choose the right tags. Also trigger when the user asks about tag conventions, wants to add a new tag to the taxonomy, or says \"my tags are a mess\". Always consult this skill's taxonomy file before assigning tags to any wiki page.",
+      "group": "wiki",
+      "id": "tag-taxonomy",
+      "license": "MIT",
+      "name": "tag-taxonomy",
+      "path": "tag-taxonomy/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "a6da38e031591e5a6d2a4d990e628c9bf640a1ab91229b275fe89c4416341aae",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "tdd": {
+      "description": "Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions \"red-green-refactor\", or wants integration tests.",
+      "group": "engineering",
+      "id": "tdd",
+      "license": "MIT",
+      "name": "tdd",
+      "path": "tdd/SKILL.md",
+      "references": [
+        "agents/openai.yaml",
+        "mocking.md",
+        "tests.md"
+      ],
+      "role": "base",
+      "sha256": "5505d25bbaa8fc14a79e4d20163936958992a2995b7f1dd1d6197edc9ed722e0",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "teach": {
+      "description": "Teach the user a new skill or concept, within this workspace.",
+      "group": "engineering",
+      "id": "teach",
+      "license": "MIT",
+      "name": "teach",
+      "path": "teach/SKILL.md",
+      "references": [
+        "GLOSSARY-FORMAT.md",
+        "LEARNING-RECORD-FORMAT.md",
+        "MISSION-FORMAT.md",
+        "RESOURCES-FORMAT.md",
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "550482c2d674b085c9043b87bfdc14a8f2ec453c736119e7fcbb1e9332bffeba",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "to-questionnaire": {
+      "description": "Turn a decision you can't fully answer into a questionnaire for someone else to fill in.",
+      "group": "engineering",
+      "id": "to-questionnaire",
+      "license": "MIT",
+      "name": "to-questionnaire",
+      "path": "to-questionnaire/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "b5eb929842ee0e93d867c5e906d183d350f2f2d149eaeaa86967d94d8eda1d3b",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "to-spec": {
+      "description": "Turn the current conversation into a spec and publish it to the project issue tracker: no interview, just synthesis of what you've already discussed.",
+      "group": "engineering",
+      "id": "to-spec",
+      "license": "MIT",
+      "name": "to-spec",
+      "path": "to-spec/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "43ad9cf318e5e7d3d1fa360253a37021796dc87a0c2e595ad262661a10f85088",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "to-tickets": {
+      "description": "Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker (edges as text in one file per ticket locally, or native blocking links on a real tracker).",
+      "group": "engineering",
+      "id": "to-tickets",
+      "license": "MIT",
+      "name": "to-tickets",
+      "path": "to-tickets/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "56ec23c5b2782785d4e65bff9e315b6d3aeb4ef977c174a219e99489fada1995",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "triage": {
+      "description": "Move issues and external PRs through a state machine of triage roles, categorise, verify, grill if needed, and write agent-ready briefs.",
+      "group": "engineering",
+      "id": "triage",
+      "license": "MIT",
+      "name": "triage",
+      "path": "triage/SKILL.md",
+      "references": [
+        "AGENT-BRIEF.md",
+        "OUT-OF-SCOPE.md",
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "917b0baf74be583e74f110857ed45df2766617f75c00baf61fd136d7af515edf",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "understand": {
+      "description": "Analyze a codebase into a code-understanding graph under .ua/ for architecture, components and relationships. Use when asked to understand a repo, map dependencies, or build the graph that powers /understand-dashboard.",
+      "group": "understand",
+      "id": "understand",
+      "license": "MIT",
+      "name": "understand",
+      "path": "understand/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "32e891d410182af60cb4af93e71abcacda1a711ee0beb5e3918e64cd3956ab89",
+      "source_repo": "understand",
+      "tier": "standard"
+    },
+    "understand-chat": {
+      "description": "Answer questions about a codebase by reading its .ua/knowledge-graph.json. Use for \"how does X work\", \"what calls Y\", \"where is Z defined\", or architecture questions grounded in the graph.",
+      "group": "understand",
+      "id": "understand-chat",
+      "license": "MIT",
+      "name": "understand-chat",
+      "path": "understand-chat/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "2a1130c974a8ec2eea4450f1469de8a7538197fcfc4ac0cea0dd6cf6f3179856",
+      "source_repo": "understand",
+      "tier": "standard"
+    },
+    "understand-dashboard": {
+      "description": "Open the interactive Understand tab in the node console to explore a code-understanding graph. Use after /understand, or when asked to visualize architecture, dependencies or a tour.",
+      "group": "understand",
+      "id": "understand-dashboard",
+      "license": "MIT",
+      "name": "understand-dashboard",
+      "path": "understand-dashboard/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "a1bded729bfb5bb072b7a9132afc5ba5cdc44ee4fed8970f975337845f82780b",
+      "source_repo": "understand",
+      "tier": "standard"
+    },
+    "understand-diff": {
+      "description": "Compare two code-understanding graphs and summarize added, removed and changed nodes and edges. Use to review architectural impact after a branch, commit or refactor.",
+      "group": "understand",
+      "id": "understand-diff",
+      "license": "MIT",
+      "name": "understand-diff",
+      "path": "understand-diff/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "c25d8414f7958d354aff46d843bb6ecd01a655274b61ac46ae48aad1e7569b7a",
+      "source_repo": "understand",
+      "tier": "standard"
+    },
+    "understand-domain": {
+      "description": "Extract business-domain context from a codebase: routes, entities, entry points and explicitly stated rules. Use for domain modeling, onboarding or a business-flow view.",
+      "group": "understand",
+      "id": "understand-domain",
+      "license": "MIT",
+      "name": "understand-domain",
+      "path": "understand-domain/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "37d97768cb3e5ff8ffeba84da4c818958023e9412699c16084cbcbf0a0409ffe",
+      "source_repo": "understand",
+      "tier": "standard"
+    },
+    "understand-explain": {
+      "description": "Explain one node, symbol or path in a code-understanding graph, with its neighbours and the edge types that connect them. Use for \"explain this function\", \"what depends on this\", or \"how are A and B connected\".",
+      "group": "understand",
+      "id": "understand-explain",
+      "license": "MIT",
+      "name": "understand-explain",
+      "path": "understand-explain/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "74e92403877f2ed8d47432976d1678f462b1cd7a7e2a89a19bcbca28bc19643b",
+      "source_repo": "understand",
+      "tier": "standard"
+    },
+    "understand-figma": {
+      "description": "Turn a Figma REST document (JSON) into a design graph of pages, screens, components, instances and tokens. Use when a design file is provided locally, without network access.",
+      "group": "understand",
+      "id": "understand-figma",
+      "license": "MIT",
+      "name": "understand-figma",
+      "path": "understand-figma/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "a6da9aa6904e07270e1eea4edd86fd455ea8d08aacc3f60bc0563ec92a55dceb",
+      "source_repo": "understand",
+      "tier": "standard"
+    },
+    "understand-knowledge": {
+      "description": "Analyze a Karpathy-pattern LLM wiki (raw sources, markdown articles, index and schema) into an article/source/topic graph. Use for a wiki or knowledge base rather than a code repository.",
+      "group": "understand",
+      "id": "understand-knowledge",
+      "license": "MIT",
+      "name": "understand-knowledge",
+      "path": "understand-knowledge/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "97d9e5d19cd6064e375109f06e9f0616f5740c3977ae445a86068472e6f6d146",
+      "source_repo": "understand",
+      "tier": "standard"
+    },
+    "understand-onboard": {
+      "description": "Produce a guided onboarding tour from a code-understanding graph, using its layers and tour steps. Use for \"where do I start\", \"onboard me\", or a reading order for a new repository.",
+      "group": "understand",
+      "id": "understand-onboard",
+      "license": "MIT",
+      "name": "understand-onboard",
+      "path": "understand-onboard/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "faa2b4b9746d4a769247dc5898767081ab9c0254d704582137172aa235eed393",
+      "source_repo": "understand",
+      "tier": "standard"
+    },
+    "vault-skill-factory": {
+      "description": "Generate a portable, self-contained Agent Skill from mature, curated orchestrator wiki pages \u2014 turning a cluster of verified knowledge into a reusable \"digital expert\" (SKILL.md + references/). Use this skill when the user says \"/vault-skill-factory\", \"make a skill from my wiki\", \"turn these pages into a skill\", \"generate an agent skill from my vault\", \"package my notes on X as a skill\", \"build a domain-expert skill from my wiki\", or wants to distill recurring, mature wiki knowledge into a shareable skill. Inspired by OpenKB's \"drop in a book \u2192 out comes a digital expert\" pattern. The factory ONLY reads the vault and WRITES TO A REVIEW DIRECTORY \u2014 it never installs skills, never writes into .skills/, and never touches global skill directories.",
+      "group": "wiki",
+      "id": "vault-skill-factory",
+      "license": "MIT",
+      "name": "vault-skill-factory",
+      "path": "vault-skill-factory/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "bcd8f55a46a63d3c00ab1474ef3b1e2e23d757c922436f4303f4e28e576d0cf6",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wait-what": {
+      "description": "Stop. That last message did not land: re-pitch it.",
+      "group": "engineering",
+      "id": "wait-what",
+      "license": "MIT",
+      "name": "wait-what",
+      "path": "wait-what/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "d961bb37defd975c539427edb8f450cdbccdcdd552e213c1ece46676a7970905",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "wayfinder": {
+      "description": "Plan a huge chunk of work (more than one agent session can hold) as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear.",
+      "group": "engineering",
+      "id": "wayfinder",
+      "license": "MIT",
+      "name": "wayfinder",
+      "path": "wayfinder/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "9be7b478c389605a24517d27752f278933588da97a1b5921b165f455edf4c5b7",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "wiki-audit": {
+      "description": "Produce dedicated audit logs and reports for the wiki: a conflict log, a missing-content log, a duplicate-detection log, and a duplicate-detection report. Use this skill when the user says \"run an audit\", \"/wiki-audit\", \"conflict log\", \"missing content log\", \"duplicate detection log\", \"duplicates report\", \"what pages contradict\", \"what's missing from the wiki\", \"find duplicate pages as a report\", or wants persistent, file-format audit artifacts rather than a one-off console report. Distinct from wiki-lint (structure health) and wiki-dedup (page merges): this skill writes dated artifact files into the vault's audit/ directory so the state of the vault is reviewable over time.",
+      "group": "wiki",
+      "id": "wiki-audit",
+      "license": "MIT",
+      "name": "wiki-audit",
+      "path": "wiki-audit/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "306f301bcb2491d4ebcd1807db358059186e2df989b2a55559dcec1e6aefd249",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wiki-capture": {
+      "description": "Save the current conversation as a permanent, structured wiki note. Use this skill when the user says \"save this\", \"/wiki-capture\", \"capture this\", \"file this conversation\", \"preserve this\", \"add this to my wiki\", or wants to turn what was just discussed into lasting knowledge. The skill classifies the content, rewrites it as declarative knowledge (not a chat transcript), and places it in the correct vault category. Also supports a fast QUICK MODE (`/wiki-capture --quick`, \"quick capture\", \"capture this finding\", \"save this bug fix\", \"save this gotcha\", \"drop this to raw\", \"quick save to wiki\") that drops findings to the `_raw/` staging area in under 60 seconds with no manifest or index writes \u2014 used by the session-end Stop hook to auto-preserve findings.",
+      "group": "wiki",
+      "id": "wiki-capture",
+      "license": "MIT",
+      "name": "wiki-capture",
+      "path": "wiki-capture/SKILL.md",
+      "references": [
+        "references/RAW-FORMAT.md"
+      ],
+      "role": "base",
+      "sha256": "f04d441ad11ae8db34e004a58e1477185480cf326572d98a2f197faa0d8c12ac",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wiki-context-pack": {
+      "description": "Produce a token-bounded context pack from the orchestrator wiki \u2014 a compact, structured slice of the most relevant pages for a topic or recent activity, designed for downstream consumption by another agent or skill. Use when the user says \"/wiki-context-pack\", \"make a context pack\", \"give me a context slice for X\", \"pack the wiki for my agent\", or \"bounded context for Y\". Different from wiki-query (which answers a question) \u2014 this produces reusable input material for a downstream task.",
+      "group": "wiki",
+      "id": "wiki-context-pack",
+      "license": "MIT",
+      "name": "wiki-context-pack",
+      "path": "wiki-context-pack/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "6b508d708f3c5369cfbba5e16acb6e3d3d5e23e4ec8af1d246725253c4dba1c2",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wiki-dashboard": {
+      "description": "Create dynamic, queryable dashboard views of the orchestrator vault using orchestrator Bases or Dataview. Use this skill when the user says \"create a dashboard\", \"vault dashboard\", \"show all X as a table\", \"dynamic view\", \"query my vault\", \"build a content index\", \"show me all concepts/entities/projects\", or wants a structured, auto-updating view of their wiki content. Bases is native to orchestrator 1.8+ (no plugin needed). Dataview requires the community plugin.",
+      "group": "wiki",
+      "id": "wiki-dashboard",
+      "license": "MIT",
+      "name": "wiki-dashboard",
+      "path": "wiki-dashboard/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "20d36eec9a277ae3a5e3e71ceb9703943c16c20d8dafd6a0000da89906c37e08",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wiki-dedup": {
+      "description": "Scan the orchestrator wiki for page-level identity collisions \u2014 different pages covering the same concept under different names (e.g. \"RSC\" vs \"React Server Components\") \u2014 and merge them. Use this skill when the user says \"dedup my wiki\", \"find duplicate pages\", \"merge duplicates\", \"identity resolution\", \"consolidate my wiki\", \"I have duplicate pages\", or \"my wiki has two pages for the same thing\". Distinct from wiki-lint (which checks structure) and cross-linker (which adds links) \u2014 this skill makes destructive page-level merges and requires careful confirmation.",
+      "group": "wiki",
+      "id": "wiki-dedup",
+      "license": "MIT",
+      "name": "wiki-dedup",
+      "path": "wiki-dedup/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "7577bf1af1aa4a3e07a6c823e5100e94470e455145544709b8ed2022e7034781",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wiki-digest": {
+      "description": "Generate a periodic knowledge digest \u2014 a human-readable newsletter-style summary of what was learned, updated, and connected in your wiki over a specified period (day/week/month). Use when the user says \"what did I learn this week\", \"give me a digest\", \"weekly summary\", \"knowledge report\", \"what's new in my wiki\", \"/wiki-digest [period]\", \"summarize my recent learning\", or wants a readable overview of recent wiki activity. Distinct from wiki-status (which reports ingestion delta of sources) \u2014 wiki-digest summarizes *knowledge*, not sources.",
+      "group": "wiki",
+      "id": "wiki-digest",
+      "license": "MIT",
+      "name": "wiki-digest",
+      "path": "wiki-digest/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "7680fb6c27d790155ec4920c0cf3599f45c44f252d8bdffe86d27c291af1ae00",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wiki-export": {
+      "description": "Export the orchestrator wiki's knowledge graph to structured formats for use in external tools. Use this skill when the user says \"export wiki\", \"export graph\", \"export to JSON\", \"export to Gephi\", \"export to Neo4j\", \"graphml\", \"visualize wiki\", \"knowledge graph export\", \"export to OKF\", \"OKF bundle\", \"open knowledge format\", \"export as markdown bundle\", or wants to use their wiki data in another tool. Outputs graph.json, graph.graphml, cypher.txt (Neo4j), and graph.html (interactive browser visualization) into a wiki-export/ directory at the vault root, plus an optional OKF (Open Knowledge Format) markdown bundle under wiki-export/okf/.",
+      "group": "wiki",
+      "id": "wiki-export",
+      "license": "MIT",
+      "name": "wiki-export",
+      "path": "wiki-export/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "4c5f7b351eed20b4bb97ea6228b8bcd4ac6c0726ec9b914bae3eb478acb84bef",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wiki-import": {
+      "description": "Import a wiki knowledge graph into the current vault \u2014 either from a graph.json export file (stubs) or from an OKF (Open Knowledge Format) markdown bundle (full page bodies). Use this skill when the user says \"import wiki\", \"import from export\", \"load graph.json\", \"import vault\", \"import OKF bundle\", \"import OKF\", \"load OKF\", \"import markdown bundle\", \"/wiki-import\", or wants to transfer pages from one vault to another using the output of wiki-export.",
+      "group": "wiki",
+      "id": "wiki-import",
+      "license": "MIT",
+      "name": "wiki-import",
+      "path": "wiki-import/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "c5cf0b4fb8ad066d27035ebedff798580ec3fa32966f58827d0140ebcfdee16f",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wiki-ingest": {
+      "description": "Ingest any source into the orchestrator wiki by distilling its knowledge into interconnected wiki pages. Handles structured documents (PDFs, markdown, articles, papers, notes, folders), raw/unstructured text (chat exports, conversation logs, Slack/Discord threads, meeting transcripts, CSV/JSON data, journal entries, browser bookmarks, email archives, text dumps), AND web URLs. Use whenever the user wants to add new sources to their wiki: \"add this to the wiki\", \"process these docs\", \"ingest this folder\", \"ingest this data\", \"process this export/logs\", \"import my chat history from X\", \"/ingest-url <url>\", \"add this URL\", \"save this page\", or pastes a URL and says \"add this\" / \"save this to my wiki\". Also triggers when the user drops a file, or for raw mode: \"process my drafts\", \"promote my raw pages\", or any reference to the _raw/ staging directory. This is the general catch-all ingest skill for any document, text, or URL source not covered by a more specific ingest skill (claude-history-ingest, etc.).",
+      "group": "wiki",
+      "id": "wiki-ingest",
+      "license": "MIT",
+      "name": "wiki-ingest",
+      "path": "wiki-ingest/SKILL.md",
+      "references": [
+        "references/ingest-prompts.md",
+        "references/pageindex.md",
+        "references/url-sources.md"
+      ],
+      "role": "base",
+      "sha256": "53a9d17e7c8268dd3ad1645447ad54e398cf41a2f17e04dec87471d805770990",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wiki-lint": {
+      "description": "Audit and maintain the health of the orchestrator wiki. Use this skill when the user wants to check their wiki for issues, find orphaned pages, detect contradictions, identify stale content, fix broken wikilinks, or perform general maintenance on their knowledge base. Also triggers on \"clean up the wiki\", \"what needs fixing\", \"audit my notes\", or \"wiki health check\". Add --consolidate to switch from report-only to act-and-report mode (the \"dream cycle\"): fixes broken links, adds missing cross-references for orphans, corrects lifecycle states, demotes stale peripheral pages, normalizes tag aliases, and adds contradiction callouts \u2014 all with a dry-run preview and explicit user confirmation before any writes.",
+      "group": "wiki",
+      "id": "wiki-lint",
+      "license": "MIT",
+      "name": "wiki-lint",
+      "path": "wiki-lint/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "9157a9f19941ebb5f3cdcfb90cd17a0be362a5982efa9b3309e70fb1cdda55f4",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wiki-query": {
+      "description": "Answer questions by searching the compiled orchestrator wiki. Use this skill when the user asks a question about their knowledge base, wants to find information across their wiki, asks \"what do I know about X\", \"find everything related to Y\", or wants synthesized answers with citations from their wiki pages. Also use when the user wants to explore connections between topics in their wiki, or asks a multi-hop \"how is X connected to Y\", \"what links X to Y\", \"trace the chain from X to Z\", or \"what does X depend on transitively\" question \u2014 answered by walking typed edges across multiple hops. Works from any project. Includes an index-only fast mode triggered by \"quick answer\", \"just scan\", \"don't read the pages\", \"fast lookup\" \u2014 returns answers from page summaries and frontmatter without reading page bodies.",
+      "group": "wiki",
+      "id": "wiki-query",
+      "license": "MIT",
+      "name": "wiki-query",
+      "path": "wiki-query/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "c471f12759c7c773344abc67ca211c3cbbfa1d148cf10ad788eb7a78c26e7569",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wiki-rebuild": {
+      "description": "Archive existing wiki knowledge and rebuild from scratch, or restore from a previous archive. Use this skill when the user wants to start fresh, rebuild the wiki from all sources, archive current knowledge before a major change, or restore an older version. Triggers on \"rebuild the wiki\", \"start over\", \"archive and rebuild\", \"restore from archive\", \"nuke and repave\", \"clean rebuild\". Also use when the wiki has drifted too far from sources and incremental fixes won't cut it.",
+      "group": "wiki",
+      "id": "wiki-rebuild",
+      "license": "MIT",
+      "name": "wiki-rebuild",
+      "path": "wiki-rebuild/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "09727113b894420bc681b0ee160c3a7f71cff4ffb1acb73f1b0cb6970072fa4e",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wiki-research": {
+      "description": "Autonomously research a topic via multi-round web search, synthesize findings, and file structured results into the orchestrator wiki. Use this skill when the user says \"/wiki-research [topic]\", \"research X\", \"find everything about Y\", \"do a deep dive on Z\", \"autonomous research on X\", or wants comprehensive, web-sourced knowledge on a topic filed directly into their wiki.",
+      "group": "wiki",
+      "id": "wiki-research",
+      "license": "MIT",
+      "name": "wiki-research",
+      "path": "wiki-research/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "6f456e84426f972739e0478f8c57f3385c66fdf33426fadfde128b7ba5c93b43",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wiki-setup": {
+      "description": "Initialize a new orchestrator wiki vault with the correct structure, special files, and configuration. Use this skill when the user wants to set up a new wiki from scratch, initialize the vault structure, create the .env file, or says things like \"set up my wiki\", \"initialize obsidian\", \"create a new vault\", \"get started with the wiki\". Also use when the user needs to reconfigure their existing vault or fix a broken setup.",
+      "group": "wiki",
+      "id": "wiki-setup",
+      "license": "MIT",
+      "name": "wiki-setup",
+      "path": "wiki-setup/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "f67dafd387e07b2735350774d625765bcb8c9bb78a97f563964596d543b24e36",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wiki-stage-commit": {
+      "description": "Review and promote staged wiki pages to their final locations. Use when WIKI_STAGED_WRITES=true and the user says \"/wiki-stage-commit\", \"review staged pages\", \"commit staged writes\", \"promote staged pages\", \"approve staged changes\", or \"what's waiting in staging\". Shows each staged file, lets the user accept or reject it, and moves accepted files to their final wiki locations. Rejected files are moved back to _raw/ for manual editing.",
+      "group": "wiki",
+      "id": "wiki-stage-commit",
+      "license": "MIT",
+      "name": "wiki-stage-commit",
+      "path": "wiki-stage-commit/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "e20460d8d41ea469ccb953ae10eb011048ef7a708cbf2024b2f5dc79e236dc94",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wiki-status": {
+      "description": "Show the current state of the wiki \u2014 what's been ingested, what's pending, and the delta between sources and wiki content. Use this skill when the user asks \"what's the status\", \"how much is ingested\", \"what's left to process\", \"show me the delta\", \"what changed since last ingest\", \"wiki dashboard\", or wants an overview of their knowledge base health and completeness. Also use before deciding whether to append or rebuild. Includes an insights mode triggered by \"wiki insights\", \"what's central\", \"show me the hubs\", \"central pages\", \"what's connected\", \"wiki structure\" \u2014 analyzes the shape of the wiki itself to surface top hubs, cross-domain bridges, and orphan-adjacent pages.",
+      "group": "wiki",
+      "id": "wiki-status",
+      "license": "MIT",
+      "name": "wiki-status",
+      "path": "wiki-status/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "981df5f16e2bbf44b43b7014e8a96b74c62f58ecbba0b91e3fd42c241b607540",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wiki-switch": {
+      "description": "Switch between multiple orchestrator wiki vault profiles. Use this skill when the user says \"/wiki-switch NAME\", \"switch to my work wiki\", \"switch vault\", \"change wiki\", \"which wiki am I on\", \"list my wikis\", \"show my vaults\", \"create a new vault config\", or \"add a new wiki profile\". The skill manages named config files at ~/.wiki/config.NAME and activates one by symlinking it to ~/.wiki/config.",
+      "group": "wiki",
+      "id": "wiki-switch",
+      "license": "MIT",
+      "name": "wiki-switch",
+      "path": "wiki-switch/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "73e546ca8b04c00b4de2b61150330c0ac1d3566bc67c2198254a7bc9a793d830",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wiki-synthesize": {
+      "description": "Systematically discover synthesis opportunities across the orchestrator wiki \u2014 pairs or clusters of concepts that co-occur frequently across pages but have no synthesis page connecting them. Creates new synthesis/ pages that draw explicit cross-cutting conclusions. Use when the user says \"synthesize my wiki\", \"find connections\", \"what concepts keep coming up together\", \"/wiki-synthesize\", or after a large ingest when the vault has grown significantly.",
+      "group": "wiki",
+      "id": "wiki-synthesize",
+      "license": "MIT",
+      "name": "wiki-synthesize",
+      "path": "wiki-synthesize/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "94087803bbf1545a927acb6ea8152b185fd10d48a773a1a0cf35c6bea84b0748",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wiki-update": {
+      "description": "Sync the current project's knowledge into the orchestrator wiki. Use this skill from any project when the user says \"update wiki\", \"sync to wiki\", \"save this to my wiki\", \"update obsidian\", or wants to distill what they've been working on into their knowledge base. This is the cross-project skill that lets you push knowledge from wherever you are into the vault.",
+      "group": "wiki",
+      "id": "wiki-update",
+      "license": "MIT",
+      "name": "wiki-update",
+      "path": "wiki-update/SKILL.md",
+      "references": [],
+      "role": "base",
+      "sha256": "05f6e7b28bb3b9fc5f12e685e90285b283eb43f8926c248f11085c7f67b5d443",
+      "source_repo": "farm:wiki",
+      "tier": "standard"
+    },
+    "wizard": {
+      "description": "Generate an interactive bash wizard that walks a human through steps only they can perform. Use when provisioning infrastructure, setting up credentials or CI secrets, walking an unfamiliar third-party dashboard, or running a one-off migration or cutover. Don't invoke this for steps the agent can perform itself.",
+      "group": "engineering",
+      "id": "wizard",
+      "license": "MIT",
+      "name": "wizard",
+      "path": "wizard/SKILL.md",
+      "references": [
+        "agents/openai.yaml",
+        "template.sh"
+      ],
+      "role": "base",
+      "sha256": "bdf31d48211ea559878f95a4f344aeabf8d85897488ba564382bab0b000daac1",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "writing-beats": {
+      "description": "Writing, exploit; assemble raw material into a journey of beats, grounding each term before a beat leans on it.",
+      "group": "engineering",
+      "id": "writing-beats",
+      "license": "MIT",
+      "name": "writing-beats",
+      "path": "writing-beats/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "a96abafa2372eede8267d770138b322d6125da8adaa7ccf0a5e08e4ee13ee71e",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "writing-for-agents": {
+      "description": "Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md.",
+      "group": "engineering",
+      "id": "writing-for-agents",
+      "license": "MIT",
+      "name": "writing-for-agents",
+      "path": "writing-for-agents/SKILL.md",
+      "references": [
+        "SKILL-MECHANICS.md",
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "551adca942227b44192edba88acd4e8db911f0121ce58ad16944ccf6a896a74a",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "writing-fragments": {
+      "description": "Writing, explore: mine raw fragments, no structure yet.",
+      "group": "engineering",
+      "id": "writing-fragments",
+      "license": "MIT",
+      "name": "writing-fragments",
+      "path": "writing-fragments/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "298b0edd23df229183630de592ed8aa4289233560f2040691f6eb77caeaad4ea",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    },
+    "writing-shape": {
+      "description": "Writing, exploit: shape raw material into an article, paragraph by paragraph.",
+      "group": "engineering",
+      "id": "writing-shape",
+      "license": "MIT",
+      "name": "writing-shape",
+      "path": "writing-shape/SKILL.md",
+      "references": [
+        "agents/openai.yaml"
+      ],
+      "role": "base",
+      "sha256": "f5e6c57bdd85178ace4a260c92f46da6b64ddee18215b461d875739c68976f72",
+      "source_repo": "mattpocock",
+      "tier": "standard"
+    }
+  }
+}

@@ -82,8 +82,12 @@ function initTabs() {
     if (allowed === "understand") loadUnderstand();
     if (allowed === "issues") loadIssues();
     if (allowed === "evals") loadEvals();
+    if (allowed === "skills") loadSkills();
   };
   addEventListener("hashchange", route);
+  $("skills-run")?.addEventListener("click", loadSkills);
+  $("skills-query")?.addEventListener("keydown", (event) => { if (event.key === "Enter") loadSkills(); });
+  $("skills-group")?.addEventListener("change", loadSkills);
   route();
 }
 
@@ -900,6 +904,64 @@ async function loadIssues() {
         el("td", { text: issue.effective_status || issue.status || "—" }),
         el("td", { text: (issue.effective_labels || issue.labels || []).join(", ") || "—" }),
         el("td", { text: issue.updated_at || issue.received_at || "—" }),
+      ]));
+    }
+    table.append(body);
+    wrap.append(table);
+  } catch (error) { showError(error.message); }
+}
+
+async function loadSkills() {
+  try {
+    const query = ($("skills-query")?.value || "").trim();
+    const group = $("skills-group")?.value || "";
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    if (group) params.set("group", group);
+    params.set("limit", "300");
+    const data = await api(`api/skills?${params}`);
+    $("skills-status").textContent = data.ok
+      ? `${data.counts?.skills ?? 0} catalogued · ${data.counts?.shown ?? 0} shown`
+      : "Unavailable";
+    const cards = $("skills-cards");
+    clear(cards);
+    if (!data.ok) {
+      cards.append(metric("Status", data.error || "unavailable"));
+      return;
+    }
+    cards.append(
+      metric("Catalogued", data.counts?.skills ?? 0),
+      metric("Groups", data.counts?.groups ?? 0),
+      metric("Shown", data.counts?.shown ?? 0),
+    );
+    const select = $("skills-group");
+    if (select && select.options.length <= 1) {
+      for (const item of data.groups || []) {
+        select.append(el("option", { value: item.name, text: `${item.name} (${item.count})` }));
+      }
+    }
+    const wrap = $("skills-list");
+    clear(wrap);
+    if (!data.skills?.length) {
+      wrap.append(el("p", { class: "empty", text: "No skills matched." }));
+      return;
+    }
+    const table = el("table");
+    table.append(
+      el("thead", {}, [el("tr", {}, ["Id", "Name", "Group", "Source", "License"].map((h) => el("th", { text: h })))]),
+    );
+    const body = el("tbody");
+    for (const skill of data.skills) {
+      const detail = el("details", {}, [
+        el("summary", { text: skill.id }),
+        el("p", { class: "muted", text: skill.description || "No description." }),
+      ]);
+      body.append(el("tr", {}, [
+        el("td", {}, [detail]),
+        el("td", { text: fmt(skill.name) }),
+        el("td", { text: fmt(skill.group) }),
+        el("td", { text: fmt(skill.source_repo) }),
+        el("td", { text: fmt(skill.license) }),
       ]));
     }
     table.append(body);

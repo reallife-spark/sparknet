@@ -259,7 +259,16 @@ def test_static_index_and_auth(tmp_path: Path, qdrant: str, openwebui: str) -> N
         status, body = _get(server.server_port, "/api/surface", "console-token-1234567890")
         assert status == 200
         surface = json.loads(body)
-        assert surface["menus"] == ["mesh", "vectors", "learning", "memory", "projects", "understand", "evals"]
+        assert surface["menus"] == [
+            "mesh",
+            "vectors",
+            "learning",
+            "memory",
+            "projects",
+            "understand",
+            "evals",
+            "skills",
+        ]
         assert surface["read_only"] is True
     finally:
         server.shutdown()
@@ -600,6 +609,7 @@ def test_surface_table_is_the_dispatch_and_menu_source() -> None:
         "understand",
         "issues",
         "evals",
+        "skills",
     ]
     for surface in console.MENU_SURFACES:
         assert surface.menu is not None
@@ -609,7 +619,7 @@ def test_surface_table_is_the_dispatch_and_menu_source() -> None:
 def test_surface_menus_and_menu_items_are_derived_from_the_table(tmp_path: Path, qdrant: str, openwebui: str) -> None:
     config, _role_root = _config(tmp_path, "peer", qdrant, openwebui)
     surface = console.api_surface(config)
-    assert surface["menus"] == ["mesh", "vectors", "learning", "memory", "projects", "understand", "evals"]
+    assert surface["menus"] == ["mesh", "vectors", "learning", "memory", "projects", "understand", "evals", "skills"]
     assert [item["id"] for item in surface["menu_items"]] == surface["menus"]
     assert surface["menu_items"][0] == {"id": "mesh", "label": "Mesh", "href": "#mesh", "icon": "mesh"}
 
@@ -733,3 +743,16 @@ def test_evals_route_degrades_when_the_gateway_returns_a_non_object(
     finally:
         gateway.shutdown()
         gateway.server_close()
+
+
+def test_skills_route_reads_the_base_catalog(tmp_path: Path, qdrant: str, openwebui: str) -> None:
+    config, _role_root = _config(tmp_path, "peer", qdrant, openwebui)
+    status, body = console.api_skills(config, console.ROLE_ROOT["peer"], {})
+    assert status == 200
+    assert body["ok"] is True and body["read_only"] is True
+    assert body["counts"]["skills"] >= 80
+    assert body["skills"]
+    status, body = console.api_skills(config, console.ROLE_ROOT["peer"], {"q": ["wiki ingest"], "limit": ["3"]})
+    assert status == 200
+    assert body["counts"]["shown"] >= 1
+    assert any(skill["id"] == "wiki-ingest" for skill in body["skills"])

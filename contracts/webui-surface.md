@@ -10,8 +10,8 @@ The fabric has two Open WebUI surfaces, not one:
 
 | Surface | Host | Menus | Scope |
 |---|---|---|---|
-| Peer — **Sparknet Node** | `agx64`, 64 GB | Mesh, Vectors, Learning (read-only Master snapshot), Memory, Projects, Understand | The owner, the owner's node, the owner's Qdrant, per-vault memory and the Master's sanitized Learning status |
-| Master — **Sparknet Master** | `agx32`, 32 GB | Mesh, Vectors, Learning, Memory, Projects, Understand, Issues | All registered nodes, users, departments, vectors, distillation runs and memory metadata |
+| Peer — **Sparknet Node** | `agx64`, 64 GB | Mesh, Vectors, Learning (read-only Master snapshot), Memory, Projects, Understand, Skills | The owner, the owner's node, the owner's Qdrant, per-vault memory and the Master's sanitized Learning status |
+| Master — **Sparknet Master** | `agx32`, 32 GB | Mesh, Vectors, Learning, Memory, Projects, Understand, Issues, Skills | All registered nodes, users, departments, vectors, distillation runs and memory metadata |
 
 Open WebUI remains the chat, account and model surface. The Sparknet pages are
 a separate console served by `scripts/sparknet-console.py` and reached through
@@ -156,6 +156,14 @@ fetch, not a second authority or knowledge channel.
 Both roles: the derived `.ua/knowledge-graph.json` for the selected role root or
 the fabric root, read-only, capped and path-controlled by the console config.
 The graph is a build artifact, not knowledge and not authority.
+
+### Skills
+
+Both roles: the node-local sorted skill catalog (`.opencode/skills/.catalog.json`)
+with group and text filters, read-only. A skill is an instruction, never
+knowledge and never authority; the page cannot load, edit or write a skill. The
+AI sandbox separately applies the `contracts/skill-policy.json` featured and
+denied sets.
 
 ### Issues
 

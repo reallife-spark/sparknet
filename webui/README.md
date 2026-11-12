@@ -1,7 +1,7 @@
 # Sparknet WebUI console
 
-Read-only Mesh, Vectors and Learning pages for the peer and Master Open WebUI
-surfaces. The contract is `contracts/webui-surface.md`.
+Read-only Mesh, Vectors, Learning and Skills pages for the peer and Master
+Open WebUI surfaces. The contract is `contracts/webui-surface.md`.
 
 ## Status
 
@@ -28,7 +28,7 @@ Implemented and tested locally:
 Live on 2026-11-04: nginx fronts Open WebUI on `agx64:8181` and
 `agx32:10.100.0.1:8088`, routes `/sparknet-console/` to the loopback console
 (`8099`/`8098`) and injects a native **SPARKNET** sidebar group directly below
-Notes/Workspace. The peer shows Mesh/Vectors/Learning; the Master shows the same
+Notes/Workspace. The peer shows Mesh/Vectors/Learning/Skills; the Master shows the same
 for all authenticated users. Peer Learning is a signed 4221 read-only fetch of
 the Master's sanitized snapshot. The 3D map has explicit zoom controls and a
 wheel/keyboard binding. The Master's `/srv/sparknet/distill` is root-only, so the

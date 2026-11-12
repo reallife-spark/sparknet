@@ -445,3 +445,5 @@ file, not here.
 - [2026-11-12] **Teaching workspace ignored.** `.gitignore` now excludes `/learn/` (personal course artifacts).
 - [2026-11-12] **goagx republished after the workspace ignore.** Release `7656de8` (`sparknet 72ea5f3`) pushed and pinned in `941e1b8`; `make drift-check` is green from the clean tree.
 - [2026-11-12] **CI green after the workspace ignore.** Added `learn` to the layout's untracked top-level allow-list (`tests/test_layout.py`); `make ci` passes (656 passed, 1 skipped in peer-node; all gates green).
+- [2026-11-12T15:20:00Z] PLAN current 104 -> 105 (Step 105 skill catalog access; 104D remains open)
+- [2026-11-12T16:20:00Z] Step 105 complete (local): skill catalog + MCP + permission.skill; 104D remains open; goagx republish pending

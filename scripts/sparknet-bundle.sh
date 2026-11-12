@@ -104,6 +104,16 @@ verify_bundle() {
     python3 "$root/scripts/sync-role-skills.py" --check --role "$vrole" 2>&1 | head -8 | sed 's/^/      /'
   fi
 
+  step "skill catalog present and deterministic"
+  if python3 "$root/scripts/sparknet-skills.py" check --role base >/dev/null 2>&1 \
+    && python3 "$root/scripts/sparknet-skills.py" check --role "$vrole" >/dev/null 2>&1; then
+    ok "base and $vrole catalogs verify"
+  else
+    bad "skill catalog failed verification"
+    python3 "$root/scripts/sparknet-skills.py" check --role base 2>&1 | head -4 | sed 's/^/      /'
+    python3 "$root/scripts/sparknet-skills.py" check --role "$vrole" 2>&1 | head -4 | sed 's/^/      /'
+  fi
+
   step "opencode config present"
   [ -f "$root/opencode.json" ] && ok "opencode.json" || bad "opencode.json missing"
 
@@ -351,7 +361,7 @@ fi
 | `contracts/` | the overlay, capability, identity, port and guard contracts this role obeys |
 | `shared/` | the canonical implementations — signed authorization, consensus, plus the http/liveness/oob layers |
 | `.opencode/skills/` | the vendored base skill suite — no global skill farm needed |
-| `<role>-node/.opencode/skills/` | the role-local sellable catalog (90 peer / 1,652 master) with `.inventory.json` |
+| `<role>-node/.opencode/skills/` | the role-local sellable catalog (90 peer / 1,652 master) with `.inventory.json` and a sorted `.catalog.json` |
 | `.opencode/agents/`      | the role-aware agents (built-ins + vendored) — `catalog`, `chart`, sparknet-node, vault, chat |
 | `scripts/plugins/kde-notify.*` | intentionally **not** bundled; KDE Connect desktop notifications are fabric-root-local only (`.opencode/plugin/*` was never created; notifications are injected via `OPENCODE_CONFIG` at the root) |
 | `scripts/sparknet`, `scripts/sparknet-sbom.py` | intentionally **not** bundled — fabric-root tools that assume a root Makefile; a node cannot run them. The release data below ships instead |

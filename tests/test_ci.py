@@ -51,6 +51,7 @@ PRE_MERGE_GATE_STEPS = (
     "format-check",
     "shellcheck",
     "role-skills-check",
+    "skills-check",
     "validate",
     "contract-test",
     "render-check",

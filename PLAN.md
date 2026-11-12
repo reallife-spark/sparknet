@@ -550,6 +550,35 @@ current: 104
     104D needs a maintenance deployment + image rebuild; it is not claimable
     from this development host.
 
+## Step 105 — Skill catalog access across OpenCode and Open WebUI
+
+- [x] **Step 105** — Give the fabric, peer and Master one deterministic skill
+  catalog with search/load access, and stop the master catalog from flooding
+  every prompt. Step 104D remains open and is not blocked by this step.
+  - [x] **105A — Catalog index.** Emit `.opencode/skills/.catalog.json` for the
+    base suite, peer and master; entries are sorted by `(group, id)`; the
+    existing `.inventory.json` shape stays unchanged.
+  - [x] **105B — Access surface.** Add `shared/sparknet-skills-mcp.py` and
+    `scripts/sparknet-skills.py`; groups, list, search, load and path are
+    read-only and role-scoped.
+  - [x] **105C — OpenCode.** Add the MCP server, a featured allow-list using
+    `permission.skill`, and the missing base suite path to the peer and master
+    configs.
+  - [x] **105D — Open WebUI engine.** Mount the catalog into the sandbox,
+    inject the MCP server and the featured permission set, and keep the master
+    catalog out of a peer sandbox.
+  - [x] **105E — Verification and docs.** Tests for deterministic ordering,
+    scoping and path safety; ADR 0020; the role READMEs and context pack.
+  - **DoD**: `make role-skills-check`, `make test-all`, `make contract-test`,
+    `make sbom-check` and `make render-check` are green; a master session
+    advertises at most the featured set; the MCP returns a hidden skill by
+    search and load; the engine config test proves the catalog mount.
+  - **Status 2026-11-12 — COMPLETE (local).** Base/peer/master catalogs are
+    sorted and current; OpenCode advertises 36 entries on master (35 featured +
+    built-in) and the MCP search/load round-trip passes. Both role bundles
+    build and verify. `goagx` needs a signed republish before `drift-check` is
+    green; no live node claim. Cursor returns to 104D, the only open step.
+
 ## Standing verification rules
 
 - A gate that cannot fail is not a gate. Every claim needs a named test or a

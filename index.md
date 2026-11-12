@@ -67,6 +67,8 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/registry-publication.json` | the Master→peer registry publication channel: envelope, digest, sequence, refusals, the 60 s re-delivery window |
 | `contracts/reflex-schema.json` | the typed decision contract for the reflex layer — a local sensor, never authority; abstain first-class |
 | `contracts/skill-eval-schema.json` | the skill-evaluation record: a digest-bound pass/warn/fail verdict from a named review skill over a delegate run, self-improve candidate, plan, RFI answer or another skill — audit evidence for the promotion gate, never authority and never knowledge (Step 96) |
+| `contracts/skill-catalog-schema.json` | the deterministic node-local skill index (`sparknet-skill-catalog/1`): entries, groups, stable order and path safety — an access artifact, never authority or knowledge (Step 105) |
+| `contracts/skill-policy.json` | the grouping and visibility policy: source→group mapping, 25–35 featured ids per role, denied groups and the WebUI subset (Step 105) |
 | `contracts/rfi-schema.json` | the request-for-information channel: overlay-attributed request, signed digest-bound answer into `01_Inbox/`, acceptance order and refusals. The answer transport and the 8090 request route are built; the peer client and Master responder are the user-node step |
 | `contracts/ports.json` | which role listens where |
 | `contracts/guard-protocol.md` | the approval conversation |

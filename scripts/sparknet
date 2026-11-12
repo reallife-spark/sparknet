@@ -39,6 +39,8 @@ Commands:
   keys-check     no tracked key material
   shims-check    every legacy name is still a symlink
   wiki-verify    the vendored wiki suite matches its pinned upstream
+  skills-index   rebuild the deterministic skill catalogs
+  skills-check   verify every skill catalog
   bundle <role>  build a standalone node bundle (role: peer|master)
   layout         show the repository layout
   help           this help
@@ -97,6 +99,8 @@ case "$cmd" in
   keys-check)   no_extra "$@"; run_make keys-check ;;
   shims-check)  no_extra "$@"; run_make shims-check ;;
   wiki-verify)  no_extra "$@"; run_make wiki-verify ;;
+  skills-index) no_extra "$@"; run_make skills-index ;;
+  skills-check) no_extra "$@"; run_make skills-check ;;
   layout)       no_extra "$@"; run_make layout ;;
   bundle)
     role="${1:-}"

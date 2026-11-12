@@ -70,6 +70,16 @@ def load_skill_eval_module() -> Any:
     )
 
 
+def load_skill_catalog_module() -> Any:
+    return load_shared(
+        "sparknet-skill-catalog.py",
+        "sparknet_console_skill_catalog",
+        dirs=[ROOT / "shared"],
+        error=ConsoleError,
+        message="cannot find shared/sparknet-skill-catalog.py; the console carries no skill catalog",
+    )
+
+
 ROLE_ROOT = {"peer": ROOT / "peer-node", "master": ROOT / "master-node"}
 ROLE_CONFIG = {
     "peer": ROOT / "peer-node" / "configs" / "webui" / "console.json",
@@ -724,6 +734,63 @@ def api_issues(config: dict[str, Any], role_root: Path) -> tuple[int, dict[str, 
     }
 
 
+def api_skills(config: dict[str, Any], role_root: Path, query: dict[str, list[str]]) -> tuple[int, dict[str, Any]]:
+    """Read this role's sorted skill catalog. Read-only: no load, no write."""
+    role = str(config.get("role") or "")
+    paths = [
+        ROOT / ".opencode" / "skills" / ".catalog.json",
+        role_root / ".opencode" / "skills" / ".catalog.json",
+    ]
+    paths = [path for path in paths if path.is_file()]
+    if not paths:
+        return 404, {"ok": False, "error": "no skill catalog on this node"}
+    module = load_skill_catalog_module()
+    try:
+        catalog = module.Catalog(paths)
+    except module.CatalogError as exc:
+        return 500, {"ok": False, "error": f"skill catalog: {exc}"}
+    q = (query.get("q") or [""])[0].strip()
+    group = (query.get("group") or [""])[0].strip()
+    try:
+        limit = max(1, min(int((query.get("limit") or ["200"])[0]), 2000))
+    except ValueError:
+        return 400, {"ok": False, "error": "limit must be an integer"}
+    if q:
+        entries = catalog.search(q, limit)
+    elif group:
+        entries = catalog.list(group)[:limit]
+    else:
+        entries = catalog.all()[:limit]
+    groups = catalog.groups()
+    return 200, {
+        "ok": True,
+        "role": role,
+        "counts": {"skills": len(catalog.entries), "groups": len(groups), "shown": len(entries)},
+        "groups": [
+            {
+                "name": name,
+                "count": len(names),
+                "description": catalog.group_descriptions.get(name, ""),
+            }
+            for name, names in groups.items()
+        ],
+        "skills": [
+            {
+                "id": entry["id"],
+                "name": entry.get("name", entry["id"]),
+                "description": entry.get("description", ""),
+                "group": entry.get("group", "other"),
+                "source_repo": entry.get("source_repo", ""),
+                "license": entry.get("license", ""),
+                "tier": entry.get("tier", "standard"),
+            }
+            for entry in entries
+        ],
+        "read_only": True,
+        "note": "Skill instructions; not knowledge and not authority.",
+    }
+
+
 EVAL_FINDINGS_LIMIT = 20
 
 
@@ -886,6 +953,10 @@ def _bound_understand(config: dict[str, Any], role_root: Path, query: dict[str, 
     return api_understand(config, role_root, summary=(query.get("summary") or [""])[0] == "1")
 
 
+def _bound_skills(config: dict[str, Any], role_root: Path, query: dict[str, list[str]]) -> Any:
+    return api_skills(config, role_root, query)
+
+
 def _bound_surface(config: dict[str, Any], role_root: Path, query: dict[str, list[str]]) -> Any:
     return api_surface(config)
 
@@ -941,6 +1012,11 @@ SURFACES: tuple[Surface, ...] = (
         "evals",
         (Endpoint("/api/evals", _bind(api_evals), auth="admin"),),
         MenuSpec("Evals", "#evals", "evals"),
+    ),
+    Surface(
+        "skills",
+        (Endpoint("/api/skills", _bound_skills),),
+        MenuSpec("Skills", "#skills", "skills"),
     ),
     Surface(
         "step89",

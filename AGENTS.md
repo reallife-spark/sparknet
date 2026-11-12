@@ -12,30 +12,27 @@ agentic planning/building, a private vault and self-healing. A **Master** is the
 elected signing role: it holds the operational key and supplies authority and
 scoped fabric knowledge. It does not run a peer's model or choose a user's work.
 
-Read `CONTEXT.md` first. It is generated from this charter, `MISSION.md`,
-`INTENT.md` and `contracts/knowledge-flow.md` and is loaded by every AI surface.
-`AGENTS.md` wins on conflict; `contracts/` wins over prose.
+Read `CONTEXT.md` first (generated from this charter, `MISSION.md`, `INTENT.md`,
+`contracts/knowledge-flow.md`). `AGENTS.md` wins on conflict; `contracts/` wins over prose.
 
 ## The fabric
 
 | Path | Role | State |
 |---|---|---|
-| `contracts/` | both | single source of truth: overlay, capabilities, identity, ports, registry, guard, share, consensus, health, telemetry, RFI, knowledge flow |
-| `shared/` | both | `sparknet-authz.py` and the one shared implementation of provenance, consensus, registry install, RFI install, liveness, notify, and the memory gateway |
+| `contracts/` | both | single source of truth: overlay, capabilities, identity, ports, registry, guard, share, consensus, health, telemetry, RFI, knowledge flow, skill catalog |
+| `shared/` | both | `sparknet-authz.py` and the one shared implementation of provenance, consensus, registry install, RFI install, liveness, notify, the memory gateway and the skill-catalog reader/MCP |
 | `peer-node/` | peer | pinned submodule `reallife-spark/sparknet-peer`: guard, anchor, dispatch bridge, AI stack, per-user vaults, self-healing |
 | `master-node/` | master | pinned submodule `reallife-spark/sparknet-master`: parity loader, ledger, isolated signer, registry, approvals, intake, admin console, responder |
 | `goagx/` | both | pinned submodule `reallife-spark/goagx`: generated AGX Xavier node distribution |
 | `gospark/` | both | pinned submodule `reallife-spark/gospark`: Go control/service plane |
-| `.opencode/skills/` | both | vendored wiki suite; role catalogs live under `<role>/.opencode/skills/` |
+| `.opencode/skills/` | both | vendored wiki suite plus `.catalog.json`; role catalogs live under `<role>/.opencode/skills/` with their own catalog |
 
 The four role/distribution directories are **Git submodules** with their own
-remotes, histories and branches. `contracts/` and `shared/` remain in the
-superproject. Clone with `git clone --recurse-submodules`; after a checkout use
-`make submodules` (`git submodule update --init --recursive`). Submodule pins are
-updated explicitly, never by an implicit pull.
+remotes and histories; `contracts/` and `shared/` stay in the superproject.
+Clone with `--recurse-submodules`; after a checkout run `make submodules`.
+Submodule pins are explicit, never an implicit pull.
 
-A role submodule alone is **not** a deployment. `make bundle` assembles what a
-node needs; `bundle-verify` proves it runs elsewhere.
+A role submodule alone is **not** a deployment: `make bundle` assembles a node; `bundle-verify` proves it.
 
 ## Knowledge flow
 
@@ -81,9 +78,8 @@ per-user KBs/models, the vLLM/MASTERSPIKE precontext and the admin terminal.
 - Frontmatter `current:` marks the step being worked.
 - Mark `[x]` **only** after its DoD is verified, then advance the cursor and
   write the plan back **immediately**.
-- Append one line per transition to `log.md`.
-- Terminal state is `current: done`. New work gets a **new** step.
-- A DoD that cannot be auto-verified is `DoD: confirm: user`.
+- Append one line per transition to `log.md`; terminal state is `current: done`.
+- New work gets a **new** step; a DoD that cannot be auto-verified is `DoD: confirm: user`.
 
 ## Commands
 
@@ -101,7 +97,7 @@ per-user KBs/models, the vLLM/MASTERSPIKE precontext and the admin terminal.
 | `make submodules` | initialize/update all four submodules at their pinned commits |
 | `make bundle ROLE=peer\|master` / `bundle-verify` | standalone node bundles |
 | `make wiki-sync` / `wiki-verify` / `wiki-preflight` | vendored wiki suite |
-| `make role-skills-check` | role-local catalogs and licenses |
+| `make role-skills-check` / `skills-check` | role-local catalogs and licenses; deterministic catalog index |
 | `make keys-check` / `make shims-check` | no key material; symlinks intact |
 | `scripts/sparknet <cmd>` | unified CLI over the make targets |
 
@@ -110,6 +106,13 @@ Run everything through `make`. `scripts/sparknet` is the unified CLI;
 resource-first check before building a container or model.
 
 ## Agent skills
+
+The installed skills are indexed by `.opencode/skills/.catalog.json` (base,
+peer, master). `permission.skill` advertises only the 25–35 featured ids from
+`contracts/skill-policy.json`; the rest is read through the `sparknet-skills`
+MCP. The catalog grants no authority and carries no vault knowledge; rebuild with
+`make skills-index`, verify with `make skills-check`.
+
 Issues: `.scratch/issues/` (`sparknet-issue/1`); see `docs/agents/issue-tracker.md`.
 Triage: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`.
 Domain docs: `GLOSSARY.md`, `docs/adr/`; see `docs/agents/domain.md`.
@@ -118,19 +121,17 @@ Domain docs: `GLOSSARY.md`, `docs/adr/`; see `docs/agents/domain.md`.
 
 `STYLE_GUIDE.md` is the standing convention: Python, shell, Makefiles, commits,
 secrets, CI, docs, release. Its §1 is resource-first: check NVIDIA's catalog
-before building your own. Cross-role changes remain atomic across repositories:
-commit the role changes in their submodule first, then commit the updated
-submodule pointer together with `contracts/`/`shared/` in the superproject, and
-run `make contract-test`.
+before building your own. Cross-role changes are atomic: commit role changes in
+their submodule first, then pin them with `contracts/`/`shared/` and run
+`make contract-test`.
 
 ## Layout
 
 Vault categories: `concepts/`, `entities/`, `skills/`, `references/`,
 `synthesis/`, `journal/`, `projects/`, `sessions/`, `_raw/`, `_staging/`,
-`_archives/`. Role subvaults keep the numbered PARA layout with legacy names as
-symlinks. Distilled page → its category; raw capture → `_raw/`; logs → `/mnt/log/`;
-secrets → the node's state directory. One page per file; cross-link instead of
-copying.
+`_archives/`; role subvaults keep the numbered PARA layout with legacy symlinks.
+Distilled page → category; raw capture → `_raw/`; logs → `/mnt/log/`; secrets →
+the node state directory. One page per file; cross-link instead of copying.
 
 ## Boundaries
 

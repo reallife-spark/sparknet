@@ -81,8 +81,8 @@ jobs:
 
       # One step, one command: the workflow does not re-list the checks. The
       # gate script owns the vocabulary (keys-check, shims-check, lint,
-      # format-check, shellcheck, validate, contract-test, render-check,
-      # sbom-check, test-all) and this step runs it. PRs take the fast pass;
+      # format-check, shellcheck, role-skills-check, skills-check, validate,
+      # contract-test, render-check, sbom-check, test-all) and this step runs it. PRs take the fast pass;
       # a push to the default branch runs the full suite, which is what
       # `make ci` does locally.
       - name: Run the local pre-merge gate

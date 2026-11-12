@@ -47,7 +47,7 @@ SCOPE ?= fabric
         vector-index vector-stamp vector-query vector-parity kv-export reflex-eval reflex-live-check reflex-live-query \
         reflex-plan-eval skill-eval nocturnal-rehearsal verify-plans env-init wiki-sync wiki-verify \
         wiki-preflight bundle bundle-verify status-plan clean dist submodules \
-        role-skills role-skills-check understand-check keys-check shims-check hooks self-improve package-install
+        role-skills role-skills-check skills-index skills-check understand-check keys-check shims-check hooks self-improve package-install
 
 submodules: ## Initialize/update all four pinned repositories
 	@git submodule update --init --recursive
@@ -392,6 +392,8 @@ drift-check: ## Fail if derived artifacts drifted (manifest, SBOM, skills, contr
 	@$(MAKE) --no-print-directory wiki-verify
 	@echo "drift-check: role-local skill catalogs"
 	@$(MAKE) --no-print-directory role-skills-check
+	@echo "drift-check: skill catalog index"
+	@$(MAKE) --no-print-directory skills-check
 	@echo "drift-check: cross-role contract parity"
 	@$(MAKE) --no-print-directory contract-test
 	@echo "drift-check: published goagx distribution"
@@ -491,6 +493,7 @@ wiki-sync: ## Re-vendor .opencode/skills from the farm, applying local patches
 	@$(PY) scripts/sync-wiki-skills.py --apply
 	@$(PY) scripts/sync-understand-skills.py --apply
 	@$(PY) scripts/sync-mattpocock-skills.py --apply
+	@$(PY) scripts/sparknet-skills.py index --role all
 	@echo
 	@$(MAKE) --no-print-directory wiki-verify
 
@@ -517,9 +520,16 @@ wiki-preflight: ## Prove the vendored skills resolve the vault you are standing 
 # --- role-local skill catalogs -------------------------------------------------
 role-skills: ## Rebuild peer-node and master-node role-local skill catalogs
 	@$(PY) scripts/sync-role-skills.py --apply
+	@$(PY) scripts/sparknet-skills.py index --role all
 
 role-skills-check: ## Verify role-local catalogs, licenses and removal list
 	@$(PY) scripts/sync-role-skills.py --check
+
+skills-index: ## Rebuild the deterministic skill catalogs for all roles
+	@$(PY) scripts/sparknet-skills.py index --role all
+
+skills-check: ## Verify every skill catalog against the installed skills
+	@$(PY) scripts/sparknet-skills.py check --role all
 
 # --- standalone node bundles ---------------------------------------------------
 

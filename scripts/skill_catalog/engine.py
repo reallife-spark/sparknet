@@ -165,6 +165,157 @@ def copy_tree(
     return files, skipped
 
 
+def parse_frontmatter(text: str) -> dict[str, str]:
+    """Read the flat ``key: value`` pairs of a SKILL.md frontmatter block.
+
+    Catalog metadata is deliberately small: id, name, description and license.
+    The role adapter has the full parser it needs; this one keeps the catalog
+    builder independent of any single skill family.
+    """
+    if not text.startswith("---"):
+        return {}
+    end = text.find("\n---", 3)
+    if end == -1:
+        return {}
+    lines = text[3:end].splitlines()
+    out: dict[str, str] = {}
+    index = 0
+    while index < len(lines):
+        match = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$", lines[index])
+        if not match:
+            index += 1
+            continue
+        key = match.group(1)
+        value = match.group(2).strip()
+        index += 1
+        if value in {">", "|", ">-", "|-"}:
+            block: list[str] = []
+            while index < len(lines) and (not lines[index].strip() or lines[index][:1].isspace()):
+                block.append(lines[index].strip())
+                index += 1
+            out[key] = " ".join(part for part in block if part)
+            continue
+        while index < len(lines) and lines[index][:1].isspace() and lines[index].strip():
+            value += " " + lines[index].strip()
+            index += 1
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        out[key] = value
+    return out
+
+
+def skill_dirs(root: Path | str) -> list[Path]:
+    """Return the immediate skill directories under ``root``, sorted by name."""
+    base = Path(root)
+    if not base.is_dir():
+        return []
+    return sorted(
+        (
+            path
+            for path in base.iterdir()
+            if path.is_dir() and not path.name.startswith(".") and (path / "SKILL.md").is_file()
+        ),
+        key=lambda path: path.name,
+    )
+
+
+def catalog_entry(
+    skill: Path, *, role: str, source_repo: str, license: str, group: str, tier: str = "standard"
+) -> dict:
+    """Build one catalog row from a skill directory."""
+    skill_md = skill / "SKILL.md"
+    text = skill_md.read_text(encoding="utf-8", errors="replace")
+    meta = parse_frontmatter(text)
+    description = " ".join(meta.get("description", "").split())
+    if not description:
+        raise ValueError(f"{skill}: missing description")
+    references = sorted(
+        path.relative_to(skill).as_posix()
+        for path in skill.rglob("*")
+        if path.is_file() and path.name != "SKILL.md" and "__pycache__" not in path.parts
+    )
+    return {
+        "id": skill.name,
+        "name": meta.get("name") or skill.name,
+        "description": description,
+        "group": group,
+        "source_repo": source_repo,
+        "license": license,
+        "tier": tier,
+        "role": role,
+        "path": f"{skill.name}/SKILL.md",
+        "references": references,
+        "sha256": file_digest(skill_md),
+    }
+
+
+def build_catalog(
+    root: Path | str,
+    *,
+    role: str,
+    group_for: Callable[[str, str], str],
+    metadata_for: Callable[[str], dict] | None = None,
+    group_order: Iterable[str] = (),
+    group_descriptions: dict[str, str] | None = None,
+) -> dict:
+    """Index every immediate skill directory under ``root``.
+
+    ``metadata_for`` supplies source_repo/license/tier; a missing entry falls
+    back to ``local``/``MIT``/``standard``. Groups are sorted by the supplied
+    policy order, then alphabetically; skills are sorted by id.
+    """
+    base = Path(root)
+    rows = []
+    for skill in skill_dirs(base):
+        meta = metadata_for(skill.name) if metadata_for else {}
+        source_repo = str(meta.get("source_repo") or meta.get("source") or "local")
+        license_name = str(meta.get("license") or "MIT")
+        tier = str(meta.get("tier") or "standard")
+        group = group_for(skill.name, source_repo)
+        rows.append(
+            catalog_entry(
+                skill,
+                role=role,
+                source_repo=source_repo,
+                license=license_name,
+                group=group,
+                tier=tier,
+            )
+        )
+    rows.sort(key=lambda row: (row["group"], row["id"]))
+    order = {name: index for index, name in enumerate(group_order)}
+    descriptions = group_descriptions or {}
+    groups: dict[str, dict[str, object]] = {}
+    for row in sorted(rows, key=lambda row: (order.get(row["group"], 999), row["group"], row["id"])):
+        group = groups.setdefault(
+            row["group"],
+            {"description": descriptions.get(row["group"], ""), "skills": []},
+        )
+        names = group["skills"]
+        if not isinstance(names, list):
+            raise ValueError(f"catalog group {row['group']} has a non-list skills field")
+        names.append(row["id"])
+    return {
+        "schema": "sparknet-skill-catalog/1",
+        "role": role,
+        "root": base.name,
+        "generated_by": "scripts/sparknet-skills.py",
+        "counts": {"skills": len(rows), "groups": len(groups)},
+        "groups": groups,
+        "order": [
+            row["id"] for row in sorted(rows, key=lambda row: (order.get(row["group"], 999), row["group"], row["id"]))
+        ],
+        "skills": {row["id"]: row for row in rows},
+    }
+
+
+def write_catalog(path: Path | str, catalog: dict) -> None:
+    """Write a catalog with a stable key order and a trailing newline."""
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(catalog, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def host_path_hits(
     root: Path | str,
     *,

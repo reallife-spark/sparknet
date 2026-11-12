@@ -188,10 +188,22 @@
       "sha256": "8be1e8f681630a7e1757d3db372f8e64a93abb8b6e75a71890f4cbb0c3fb6d2e"
     },
     {
+      "contract": "skill-catalog",
+      "file": "skill-catalog-schema.json",
+      "schema_version": "1.0",
+      "sha256": "2ec485ba529c627263c526e9254a35bfb1a678a51fdf6ce3f35badfc33461d11"
+    },
+    {
       "contract": "skill-eval",
       "file": "skill-eval-schema.json",
       "schema_version": "1.0",
       "sha256": "6154545e6bcd905cb506b26129df221171876a2684b9431f5561279267acd346"
+    },
+    {
+      "contract": "skill-policy",
+      "file": "skill-policy.json",
+      "schema_version": "1.0",
+      "sha256": "d45c4ec04d350ab06af6c4e68d46d14cb3732da786353bd85bff16ac4e426c8c"
     },
     {
       "contract": "step89-admin-schema",

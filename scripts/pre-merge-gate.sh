@@ -74,6 +74,7 @@ run_step "lint"          make --no-print-directory -C "$ROOT" lint
 run_step "format-check"  make --no-print-directory -C "$ROOT" format-check
 run_step "shellcheck"    make --no-print-directory -C "$ROOT" shellcheck
 run_step "role-skills-check" make --no-print-directory -C "$ROOT" role-skills-check
+run_step "skills-check"  make --no-print-directory -C "$ROOT" skills-check
 run_step "validate"      make --no-print-directory -C "$ROOT" validate
 run_step "contract-test" make --no-print-directory -C "$ROOT" contract-test
 run_step "render-check"  make --no-print-directory -C "$ROOT" render-check
