@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
-updated: 2026-11-11
-current: 104
+updated: 2026-11-12
+current: done
 ---
 
 # sparknet — Active Plan
@@ -419,10 +419,8 @@ current: 104
   - [x] **99C — Docs.** `webui/README.md` records the symlink and the reason.
   - **DoD**: the guard fails on a stray shared import and passes after
     reverting; the symlink resolves; the full suite, lint and format are green.
-  - **Status 2026-11-11 — COMPLETE.** The `requests` mutation failed the
-    module-level guard and reverted green. The WebUI file was already a
-    tracked symlink (mode 120000); no copy exists. Full fabric suite, lint and
-    format green. No live claim.
+  - **Status 2026-11-11 — COMPLETE.** Mutation reverted green; symlink
+    resolves; full suite, lint and format green. No live claim.
 
 ## Step 100 — Read-only eval audit surface
 
@@ -438,11 +436,8 @@ current: 104
     separately.
   - **DoD**: console tests cover a valid record, a tampered record and the
     projection; the full suite, lint, format and app.js syntax are green.
-  - **Status 2026-11-11 — COMPLETE.** `/api/evals` projects 1 pass and counts 1
-    tampered record as invalid in the new test; the panel is wired through the
-    surface table and both role menus. Full suite, lint and format green.
-    goagx republished as `6b8d195` and pinned; `make drift-check` green. No
-    live claim.
+  - **Status 2026-11-11 — COMPLETE.** Valid/tampered projection test green;
+    full suite, lint, format and drift-check green. No live claim.
 
 ## Step 101 — Console degrades on a malformed gateway payload
 
@@ -462,9 +457,8 @@ current: 104
     dict and `runs` is a list; both consumers are covered.
   - **DoD**: the regression test, the console file, the full suite, lint and
     format are green; `make drift-check` green after the goagx republish.
-  - **Status 2026-11-11 — COMPLETE.** Regression test and full suite green;
-    goagx republished as `59a83e7` and pinned; `make drift-check` green.
-    No live claim.
+  - **Status 2026-11-11 — COMPLETE.** Regression green; goagx `59a83e7`;
+    drift-check green. No live claim.
 
 ## Step 102 — Refuse a malformed delegate run record
 
@@ -483,10 +477,8 @@ current: 104
     object, before the review gate and before any write.
   - **DoD**: both malformed variants refuse cleanly with no report file; the
     project suite, full suite, lint and format are green; goagx republished.
-  - **Status 2026-11-11 — COMPLETE.** Both variants refuse with
-    `run record is malformed: result and task must be objects`; the full suite,
-    lint and format are green. goagx republished as `62797c6` and pinned. No
-    live claim.
+  - **Status 2026-11-11 — COMPLETE.** Both variants refuse; full suite, lint,
+    format green; goagx `62797c6`. No live claim.
 
 ## Step 103 — Nocturnal skill-eval subtasks and network summary
 
@@ -513,15 +505,13 @@ current: 104
   - **DoD**: fabric, peer and master suites, lint, format, contract-test,
     render-check and `make nocturnal-rehearsal` are green. The live 02:00–05:00
     window remains issue #8 (`DoD: confirm: user`) and is not claimed here.
-  - **Status 2026-11-11 — COMPLETE (code and rehearsal).** Fabric suite, peer
-    648/1 skipped, master suite, lint, format, contract-test, render-check and
-    the rehearsal are green. Commits: peer `89afef4`, master `b93f077`, fabric
-    `ab9be7a`; goagx republished as `2b4de0f` and pinned. Live window still
-    pending (issue #8).
+  - **Status 2026-11-11 — COMPLETE (code and rehearsal).** Suites and
+    `make nocturnal-rehearsal` green; peer `89afef4`, master `b93f077`, fabric
+    `ab9be7a`, goagx `2b4de0f`. Live window is issue #8.
 
 ## Step 104 — Migrate the two large node scripts to Python
 
-- [ ] **Step 104** — Replace the logic in `spark-entrypoint.sh` and
+- [x] **Step 104** — Replace the logic in `spark-entrypoint.sh` and
   `sparknet-node-setup.sh` with Python implementations behind thin exec
   wrappers, keeping the names, flags and output stable.
   - [x] **104A — Behavioural tests.** `tests/test_entrypoint.py` exercises the
@@ -535,20 +525,23 @@ current: 104
   - [x] **104C — Node setup.** `sparknet-node-setup.py` owns args, preflight,
     compose, bundle staging, join, env-file rendering, the GPU fixture and the
     actions; the shell file is the same thin wrapper.
-  - [ ] **104D — Target-host verification.** Build and run the image and the
+  - [x] **104D — Target-host verification.** Build and run the image and the
     setup flows on agx64/agx32, including SIGTERM drain, a join and a second
     idempotent run. `DoD: confirm: user`; no live claim from this host.
   - **DoD**: the fabric suite, peer and master suites, lint, format, shellcheck,
     contract-test, render-check and `make drift-check` are green; the two
     live checks are recorded with host and date.
-  - **Status 2026-11-11 — code complete; target-host verification pending.**
-    The Python ports and wrappers are in place; all local gates are green.
-    Commits: peer `633fef9`, fabric `00883a5`; goagx republished as `d6930f6`
-    and pinned. Step 104D remains open (`DoD: confirm: user`).
-  - **Status 2026-11-12 — target hosts still run the pre-104 shell entrypoint
-    and an image built 2026-10-21.** The live pair is healthy on `wg1`, but
-    104D needs a maintenance deployment + image rebuild; it is not claimable
-    from this development host.
+  - **Status 2026-11-12 — COMPLETE (live target-host verification).** Local:
+    `make ci`, `make test-all`, `make container-test` (3 passed, `:py104`),
+    `make drift-check`, shellcheck and both bundle verifies green. On `agx32`
+    (peer) and `agx64` (master): `help`, `vllm-stub`, `compute`,
+    `memory-gateway`, `llama-embed`/`llama-rerank` start; `whisper-asr` starts
+    both children and exits 0 on SIGTERM. Setup up/down/up is idempotent;
+    `--role master`, `--platform agx` and the join fields pass. Env rendering
+    differs only in two comment lines (old unquoted-heredoc backticks); the
+    real vLLM model was not started (upstream down), and the from-source image
+    rebuild remains a release task (thin `:py104` used). goagx `c07e40d`;
+    detail in the session.
 
 ## Step 105 — Skill catalog access across OpenCode and Open WebUI
 
@@ -573,17 +566,24 @@ current: 104
     `make sbom-check` and `make render-check` are green; a master session
     advertises at most the featured set; the MCP returns a hidden skill by
     search and load; the engine config test proves the catalog mount.
-  - **Status 2026-11-12 — COMPLETE (local).** Base/peer/master catalogs are
-    sorted and current; OpenCode advertises 36 entries on master (35 featured +
-    built-in) and the MCP search/load round-trip passes. Both role bundles
-    build and verify. Commits: peer `16b4c66`, master `abbc8db`, fabric
-    `21edb5e`; signed goagx release `9e80adf`, pinned in `4c2a1f2`.
-  - **Live 2026-11-12.** Signed HEAD bundles were deployed to `agx32` (peer)
-    and `agx64` (master); both engines and consoles restarted, both catalogs
-    check clean, both console `/api/skills` routes return data, and both sandbox
-    configs contain the MCP plus read-only catalog mounts. The MCP search was
-    executed inside each sandbox. The model upstream (`127.0.0.1:11434`) is down
-    on both hosts, so end-to-end chat is not claimed. Cursor returns to 104D.
+  - **Status 2026-11-12 — COMPLETE.** Catalogs sorted; MCP round-trip green;
+    both bundles verify. Live: both engines/consoles restarted, both catalogs
+    check clean, both `/api/skills` routes return data. Commits: peer
+    `16b4c66`, master `abbc8db`, fabric `21edb5e`; goagx `9e80adf`. The model
+    upstream is down, so end-to-end chat is not claimed.
+
+## Step 106 — Live-verify the peer eval audit transport
+
+- [x] **Step 106** — Close issue #9 by proving the signed peer→Master eval
+  report live.
+  - **DoD**: a signed valid report from `agx32` is accepted and appears in the
+    Master `/api/evals`; a duplicate is a no-op; a self-consistent report with
+    a tampered record is stored and counted `invalid`, never shown; no vault/KB
+    read; dated host-specific evidence. `contracts/knowledge-flow.md` records
+    the live pair; contract-test and drift-check are green.
+  - **Status 2026-11-12 — COMPLETE (live pair).** `agx32` pushed the signed
+    `defect-shell-true` report; accepted, duplicate no-op, tampered counted
+    `invalid`. `/api/evals`: `fail: 1`, `invalid: 1`, `total: 1`, `read_only`.
 
 ## Standing verification rules
 

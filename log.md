@@ -447,3 +447,7 @@ file, not here.
 - [2026-11-12] **CI green after the workspace ignore.** Added `learn` to the layout's untracked top-level allow-list (`tests/test_layout.py`); `make ci` passes (656 passed, 1 skipped in peer-node; all gates green).
 - [2026-11-12T15:20:00Z] PLAN current 104 -> 105 (Step 105 skill catalog access; 104D remains open)
 - [2026-11-12T16:20:00Z] Step 105 complete (local): skill catalog + MCP + permission.skill; 104D remains open; goagx republish pending
+- [2026-11-12T22:30:00Z] PLAN Step 104D complete — live target verification on agx32 (peer) and agx64 (master): dispatcher stub/compute/memory/llama/whisper, SIGTERM drain, setup up/down/up idempotence and join fields; thin `:py104` image; env parity documented (comment-only difference); cursor 104 -> 106.
+- [2026-11-12T22:30:00Z] Release pins: fabric `d709a19`..`1c6d6e3`; goagx `c07e40d`; role bundles built from `a67c78b` and deployed to both hosts.
+- [2026-11-12T22:45:00Z] Step 106 complete — live eval audit: `agx32` signed report accepted, duplicate no-op, tampered stored and counted `invalid`; `/api/evals` `fail:1 invalid:1 total:1`; `contracts/knowledge-flow.md` live pair updated; root cursor `done`.
+- [2026-11-12T22:50:00Z] 9G preflight — live signed eval dispatch through the scheduler, signer and peer bridge succeeded; `network_evals` `fail:1`; aggregate `master-node/01_Inbox/nocturnal/preflight-20261112T215005Z/...`; window timer armed for 2026-11-13 01:59:30 CET.
