@@ -577,8 +577,13 @@ current: 104
     sorted and current; OpenCode advertises 36 entries on master (35 featured +
     built-in) and the MCP search/load round-trip passes. Both role bundles
     build and verify. Commits: peer `16b4c66`, master `abbc8db`, fabric
-    `21edb5e`; signed goagx release `9e80adf`, pinned in `4c2a1f2`. No live node
-    claim. Cursor returns to 104D, the only open step.
+    `21edb5e`; signed goagx release `9e80adf`, pinned in `4c2a1f2`.
+  - **Live 2026-11-12.** Signed HEAD bundles were deployed to `agx32` (peer)
+    and `agx64` (master); both engines and consoles restarted, both catalogs
+    check clean, both console `/api/skills` routes return data, and both sandbox
+    configs contain the MCP plus read-only catalog mounts. The MCP search was
+    executed inside each sandbox. The model upstream (`127.0.0.1:11434`) is down
+    on both hosts, so end-to-end chat is not claimed. Cursor returns to 104D.
 
 ## Standing verification rules
 
