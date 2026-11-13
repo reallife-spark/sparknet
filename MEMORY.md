@@ -1,60 +1,59 @@
 # sparknet — Session Memory
 > Standing state only. Read at session start; **replace, never append**.
-> History belongs in `log.md` and `sessions/YYYY-MM-DD.md`; pre-2026-10-31
-> detail is in `_archives/MEMORY_FULL_2026-10-30.md`.
+> History belongs in `log.md` and `sessions/YYYY-MM-DD.md`.
 Updated: 2026-11-13
 ## Plan cursor
-- `PLAN.md` — `current: done` (104D/106 complete). `master-node/PLAN.md` —
-  `current: done` (9G live window complete 2026-11-13 02:10 CET).
-- Merged: fabric #18 (review triage), #19 (loader diagnostics), #20 (peer
-  guard-status pin), #21 (AGX digest pin), #22 (KV/GPU ADRs); peer #2
-  (guard-status); goagx signed release `2a925a6`; master plan truth `d227733`.
-- #8/#9/#11 are closed with dated agx32/agx64 evidence (0 open). Next:
-  sandbox 20E/20F, Step 10 4203 third host, Phase 9, KV/GPU ADR backlog.
-- Phase 8 remains closed: 54 fixed, 186 reviewed-clean, 176 test-verified;
-  register and inventory in `_archives/`.
+- `PLAN.md` — `current: 108` (Step 107 knowledge capture complete; Step 108
+  `sparknet-llm`/`llama.cpp` next). `master-node/PLAN.md` — `current: done`
+  (9G live window 2026-11-13).
+- #8/#9/#11 closed with dated agx32/agx64 evidence (0 open). Next: Step 108
+  `sparknet-llm`/`llama.cpp`, sandbox 20E/20F, Step 10 4203 third host, Phase 9.
 ## Live fabric
-- **`agx64` = Master = `sparknet-node-0001`** (`10.100.0.1/32`, hostname
-  `red-team`); **`agx32` = peer = `sparknet-node-0002`** (`10.100.0.2/32`,
-  hostname `blue-team`). Peer egress only to Master. The overlay is `wg1`, not
-  `wg0`.
-- Both hosts now carry the post-104 wrappers/Python, the eval-audit and Step
-  103 code, and refreshed contexts. The live checks used a thin `:py104` layer
-  over the existing AGX image; the from-source image rebuild remains a release
-  task. 9G window 2026-11-13: plan/arm/lease, signed eval job and aggregate
-  `fail:1`, no promotion; cluster execute, wg observer and idle-ignore remain
-  enabled for the continuous window. The model job is not claimed (upstream
-  down).
-- Master: signer/ledger/parity, 8088 admin, 8098 console, 8090/8091 intake, 4220–4223, 4201/4202 share, 4204 engine, Qdrant 6333, teacher.
-- Peer: 9090 guard, 4096 bridge, 4201/4202 share, 4110/4093 memory, 8181 WebUI, 8099 console, 4204 engine, Qdrant 6333, student.
-- **agx32 disk hygiene (2026-11-12):** root 869G→70G used. Qdrant snapshots live at `/mnt/ai/qdrant-snapshots` (keep 1/collection); Ollama store merged into `/mnt/ai/ollama/models`; `~/.cache/huggingface` → `/mnt/ai/hf-cache`; uplift outbox capped at 5 GiB; `sparknet-console@master` disabled. `sparknet-uplift-sync.timer` (user) runs daily at 06:15; goagx is pinned at `7656de8` and drift-clean from HEAD; `/mnt/data` MinIO PCAP orphans reclaimed (77G→4.4G).
-- **Teacher/student:** agx64 Qwen3.6-35B-A3B Q4_K_M; agx32 Qwen3.5-9B Q8.
-- **Agents:** agx32 `sparknet-agent@engineering` and `@cyber` user units; agx64 `sparknet-orchestrator.service`. Live task returned `engineering.result` `summary=OK`.
-- **Exec:** agx32 daemon live with exact allowlist `pwd`, `ls -la`, `git status --short`; cwd `01_Inbox`/`05_Knowledge`; audit `.state/exec-audit.jsonl`; no shell.
-- **Secrets:** engine/memory/Qdrant rotated 2026-11-07; old tokens refused. Master/peer WebUI chat verified.
+- `agx64` = Master = `sparknet-node-0001` (`10.100.0.1/32`, `red-team`),
+  **AGX Xavier 64 GB**, `sm_72`, L4T r35, MAXN; `agx32` = peer =
+  `sparknet-node-0002` (`10.100.0.2/32`, `blue-team`), **AGX Xavier 32 GB**,
+  `sm_72`, L4T r35, MAXN. Peer egress only to Master; overlay `wg1`.
+- 9G window 2026-11-13 02:00–02:10: plan/arm/lease, signed eval job,
+  `network_evals fail:1`, no promotion; abort. Cluster execute, wg observer and
+  idle-ignore remain enabled. The model-prompt job is not claimed (Ollama
+  upstream down); Step 108's `llama.cpp` path is the replacement.
+- Text engine: **vLLM v0.2.7 today**; ADR 0021 (proposed) replaces it with
+  `jetson-containers` `llama.cpp`/`llama-server` (`sparknet-llm:agx`); Ollama
+  is the fallback and the peer's own AI-stack server; MLC-LLM optional;
+  TensorRT-LLM/ExLlamaV2/vLLM not the path. `vllm:8000`, `vllm-stub` and the
+  aux embed/rerank/audio stay.
+- Teacher/main on `agx64`: Qwen3.6-35B Q4_K_M (largest same-version that fits
+  64 GB at the best responsive quantization). Student on `agx32`:
+  Qwen3.6-0.6B Q8_0 (smallest same-version; 1.7B if too weak). Fallback
+  Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0. Old `qwen3.5-9b`/`qwen3.8-27b` retired.
+- **Storage:** vaults on the data drives (`/mnt/ai/...`); active
+  teacher/student GGUF/tokenizer/precontext/KV on the root NVMe
+  (`/opt/sparknet/models/...`); cold store/HF cache/uplift/distill/Qdrant
+  snapshots/backups on the data; keys/state on the root. `agx64` root 137 GB,
+  data 1.4 TB; `agx32` root 808 GB, data 131 GB. Model container mounts only
+  the root model dir.
+- **Tuning:** `sm_72` (`CUDA_ARCHITECTURES=72`); Q4_K_M teacher, Q8_0/Q4_K_M
+  student; `--n-gpu-layers 99`; measured ctx/parallel; MAXN (`nvpmodel -m 0`,
+  `jetson_clocks`); `tegrastats`; 136.5 GB/s. goagx pinned `4563567`; disk,
+  agents and secrets are in `sessions/2026-11-12.md`.
 ## Durable facts
-- Memory plane: Go `sparknet-memory` 4110 behind Python gateway 4093; one store, per-vault scope.
-- Qdrant 6333/6334; 4223 is the only signed surface.
-- `model-uplift` carries consented training/backup evidence only, never answers.
-- One `shared/sparknet-authz.py`; one authorization implementation.
-- A role subvault is not a deployment; `make bundle` + `bundle-verify`.
-- Keys live in `$SPARKNET_STATE_DIR` at 0700/0600; never in git or a vault.
-- Live fleet uses iptables and userspace WireGuard.
-- Registry ships empty; fresh nodes grant nothing.
-- Understand graph is a build artifact (`.ua/`); issues are work items (`.scratch/issues/`). Neither is knowledge or authority.
-- Understand graph: Python is the sole producer (`scan`/`build`/`merge`/`validate`/`diff`); Go consumes `query`/`export`/MCP and adapts `scan`/`diff`/`parse` through `shared/sparknet-understand.py`. Python core is split into `schema.py`, `production.py`, `algebra.py` behind the path-stable `core.py` facade.
-- Issue model: `shared/sparknet-issue.py` owns parse, redaction, validation, ledger, triage and projection; `shared/sparknet-authz.py` still owns the envelope/signature. Triage history is append-only `triage.jsonl`, derived `triage.json`.
-- Skill-eval model: `contracts/skill-eval-schema.json` + `shared/sparknet-skill-eval.py` is the one digest-bound pass/warn/fail record. Gate mode in `sparknet-self-improve.evaluate()` and `project report --require-review` require a passing record; the Go broker validates and stores it. `make skill-eval` runs the offline golden harness. Records are audit evidence: never authority, never knowledge.
-- Skill access: `.opencode/skills/.catalog.json` (base/peer/master) is the sorted index; `shared/sparknet-skills-mcp.py` is the one read-only search/load surface. `permission.skill` advertises only the featured ids from `contracts/skill-policy.json`; the full tree stays in place. The catalog is not authority and not knowledge.
-- Architecture decisions recorded: issue module (root ADR 0009), skill catalog (root ADR 0010), core split (root ADR 0011), sandbox policy authority (root ADR 0013), graph producer/consumer (goSpark ADR 0018).
-- Base skill tree: 81 skills (32 vendored wiki, 2 local, 9 understand, 38 mattpocock); role catalogs peer 125 / master 1614.
+- Memory plane: Go `sparknet-memory` 4110 behind Python gateway 4093; one store, per-vault scope; Qdrant 6333/6334; 4223 the only signed surface.
+- `model-uplift` carries consented training/backup evidence only, never answers; teacher traces/uplift are not an answer corpus.
+- One `shared/sparknet-authz.py`; a role subvault is not a deployment (`make bundle` + `bundle-verify`); keys live in `$SPARKNET_STATE_DIR` at 0700/0600.
+- Live fleet uses iptables and userspace WireGuard; registry ships empty.
+- Understand graph is a build artifact (`.ua/`); issues are work items (`.scratch/issues/`); neither is knowledge or authority.
+- Skill-eval: `contracts/skill-eval-schema.json` + `shared/sparknet-skill-eval.py` is the one digest-bound record; audit evidence, never authority or knowledge.
+- Skill access: `.opencode/skills/.catalog.json` (base/peer/master) + the read-only MCP; `permission.skill` advertises the featured set only.
+- Architecture decisions: 0009 issue, 0010 skill catalog, 0011 core split, 0013 sandbox policy, goSpark 0018 graph, 0019 eval audit, 0020 skill access, 0021 AGX text engine (proposed).
+- Base skill tree: 81 skills; role catalogs peer 125 / master 1614.
+- AGX text-engine pages: ADR 0021; `references/dusty-nv-jetson-llm-containers-2026-11-13`; `concepts/agx-llm-engine`; `synthesis/agx-text-serving-options`.
 ## Security hardening 2026-11-08
-- Signer live on agx64 as root, operational key 0600, socket 0660/allowlist, ledger pinned before signing. Ledger `verify_chain` pins the key and refuses a return to an old key; live 54-block ledger verified. goSpark uses pinned mTLS and a bearer-gated admin listener.
-## Phase 8 state
-- Closed: 54 fixed, 186 reviewed-clean, 176 test-verified; waves A–G hardened shared boundaries, scripts/goagx, peer provisioner/share, master uplift/vector, WebUI, goSpark and tests. Register/inventory in `_archives/`.
+- Signer live on agx64; operational key 0600, socket 0660/allowlist, 54-block ledger verified; goSpark pinned mTLS and bearer-gated admin.
 ## Command gotchas
 - `make ci`/`make test-all` are authoritative; full run >120 s.
 - Rebuild before `bundle-verify`; run `wiki-preflight` before wiki suite.
-- A long-running service loads `shared/` at start; restart after changing shared modules.
 ## Local vs live
-This development host has no GPU/overlay. Code, tests, contracts, ledger and bundles are verifiable here; WireGuard, iptables, `chattr +i`, systemd, signer and live election are target-host checks.
+This development host has no GPU/overlay. Code, tests, contracts, ledger and
+bundles are verifiable here; WireGuard, iptables, `chattr +i`, systemd, signer
+and live election are target-host checks. The AGX runtime/model/storage claims
+are Step 108 target-host checks, not this host.

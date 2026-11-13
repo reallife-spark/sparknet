@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
-updated: 2026-11-12
-current: done
+updated: 2026-11-13
+current: 108
 ---
 
 # sparknet — Active Plan
@@ -302,72 +302,15 @@ current: done
 ## Step 96 — Skill-based feedback loops and evaluations
 
 - [x] **Step 96** — Turn the installed Matt Pocock skills into recorded,
-  gating evaluations of AI work products and of the skills themselves, and
-  file the work local-first in all five repositories. Task-tracked in
-  `.scratch/issues/`; no live claim is made from this host.
-  - [x] **96A — Issues.** File `sparknet-issue/1` items in the fabric,
-    peer-node, gospark, master-node and goagx trackers; `.scratch/` is
-    canonical until the GitHub mirror's PAT can create issues.
-    **DoD**: every issue parses and redacts through
-    `shared/sparknet-issue.py`; the gospark tracker is gitignored like the
-    others.
-    **Status 2026-11-11 — COMPLETE.** 13 issues filed (8 fabric, 1 peer, 1
-    Go, 1 master, 1 goagx follow-up); all validated through the canonical
-    parser and redactor; `.scratch/` ignored in gospark like the other trees.
-  - [x] **96B — Eval record.** Add `contracts/skill-eval-schema.json` and the
-    stdlib-only `shared/sparknet-skill-eval.py`: canonical projection,
-    validation, digest binding and refused authority-shaped fields.
-    **DoD**: `tests/test_skill_eval.py` fails before the module exists and
-    passes after; `make render-check` is green.
-    **Status 2026-11-11 — COMPLETE.** RED was `FileNotFoundError` for the
-    absent module; GREEN is 15 passing records tests. `make render` registered
-    the contract and `make render-check` is green.
-  - [x] **96C — Promotion gate.** In gate mode
-    `sparknet-self-improve.evaluate()` requires a passing skill-eval verdict in
-    addition to benchmark thresholds; non-gate callers keep today's behaviour.
-    **DoD**: a fail, missing or invalid verdict blocks promotion; tests cover
-    gate and non-gate modes.
-    **Status 2026-11-11 — COMPLETE.** Gate mode returns `pending` for a
-    missing/warn/fail/invalid record and `rollback` still wins on a threshold
-    regression; non-gate output is byte-identical to the legacy shape. CLI
-    gains `--require-review` and `--skill-eval`; 13 tests pass.
-  - [x] **96D — Reviewer rubric.** The project plan template and the
-    project-reviewer delegate emit the record; the Go delegate broker
-    validates and persists it. Cross-role commit series.
-    **DoD**: peer and gospark tests green; `make contract-test` green.
-    **Status 2026-11-11 — COMPLETE.** The template names the rubric; `project
-    report --require-review` validates a record from a file or the run result
-    and refuses missing/invalid/failing verdicts without writing a page. The
-    Go broker validates and stores `skill_eval`, fails the run on an invalid
-    record, and the contract snapshot/PROVENANCE moved with it. gospark
-    `make ci` and `make contract-test` green. Peer issue resolved as no
-    peer-local code path.
-  - [x] **96E — Skill self-eval.** Golden diffs under `tests/skill-evals/` and
-    the offline, deterministic `scripts/sparknet-skill-eval.py` runner with an
-    explicit abstain path.
-    **DoD**: a mutation check proves the eval can fail; results are
-    `sparknet-skill-eval/1` records.
-    **Status 2026-11-11 — COMPLETE.** Four golden cases; precision/recall
-    reported; records validate; `make skill-eval` is the entry point; disabling
-    a rule turns the run red (exit 2, verdict `fail`). Live model scoring stays
-    in the nocturnal issue.
-  - [x] **96F — Language policy.** Record the Go/Python/HTTP target and the
-    shell forward rule in `STYLE_GUIDE.md`; the shell migrations and the
-    nocturnal live loop remain open issues and get their own step when
-    scheduled, because their DoD needs dated target-host verification.
-    **DoD**: docs gates green; no behavior change.
-    **Status 2026-11-11 — COMPLETE.** `STYLE_GUIDE.md` now states the target
-    split and the forward rule: new logic in Python/Go, shell stays thin.
+  gating evaluations of AI work products and of the skills themselves; file the
+  work local-first in all five repositories (96A–96F). Detail:
+  `sessions/2026-11-11.md` and `log.md`.
   - **DoD**: `make test-all`, `CI_QUICK=1 make ci`, `make contract-test`,
-    `make render-check`, `make drift-check` and `git diff --check` are green;
-    no live claim is made from this host.
-  - **Status 2026-11-11 — COMPLETE.** 96A–96F verified. Pushed goSpark
-    `2e8b2be` and fabric `8f9bb08`; goagx republished as `c77170b` from
-    sparknet `df5c46a`, with the goSpark pin bumped and the superproject
-    pointer pinned. `make drift-check` is green. The GitHub mirror remains
-    blocked: `gh issue create` returns `Resource not accessible by personal
-    access token (createIssue)`; the fine-grained PAT needs Issues: Read and
-    write in GitHub settings. Local `.scratch/issues/` stays canonical. No
+    `make render-check`, `make drift-check` and `git diff --check` green; no
+    live claim from this host.
+  - **Status 2026-11-11 — COMPLETE.** 96A–96F verified; goSpark `2e8b2be`,
+    fabric `8f9bb08`, goagx `c77170b`; `make drift-check` green. The GitHub
+    mirror remains blocked by the PAT; local `.scratch/issues/` canonical. No
     live claim.
 
 ## Step 97 — Restore the fabric dependency guard
@@ -584,6 +527,32 @@ current: done
   - **Status 2026-11-12 — COMPLETE (live pair).** `agx32` pushed the signed
     `defect-shell-true` report; accepted, duplicate no-op, tampered counted
     `invalid`. `/api/evals`: `fail: 1`, `invalid: 1`, `total: 1`, `read_only`.
+
+## Step 107 — Capture the AGX LLM engine research and improve the vault
+
+- [x] **Step 107** — Capture the dusty-nv review, the runtime/model decision,
+  the hardware truth and the storage contract; run the full wiki cycle.
+  - **DoD**: the reference/entities/ADR/concept/synthesis/GLOSSARY/index/hot
+    pages are cited, cross-linked and current; the hardware truth is AGX Xavier
+    64/32 GB; the full wiki cycle and `make ci`/`test-all`/`drift-check` are
+    green; no live claim for the unimplemented engine.
+  - **Status 2026-11-13 — COMPLETE.** The pages are written and linked; the
+    hardware truth is 64/32; the wiki cycle and the local gates are green. Step
+    108 is next.
+
+## Step 108 — Replace the AGX text engine with llama.cpp/llama-server
+
+- [ ] **Step 108** — Implement `sparknet-llm:agx`, remove the vLLM build from
+  the node image, keep `vllm:8000`/`vllm-stub`/aux, stage the teacher/student
+  models, migrate storage, and validate on agx64/agx32.
+  - **DoD**: the `sparknet-llm:agx` image serves the teacher on agx64 and the
+    student on agx32 through the OpenAI endpoints; the precontext is present;
+    the node image no longer builds vLLM; the `vllm-stub`/aux/agent/compute
+    paths still work; the active model files are on the root and the vaults on
+    the data drives; the live checks are dated and host-specific; `make ci`,
+    `make test-all`, `make drift-check`, `make container-test`, `make bundle`/
+    `bundle-verify` and the goagx publish/pin are green; no live claim before
+    the checks run.
 
 ## Standing verification rules
 

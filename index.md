@@ -1,6 +1,6 @@
 ---
 title: sparknet Knowledge Index
-updated: 2026-11-06
+updated: 2026-11-13
 ---
 
 # sparknet — Knowledge Index
@@ -26,6 +26,7 @@ This repository is a fabric. Each vault has its own categories and its own
 - [[CONTRIBUTING]] — setup, the gate (`make ci`), and the atomic cross-role rule
 - [[SECURITY]] — how to report, and the fail-closed authority model it protects
 - [[STYLE_GUIDE]] — how work is written here (Python, shell, commits, secrets, CI)
+- [[GLOSSARY]] — the fabric vocabulary, including the model-serving and AGX terms
 - [[CHANGELOG]] — releases; `VERSION` is the source of truth
 - [[CONTEXT]] — generated operating context loaded by every AI surface
 - [[MISSION]] — what this vault is for and what "done" looks like
@@ -52,6 +53,28 @@ by its own commit, with both roles edited together where the contract changes.
 | `MCP_A2A_DESIGN.md` | MCP/A2A tool surface |
 | `RFI_REQUEST_DESIGN.md` | the RFI request channel: peer→Master attribution by the authenticated overlay |
 | `MASTER_OBSERVABILITY_DESIGN.md` | Phase 4 Master observability: telemetry pushed as evidence, never interception; no authority on the telemetry path |
+| `docs/adr/0021-agx-llm-engine.md` | the AGX text engine: llama.cpp/llama-server, teacher/student, storage, MAXN; proposed (Step 107) |
+| `docs/architecture/2026-11-10-deep-module-audit.md` | the deep-module audit behind ADR 0011/0014 |
+| `docs/architecture/2026-11-11-external-review-triage.md` | the external-review triage behind the AGX digest pin |
+
+## Architecture decisions
+
+One decision per file in `docs/adr/`; the ADR template/index is
+`docs/adr/README.md`. The new decision is [[0021-agx-llm-engine]]; the existing
+files are [[0001-local-markdown-issue-tracker]],
+[[0002-by-path-loader-across-roles-and-tests]], [[0003-listener-route-policy]],
+[[0004-envelope-catalog]], [[0005-console-surface-table]],
+[[0006-stage-the-provenance-split]],
+[[0007-complete-the-provenance-lifecycle-split]],
+[[0008-signer-operation-catalog]], [[0009-issue-module]],
+[[0010-skill-catalog]], [[0011-understand-core-split]],
+[[0012-openshell-sandbox]], [[0013-sandbox-policy-authority]],
+[[0014-keep-authz-behind-one-facade]],
+[[0015-memory-filter-adapter-boundary]],
+[[0016-pin-agx-base-digest]], [[0017-defer-live-kv-capture]],
+[[0018-keep-gpu-embedder-behind-vllm-embed]],
+[[0019-eval-audit-report-channel]], [[0020-skill-catalog-access]].
+
 
 ## The contract
 
@@ -137,20 +160,27 @@ whole vocabulary but no private key can never grant, revoke or escalate.
 Each category exists in all three vaults.
 
 ### Concepts
-Three distilled pages: `[[activity-trumps-eviction]]`, 
-`[[admission-epoch]]`, `[[two-personality-listener]]`.
+Four distilled pages: `[[activity-trumps-eviction]]`,
+`[[admission-epoch]]`, `[[two-personality-listener]]`, `[[agx-llm-engine]]`.
 
 ### Entities
+`[[dusty-nv]]` (the Jetson AI container/tutorial ecosystem) and
+`[[jetson-containers]]` (the `llama_cpp`/`ollama` container build system).
 
 ### Skills
 
 ### References
-Two references: `[[pair-architecture-review]]` (NVIDIA Personal-AI-Router)
-and `[[nvidia-dsx-standard-practice]]` (the 14-repo dsx/EleutherAI inventory
-behind PLAN Steps 45–52).
+Eight references: `[[pair-architecture-review]]` (NVIDIA Personal-AI-Router),
+`[[nvidia-dsx-standard-practice]]` (the 14-repo dsx/EleutherAI inventory),
+`[[nvidia-build-catalog]]`, `[[nvidia-dsx-exchange-bus]]`,
+`[[nvidia-fleet-telemetry-comparison]]`, `[[nvidia-redfish-bmc-inventory]]`,
+`[[nvidia-telemetry-observation-model]]`, and
+`[[dusty-nv-jetson-llm-containers-2026-11-13]]` (the 2026-11-13 Jetson
+runtime review).
 
 ### Synthesis
-One synthesis page: [[what-pair-membership-implies-for-sparknet-reformation]].
+Two synthesis pages: `[[what-pair-membership-implies-for-sparknet-reformation]]`
+and `[[agx-text-serving-options]]` (the AGX runtime comparison).
 
 ### Journal
 
@@ -158,13 +188,17 @@ One synthesis page: [[what-pair-membership-implies-for-sparknet-reformation]].
 
 ## Working areas
 
-- `goagx/` — the node image surface retargeted to Jetson AGX Xavier (sm_72,
-  16 GB): `sparknet.agx.docker`, `sparknet.agx.compose.yml`, the audio shim;
-  same contract/services/ports as the Spark stack, selected by
+- `goagx/` — the node image surface retargeted to Jetson AGX Xavier (`sm_72`,
+  L4T r35; **64 GB `agx64` / 32 GB `agx32`**, not the stale 16 GB note):
+  `sparknet.agx.docker`, `sparknet.agx.compose.yml`, the audio shim; same
+  contract/services/ports as the Spark stack, selected by
   `sparknet-node-setup.sh --platform agx` (`goagx/README.md` first). The
   **standalone deployment repo** `reallife-spark/goagx` is generated from
   this tree (`make goagx-publish`): clone it on a fresh Xavier, run
-  `./goagx/bootstrap-agx.sh`, get a full fabric node.
+  `./goagx/bootstrap-agx.sh`, get a full fabric node. The text engine is vLLM
+  today; [[0021-agx-llm-engine]] proposes `llama.cpp`/`llama-server`
+  (`sparknet-llm:agx`), with the teacher/student models and the root/data
+  storage contract. Step 108 implements it and corrects the generated docs.
 - `_raw/` — unprocessed captures (never deleted; ingest promotes them)
 - `_staging/` — LLM-written pages awaiting review (`WIKI_STAGED_WRITES=true`)
 - `_archives/` — vault snapshots for `/wiki-rebuild`
@@ -181,16 +215,31 @@ silently write into a different vault.
 | `make wiki-verify` | the vendored suite still matches its pinned upstream |
 | `/wiki-status` | ingest delta + recommendation |
 | `/wiki-lint` | health audit (orphans, stale, broken links) |
-| `/wiki-query` | ask the wiki, with citations |
+| `/cross-linker` | add missing wikilinks and connect new pages |
+| `/tag-taxonomy` | controlled tags for new pages |
+| `/wiki-synthesize` | find/create cross-cut synthesis pages |
+| `/wiki-audit` | dated conflict/missing/duplicate reports |
+| `/wiki-dedup` | merge page-level identity duplicates |
+| `/wiki-digest` | readable knowledge digest |
+| `/wiki-context-pack` | bounded context pack for a downstream task |
 | `/daily-update` | daily cycle: index + hot cache refresh |
+| `make -C peer-node vault-health` | peer vault diagnosis (read-only) |
+| `make -C master-node vault-health` | Master vault diagnosis (read-only) |
 
 ## Repo-wide checks
 
 | Command | Purpose |
 |---|---|
+| `make ci` | the authoritative local pre-merge gate |
 | `make test-all` | every suite: contract, fabric, peer, master |
 | `make contract-test` | the peer still matches `contracts/` |
-| `make lint` | ruff over everything linted |
+| `make drift-check` | derived artifacts, contexts and goagx in sync |
+| `make container-test` | the opt-in container election/CPU-node smoke |
+| `make context-check` | generated `CONTEXT.md` is current |
+| `make governance-check` | PLAN/MEMORY/CONTEXT budgets and currentness |
+| `make lint` / `make format-check` | Python style and formatting |
+| `make shellcheck` | remaining shell |
+| `make keys-check` | no key material, state modes |
 | `make nv-search q="…"` | resource-first: NVIDIA's catalog before our own build |
 | `make bundle ROLE=…` | build a standalone node bundle |
 | `make bundle-verify ROLE=…` | extract it elsewhere and prove it runs |

@@ -1,3 +1,9 @@
+---
+title: sparknet glossary
+updated: 2026-11-13
+type: reference
+---
+
 # sparknet glossary
 
 The vocabulary of the two-role fabric. Entries name concepts; `contracts/` owns
@@ -351,6 +357,296 @@ The separate stop/delete/create sequence required after a policy change that
 cannot be applied live. It is not a sandbox action and not a restart.
 
 _Avoid_: restart, reload, recreate (unqualified)
+
+### Model serving
+
+**model plane**:
+One of the two model-serving surfaces on a node: the node's own AI stack
+(Open WebUI/Ollama/Qdrant) or the fabric text engine (`vllm:8000`). They share
+the model store and hardware, not a contract.
+
+_Avoid_: model layer, LLM stack
+
+**text engine**:
+The OpenAI-compatible inference server behind the `vllm` service on port 8000;
+today vLLM, proposed `llama.cpp`/`llama-server` in ADR 0021. It serves the
+agent/compute and cluster work, never the vault.
+
+_Avoid_: model server (unqualified), LLM
+
+**OpenAI-compatible engine**:
+The `/v1/models`, `/v1/chat/completions` and `/health` surface of the text
+engine. The service name and port are historical and stable.
+
+_Avoid_: OpenAI (the vendor), API
+
+**vLLM**:
+The current text engine; a Python/PyTorch/xformers/CUDA stack. Its dependency
+build is the reason for the migration; it is retired from the AGX text engine.
+
+_Avoid_: engine (unqualified)
+
+**llama.cpp**:
+The C++/CUDA inference engine; GGUF; the `llama-server` HTTP surface. The
+primary proposed text engine for the AGX nodes.
+
+_Avoid_: Llama (the model family), llama-cpp-python (the bindings)
+
+**llama-server**:
+The `llama.cpp` OpenAI-compatible HTTP server; `--jinja`,
+`--chat-template-file` and `--system-prompt-file` inject the precontext.
+
+_Avoid_: server (unqualified), vLLM
+
+**GGUF**:
+The quantized model file format used by `llama.cpp` and Ollama. A GGUF blob is
+a model file, not a vault page.
+
+_Avoid_: model file (unqualified), GGML (the old format)
+
+**quantization**:
+The Q4_K_M/Q5_K_M/Q6_K/Q8_0 weight formats; the quality/size/speed tradeoff.
+The 136.5 GB/s memory bandwidth makes Q4_K_M the teacher default.
+
+_Avoid_: compression, precision
+
+**Q4_K_M**:
+The 4-bit k-quant used for the 32B/35B teacher on the Xavier; responsive, with
+Q5_K_M/Q6_K only when the measured tokens/s is acceptable.
+
+_Avoid_: 4-bit (unqualified)
+
+**Q8_0**:
+The 8-bit quantization used for the small student; near-lossless and small
+enough for the 32 GB peer.
+
+_Avoid_: 8-bit (unqualified)
+
+**n-gpu-layers**:
+The `llama.cpp` `--n-gpu-layers` count; 99 means all layers on the unified
+GPU/CPU memory.
+
+_Avoid_: GPU layers (unqualified), offload
+
+**context size**:
+The `llama-server --ctx-size` / `VLLM_MAX_MODEL_LEN` window; it sets the KV
+cache and memory footprint.
+
+_Avoid_: context window (unqualified), max length
+
+**precontext**:
+The MASTERSPIKE format plus the fabric digest, injected as the system/chat
+template by `spark-precontext.py`; it carries the fabric vocabulary and format,
+never a capability or a secret.
+
+_Avoid_: prompt (unqualified), system prompt (the whole)
+
+**MASTERSPIKE**:
+The llm-wiki format carrier (a model/prompt, not a capability); the
+`masterspike` manifests and the `spark-precontext.py` source.
+
+_Avoid_: master model, master prompt
+
+**model store**:
+The on-disk GGUF/model files. The active teacher/student live on the root NVMe;
+the cold store, HF cache and traces live on the data drives.
+
+_Avoid_: cache, models (unqualified)
+
+**model catalog**:
+`contracts/model-catalog.json`, the role-placement declaration for teacher,
+student and embeddings; the `agent-models` and `ai-stack` surfaces are the
+node-local views.
+
+_Avoid_: model list, registry (the authority)
+
+**teacher/main model**:
+The largest same-version Qwen model on `agx64`; the Q4_K_M distillation source.
+
+_Avoid_: main model (unqualified), teacher (the human)
+
+**student model**:
+The smallest same-version Qwen model on `agx32`; the Q8_0/Q4_K_M distillation
+target.
+
+_Avoid_: student (the human), small model
+
+**distillation**:
+The same-family teacher→student training pipeline; the teacher traces/uplift
+are training evidence, never an answer corpus.
+
+_Avoid_: training (unqualified), fine-tuning
+
+**uplift**:
+The consented teacher traces, Qdrant snapshots and raw-KV manifests sent to the
+Master for training/backup; never served, never knowledge.
+
+_Avoid_: backup, data
+
+**jetson-containers**:
+The `dusty-nv` modular container build system; the `llama_cpp`/`ollama`/`mlc`
+packages; `autotag`/`build`; the L4T-compatible images.
+
+_Avoid_: containers (unqualified), jetson-containers (the CLI)
+
+**autotag**:
+The `jetson-containers` command that resolves the L4T-compatible image tag or
+falls back to a build.
+
+_Avoid_: tag (unqualified)
+
+**L4T**:
+Linux for Tegra, the Jetson BSP; the AGX Xavier runs r35 (JetPack 5).
+
+_Avoid_: JetPack (the SDK), Ubuntu (the distro)
+
+**JetPack**:
+The NVIDIA Jetson SDK; its L4T r35 is the AGX Xavier baseline.
+
+_Avoid_: L4T (the BSP), CUDA
+
+**sm_72**:
+The AGX Xavier compute capability; compile with `CUDA_ARCHITECTURES=72` and
+`-DCMAKE_CUDA_ARCHITECTURES=72`.
+
+_Avoid_: sm72, arch
+
+**Volta Tensor Cores**:
+The AGX Xavier GPU tensor cores; the `sm_72` target keeps them available.
+
+_Avoid_: tensor cores (unqualified), GPU
+
+**unified memory**:
+The Jetson CPU/GPU shared memory; 64 GB on `agx64`, 32 GB on `agx32`, with
+~136.5 GB/s bandwidth. The model, context and KV cache share it.
+
+_Avoid_: RAM, VRAM
+
+**MAXN**:
+The `nvpmodel -m 0` power mode plus `jetson_clocks`; the maximum clocks before
+inference.
+
+_Avoid_: max power, performance mode
+
+**nvpmodel**:
+The Jetson power-mode tool; `-m 0` selects MAXN, `-q` reports the mode.
+
+_Avoid_: power (unqualified)
+
+**jetson_clocks**:
+The Jetson clock tool; `sudo jetson_clocks` fixes the clocks for inference.
+
+_Avoid_: overclock, clocks (unqualified)
+
+**tegrastats**:
+The Jetson telemetry tool (RAM/GPU/EMC/temps); the benchmark companion.
+
+_Avoid_: nvidia-smi (the dGPU), telemetry (the fabric)
+
+**Ollama**:
+The Go/llama.cpp model server with an OpenAI API; the peer's own AI-stack
+server and the fallback text engine.
+
+_Avoid_: LLM (unqualified), model server (unqualified)
+
+**MLC-LLM**:
+The TVM-compiled LLM runtime with `mlc_llm serve`; an optional experiment, not
+the primary.
+
+_Avoid_: MLC (the library), TVM (the compiler)
+
+**TensorRT-LLM**:
+NVIDIA's optimized LLM runtime; heavy, INT4/INT8; not the Xavier default here.
+
+_Avoid_: TensorRT (the general), TRT
+
+**ExLlamaV2**:
+The EXL2/GPTQ runtime with a custom PyTorch build; not the path for this
+migration.
+
+_Avoid_: ExLlama (the old), GPTQ (the format)
+
+**NanoLLM**:
+The `dusty-nv` optimized local inference library; not a drop-in OpenAI server.
+
+_Avoid_: NanoLLM (the container), LLM
+
+**text-generation-webui**:
+The oobabooga UI with an OpenAI extension; heavier than the text engine needs.
+
+_Avoid_: WebUI (Open WebUI), UI
+
+**SGLang / TGI**:
+High-throughput serving stacks; not the Xavier text-engine path.
+
+_Avoid_: server (unqualified), inference
+
+**vllm-stub**:
+The CPU-only deterministic OpenAI stub behind `--engine stub`; the node image
+keeps it for the no-GPU graph.
+
+_Avoid_: stub (unqualified), mock
+
+**aux engines**:
+The `vllm-embed`, `vllm-rerank` and `vllm-audio` services; llama.cpp/whisper.cpp,
+separate from the text engine. The names are historical.
+
+_Avoid_: vLLM (the engine), sidecars (unqualified)
+
+**model file**:
+The GGUF/tokenizer/config/precontext set; the active copy on the root, the cold
+copy on the data drives.
+
+_Avoid_: model (unqualified), weights
+
+**KV cache**:
+The runtime key/value cache; it grows with the context and lives with the
+active model on the root.
+
+_Avoid_: cache (unqualified), memory
+
+**HF cache**:
+The HuggingFace download cache; a cold artifact on the data drives, not the
+active model store.
+
+_Avoid_: model store, cache
+
+**root drive / data drive**:
+The NVMe root (`/`) for the active model files, precontext, KV, state and
+Docker; the data drives (`/mnt/ai`) for the vaults, cold store, traces and
+backups.
+
+_Avoid_: disk (unqualified), SSD
+
+**storage contract**:
+The rule that vaults stay on the data drives and active model-calculation files
+stay on the root; the `model-store`, runbook and Step 108 implement it.
+
+_Avoid_: storage (unqualified), layout
+
+**teacher traces**:
+The teacher model outputs/traces used for distillation; training evidence on
+the data drives, never served.
+
+_Avoid_: logs (unqualified), data
+
+**no-teacher-backup**:
+The rule that the teacher model is not a backup or an answer corpus; the
+model-store/uplift boundary.
+
+_Avoid_: backup (unqualified), mirror
+
+**same-version pair**:
+The teacher and student share the Qwen version/tokenizer; the model-selection
+rule for a clean distillation.
+
+_Avoid_: same model, family (unqualified)
+
+**model-selection rule**:
+Teacher = largest same-version Qwen that fits 64 GB at the best responsive
+quantization (Q4_K_M first); student = smallest same-version Qwen at Q8_0.
+
+_Avoid_: model choice, sizing
 
 ### Fabric components
 
