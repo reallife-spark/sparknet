@@ -575,6 +575,13 @@ current: 108
     cold store; `make ci`, `make test-all`, `make contract-test`,
     `make drift-check`, `make goagx-publish`/pin and the bundle gates are
     green; the live checks are dated and host-specific.
+  - **Status 2026-11-13 — measured.** All four runs passed the quality floor
+    1.0. `qwen3.6`: teacher 18.54/18.08 tok/s, student 4.41/4.54 tok/s,
+    agreement 0.653. `qwen3`: teacher 3.94/3.65 tok/s, student 76.78/57.33
+    tok/s, agreement 0.608. Recommendation on the stated rule: `qwen3` for the
+    served student; the Qwen3.6 teacher remains the faster distillation
+    teacher. Promotion/cleanup and the final publish/pin are pending the
+    operator's winner decision.
 
 ## Standing verification rules
 
