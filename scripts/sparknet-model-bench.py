@@ -21,6 +21,7 @@ import os
 import statistics
 import sys
 import tempfile
+import threading
 import time
 import urllib.request
 from datetime import datetime, timezone
@@ -93,6 +94,10 @@ def validate_config(config: dict[str, Any], role: str, catalog: dict[str, dict[s
             errors.append("options.num_ctx must be at least 512")
         if int(options.get("num_predict", 0)) < 1:
             errors.append("options.num_predict must be positive")
+        if options.get("rank") not in (None, "quality", "speed"):
+            errors.append("options.rank must be quality or speed")
+        if float(options.get("quality_floor", 0.0)) < 0 or float(options.get("quality_floor", 0.0)) > 1:
+            errors.append("options.quality_floor must be between 0 and 1")
     except (TypeError, ValueError):
         errors.append("options numeric fields must be integers")
     candidates = config.get("candidates")
@@ -233,18 +238,61 @@ def openai_chat(
     num_predict: int,
     timeout: float,
 ) -> dict[str, Any]:
-    return _post_json(
-        f"{base_url.rstrip('/')}/v1/chat/completions",
-        {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": options.get("temperature", 0),
-            "seed": options.get("seed", 42),
-            "max_tokens": num_predict,
-            "stream": False,
-        },
-        timeout,
-    )
+    body: dict[str, Any] = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": options.get("temperature", 0),
+        "seed": options.get("seed", 42),
+        "max_tokens": num_predict,
+        "stream": False,
+    }
+    template_kwargs = options.get("chat_template_kwargs")
+    if isinstance(template_kwargs, dict):
+        body["chat_template_kwargs"] = template_kwargs
+    return _post_json(f"{base_url.rstrip('/')}/v1/chat/completions", body, timeout)
+
+
+def _meminfo() -> tuple[int, int] | None:
+    try:
+        values = {}
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            key, _, rest = line.partition(":")
+            if key in ("MemTotal", "MemAvailable"):
+                values[key] = int(rest.strip().split()[0])
+        return values["MemTotal"], values["MemAvailable"]
+    except (OSError, KeyError, ValueError):
+        return None
+
+
+class _MemorySampler:
+    """Peak used unified memory while a benchmark runs."""
+
+    def __init__(self, interval: float = 0.5) -> None:
+        self.interval = interval
+        self.peak_gb = 0.0
+        self.baseline_gb: float | None = None
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self) -> None:
+        first = _meminfo()
+        if first:
+            total, available = first
+            self.baseline_gb = round((total - available) / 1024**2, 2)
+        self._thread.start()
+
+    def _run(self) -> None:
+        while not self._stop.wait(self.interval):
+            sample = _meminfo()
+            if not sample:
+                continue
+            total, available = sample
+            self.peak_gb = max(self.peak_gb, round((total - available) / 1024**2, 2))
+
+    def stop(self) -> float | None:
+        self._stop.set()
+        self._thread.join(timeout=5)
+        return self.peak_gb or None
 
 
 def quality(prompt: dict[str, Any], answer: str) -> tuple[bool, list[str]]:
@@ -269,6 +317,9 @@ def measure(
     kind = str(provider["kind"])
     model = str(candidate["model"])
     rows: list[dict[str, Any]] = []
+    sampler = _MemorySampler() if kind == "openai" else None
+    if sampler is not None:
+        sampler.start()
     warmup_prompt = str(prompts[0]["prompt"])
     log(f"{candidate['id']}: warming {model}")
     if kind == "ollama":
@@ -334,7 +385,10 @@ def measure(
                 message = choices[0].get("message") if choices and isinstance(choices[0], dict) else {}
                 answer = str(message.get("content") or "")
                 usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
+                timings = result.get("timings") if isinstance(result.get("timings"), dict) else {}
                 wall = time.perf_counter() - started
+                decode = timings.get("predicted_per_second")
+                prompt_tps = timings.get("prompt_per_second")
                 row = {
                     "prompt_id": prompt["id"],
                     "run": run,
@@ -342,20 +396,28 @@ def measure(
                     "load_s": None,
                     "prompt_tokens": int(usage.get("prompt_tokens") or 0),
                     "completion_tokens": int(usage.get("completion_tokens") or 0),
-                    "prompt_tok_s": None,
-                    "decode_tok_s": round(int(usage.get("completion_tokens") or 0) / wall, 2) if wall else None,
+                    "prompt_tok_s": round(float(prompt_tps), 2) if prompt_tps else None,
+                    "decode_tok_s": round(float(decode), 2)
+                    if decode
+                    else round(int(usage.get("completion_tokens") or 0) / wall, 2)
+                    if wall
+                    else None,
                 }
             passed, failures = quality(prompt, answer)
             row["quality_pass"] = passed
             row["quality_failures"] = failures
-            row["answer"] = answer[:500]
+            row["answer"] = answer
+            row["answer_preview"] = answer[:500]
             rows.append(row)
 
-    if options.get("unload_after", True) and kind == "ollama":
+    baseline_memory = None
+    if kind == "ollama":
         memory = ollama_memory_gb(base_url, model)
-        ollama_unload(base_url, model)
+        if options.get("unload_after", True):
+            ollama_unload(base_url, model)
     else:
-        memory = ollama_memory_gb(base_url, model) if kind == "ollama" else None
+        memory = sampler.stop() if sampler is not None else None
+        baseline_memory = sampler.baseline_gb if sampler is not None else None
 
     successful = [row for row in rows if row["quality_pass"]]
     decode = [row["decode_tok_s"] for row in rows if row.get("decode_tok_s")]
@@ -370,6 +432,8 @@ def measure(
         "wall_s_median": round(statistics.median(wall), 3) if wall else None,
         "load_s_median": round(statistics.median(load), 3) if load else None,
         "peak_memory_gb": memory,
+        "baseline_memory_gb": baseline_memory,
+        "precontext": options.get("precontext"),
         "rows": rows,
     }
     log(
@@ -393,12 +457,16 @@ def run(
     missing = set(candidates) - {c["id"] for c in selected}
     if missing:
         raise BenchError(f"unknown candidate(s): {', '.join(sorted(missing))}")
+    rank = str(options.get("rank") or "quality")
+    quality_floor = float(options.get("quality_floor") or 0.0)
     result = {
         "schema": "sparknet-model-bakeoff-result/1",
         "role": role,
         "node": config.get("node"),
         "generated_at": now_iso(),
         "options": options,
+        "rank": rank,
+        "quality_floor": quality_floor,
         "candidates": [],
     }
     if dry_run:
@@ -409,36 +477,43 @@ def run(
 
     for candidate in selected:
         try:
-            result["candidates"].append(
-                measure(
-                    candidate=candidate,
-                    provider=config["provider"],
-                    options=options,
-                    prompts=config["prompts"],
-                    timeout=float(options["timeout_seconds"]),
-                )
+            measured = measure(
+                candidate=candidate,
+                provider=config["provider"],
+                options=options,
+                prompts=config["prompts"],
+                timeout=float(options["timeout_seconds"]),
             )
+            measured["eligible"] = measured["quality_pass_rate"] >= quality_floor
+            result["candidates"].append(measured)
         except Exception as exc:
             log(f"{candidate['id']}: FAILED: {exc}")
             result["candidates"].append({"id": candidate["id"], "model": candidate["model"], "error": str(exc)})
 
+    def _rank_key(row: dict[str, Any]) -> tuple[Any, ...]:
+        eligible = bool(row.get("eligible"))
+        quality = row.get("quality_pass_rate") or 0.0
+        decode = row.get("decode_tok_s_median") or 0.0
+        memory = row.get("peak_memory_gb") or 0.0
+        if rank == "speed":
+            return (eligible, decode, quality, -memory)
+        return (eligible, quality, decode, -memory)
+
     ranked = sorted(
         [row for row in result["candidates"] if "error" not in row],
-        key=lambda row: (
-            row["quality_pass_rate"],
-            row.get("decode_tok_s_median") or 0,
-            -(row.get("peak_memory_gb") or 0),
-        ),
+        key=_rank_key,
         reverse=True,
     )
     result["leaderboard"] = [
         {
             "id": row["id"],
             "model": row["model"],
+            "eligible": row.get("eligible"),
             "quality_pass_rate": row["quality_pass_rate"],
             "decode_tok_s_median": row.get("decode_tok_s_median"),
             "wall_s_median": row.get("wall_s_median"),
             "peak_memory_gb": row.get("peak_memory_gb"),
+            "precontext": row.get("precontext"),
         }
         for row in ranked
     ]
@@ -468,6 +543,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--catalog", type=Path, default=DEFAULT_CATALOG)
     parser.add_argument("--candidate", action="append", default=[])
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument("--rank", choices=("quality", "speed"), default=None)
+    parser.add_argument("--precontext", choices=("off", "on"), default=None)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
@@ -478,6 +555,10 @@ def main(argv: list[str] | None = None) -> int:
     config_path = args.config or ROLE_CONFIG[args.role]
     try:
         config = load_json(config_path)
+        if args.rank:
+            config.setdefault("options", {})["rank"] = args.rank
+        if args.precontext:
+            config.setdefault("options", {})["precontext"] = args.precontext
         catalog = catalog_by_id(args.catalog)
         errors = validate_config(config, args.role, catalog)
         if errors:

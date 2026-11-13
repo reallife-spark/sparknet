@@ -63,10 +63,11 @@ distillation is a clean transfer.
 - **Teacher/main on `agx64` (64 GB):** largest same-version model that fits at
   the best responsive quantization; **Q4_K_M** first; Q5_K_M/Q6_K only if the
   measured tokens/s is acceptable; Q8_0 only for a small model.
-- **Student on `agx32` (32 GB):** smallest same-version model at **Q8_0**
-  (Q4_K_M if needed).
-- Candidate: **Qwen3.6-35B Q4_K_M + Qwen3.6-0.6B Q8_0**; fallback
-  **Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0**.
+- **Student on `agx32` (32 GB):** smallest same-version model at the best
+  responsive quantization. The Qwen3.6 family has no 0.6B/1.7B release; the
+  smallest is **Qwen3.6-27B**, so the student is **Qwen3.6-27B Q4_K_M**.
+- Candidate: **Qwen3.6-35B Q4_K_M + Qwen3.6-27B Q4_K_M**; fallback only if
+  the teacher is switched to Qwen3: **Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0**.
 - Retire the `qwen3.5-9b` / `qwen3.8-27b` pair: different versions, not a clean
   distillation pair.
 
@@ -75,8 +76,8 @@ Approximate weights:
 | Model | Q4_K_M | Q5_K_M | Q6_K | Q8_0 | Role |
 |---|---|---|---|---|---|
 | Qwen3.6-35B / Qwen3-32B | ~20–21 GB | ~23–24 GB | ~27–28 GB | ~34–37 GB | teacher on `agx64` |
-| Qwen3.6-0.6B / Qwen3-0.6B | — | — | — | ~0.7 GB | student on `agx32` |
-| Qwen3.6-1.7B / Qwen3-1.7B | — | — | — | ~1.9 GB | student if 0.6B is too weak |
+| Qwen3.6-27B | ~17 GB | ~19 GB | ~22 GB | ~28 GB | student on `agx32` |
+| Qwen3-0.6B | — | — | — | ~0.7 GB | fallback student only with a Qwen3 teacher |
 | Qwen3.5-9B | — | — | — | 8.06 GiB | measured 11.27 tok/s |
 | Qwen3.8-27B | 14.73 GiB | — | — | — | measured 4.75 tok/s |
 

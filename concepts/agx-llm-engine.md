@@ -46,12 +46,13 @@ engine never becomes a knowledge channel.
 | Host | Runtime | Model | Why |
 |---|---|---|---|
 | `agx64` (64 GB) | **llama.cpp / `llama-server`** (CUDA, `sm_72`) | teacher/main Qwen3.6-35B Q4_K_M (fallback Qwen3-32B Q4_K_M) | most reliable GPU path; OpenAI API; precontext; 64 GB |
-| `agx32` (32 GB) | **llama.cpp / `llama-server`** for the text engine; **Ollama** for the node's own AI stack and fallback | student Qwen3.6-0.6B Q8_0 (fallback Qwen3-0.6B Q8_0) | same engine/API as the teacher; Ollama is the peer's simple chat plane |
+| `agx32` (32 GB) | **llama.cpp / `llama-server`** for the text engine; **Ollama** for the node's own AI stack and fallback | student Qwen3.6-27B Q4_K_M (the smallest Qwen3.6 release; fallback Qwen3-0.6B only with a Qwen3 teacher) | same engine/API as the teacher; Ollama is the peer's simple chat plane |
 
 Ollama is the fallback and the peer's own chat server; MLC-LLM is an optional
 experiment. TensorRT-LLM, ExLlamaV2, text-generation-webui, SGLang, TGI and
 vLLM are not the path for these Xavier nodes. The exact same-version pair is
-confirmed after the model inventory in Step 108.
+confirmed after the model inventory: Qwen3.6-35B-A3B Q4_K_M (teacher) and
+Qwen3.6-27B Q4_K_M (student).
 
 ## Model store and precontext
 

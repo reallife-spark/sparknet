@@ -42,7 +42,7 @@ SCOPE ?= fabric
         container-test \
         render render-check sbom sbom-check nv-search drift-check context-pack context-check governance-check \
         goagx-publish goagx-drift-check \
-        devtools webui-console model-catalog-check model-pull model-verify model-bench model-runtime-status model-runtime-start model-runtime-stop model-runtime-reap model-survey model-update-status model-set-candidate model-promote model-rollback \
+        devtools webui-console model-catalog-check model-pull model-verify model-bench model-set model-bakeoff-report model-runtime-status model-runtime-start model-runtime-stop model-runtime-reap model-survey model-update-status model-set-candidate model-promote model-rollback \
         vector-dev vector-init vector-inspect \
         vector-index vector-stamp vector-query vector-parity kv-export reflex-eval reflex-live-check reflex-live-query \
         reflex-plan-eval skill-eval nocturnal-rehearsal verify-plans env-init wiki-sync wiki-verify \
@@ -315,6 +315,8 @@ sbom-check: ## Fail if the SBOM is stale vs VERSION, requirements.txt or the ski
 
 MODEL_NODE ?= agx64
 MODEL_ROLE ?= peer
+MODEL_SET ?= qwen3.6
+PRECONTEXT ?= on
 PROFILE ?= teacher
 
 model-catalog-check: ## Validate the model catalog and role placement
@@ -328,6 +330,13 @@ model-verify: ## Verify the pinned model manifests for MODEL_NODE
 
 model-bench: ## Benchmark MODEL_ROLE candidates (BENCH_ARGS="--dry-run" or --candidate <id>)
 	@$(PY) scripts/sparknet-model-bench.py --role "$(MODEL_ROLE)" $(BENCH_ARGS)
+
+model-set: ## Switch the AGX text-engine set (MODEL_ROLE, MODEL_SET=qwen3.6|qwen3, PRECONTEXT=on|off)
+	@$(PY) scripts/sparknet-model-set.py --role "$(MODEL_ROLE)" --set "$(MODEL_SET)" --precontext "$(PRECONTEXT)"
+
+model-bakeoff-report: ## Summarize the dual bake-off (TEACHER_NO_PC, TEACHER_PC, STUDENT_NO_PC, STUDENT_PC, optional AGREEMENT)
+	@test -n "$(TEACHER_NO_PC)" -a -n "$(TEACHER_PC)" -a -n "$(STUDENT_NO_PC)" -a -n "$(STUDENT_PC)" || { echo "TEACHER_NO_PC, TEACHER_PC, STUDENT_NO_PC and STUDENT_PC required" >&2; exit 2; }
+	@$(PY) scripts/sparknet-model-bakeoff-report.py --teacher-no-pc "$(TEACHER_NO_PC)" --teacher-pc "$(TEACHER_PC)" --student-no-pc "$(STUDENT_NO_PC)" --student-pc "$(STUDENT_PC)" $(if $(AGREEMENT),--agreement "$(AGREEMENT)") $(if $(REPORT_OUT),--out "$(REPORT_OUT)")
 
 model-runtime-status: ## Show model runtime leases (MODEL_ROLE=peer|master)
 	@$(PY) scripts/sparknet-model-runtime.py status --role "$(MODEL_ROLE)" $(if $(PROBE),--probe,)

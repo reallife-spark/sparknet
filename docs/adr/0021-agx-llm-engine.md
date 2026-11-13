@@ -58,17 +58,20 @@ Replace the AGX **text engine** with a `jetson-containers` **`llama.cpp` /
   The node image keeps goSpark, the Python compute plane, the bundle, the aux
   engines and the stub; `sparknet-llm:agx` carries `llama-server` and the
   precontext.
-- Inject the precontext through `llama-server` (`--jinja` plus
-  `--chat-template-file`/`--system-prompt-file`); the source is
-  `spark-precontext.py` (`digest` + MASTERSPIKE text) and the
-  `masterspike` manifests.
+- Inject the precontext through a thin OpenAI proxy in front of
+  `llama-server`: it merges the MASTERSPIKE text + fabric digest into the first
+  system message, and `llama-server --jinja` renders the model's own template.
+  The source is `spark-precontext.py` (`digest` + MASTERSPIKE text) and the
+  `masterspike` manifests. The b9016 build has no `--system-prompt-file` flag.
 - **Teacher/main on `agx64`:** the largest Qwen model of the chosen version
   that fits 64 GB at the best responsive quantization, starting at **Q4_K_M**
   (Q5_K_M/Q6_K only if measured tokens/s is acceptable; Q8_0 only for a small
   model). Candidate: Qwen3.6-35B Q4_K_M.
 - **Student on `agx32`:** the smallest Qwen model of the **same version**, at
-  Q8_0 (or Q4_K_M if memory/speed requires). Candidate: Qwen3.6-0.6B Q8_0.
-  Fallback pair: Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0. Retire the mismatched
+  the best responsive quantization. The Qwen3.6 family has no 0.6B/1.7B
+  release; its smallest model is **Qwen3.6-27B**, so the student is
+  **Qwen3.6-27B Q4_K_M** (~17 GB). Fallback pair only if the teacher is
+  switched to Qwen3: Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0. Retire the mismatched
   `qwen3.5-9b` / `qwen3.8-27b` pair.
 - **Storage:** active teacher/student GGUF, tokenizer, precontext and KV cache
   on the root NVMe; the cold model store, vaults, uplift/distillation traces,

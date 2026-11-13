@@ -110,10 +110,11 @@ and distillation is a clean teacher→student transfer:
   model small enough to stay responsive.
 - **Student on `agx32`:** the smallest model of the **same version**, at
   **Q8_0** (or Q4_K_M if memory/speed requires).
-- Candidate pair: **Qwen3.6-35B Q4_K_M** teacher + **Qwen3.6-0.6B Q8_0**
-  student; fallback **Qwen3-32B Q4_K_M** + **Qwen3-0.6B Q8_0** if the 3.6
-  small model is unavailable or the 35B Q4_K_M does not fit with the desired
-  context.
+- Candidate pair: **Qwen3.6-35B-A3B Q4_K_M** teacher + **Qwen3.6-27B Q4_K_M**
+  student. **Correction (2026-11-13, Step 108):** the Qwen3.6 family has no
+  0.6B/1.7B release; 27B is the smallest same-version model. The Qwen3
+  fallback pair (**Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0**) is valid only if the
+  teacher is switched to Qwen3.
 - Retire the current `qwen3.5-9b` / `qwen3.8-27b` pair: it is not same-version.
 - The exact pair is confirmed after the Phase 0 model inventory (GGUF,
   tokenizer, license, memory, tokens/s). The `model-catalog`, `agent-models`,
@@ -127,8 +128,8 @@ Approximate GGUF footprints:
 | Qwen3.6-35B / Qwen3-32B | Q5_K_M | ~23–24 GB | only if tokens/s acceptable |
 | Qwen3.6-35B / Qwen3-32B | Q6_K | ~27–28 GB | only if tokens/s acceptable |
 | Qwen3.6-35B / Qwen3-32B | Q8_0 | ~34–37 GB | too slow/too tight for the teacher; not the first choice |
-| Qwen3.6-0.6B / Qwen3-0.6B | Q8_0 | ~0.7 GB | `agx32` 32 GB student |
-| Qwen3.6-1.7B / Qwen3-1.7B | Q8_0 | ~1.9 GB | student if 0.6B is too weak |
+| Qwen3.6-27B | Q4_K_M | ~17 GB | `agx32` 32 GB student (smallest Qwen3.6) |
+| Qwen3-0.6B | Q8_0 | ~0.7 GB | fallback student only with a Qwen3 teacher |
 | Qwen3.5-9B | Q8_0 | 8.06 GiB | measured 11.27 tok/s on the student |
 | Qwen3.8-27B | Q4_K_M | 14.73 GiB | measured 4.75 tok/s; not same-version with the 9B |
 
@@ -150,7 +151,7 @@ add context/KV, the OS and the Docker/container overhead.
 - Space budget: `agx64` root has 137 GB free; the 35B Q4_K_M weights ~21 GB
   plus context/KV and images (~40.6 GB images, 30.7 GB reclaimable) fit after
   pruning the old vLLM image/build cache. `agx32` root has 808 GB free; the
-  0.6B student is negligible. The data drives hold the 317/328 GB Ollama store;
+  27B Q4_K_M student is ~17 GB. The data drives hold the 317/328 GB Ollama store;
   only the active pair is staged on the root.
 - The migration is reversible: keep the current vLLM image/service and the
   model store untouched until the new path is validated; tag both images.
@@ -160,13 +161,13 @@ add context/KV, the OS and the Docker/container overhead.
 | Host | Runtime | Model | Why |
 |---|---|---|---|
 | `agx64` | **llama.cpp / `llama-server`** (CUDA, `sm_72`) | Teacher/main, Qwen3.6-35B Q4_K_M (fallback Qwen3-32B Q4_K_M) | Most reliable GPU path; OpenAI API; precontext; 64 GB |
-| `agx32` | **llama.cpp / `llama-server`** for the text engine; **Ollama** for the peer's own AI stack and fallback | Student, Qwen3.6-0.6B Q8_0 (fallback Qwen3-0.6B Q8_0) | Same engine/API as the teacher; Ollama is the peer's simple chat plane |
+| `agx32` | **llama.cpp / `llama-server`** for the text engine; **Ollama** for the peer's own AI stack and fallback | Student, Qwen3.6-27B Q4_K_M (fallback Qwen3-0.6B only with a Qwen3 teacher) | Same engine/API as the teacher; Ollama is the peer's simple chat plane |
 
 The `vllm` compose service name and port 8000 stay stable; the new image is
 `sparknet-llm:agx`; the `vllm-stub` CPU profile stays; the aux
 `vllm-embed`/`vllm-rerank`/`vllm-audio` engines remain. The precontext is
-injected through `llama-server --jinja` plus
-`--chat-template-file`/`--system-prompt-file`; the `spark-precontext.py`
+injected by a thin OpenAI proxy as the first system message; `llama-server
+--jinja` renders the model template. The `spark-precontext.py`
 `digest`/MASTERSPIKE text is the source. The full implementation is Step 108.
 
 ## Resource-first check

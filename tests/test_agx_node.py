@@ -223,6 +223,8 @@ def test_agx_dockerfile_pins_hold():
     assert "COPY sparknet-llm-entrypoint.py" in llm
     assert "COPY sparknet-llm-proxy.py" in llm
     assert "llama-server" in llm
+    assert re.search(r"ARG LLAMA_CPP_REF=b9016", llm), "the server build must follow the jetson-containers b9016 pin"
+    assert "CMAKE_CUDA_ARCHITECTURES=72" in llm, "the engine must build for sm_72"
 
 
 def test_agx_image_shares_the_node_surface_pins():

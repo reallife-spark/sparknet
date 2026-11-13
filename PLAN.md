@@ -554,6 +554,28 @@ current: 108
     `bundle-verify` and the goagx publish/pin are green; no live claim before
     the checks run.
 
+## Step 109 — Dual teacher/student bake-off
+
+- [ ] **Step 109** — Keep both same-version sets available and benchmark them
+  on the real AGX engine: Qwen3.6-35B-A3B Q4_K_M + Qwen3.6-27B Q4_K_M and
+  Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0.
+  - **Scope**: no training; the distillation pass is the teacher→student
+    agreement eval (`held_out_teacher_agreement`, quality agreement, refusal
+    rate, latency).
+  - **Method**: run the no-precontext pass first, then the fabric-precontext
+    pass; record teacher and student decode tok/s separately; quality floor
+    **1.0**; show the speeds and recommend the winner using student
+    precontext-on speed first, teacher precontext-on speed second, memory
+    third.
+  - **DoD**: both sets are catalogued and staged; `scripts/sparknet-model-set.py`
+    switches the active engine; the OpenAI bake-off configs and the agreement
+    eval are implemented and tested; both no-precontext and precontext results
+    are recorded for both sets; the report shows teacher/student speeds and a
+    recommendation; the winner stays on root and the other set moves to the
+    cold store; `make ci`, `make test-all`, `make contract-test`,
+    `make drift-check`, `make goagx-publish`/pin and the bundle gates are
+    green; the live checks are dated and host-specific.
+
 ## Standing verification rules
 
 - A gate that cannot fail is not a gate. Every claim needs a named test or a

@@ -49,6 +49,13 @@ on `/mnt/ai/models`; the engine container mounts only the root model
 directory, read-only. Vaults, keys and the state directory are never in that
 mount.
 
+Two same-version pairs are kept for the AGX bake-off: Qwen3.6-35B-A3B
+Q4_K_M + Qwen3.6-27B Q4_K_M and Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0. Both fit
+on the root during the comparison. The winner stays on root; the other set
+moves to the cold store under `/mnt/ai/models/<model-id>/` and remains
+available for a later re-stage. The `scripts/sparknet-model-set.py` helper
+selects the active file; the catalog records the pair.
+
 A pull manifest records:
 
 - catalog id, repo, requested revision and resolved commit;

@@ -29,6 +29,7 @@ ROLE = os.environ.get("SPARKNET_ROLE") or "peer"
 PROFILES = os.environ.get("SPARK_PROFILES") or ""
 ENGINE = os.environ.get("SPARK_ENGINE") or "vllm"
 PLATFORM = os.environ.get("SPARKNET_PLATFORM") or "spark"
+MODEL_SET = os.environ.get("SPARKNET_MODEL_SET") or "qwen3.6"
 MASTER_PUB = os.environ.get("SPARKNET_MASTER_PUB") or ""
 REGISTRY = os.environ.get("SPARKNET_REGISTRY_FILE") or ""
 DO_BUILD = True
@@ -42,8 +43,18 @@ AGX_L4T_BASE = (
     "nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3"
     "@sha256:545a0f62fb4a5fd2d8c511134f6c55d451ae1565075dcc67123b0c422a469472"
 )
-AGX_TEACHER_FILE = "/opt/sparknet/models/qwen3.6-35b-q4_k_m.gguf"
-AGX_STUDENT_FILE = "/opt/sparknet/models/qwen3.6-0.6b-q8_0.gguf"
+AGX_TEACHER_FILE = "/opt/sparknet/models/qwen3.6-35b-a3b-q4_k_m.gguf"
+AGX_STUDENT_FILE = "/opt/sparknet/models/qwen3.6-27b-q4_k_m.gguf"
+AGX_MODEL_SETS = {
+    "qwen3.6": {
+        "master": (AGX_TEACHER_FILE, "qwen3.6-35b"),
+        "peer": (AGX_STUDENT_FILE, "qwen3.6-27b"),
+    },
+    "qwen3": {
+        "master": ("/opt/sparknet/models/qwen3-32b-q4_k_m.gguf", "qwen3-32b"),
+        "peer": ("/opt/sparknet/models/qwen3-0.6b-q8_0.gguf", "qwen3-0.6b"),
+    },
+}
 
 USAGE = """sparknet-node-setup.sh — bring up a SparkNet node (DGX Spark or AGX Xavier).
 
@@ -65,6 +76,7 @@ Options:
   --engine vllm|stub   model engine (default vllm; on AGX vllm means the
                         llama.cpp llama-server image; stub = CPU-only OpenAI
                         stub, no GPU/model)
+  --model-set NAME     AGX teacher/student set: qwen3.6 (default) or qwen3
   --profiles A,B,C     compose profiles to enable: kv vector control webui embed rerank audio ingest backup opencode
   --master-pub KEY     the elected Master's Ed25519 public key (base64) or a file
                        holding it; joins the node to the fabric instead of running
@@ -208,10 +220,9 @@ def render_env_file() -> None:
     overlay = os.environ.get("SPARKNET_OVERLAY_IPV4") or ("10.100.0.1" if ROLE == "master" else "10.100.0.2")
     image_tag = os.environ.get("SPARKNET_IMAGE_TAG") or "dev"
     if PLATFORM == "agx":
-        model = os.environ.get("VLLM_MODEL") or ("qwen3.6-35b" if ROLE == "master" else "qwen3.6-0.6b")
-        model_file = os.environ.get("SPARKNET_LLM_MODEL_FILE") or (
-            AGX_TEACHER_FILE if ROLE == "master" else AGX_STUDENT_FILE
-        )
+        set_file, set_alias = AGX_MODEL_SETS[MODEL_SET][ROLE]
+        model = os.environ.get("VLLM_MODEL") or set_alias
+        model_file = os.environ.get("SPARKNET_LLM_MODEL_FILE") or set_file
         base_line = "L4T_BASE=" + (os.environ.get("L4T_BASE") or AGX_L4T_BASE)
         max_len = "VLLM_MAX_MODEL_LEN=" + (os.environ.get("VLLM_MAX_MODEL_LEN") or "8192")
         llm_line = "\n".join(
@@ -221,6 +232,8 @@ def render_env_file() -> None:
                 "SPARKNET_LLM_MODEL_FILE=" + model_file,
                 "SPARKNET_LLM_CTX=" + (os.environ.get("SPARKNET_LLM_CTX") or "8192"),
                 "SPARKNET_MODELS_HOST=" + (os.environ.get("SPARKNET_MODELS_HOST") or "/opt/sparknet/models"),
+                "SPARKNET_MODEL_SET=" + MODEL_SET,
+                "VLLM_EXTRA_ARGS=" + (os.environ.get("VLLM_EXTRA_ARGS") or "--no-mmap --fit off"),
             ]
         )
         node_line = "\n".join(
@@ -443,6 +456,7 @@ def parse(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--role", default=ROLE)
     parser.add_argument("--platform", default=PLATFORM)
     parser.add_argument("--engine", default=ENGINE)
+    parser.add_argument("--model-set", default=MODEL_SET)
     parser.add_argument("--profiles", default=PROFILES)
     parser.add_argument("--master-pub", default=MASTER_PUB)
     parser.add_argument("--registry", default=REGISTRY)
@@ -453,7 +467,7 @@ def parse(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
-    global ROLE, PLATFORM, ENGINE, PROFILES, MASTER_PUB, REGISTRY, DO_BUILD, GOSPARK_DIR, ACTION
+    global ROLE, PLATFORM, ENGINE, MODEL_SET, PROFILES, MASTER_PUB, REGISTRY, DO_BUILD, GOSPARK_DIR, ACTION
     global COMPOSE_FILE, ENV_FILE
     args = parse(argv)
     if args.help:
@@ -463,6 +477,7 @@ def main(argv: list[str] | None = None) -> int:
     ROLE = args.role
     PLATFORM = args.platform
     ENGINE = args.engine
+    MODEL_SET = args.model_set
     PROFILES = args.profiles
     MASTER_PUB = args.master_pub
     REGISTRY = args.registry
@@ -470,6 +485,8 @@ def main(argv: list[str] | None = None) -> int:
     DO_BUILD = not args.no_build
     if ENGINE not in ("vllm", "stub"):
         die(f"--engine must be 'vllm' or 'stub' (got: {ENGINE})")
+    if MODEL_SET not in AGX_MODEL_SETS:
+        die(f"--model-set must be one of {', '.join(sorted(AGX_MODEL_SETS))} (got: {MODEL_SET})")
     if ROLE not in ("peer", "master"):
         die(f"--role must be 'peer' or 'master' (got: {ROLE})")
     if REGISTRY and ROLE == "master":

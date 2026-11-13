@@ -71,13 +71,14 @@
       "runtime": "llama.cpp",
       "license": "Apache-2.0",
       "license_url": "https://huggingface.co/Qwen/Qwen3.6-35B-A3B",
-      "size_gb": 23,
+      "size_gb": 22.1,
       "fast_memory_gb": 23,
       "context_tokens": 131072,
       "serving_port": 8100,
       "status": "active",
-      "why": "Proven fallback on Orin 64 GB: faster, much more context headroom, near-lossless compared with the newest 2-bit teacher.",
-      "notes": "Live teacher winner 2026-11-01: Q4_K_M via Ollama, 22.22 tok/s, 21.21 GiB resident, 100% on the fixed suite (thinking off)."
+      "why": "Qwen3.6-35B-A3B Q4_K_M; the same-version teacher for the 27B student. The official unsloth GGUF is the benchmark source.",
+      "notes": "Live teacher winner 2026-11-01: Q4_K_M via Ollama, 22.22 tok/s, 21.21 GiB resident, 100% on the fixed suite (thinking off).",
+      "pair": "qwen3.6"
     },
     {
       "id": "qwen3.6-35b-a3b-q8",
@@ -102,7 +103,8 @@
       "serving_port": 8100,
       "status": "candidate",
       "why": "Quality reference for the bake-off. It fits 64 GB but leaves less room than Q4_K_M for the peer's other services.",
-      "notes": "Live quality reference 2026-11-01: 17.79 tok/s, 34.39 GiB resident, 100% on the fixed suite (thinking off). Needs vLLM/aux stopped."
+      "notes": "Live quality reference 2026-11-01: 17.79 tok/s, 34.39 GiB resident, 100% on the fixed suite (thinking off). Needs vLLM/aux stopped.",
+      "pair": "qwen3.6"
     },
     {
       "id": "qwen3.8-27b-q4",
@@ -238,56 +240,6 @@
       "why": "Existing embedding baseline; keeps the vector map comparable with the current Qdrant indexes."
     },
     {
-      "id": "qwen3.6-0.6b-q8",
-      "family": "qwen3.6",
-      "generation": "3.6",
-      "role": "student",
-      "nodes": [
-        "agx32"
-      ],
-      "repo": "unsloth/Qwen3.6-0.6B-GGUF",
-      "revision": "main",
-      "include": [
-        "*Q8_0*.gguf"
-      ],
-      "format": "gguf",
-      "runtime": "llama.cpp",
-      "license": "Apache-2.0",
-      "license_url": "https://huggingface.co/Qwen/Qwen3.6-0.6B",
-      "size_gb": 0.7,
-      "fast_memory_gb": 1,
-      "context_tokens": 32768,
-      "serving_port": 8101,
-      "status": "candidate",
-      "why": "The smallest same-version Qwen3.6 student at Q8_0; the clean tokenizer/family transfer for the teacher.",
-      "notes": "The local Ollama store has no Qwen3.6 small model; pull this GGUF before the Step 108 live check."
-    },
-    {
-      "id": "qwen3.6-1.7b-q8",
-      "family": "qwen3.6",
-      "generation": "3.6",
-      "role": "student",
-      "nodes": [
-        "agx32"
-      ],
-      "repo": "unsloth/Qwen3.6-1.7B-GGUF",
-      "revision": "main",
-      "include": [
-        "*Q8_0*.gguf"
-      ],
-      "format": "gguf",
-      "runtime": "llama.cpp",
-      "license": "Apache-2.0",
-      "license_url": "https://huggingface.co/Qwen/Qwen3.6-1.7B",
-      "size_gb": 1.9,
-      "fast_memory_gb": 2,
-      "context_tokens": 32768,
-      "serving_port": 8101,
-      "status": "candidate",
-      "why": "Same-version student if the 0.6B model is too weak on the fixed suite.",
-      "notes": "Benchmark against qwen3.6-0.6b-q8 before promoting."
-    },
-    {
       "id": "qwen3-0.6b-q8",
       "family": "qwen3",
       "generation": "3",
@@ -309,8 +261,61 @@
       "context_tokens": 32768,
       "serving_port": 8101,
       "status": "candidate",
-      "why": "Fallback only: pair with a Qwen3-32B teacher if the Qwen3.6 small model is unavailable.",
-      "notes": "Do not mix this with the Qwen3.6 teacher; same-version is the rule."
+      "why": "Qwen3-0.6B Q8_0; the small Qwen3 student. Compare against the Qwen3.6-27B student.",
+      "notes": "Official unsloth Q8_0 GGUF. Fits the 32 GB peer with the full GPU and leaves room for the rest of the stack.",
+      "pair": "qwen3"
+    },
+    {
+      "id": "qwen3.6-27b-q4-k-m",
+      "family": "qwen3.6",
+      "generation": "3.6",
+      "role": "student",
+      "nodes": [
+        "agx32"
+      ],
+      "repo": "unsloth/Qwen3.6-27B-GGUF",
+      "revision": "main",
+      "include": [
+        "*Q4_K_M*.gguf"
+      ],
+      "format": "gguf",
+      "runtime": "llama.cpp",
+      "license": "Apache-2.0",
+      "license_url": "https://huggingface.co/Qwen/Qwen3.6-27B",
+      "size_gb": 17,
+      "fast_memory_gb": 17,
+      "context_tokens": 32768,
+      "serving_port": 8101,
+      "status": "candidate",
+      "why": "The smallest available Qwen3.6 model; same version as the 35B-A3B teacher, Q4_K_M for the 32 GB peer.",
+      "notes": "The Qwen3.6 family has no 0.6B/1.7B model; 27B is the smallest same-version student. 16.8 GB GGUF, fits 32 GB with context headroom.",
+      "pair": "qwen3.6"
+    },
+    {
+      "id": "qwen3-32b-q4-k-m",
+      "family": "qwen3",
+      "generation": "3",
+      "role": "teacher",
+      "nodes": [
+        "agx64"
+      ],
+      "repo": "unsloth/Qwen3-32B-GGUF",
+      "revision": "main",
+      "include": [
+        "*Q4_K_M*.gguf"
+      ],
+      "format": "gguf",
+      "runtime": "llama.cpp",
+      "license": "Apache-2.0",
+      "license_url": "https://huggingface.co/Qwen/Qwen3-32B",
+      "size_gb": 19.8,
+      "fast_memory_gb": 20,
+      "context_tokens": 32768,
+      "serving_port": 8100,
+      "status": "candidate",
+      "pair": "qwen3",
+      "why": "Qwen3-32B Q4_K_M; the same-version teacher for the Qwen3-0.6B student. Compare against the Qwen3.6-35B-A3B set.",
+      "notes": "Official unsloth Q4_K_M GGUF. Benchmark with the same 6-prompt suite and the fabric precontext."
     }
   ]
 }

@@ -24,7 +24,7 @@ Updated: 2026-11-13
   aux embed/rerank/audio stay.
 - Teacher/main on `agx64`: Qwen3.6-35B Q4_K_M (largest same-version that fits
   64 GB at the best responsive quantization). Student on `agx32`:
-  Qwen3.6-0.6B Q8_0 (smallest same-version; 1.7B if too weak). Fallback
+  Qwen3.6-27B Q4_K_M (smallest same-version; no smaller Qwen3.6 release exists). Fallback
   Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0. Old `qwen3.5-9b`/`qwen3.8-27b` retired.
 - **Storage:** vaults on the data drives (`/mnt/ai/...`); active
   teacher/student GGUF/tokenizer/precontext/KV on the root NVMe

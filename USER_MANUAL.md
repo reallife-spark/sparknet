@@ -461,6 +461,12 @@ and OpenAI endpoints remain. The node image keeps goSpark, compute, the aux
 engines, the bundle and the stub; the engine image carries `llama-server` and
 the precontext proxy.
 
+Two same-version pairs are staged for the AGX bake-off: Qwen3.6-35B-A3B
+Q4_K_M + Qwen3.6-27B Q4_K_M and Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0.
+`scripts/sparknet-model-set.py --role master|peer --set qwen3.6|qwen3
+--precontext on|off` selects the active engine file; both fit on root during
+the comparison, and the winner stays on root afterward.
+
 ### 7.2 The compose graph
 
 `spark.compose.yml` declares the services below. The AGX compose declares the

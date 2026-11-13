@@ -40,8 +40,9 @@ the embed/rerank/audio aux services stay stable. Step 108 implements it.
 **Teacher/student are a same-version pair.** Teacher/main on `agx64`:
 Qwen3.6-35B Q4_K_M (the largest same-version model that fits 64 GB at the best
 responsive quantization; Q5_K_M/Q6_K only if measured tokens/s is acceptable).
-Student on `agx32`: Qwen3.6-0.6B Q8_0 (the smallest same-version model; 1.7B
-only if 0.6B is too weak). Fallback pair: Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0.
+Student on `agx32`: Qwen3.6-27B Q4_K_M (the smallest Qwen3.6 release; no
+0.6B/1.7B exists). Fallback pair only if the teacher is switched to Qwen3:
+Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0.
 The old `qwen3.5-9b` / `qwen3.8-27b` pair is retired because it is not
 same-version. The exact pair is confirmed after the model inventory in Step
 108; the distillation uses the same tokenizer/family, and teacher traces/uplift
@@ -54,7 +55,7 @@ uplift/distillation traces, Qdrant snapshots and backups stay on the data
 drives; keys/state stay in the secure state dir on the root. The model
 container mounts only the root model directory, never a vault. `agx64` root
 has 137 GB free (35B Q4_K_M ~21 GB plus images/context; prune the old vLLM
-image/build cache); `agx32` root has 808 GB free for the 0.6B student. The data
+image/build cache); `agx32` root has 808 GB free for the 27B student. The data
 drives hold the 317/328 GB Ollama store; only the active pair is staged on the
 root.
 

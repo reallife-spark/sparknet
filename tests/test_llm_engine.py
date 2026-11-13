@@ -58,7 +58,7 @@ def test_llama_args_map_the_historical_env(entrypoint, monkeypatch) -> None:
 
 
 def test_unsupported_flags_are_not_passed(entrypoint, monkeypatch) -> None:
-    monkeypatch.setenv("VLLM_MODEL", "qwen3.6-0.6b")
+    monkeypatch.setenv("VLLM_MODEL", "qwen3.6-27b")
     monkeypatch.setenv("SPARKNET_LLM_PARALLEL", "4")
     monkeypatch.setenv("SPARKNET_LLM_METRICS", "1")
     args = entrypoint._llama_args("--model --host --port", "/models/student.gguf")
