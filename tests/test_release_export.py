@@ -75,6 +75,8 @@ GOAGX_ROOT_FILES = (
     "spark-entrypoint.py",
     "spark-precontext.py",
     "spark.compose.cpu.yml",
+    "sparknet-llm-entrypoint.py",
+    "sparknet-llm-proxy.py",
     "torch-dist-l4t-compat.py",
     "spark-vllm-l4t-patch.py",
     "spark-vllm-xformers-gqa-patch.py",

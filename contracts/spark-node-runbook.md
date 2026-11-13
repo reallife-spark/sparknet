@@ -192,7 +192,7 @@ exposes:
 
 | Port | Service | Bind default | Reaches |
 |---|---|---|---|
-| 8000 | `vllm` | `SPARKNET_BIND_API` (0.0.0.0) | the OpenAI-compatible engine (or stub) |
+| 8000 | `vllm` | `SPARKNET_BIND_API` (0.0.0.0) | the OpenAI-compatible text engine (vLLM on Spark, llama-server on AGX, or the stub) |
 | 8080 | `agent` gateway | `SPARKNET_BIND_API` | the node's fabric-facing edge |
 | 8081 | `control` gateway | `SPARKNET_BIND_API` | `--role master` only |
 | 8899 | `control` admin | `SPARKNET_BIND_LOCAL` (127.0.0.1) | `--role master` admin |
@@ -216,17 +216,23 @@ node's bind (`SPARKNET_BIND_LOCAL`) rather than re-bind the fabric side.
 ### The AGX Xavier variant (`--platform agx`)
 
 `--platform agx` selects `goagx/sparknet.agx.compose.yml` and
-`spark-agx.env` together (the default stays `spark`), and swaps the image to
-`sparknet-agx-node:dev`. The service graph, container names, profiles, ports
-and core env keys are the same by test (`tests/test_agx_node.py`), so §5 and
-§6 read unchanged; manual `docker compose -f …` commands substitute the AGX
-file. What genuinely differs, all documented in `goagx/README.md`:
+`spark-agx.env` together (the default stays `spark`). The service graph,
+container names, profiles, ports and core env keys are the same by test
+(`tests/test_agx_node.py`), so §5 and §6 read unchanged; manual
+`docker compose -f …` commands substitute the AGX file. Two images share the
+surface: `sparknet-agx-node:dev` (goSpark, compute, aux engines, bundle,
+stub) and `sparknet-llm:agx` (the text engine). What genuinely differs, all
+documented in `goagx/README.md`:
 
-- **defaults that fit 16 GB** — Mistral-7B instead of Qwen2.5-32B, context
-  8192 instead of 65536, `VLLM_SHM_SIZE=4gb`; each overridable;
-- **vLLM v0.2.7 built from source** (`sm_72` via `7.0+PTX`, xformers from
-  sdist, build gates `import vllm._C` + `--port` greps) behind the `VLLM_CLI`
-  dialect switch — the engine command is an env, not a hardcode;
+- **role-specific GGUF on the root model dir** — teacher Qwen3.6-35B Q4_K_M
+  on `agx64` (64 GB), student Qwen3.6-0.6B Q8_0 on `agx32` (32 GB);
+  `VLLM_MAX_MODEL_LEN=8192` default, each overridable; the compose mounts
+  `/opt/sparknet/models` read-only and never mounts a vault or the state dir;
+- **the text engine is `sparknet-llm:agx`** — `llama-server` from dusty-nv's
+  `jetson-containers` `llama_cpp` package (L4T r35 / `sm_72`) plus the
+  precontext proxy; the node image no longer builds vLLM;
+- **the precontext is a proxy-injected system message** (MASTERSPIKE text +
+  fabric digest); `SPARKNET_PRECONTEXT_MAX_BYTES` caps it;
 - **audio runs through the shim**: whisper.cpp has no OpenAI transcription
   route, so `sparknet-audio-shim.py` exposes `/v1/audio/transcriptions` on
   the audio profile's port and forwards to `127.0.0.1:8004`;
@@ -234,8 +240,9 @@ file. What genuinely differs, all documented in `goagx/README.md`:
   `/v1/rerank` (+ `/v1/reranking`).
 
 The CPU smoke works identically: `--engine stub` layers
-`spark.compose.cpu.yml` (command/env/device reservations only — never the
-image) onto whichever base file the platform selected.
+`spark.compose.cpu.yml` (command/env/device reservations, plus the node image
+and `vllm-stub`) onto whichever base file the platform selected. The LLM image
+has no stub, so the overlay switches `vllm` to the node image.
 
 ## 6. Join a running fabric (adopt the elected Master)
 
@@ -368,10 +375,11 @@ deployed:
    unexecuted; a revoke has still to be shown inert at the guard on a real host.
 
 On an AGX Xavier node (`--platform agx`) this whole list applies with the
-GB10 specifics swapped for Xavier's — `sm_72` inside a 16 GB budget, the
-source-built vLLM/xformers actually completing, the sidecar reading the
-Jetson driver — plus the audio-shim behaviours; `goagx/README.md` keeps that
-extra list.
+GB10 specifics swapped for Xavier's — `sm_72` inside a 64 GB (teacher) or
+32 GB (student) budget, the `llama.cpp` engine loading the GGUF and answering
+the OpenAI endpoints, the precontext present in the request, the sidecar
+reading the Jetson driver — plus the audio-shim behaviours; `goagx/README.md`
+keeps that extra list.
 
 ## 10. Troubleshooting
 

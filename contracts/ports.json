@@ -137,7 +137,7 @@
       "host_bind": "${SPARKNET_BIND_API:-0.0.0.0}",
       "host_published": true,
       "implementation_state": "implemented",
-      "note": "The OpenAI-compatible engine (real vLLM, or the vllm-stub on --engine stub: same service name, same port, so agent/compute wiring never changes). Wildcard by default because the node's API is meant to be reachable on the LAN, not only in-network.",
+      "note": "The OpenAI-compatible text engine (vLLM on the Spark, llama-server from sparknet-llm on the AGX, or the vllm-stub on --engine stub: same service name, same port, so agent/compute wiring never changes). Wildcard by default because the node's API is meant to be reachable on the LAN, not only in-network.",
       "profile": "default",
       "protocol": "tcp/http",
       "runtime": "not-listening",

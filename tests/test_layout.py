@@ -110,6 +110,8 @@ EXPECTED_TOP_LEVEL = {
     "spark.compose.yml",
     "spark.compose.cpu.yml",
     "spark-precontext.py",
+    "sparknet-llm-entrypoint.py",
+    "sparknet-llm-proxy.py",
     "sparknet-node-setup.sh",
     "sparknet-node-setup.py",
     # the AGX Xavier twin of the node surface: image + compose + audio shim +

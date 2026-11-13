@@ -37,6 +37,13 @@ ACTION = "up"
 STATE_DIR_IN_CONTAINER = "/srv/sparknet/peer-node/.state"
 REGISTRY_IN_CONTAINER = STATE_DIR_IN_CONTAINER + "/node-authorizations.json"
 ALL_INTERFACES = "0.0.0.0"  # noqa: S104 - the compose surface binds the API
+AGX_LLM_BASE = "dustynv/llama_cpp:r35.2.1@sha256:a5659335c4b5d31f82b29ec5a04e6e77d219897eef0028db841c9d4c832b90f0"
+AGX_L4T_BASE = (
+    "nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3"
+    "@sha256:545a0f62fb4a5fd2d8c511134f6c55d451ae1565075dcc67123b0c422a469472"
+)
+AGX_TEACHER_FILE = "/opt/sparknet/models/qwen3.6-35b-q4_k_m.gguf"
+AGX_STUDENT_FILE = "/opt/sparknet/models/qwen3.6-0.6b-q8_0.gguf"
 
 USAGE = """sparknet-node-setup.sh — bring up a SparkNet node (DGX Spark or AGX Xavier).
 
@@ -55,7 +62,9 @@ Options:
                         agx = AGX Xavier, goagx/sparknet.agx.* — its own
                         env-file, so switching platforms never inherits
                         the other's base/model lines)
-  --engine vllm|stub   model engine (default vllm; stub = CPU-only OpenAI stub, no GPU/model)
+  --engine vllm|stub   model engine (default vllm; on AGX vllm means the
+                        llama.cpp llama-server image; stub = CPU-only OpenAI
+                        stub, no GPU/model)
   --profiles A,B,C     compose profiles to enable: kv vector control webui embed rerank audio ingest backup opencode
   --master-pub KEY     the elected Master's Ed25519 public key (base64) or a file
                        holding it; joins the node to the fabric instead of running
@@ -197,16 +206,43 @@ def render_env_file() -> None:
 
     node_id = os.environ.get("SPARKNET_NODE_ID") or os.uname().nodename
     overlay = os.environ.get("SPARKNET_OVERLAY_IPV4") or ("10.100.0.1" if ROLE == "master" else "10.100.0.2")
+    image_tag = os.environ.get("SPARKNET_IMAGE_TAG") or "dev"
     if PLATFORM == "agx":
-        model = os.environ.get("VLLM_MODEL") or "mistralai/Mistral-7B-Instruct-v0.2"
-        base_line = "L4T_BASE=" + (os.environ.get("L4T_BASE") or "nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3")
+        model = os.environ.get("VLLM_MODEL") or ("qwen3.6-35b" if ROLE == "master" else "qwen3.6-0.6b")
+        model_file = os.environ.get("SPARKNET_LLM_MODEL_FILE") or (
+            AGX_TEACHER_FILE if ROLE == "master" else AGX_STUDENT_FILE
+        )
+        base_line = "L4T_BASE=" + (os.environ.get("L4T_BASE") or AGX_L4T_BASE)
         max_len = "VLLM_MAX_MODEL_LEN=" + (os.environ.get("VLLM_MAX_MODEL_LEN") or "8192")
-        max_len += "\nVLLM_SHM_SIZE=" + (os.environ.get("VLLM_SHM_SIZE") or "4gb")
+        llm_line = "\n".join(
+            [
+                "SPARKNET_LLM_BASE=" + (os.environ.get("SPARKNET_LLM_BASE") or AGX_LLM_BASE),
+                "SPARKNET_LLM_TAG=" + (os.environ.get("SPARKNET_LLM_TAG") or "agx"),
+                "SPARKNET_LLM_MODEL_FILE=" + model_file,
+                "SPARKNET_LLM_CTX=" + (os.environ.get("SPARKNET_LLM_CTX") or "8192"),
+                "SPARKNET_MODELS_HOST=" + (os.environ.get("SPARKNET_MODELS_HOST") or "/opt/sparknet/models"),
+            ]
+        )
+        node_line = "\n".join(
+            [
+                "SPARKNET_NODE_IMAGE=sparknet-agx-node:" + image_tag,
+                "SPARKNET_NODE_DOCKERFILE=goagx/sparknet.agx.docker",
+            ]
+        )
+        gpu_mem_line = ""
         image_dockerfile = "sparknet.agx.docker"
     else:
         model = os.environ.get("VLLM_MODEL") or "Qwen/Qwen2.5-32B-Instruct"
         base_line = "VLLM_BASE=" + (os.environ.get("VLLM_BASE") or "nvcr.io/nvidia/vllm:26.04-py3")
         max_len = "VLLM_MAX_MODEL_LEN=" + (os.environ.get("VLLM_MAX_MODEL_LEN") or "65536")
+        llm_line = ""
+        node_line = "\n".join(
+            [
+                "SPARKNET_NODE_IMAGE=sparknet-spark-node:" + image_tag,
+                "SPARKNET_NODE_DOCKERFILE=spark.docker",
+            ]
+        )
+        gpu_mem_line = "VLLM_GPU_MEM_UTIL=" + (os.environ.get("VLLM_GPU_MEM_UTIL") or "0.85")
         image_dockerfile = "spark.docker"
 
     service_cmd = "vllm-stub" if ENGINE == "stub" else "vllm"
@@ -238,12 +274,14 @@ SPARKNET_OVERLAY_IPV4={overlay}
 SPARKNET_SHARED_SECRET={secret}
 SPARKNET_STATE_HOST={NODE_STATE}
 GOSPARK_DIR={GOSPARK_DIR}
-SPARKNET_IMAGE_TAG={os.environ.get("SPARKNET_IMAGE_TAG") or "dev"}
+SPARKNET_IMAGE_TAG={image_tag}
 {base_line}
 VLLM_MODEL={model}
 VLLM_SERVICE_CMD={service_cmd}
-VLLM_GPU_MEM_UTIL={os.environ.get("VLLM_GPU_MEM_UTIL") or "0.85"}
+{gpu_mem_line}
 {max_len}
+{llm_line}
+{node_line}
 HF_CACHE_DIR={os.environ.get("HF_CACHE_DIR") or (Path.home() / ".cache" / "huggingface")}
 SPARKNET_BIND_API={os.environ.get("SPARKNET_BIND_API") or ALL_INTERFACES}
 SPARKNET_BIND_LOCAL={os.environ.get("SPARKNET_BIND_LOCAL") or "127.0.0.1"}
@@ -351,8 +389,9 @@ def act_build() -> None:
     write_gpu_fixture()
     ensure_vault_env()
     if PLATFORM == "agx":
-        base = os.environ.get("L4T_BASE") or "nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3"
-        log(f"building the node image ({PLATFORM}: L4T_BASE={base})")
+        base = os.environ.get("L4T_BASE") or AGX_L4T_BASE
+        llm_base = os.environ.get("SPARKNET_LLM_BASE") or AGX_LLM_BASE
+        log(f"building the node + text-engine images ({PLATFORM}: L4T_BASE={base}, SPARKNET_LLM_BASE={llm_base})")
     else:
         base = os.environ.get("VLLM_BASE") or "nvcr.io/nvidia/vllm:26.04-py3"
         log(f"building the node image ({PLATFORM}: VLLM_BASE={base})")
@@ -375,7 +414,7 @@ def act_up() -> None:
     print()
     log("node up. Endpoints:")
     bind = os.environ.get("SPARKNET_BIND_API") or ALL_INTERFACES
-    print(f"    vLLM OpenAI API   http://{bind}:8000/v1")
+    print(f"    text engine API   http://{bind}:8000/v1")
     print(f"    node gateway      http://{bind}:8080/v1")
     if ROLE == "master":
         print("    control admin     http://127.0.0.1:8899/admin")

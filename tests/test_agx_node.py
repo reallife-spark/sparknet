@@ -24,6 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 AGX_DIR = REPO_ROOT / "goagx" / "goagx"
 AGX_COMPOSE = AGX_DIR / "sparknet.agx.compose.yml"
 AGX_DOCKER = AGX_DIR / "sparknet.agx.docker"
+AGX_LLM_DOCKER = AGX_DIR / "sparknet-llm.docker"
 SPARK_COMPOSE = REPO_ROOT / "spark.compose.yml"
 SPARK_DOCKER = REPO_ROOT / "spark.docker"
 SETUP = REPO_ROOT / "sparknet-node-setup.py"
@@ -109,8 +110,8 @@ def test_published_ports_match(spark: dict, agx: dict):
 def test_core_services_keep_their_env_keys(spark: dict, agx: dict):
     """The core services talk to each other through named env keys; the
     engine layer is where divergence lives (LLAMA_*/WHISPER_* on AGX), never
-    here. Values may differ (a 7B default on Xavier); keys may not."""
-    for name in sorted(CORE_SERVICES):
+    here. `vllm` is the engine boundary and has its own LLM env contract."""
+    for name in sorted(CORE_SERVICES - {"vllm"}):
         assert _env_keys(agx[name]) == _env_keys(spark[name]), (
             f"{name}: env keys drifted: only-spark={sorted(_env_keys(spark[name]) - _env_keys(agx[name]))} "
             f"only-agx={sorted(_env_keys(agx[name]) - _env_keys(spark[name]))}"
@@ -138,31 +139,35 @@ def test_engine_divergence_is_exactly_the_documented_one(spark: dict, agx: dict)
 
 
 def test_agx_defaults_fit_a_xavier(spark: dict, agx: dict):
-    """Xavier has 8-16 GB unified memory, not 128: the AGX defaults must be
-    the small ones, and the Spark defaults must not have been dragged along
-    by the copy."""
+    """Xavier has 64 GB / 32 GB unified memory, not 128: the AGX text engine
+    loads a role-specific GGUF on the root model directory, and the Spark
+    defaults must not have been dragged along by the copy."""
     agx_env = agx["vllm"]["environment"]
     spark_env = spark["vllm"]["environment"]
-    assert "mistralai/Mistral-7B-Instruct-v0.2" in str(agx_env["VLLM_MODEL"])
+    assert "qwen3.6" in str(agx_env["VLLM_MODEL"])
     assert "Qwen" in str(spark_env["VLLM_MODEL"])
+    assert "/opt/sparknet/models/" in str(agx_env["SPARKNET_LLM_MODEL_FILE"])
     assert "8192" in str(agx_env["VLLM_MAX_MODEL_LEN"]), "AGX default context must fit Xavier, not the Spark"
     assert "65536" in str(spark_env["VLLM_MAX_MODEL_LEN"]), "the Spark default was dragged down by the copy"
-    compose_text = AGX_COMPOSE.read_text(encoding="utf-8")
-    assert "shm_size: ${VLLM_SHM_SIZE:-4gb}" in compose_text, "the AGX shm default must fit a 16 GB machine"
+    assert "SPARKNET_LLM_MODEL_FILE" in _env_keys(agx["vllm"])
+    assert "SPARKNET_LLM_MODEL_FILE" not in _env_keys(spark["vllm"])
+    assert "SPARKNET_LLM_BASE" in str(agx["vllm"]["build"]["args"])
+    assert "VLLM_SHM_SIZE" not in AGX_COMPOSE.read_text(encoding="utf-8")
 
 
 # --- 2. the image and its pins ------------------------------------------------
 
 
 def test_agx_builds_its_own_image_from_the_repo_root(agx: dict):
-    """The build context is the repo root (bundle tarball + dispatcher live
-    there), the dockerfile is the AGX one, and the goSpark named context keeps
-    the source out of the upload — same shape as the Spark build."""
-    build = agx["vllm"]["build"]
-    assert build["context"] == ".."
-    assert build["dockerfile"] == "goagx/sparknet.agx.docker"
-    assert "gospark" in (build.get("additional_contexts") or {}), "the goSpark named context is required"
-    args = build.get("args") or {}
+    """Two images, one build context: the node image is inherited by every
+    service, the text engine is the `vllm` service's own image. The goSpark
+    named context keeps the source out of the upload on both."""
+    node = agx["compute"]
+    node_build = node["build"]
+    assert node_build["context"] == ".."
+    assert node_build["dockerfile"] == "goagx/sparknet.agx.docker"
+    assert "gospark" in (node_build.get("additional_contexts") or {}), "the goSpark named context is required"
+    args = node_build.get("args") or {}
     assert args["L4T_BASE"].startswith("${L4T_BASE:-nvcr.io/nvidia/l4t-pytorch:r35."), (
         "the AGX base must be a pinned L4T r35 PyTorch image, never a moving tag"
     )
@@ -172,34 +177,52 @@ def test_agx_builds_its_own_image_from_the_repo_root(agx: dict):
     spark_build = _services(SPARK_COMPOSE)["vllm"]["build"]
     for key in ("OPENCODE_VERSION", "NATS_VERSION"):
         assert args[key] == spark_build["args"][key], f"{key} must be the same pin on both platforms"
-    assert "image" in agx["vllm"] and "sparknet-agx-node:" in agx["vllm"]["image"]
+    assert "sparknet-agx-node:" in node["image"]
+
+    llm = agx["vllm"]
+    llm_build = llm["build"]
+    assert llm_build["context"] == ".."
+    assert llm_build["dockerfile"] == "goagx/sparknet-llm.docker"
+    assert "gospark" in (llm_build.get("additional_contexts") or {}), (
+        "the CPU overlay must be able to switch to the node image"
+    )
+    assert "sparknet-llm:" in llm["image"]
+    assert llm_build["args"]["SPARKNET_LLM_BASE"].startswith("${SPARKNET_LLM_BASE:-dustynv/llama_cpp:r35.")
 
 
 def test_agx_dockerfile_pins_hold():
     """No floating tags, version-shaped refs, SHA-pinned model URLs, and the
-    two facts this image exists for: an r35 base and a Volta-compatible arch
-    list (vLLM rejects unknown archs outright — 7.2 is not in its set, so the
-    build targets 7.0+PTX and the driver JITs for sm_72)."""
+    two facts the node image exists for: an r35 base and the two aux engines.
+    The text engine is the separate `sparknet-llm` image."""
     text = AGX_DOCKER.read_text(encoding="utf-8")
 
     assert re.search(r"ARG L4T_BASE=nvcr\.io/nvidia/l4t-pytorch:r35\.", text), "base must stay on the L4T r35 branch"
     assert re.search(r"ARG L4T_BASE=nvcr\.io/nvidia/l4t-pytorch:r35\.[^\n]+@sha256:[0-9a-f]{64}", text), (
         "the AGX base must be pinned by digest"
     )
-    assert re.search(r'ARG TORCH_CUDA_ARCH_LIST="7\.0\+PTX"', text), (
-        "sm_70+PTX is the only arch list v0.2.7 accepts for Xavier"
-    )
     assert not re.search(r":(latest|main)\b", text), "the AGX image floats a tag"
+    assert "VLLM_GIT_REF" not in text, "the node image must not build vLLM"
+    assert "xformers" not in text.lower(), "the node image must not build xformers"
+    assert "import vllm" not in text, "the node image must not import vLLM"
 
-    for arg in ("VLLM_GIT_REF", "LLAMA_CPP_REF", "WHISPER_CPP_REF"):
+    for arg in ("LLAMA_CPP_REF", "WHISPER_CPP_REF"):
         match = re.search(rf"ARG {arg}=(v[\d.]+)", text)
         assert match, f"{arg} must be a version-shaped release ref"
-    assert re.search(r"ARG XFORMERS_PIP_SPEC=\"xformers==", text), "xformers must be pinned to the torch-2.0.0 match"
 
     urls = re.findall(r"https://huggingface\.co/\S+", text)
     assert len(urls) >= 3, "the three baked models must be present"
     for url in urls:
         assert re.search(r"/resolve/[0-9a-f]{40}/", url), f"model URL is not SHA-pinned: {url}"
+
+    llm = AGX_LLM_DOCKER.read_text(encoding="utf-8")
+    assert re.search(r"ARG SPARKNET_LLM_BASE=dustynv/llama_cpp:r35\.", llm), (
+        "the engine base must be a Jetson llama_cpp r35 image"
+    )
+    assert re.search(r"@sha256:[0-9a-f]{64}", llm), "the engine base must be pinned by digest"
+    assert "FROM ${SPARKNET_LLM_BASE}" in llm
+    assert "COPY sparknet-llm-entrypoint.py" in llm
+    assert "COPY sparknet-llm-proxy.py" in llm
+    assert "llama-server" in llm
 
 
 def test_agx_image_shares_the_node_surface_pins():
@@ -402,8 +425,8 @@ def test_stage_scope_checker_catches_the_original_bug():
 
 @pytest.mark.parametrize(
     "dockerfile",
-    [AGX_DOCKER, SPARK_DOCKER],
-    ids=["agx", "spark"],
+    [AGX_DOCKER, AGX_LLM_DOCKER, SPARK_DOCKER],
+    ids=["agx-node", "agx-llm", "spark"],
 )
 def test_dockerfile_args_reach_the_stages_that_use_them(dockerfile: Path):
     """Every ARG a RUN/COPY/ENV consumes must be declared in that stage —

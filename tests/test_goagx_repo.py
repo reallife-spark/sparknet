@@ -29,6 +29,7 @@ EXPORT = REPO_ROOT / "scripts" / "sparknet-release-export.py"
 BOOTSTRAP = REPO_ROOT / "goagx" / "goagx" / "bootstrap-agx.sh"
 PIN = REPO_ROOT / "goagx" / "goagx" / "GOSPARK_PIN"
 AGX_DOCKER = REPO_ROOT / "goagx" / "goagx" / "sparknet.agx.docker"
+AGX_LLM_DOCKER = REPO_ROOT / "goagx" / "goagx" / "sparknet-llm.docker"
 AGX_COMPOSE = REPO_ROOT / "goagx" / "goagx" / "sparknet.agx.compose.yml"
 SETUP = REPO_ROOT / "sparknet-node-setup.sh"
 KEYS_CHECK = REPO_ROOT / "scripts" / "sparknet-keys-check.sh"
@@ -54,8 +55,11 @@ def _pin(key: str) -> str:
 
 
 def _dockerfile_arg(name: str) -> str:
-    m = re.search(rf"^ARG {re.escape(name)}=(.*)$", AGX_DOCKER.read_text(), re.M)
-    return m.group(1).strip().strip('"') if m else ""
+    for path in (AGX_DOCKER, AGX_LLM_DOCKER):
+        m = re.search(rf"^ARG {re.escape(name)}=(.*)$", path.read_text(), re.M)
+        if m:
+            return m.group(1).strip().strip('"')
+    return ""
 
 
 @pytest.fixture(scope="module")
@@ -120,23 +124,25 @@ def test_dockerfile_context_sources_are_exported() -> None:
     shipped in the repo.
     """
     bundle_default = "peer-node/container/context/sparknet-peer.tar.gz"
-    for line in AGX_DOCKER.read_text().splitlines():
-        m = re.match(r"^COPY\s+(?!--from)(.+)$", line.strip())
-        if not m:
-            continue
-        tokens = m.group(1).split()
-        for src in tokens[:-1]:  # last token is the destination
-            if src == bundle_default or src.startswith("${"):
+    for dockerfile in (AGX_DOCKER, AGX_LLM_DOCKER):
+        for line in dockerfile.read_text().splitlines():
+            m = re.match(r"^COPY\s+(?!--from)(.+)$", line.strip())
+            if not m:
                 continue
-            rel = src.lstrip("./")
-            assert rel in ROOT_FILES or any(rel.startswith(f"{s}/") for s in SUBTREES), (
-                f"dockerfile COPYs {rel}, which the export does not carry"
-            )
+            tokens = m.group(1).split()
+            for src in tokens[:-1]:  # last token is the destination
+                if src == bundle_default or src.startswith("${"):
+                    continue
+                rel = src.lstrip("./")
+                assert rel in ROOT_FILES or any(rel.startswith(f"{s}/") for s in SUBTREES), (
+                    f"{dockerfile.name} COPYs {rel}, which the export does not carry"
+                )
 
 
 def test_compose_builds_against_the_exported_surface() -> None:
     text = AGX_COMPOSE.read_text()
     assert "dockerfile: goagx/sparknet.agx.docker" in text
+    assert "dockerfile: goagx/sparknet-llm.docker" in text
     assert "context: .." in text, "the image build context is the repo root"
 
 
@@ -161,6 +167,9 @@ def test_staged_layout_is_complete(staged: Path) -> None:
     for rel in [*SUBTREES, *ROOT_FILES, *GENERATED]:
         assert (staged / rel).exists(), f"staged tree is missing {rel}"
     assert (staged / "goagx" / "sparknet.agx.docker").is_file()
+    assert (staged / "goagx" / "sparknet-llm.docker").is_file()
+    assert (staged / "sparknet-llm-entrypoint.py").is_file()
+    assert (staged / "sparknet-llm-proxy.py").is_file()
     assert (staged / "goagx" / "bootstrap-agx.sh").is_file()
     assert (staged / "bootstrap-agx.sh").is_symlink(), "the root entry is a shim symlink"
 
@@ -185,7 +194,7 @@ def test_staged_manifest_records_every_pin(staged: Path) -> None:
     assert manifest["sparknet_sha"] == head
     assert manifest["gospark_sha"] == _pin("GOSPARK_SHA")
     assert manifest["gospark_repo"] == _pin("GOSPARK_REPO")
-    assert manifest["vllm_git_ref"] == _dockerfile_arg("VLLM_GIT_REF")
+    assert manifest["sparknet_llm_base"] == _dockerfile_arg("SPARKNET_LLM_BASE")
     assert manifest["l4t_base"] == _dockerfile_arg("L4T_BASE")
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", manifest["published"])
 
@@ -245,7 +254,7 @@ def test_staged_publish_is_self_verifying(staged: Path) -> None:
 
 def test_readme_template_carries_every_placeholder() -> None:
     text = (TEMPLATES / "README.md.tmpl").read_text()
-    for key in ("SPARKNET_SHA", "GOSPARK_SHA", "GOSPARK_REPO", "PUBLISHED", "VLLM_REF", "L4T_BASE"):
+    for key in ("SPARKNET_SHA", "GOSPARK_SHA", "GOSPARK_REPO", "PUBLISHED", "LLM_BASE", "L4T_BASE"):
         assert f"{{{{{key}}}}}" in text, f"README template is missing {{{{{key}}}}}"
 
 

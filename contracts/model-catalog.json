@@ -2,12 +2,13 @@
   "schema_version": "1.0",
   "contract": "model-catalog",
   "description": "The operator-owned model catalog. It names every model the fabric may pull, which node may serve it, the quant, the runtime, the license and the approximate fit. Weights are not knowledge, not authority and never enter a vault, a bundle or 4223. The Master host (agx64, 64 GB) serves the teacher; the peer host (agx32, 32 GB) serves the student. The teacher is deliberately not eligible for agx32: a 32 GB node cannot serve it, and a cold backup of those weights there is not a deployment.",
-  "updated": "2026-11-06",
+  "updated": "2026-11-13",
   "store": {
     "root": "/mnt/ai/models",
     "manifest_dir": "manifests",
     "min_free_gb": 80,
-    "note": "The store is a host path, never a vault path. A model pull is an operator action; it is not an LLM tool."
+    "note": "The store is a host path, never a vault path. A model pull is an operator action; it is not an LLM tool.",
+    "active_root": "/opt/sparknet/models"
   },
   "role_placement": {
     "master": {
@@ -124,9 +125,9 @@
       "fast_memory_gb": 18,
       "context_tokens": 32768,
       "serving_port": 8101,
-      "status": "candidate",
+      "status": "retired",
       "why": "The smallest Qwen3.8 generation model. It fits agx32 for inference, but QLoRA training is tight; use only in an exclusive training window.",
-      "notes": "Live same-generation student experiment 2026-11-01: 4.75 tok/s, 14.73 GiB resident, 100%; slower than 9B."
+      "notes": "Retired by Step 108: not the same Qwen version as the Qwen3.6 teacher. Keep the weights until the new student is validated; do not use the pair for distillation."
     },
     {
       "id": "qwen3.5-9b-q8",
@@ -149,9 +150,9 @@
       "fast_memory_gb": 10,
       "context_tokens": 32768,
       "serving_port": 8101,
-      "status": "active",
+      "status": "retired",
       "why": "The safe default student: same Qwen family, comfortable QLoRA on 32 GB, and leaves room for the Master's services.",
-      "notes": "Live student winner 2026-11-01: 11.27 tok/s, 8.06 GiB resident, 100% on the fixed suite; imported into agx32 Ollama."
+      "notes": "Retired by Step 108: not the same Qwen version as the Qwen3.6 teacher. Keep the weights until the new student is validated; do not use the pair for distillation."
     },
     {
       "id": "qwen3.5-4b-q8",
@@ -174,8 +175,9 @@
       "fast_memory_gb": 5,
       "context_tokens": 32768,
       "serving_port": 8101,
-      "status": "candidate",
-      "why": "The low-memory student fallback for the bake-off and for a Master that must keep more services resident."
+      "status": "retired",
+      "why": "The low-memory student fallback for the bake-off and for a Master that must keep more services resident.",
+      "notes": "Retired by Step 108: not the same Qwen version as the Qwen3.6 teacher. Keep the weights until the new student is validated; do not use the pair for distillation."
     },
     {
       "id": "qwen3-embedding-0.6b",
@@ -234,6 +236,81 @@
       "serving_port": null,
       "status": "candidate",
       "why": "Existing embedding baseline; keeps the vector map comparable with the current Qdrant indexes."
+    },
+    {
+      "id": "qwen3.6-0.6b-q8",
+      "family": "qwen3.6",
+      "generation": "3.6",
+      "role": "student",
+      "nodes": [
+        "agx32"
+      ],
+      "repo": "unsloth/Qwen3.6-0.6B-GGUF",
+      "revision": "main",
+      "include": [
+        "*Q8_0*.gguf"
+      ],
+      "format": "gguf",
+      "runtime": "llama.cpp",
+      "license": "Apache-2.0",
+      "license_url": "https://huggingface.co/Qwen/Qwen3.6-0.6B",
+      "size_gb": 0.7,
+      "fast_memory_gb": 1,
+      "context_tokens": 32768,
+      "serving_port": 8101,
+      "status": "candidate",
+      "why": "The smallest same-version Qwen3.6 student at Q8_0; the clean tokenizer/family transfer for the teacher.",
+      "notes": "The local Ollama store has no Qwen3.6 small model; pull this GGUF before the Step 108 live check."
+    },
+    {
+      "id": "qwen3.6-1.7b-q8",
+      "family": "qwen3.6",
+      "generation": "3.6",
+      "role": "student",
+      "nodes": [
+        "agx32"
+      ],
+      "repo": "unsloth/Qwen3.6-1.7B-GGUF",
+      "revision": "main",
+      "include": [
+        "*Q8_0*.gguf"
+      ],
+      "format": "gguf",
+      "runtime": "llama.cpp",
+      "license": "Apache-2.0",
+      "license_url": "https://huggingface.co/Qwen/Qwen3.6-1.7B",
+      "size_gb": 1.9,
+      "fast_memory_gb": 2,
+      "context_tokens": 32768,
+      "serving_port": 8101,
+      "status": "candidate",
+      "why": "Same-version student if the 0.6B model is too weak on the fixed suite.",
+      "notes": "Benchmark against qwen3.6-0.6b-q8 before promoting."
+    },
+    {
+      "id": "qwen3-0.6b-q8",
+      "family": "qwen3",
+      "generation": "3",
+      "role": "student",
+      "nodes": [
+        "agx32"
+      ],
+      "repo": "unsloth/Qwen3-0.6B-GGUF",
+      "revision": "main",
+      "include": [
+        "*Q8_0*.gguf"
+      ],
+      "format": "gguf",
+      "runtime": "llama.cpp",
+      "license": "Apache-2.0",
+      "license_url": "https://huggingface.co/Qwen/Qwen3-0.6B",
+      "size_gb": 0.7,
+      "fast_memory_gb": 1,
+      "context_tokens": 32768,
+      "serving_port": 8101,
+      "status": "candidate",
+      "why": "Fallback only: pair with a Qwen3-32B teacher if the Qwen3.6 small model is unavailable.",
+      "notes": "Do not mix this with the Qwen3.6 teacher; same-version is the rule."
     }
   ]
 }

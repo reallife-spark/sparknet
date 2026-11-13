@@ -75,9 +75,9 @@ Key environment (all optional; defaults shown):
   SPARKNET_STATE_DIR        <vault>/.state
   SPARKNET_BUS_URL          nats://nats:4222
   SPARKNET_SHARED_SECRET    generated into the state dir if unset
-  VLLM_CLI                  vllm serve  (AGX image sets
-                            "python3 -m vllm.entrypoints.openai.api_server")
-  VLLM_MODEL                Qwen/Qwen2.5-32B-Instruct (AGX: Mistral-7B)
+  VLLM_CLI                  vllm serve  (the Spark image's engine command;
+                            the AGX text engine has its own entrypoint)
+  VLLM_MODEL                Qwen/Qwen2.5-32B-Instruct (AGX: the GGUF alias)
   VLLM_PORT                 8000
   VLLM_GPU_MEM_UTIL         0.85
   VLLM_MAX_MODEL_LEN        65536

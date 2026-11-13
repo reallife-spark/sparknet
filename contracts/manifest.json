@@ -107,7 +107,7 @@
       "contract": "model-catalog",
       "file": "model-catalog.json",
       "schema_version": "1.0",
-      "sha256": "c0a08ff59bdba91996d0142888572533fc6be62382e64c78d2ef2ddf58cb58a3"
+      "sha256": "d1e9a4dacf53169a7a25a9f79995ad92e8a203aae21be90081b4e8869e08a9e8"
     },
     {
       "contract": "nocturnal-artifact-schema",
@@ -137,7 +137,7 @@
       "contract": "ports",
       "file": "ports.json",
       "schema_version": "2.1",
-      "sha256": "6b07140a10be1a7eb57fe65b8de1b1d1ad2c3e62996e250e18393d29c14b1a37"
+      "sha256": "5e534f5ec217b8c9881650f1452fd18479e6aa783ee21e58783af57fb054801c"
     },
     {
       "contract": "proposal-schema",

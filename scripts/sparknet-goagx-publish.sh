@@ -113,8 +113,11 @@ TEMPLATES="$REPO_ROOT/goagx/goagx/publish-templates"
 
 pin_get() { sed -n "s/^$1=//p" "$REPO_ROOT/goagx/goagx/GOSPARK_PIN" | head -1; }
 
-dockerfile_arg() {  # ARG name -> default from the AGX dockerfile
-  sed -n "s/^ARG $1=//p" "$REPO_ROOT/goagx/goagx/sparknet.agx.docker" | head -1
+dockerfile_arg() {  # ARG name -> default from either AGX dockerfile
+  local value
+  value="$(sed -n "s/^ARG $1=//p" "$REPO_ROOT/goagx/goagx/sparknet.agx.docker" | head -1)"
+  [ -n "$value" ] || value="$(sed -n "s/^ARG $1=//p" "$REPO_ROOT/goagx/goagx/sparknet-llm.docker" | head -1)"
+  printf '%s' "$value"
 }
 
 resolved_sha() {  # the sparknet revision this export represents
@@ -150,7 +153,7 @@ stage_into() {  # <target-dir>
       -e "s|{{GOSPARK_SHA}}|$(pin_get GOSPARK_SHA)|g" \
       -e "s|{{GOSPARK_REPO}}|$(pin_get GOSPARK_REPO)|g" \
       -e "s|{{PUBLISHED}}|$(date -u +%Y-%m-%dT%H:%M:%SZ)|g" \
-      -e "s|{{VLLM_REF}}|$(dockerfile_arg VLLM_GIT_REF)|g" \
+      -e "s|{{LLM_BASE}}|$(dockerfile_arg SPARKNET_LLM_BASE)|g" \
       -e "s|{{L4T_BASE}}|$(dockerfile_arg L4T_BASE)|g" \
       "$TEMPLATES/README.md.tmpl" > "$target/README.md"
   mkdir -p "$target/.github/workflows"
@@ -163,9 +166,12 @@ out, root, sha, from_git = sys.argv[1:5]
 root = pathlib.Path(root)
 
 def dockerfile_arg(name: str) -> str:
-    text = (root / "goagx" / "goagx" / "sparknet.agx.docker").read_text()
-    m = re.search(rf"^ARG {re.escape(name)}=(.*)$", text, re.M)
-    return m.group(1).strip().strip('"') if m else ""
+    for rel in ("sparknet.agx.docker", "sparknet-llm.docker"):
+        text = (root / "goagx" / "goagx" / rel).read_text()
+        m = re.search(rf"^ARG {re.escape(name)}=(.*)$", text, re.M)
+        if m:
+            return m.group(1).strip().strip('"')
+    return ""
 
 pin = {}
 for line in (root / "goagx" / "goagx" / "GOSPARK_PIN").read_text().splitlines():
@@ -183,7 +189,7 @@ manifest = {
     "gospark_repo": pin.get("GOSPARK_REPO", ""),
     "gospark_sha": pin.get("GOSPARK_SHA", ""),
     "l4t_base": dockerfile_arg("L4T_BASE"),
-    "vllm_git_ref": dockerfile_arg("VLLM_GIT_REF"),
+    "sparknet_llm_base": dockerfile_arg("SPARKNET_LLM_BASE"),
     "opencode_version": dockerfile_arg("OPENCODE_VERSION"),
     "nats_version": dockerfile_arg("NATS_VERSION"),
     "published": datetime.datetime.now(datetime.timezone.utc)
@@ -292,7 +298,7 @@ verify_tree() {  # <root>
   if python3 - "$root/VERSIONS.json" <<'PY'
 import json, sys
 m = json.load(open(sys.argv[1]))
-required = ("name", "sparknet_sha", "gospark_sha", "l4t_base", "vllm_git_ref", "published")
+required = ("name", "sparknet_sha", "gospark_sha", "l4t_base", "sparknet_llm_base", "published")
 missing = [k for k in required if not m.get(k)]
 sys.exit(1 if missing else 0)
 PY

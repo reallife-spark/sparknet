@@ -42,6 +42,13 @@ The store root is `/mnt/ai/models` unless the operator chooses another host
 path. It is never a vault path and never a repository path. Model files are
 read-only to the serving container. Manifests are `0600`.
 
+The **active serving copy** is separate: the teacher/student GGUF the text
+engine loads is staged under `/opt/sparknet/models/` on the root NVMe
+(`SPARKNET_MODELS_HOST`, `SPARKNET_LLM_MODEL_FILE`). The cold store remains
+on `/mnt/ai/models`; the engine container mounts only the root model
+directory, read-only. Vaults, keys and the state directory are never in that
+mount.
+
 A pull manifest records:
 
 - catalog id, repo, requested revision and resolved commit;

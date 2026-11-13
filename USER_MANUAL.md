@@ -438,26 +438,28 @@ The node image surface is a **pair**, selected together by one flag:
 | | DGX Spark (`--platform spark`) | AGX Xavier (`--platform agx`) |
 |---|---|---|
 | GPU / arch | GB10, `sm_121a` | Xavier, `sm_72` (Volta) |
-| Memory | 128 GB unified | 16 GB LPDDR4X (Orin: 32/64 GB) |
-| Base | `nvcr.io/nvidia/vllm:26.04-py3` | `nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3` (cu114, torch 2.0.0, Python 3.8) |
-| Engine | prebuilt vLLM wheels | **vLLM v0.2.7 built from source** (hours) |
-| Image file | `spark.docker` | `goagx/sparknet.agx.docker` |
+| Memory | 128 GB unified | 64 GB (`agx64`) / 32 GB (`agx32`) |
+| Node base | `nvcr.io/nvidia/vllm:26.04-py3` | `nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3` (cu114, Python 3.8) |
+| Engine | prebuilt vLLM wheels | **`llama.cpp` `llama-server`** (`sparknet-llm:agx`, base `dustynv/llama_cpp:r35.2.1`) |
+| Image files | `spark.docker` | `goagx/sparknet.agx.docker` + `goagx/sparknet-llm.docker` |
 | Compose file | `spark.compose.yml` | `goagx/sparknet.agx.compose.yml` |
 
 `--platform` picks the compose file **and** the env-file together, so a node can
 never build the AGX image against the Spark compose, and switching platforms
 never inherits the other's base/model lines. `spark.compose.cpu.yml` layers
-onto either and overrides only command/env/device reservations — never the
-image — so the CPU smoke works on both.
+onto either and overrides command/env/device reservations, and on AGX it also
+selects the node image's `vllm-stub` (the LLM image has no stub).
 
-The AGX image is the harder problem: NVIDIA publishes no vLLM container for the
-r35 branch, NGC is current-generation only and does not cover `sm_72`, and the
-community `jetson-containers` route fails on JetPack 5 (r35 ships Python 3.8;
-modern vLLM needs ≥ 3.10 and triton). The verdict, recorded in
-`goagx/README.md`, is to build vLLM from source at a pinned ref
-(`VLLM_GIT_REF=v0.2.7`) with `ARG VLLM_GIT_URL` kept as the escape hatch. The
-full resource-first record is in `references/nvidia-build-catalog.md`; the
-search helper is `make nv-search q="…"`.
+The AGX vLLM source build was the blocker: the operator could not satisfy its
+Python/PyTorch/xformers dependency stack on either Xavier host. The
+resource-first review of `dusty-nv` (recorded in
+`references/dusty-nv-jetson-llm-containers-2026-11-13.md`) selected
+`jetson-containers` `llama_cpp` as the engine and Ollama as the fallback and
+the peer's own AI-stack server. The decision is
+`docs/adr/0021-agx-llm-engine.md`; the stable `vllm` service name, port 8000
+and OpenAI endpoints remain. The node image keeps goSpark, compute, the aux
+engines, the bundle and the stub; the engine image carries `llama-server` and
+the precontext proxy.
 
 ### 7.2 The compose graph
 
@@ -468,7 +470,7 @@ asserted by `tests/test_agx_node.py`.
 | Service | Role |
 |---|---|
 | `nats` | The NATS/JetStream bus everything else talks over. |
-| `vllm` | The text engine (OpenAI-compatible). |
+| `vllm` | The text engine (OpenAI-compatible; `llama-server` on AGX). |
 | `vllm-embed` | The embedding profile. |
 | `vllm-rerank` | The rerank profile. |
 | `vllm-audio` | The audio profile (whisper.cpp on AGX). |
@@ -503,10 +505,13 @@ llama-embed   llama-rerank   whisper-asr   precontext   shell
 bring the whole graph up and round-trip through the agent ↔ engine ↔ compute
 path. That is the smoke test the CI container leg runs.
 
-`spark-precontext.py` bakes the vault into a precontext template that the chat
-path prepends. It is capped (`SPARKNET_PRECONTEXT_MAX_BYTES`) because an
-uncapped precontext overflows the engine's context window — on the AGX the
-8 192-token window holds roughly 4 771 prompt tokens.
+`spark-precontext.py` bakes the fabric's MASTERSPIKE text and digest into the
+precontext. On Spark the chat template carries it; on AGX the
+`sparknet-llm-proxy.py` proxy merges it into the first system message before
+`llama-server` sees the request. It is capped
+(`SPARKNET_PRECONTEXT_MAX_BYTES`) because an uncapped precontext overflows the
+engine's context window — on the AGX the 8 192-token window holds roughly
+4 771 prompt tokens.
 
 ### 7.4 The two port namespaces
 
@@ -934,7 +939,7 @@ human decision. `make install-units` is a dry-run report unless you pass
 | The guard verifies but refuses to apply | The peer lacks `guard-apply`, or `--apply-enabled` is off (it is off by default), or the target path is not protected. | `contracts/guard-protocol.md`; the peer `Makefile`'s `guard-status` target. |
 | The overlay does not come up after a reboot | The kernel module is absent on this platform (`CONFIG_WIREGUARD=n` on the tegra hosts). | Both roles bring the overlay up through the peer's `scripts/sparknet-wg-bringup.sh` (userspace `wireguard-go`), driven by an enabled anchor unit. |
 | `goSpark` refuses to start an admin surface | It refuses any non-loopback admin bind. | Bind `127.0.0.1:8899` and reach it over an SSH tunnel. |
-| The 32 GB AGX master dies with an OOM during generation | Mistral-7B and the aux profiles cannot be resident together. | The aux profiles are an on-demand window on that node; stop them for the text battery. |
+| The 32 GB AGX peer dies with an OOM during generation | The student GGUF, the context/KV and the aux profiles exceed unified memory. | Lower `VLLM_MAX_MODEL_LEN`/`SPARKNET_LLM_CTX`; stop the aux profiles for the text battery. |
 
 ---
 
