@@ -27,15 +27,12 @@ produced three all-idle samples; `plan-ce065bc3f69236d4` armed as
 peer's signed result/manifest under `01_Inbox/nocturnal/`. `abort` closed the
 lease. Issues #8, #9 and #11 are closed; the mirror has no open issues.
 
-**The text engine is at a decision point.** The current AGX text engine is
-vLLM v0.2.7, source-built with torch/xformers/Python 3.8; the operator reports
-its dependencies cannot be fulfilled on the two Xavier nodes. ADR 0021
-(proposed, Step 107) replaces it with a `jetson-containers` `llama.cpp` /
-`llama-server` container, `sparknet-llm:agx`; Ollama is the fallback and the
-peer's own AI-stack server; MLC-LLM is an optional experiment; TensorRT-LLM,
-ExLlamaV2, text-generation-webui, SGLang/TGI and vLLM are not the path. The
-`vllm` service name, port 8000, OpenAI endpoints, `vllm-stub` CPU profile and
-the embed/rerank/audio aux services stay stable. Step 108 implemented it; live on `agx64`/`agx32` 2026-11-13.
+**The AGX text engine is llama.cpp/llama-server.** `sparknet-llm:agx` is
+live on `agx64`/`agx32` (2026-11-13); ADR 0021 is accepted and the vLLM source
+build is retired. Ollama is the fallback and the peer's own AI-stack server;
+MLC-LLM is optional; TensorRT-LLM/ExLlamaV2 are not the path. The `vllm`
+service name, port 8000, OpenAI endpoints, `vllm-stub` and the
+embed/rerank/audio aux services stay stable.
 
 **Teacher/student are a same-version pair.** Teacher/main on `agx64`:
 Qwen3.6-35B Q4_K_M (the largest same-version model that fits 64 GB at the best
@@ -70,11 +67,9 @@ Q8_0/Q4_K_M student; `--n-gpu-layers 99`; measured `--ctx-size`/`--parallel`;
 MAXN (`sudo nvpmodel -m 0`, `sudo jetson_clocks`); watch `tegrastats`; the
 136.5 GB/s unified-memory bandwidth is the bottleneck.
 
-**Open.** Step 108 (build `sparknet-llm:agx`, remove the vLLM build, stage the
-models, migrate storage, validate on `agx64`/`agx32`); the exact Qwen pair after
-the model inventory; the `jetson-containers` `llama_cpp`/`ollama` build on L4T
-r35; the `goagx`/runbook/manual hardware and engine correction; the full wiki
-cycle; the no-legal-review note. No live claim is made for the new engine.
+**Open.** No engine or bake-off work. The next roadmap step is a new step,
+not a reuse of 108/109. The no-legal-review note and the `jetson-containers`
+`NOASSERTION`/MIT terms stay recorded.
 
 **Standing truths.** Authority comes from key possession; the vaults and the
 model store are not authority. `CONTEXT.md` is generated; `MEMORY.md` and

@@ -79,6 +79,7 @@ docker run --rm -i \
   -v "$TGZ:/bundle/master-worktree.tar.gz:ro" \
   -v "$OUT:/out" \
   -e SPARKNET_PYTHON="$PYTHON_IN_IMAGE" \
+  -e SPARKNET_FABRIC_ROOT= \
   -e SPARKNET_ELECTION_PY=/fabric/shared/sparknet-election.py \
   -e SPARKNET_SIGNER_PY=/fabric/master-node/services/sparknet-signer.py \
   -e SPARKNET_REHEARSAL_TGZ=/bundle/master-worktree.tar.gz \

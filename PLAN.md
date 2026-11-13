@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
 updated: 2026-11-13
-current: 108
+current: done
 ---
 
 # sparknet — Active Plan
@@ -539,10 +539,9 @@ current: 108
   - **Status 2026-11-13 — COMPLETE.** The pages are written and linked; the
     hardware truth is 64/32; the wiki cycle and the local gates are green. Step
     108 is next.
-
 ## Step 108 — Replace the AGX text engine with llama.cpp/llama-server
 
-- [ ] **Step 108** — Implement `sparknet-llm:agx`, remove the vLLM build from
+- [x] **Step 108** — Implement `sparknet-llm:agx`, remove the vLLM build from
   the node image, keep `vllm:8000`/`vllm-stub`/aux, stage the teacher/student
   models, migrate storage, and validate on agx64/agx32.
   - **DoD**: the `sparknet-llm:agx` image serves the teacher on agx64 and the
@@ -553,10 +552,14 @@ current: 108
     `make test-all`, `make drift-check`, `make container-test`, `make bundle`/
     `bundle-verify` and the goagx publish/pin are green; no live claim before
     the checks run.
-
+  - **Status 2026-11-13 — COMPLETE.** Static `sparknet-llm:agx` serves
+    Qwen3.6-35B-A3B on `agx64` and Qwen3.6-27B on `agx32`; precontext 16000 B;
+    `vllm-stub`/embed/rerank/agent/compute validated; models on root, vaults on
+    `/mnt/ai`; `make ci`/`test-all`/`drift-check`/`container-test` and the
+    bundle/goagx gates green.
 ## Step 109 — Dual teacher/student bake-off
 
-- [ ] **Step 109** — Keep both same-version sets available and benchmark them
+- [x] **Step 109** — Keep both same-version sets available and benchmark them
   on the real AGX engine: Qwen3.6-35B-A3B Q4_K_M + Qwen3.6-27B Q4_K_M and
   Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0.
   - **Scope**: no training; the distillation pass is the teacher→student
@@ -575,14 +578,14 @@ current: 108
     cold store; `make ci`, `make test-all`, `make contract-test`,
     `make drift-check`, `make goagx-publish`/pin and the bundle gates are
     green; the live checks are dated and host-specific.
-  - **Status 2026-11-13 — measured.** All four runs passed the quality floor
-    1.0. `qwen3.6`: teacher 18.54/18.08 tok/s, student 4.41/4.54 tok/s,
-    agreement 0.653. `qwen3`: teacher 3.94/3.65 tok/s, student 76.78/57.33
-    tok/s, agreement 0.608. Recommendation on the stated rule: `qwen3` for the
-    served student; the Qwen3.6 teacher remains the faster distillation
-    teacher. Promotion/cleanup and the final publish/pin are pending the
-    operator's winner decision.
-
+  - **Status 2026-11-13 — measured.** All four runs passed quality 1.0.
+    `qwen3.6`: teacher 18.54/18.08 tok/s, student 4.41/4.54, agreement 0.653.
+    `qwen3`: teacher 3.94/3.65, student 76.78/57.33, agreement 0.608.
+    Recommendation: `qwen3` on student speed; operator chose `qwen3.6`.
+  - **Status 2026-11-13 — COMPLETE.** `qwen3.6` stays on root; Qwen3 set
+    cold under `/mnt/ai/models/`; re-stage with
+    `scripts/sparknet-model-stage.py`; report/agreement saved; all gates and
+    goagx publish/pin green.
 ## Standing verification rules
 
 - A gate that cannot fail is not a gate. Every claim needs a named test or a
@@ -592,7 +595,6 @@ current: 108
   WireGuard, `chattr`, systemd, the signer or a browser surface.
 - `PLAN.md` history is evidence; do not rewrite it to make a status look better.
 - New roadmap work after `current: done` becomes a new step, not a reuse.
-
 ## Next
 
 `current:` moves one step at a time, and only after the DoD is verified.
