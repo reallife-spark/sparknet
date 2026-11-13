@@ -31,7 +31,7 @@ Updated: 2026-11-13
   the root model dir.
 - **Tuning:** `sm_72`; Q4_K_M teacher, Q4_K_M/Q8_0 student; `--n-gpu-layers
   99`; `--no-mmap --fit off` for the 27B; MAXN; `tegrastats`; 136.5 GB/s.
-  goagx pinned `b016173`.
+  goagx pinned `07e9dda`.
 ## Durable facts
 - Memory plane: Go `sparknet-memory` 4110 behind Python gateway 4093; one store, per-vault scope; Qdrant 6333/6334; 4223 the only signed surface.
 - `model-uplift` carries consented training/backup evidence only, never answers; teacher traces/uplift are not an answer corpus.
