@@ -231,6 +231,9 @@ documented in `goagx/README.md`:
 - **two same-version sets** — `qwen3.6` (35B-A3B + 27B) and `qwen3`
   (32B + 0.6B); `scripts/sparknet-model-set.py` selects the active file and
   precontext mode, and both fit on root during the bake-off;
+  the 2026-11-13 bake-off chose `qwen3.6` (teacher 18.54/18.08 tok/s,
+  student 4.41/4.54 tok/s, quality 1.0); the Qwen3 set is cold and can be
+  re-staged with `scripts/sparknet-model-stage.py`;
 - **the text engine is `sparknet-llm:agx`** — `llama-server` from dusty-nv's
   `jetson-containers` `llama_cpp` package (L4T r35 / `sm_72`) plus the
   precontext proxy; the node image no longer builds vLLM;

@@ -35,18 +35,24 @@ its dependencies cannot be fulfilled on the two Xavier nodes. ADR 0021
 peer's own AI-stack server; MLC-LLM is an optional experiment; TensorRT-LLM,
 ExLlamaV2, text-generation-webui, SGLang/TGI and vLLM are not the path. The
 `vllm` service name, port 8000, OpenAI endpoints, `vllm-stub` CPU profile and
-the embed/rerank/audio aux services stay stable. Step 108 implements it.
+the embed/rerank/audio aux services stay stable. Step 108 implemented it; live on `agx64`/`agx32` 2026-11-13.
 
 **Teacher/student are a same-version pair.** Teacher/main on `agx64`:
 Qwen3.6-35B Q4_K_M (the largest same-version model that fits 64 GB at the best
 responsive quantization; Q5_K_M/Q6_K only if measured tokens/s is acceptable).
 Student on `agx32`: Qwen3.6-27B Q4_K_M (the smallest Qwen3.6 release; no
-0.6B/1.7B exists). Fallback pair only if the teacher is switched to Qwen3:
-Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0.
+0.6B/1.7B exists). The second same-version pair is Qwen3-32B Q4_K_M +
+Qwen3-0.6B Q8_0.
 The old `qwen3.5-9b` / `qwen3.8-27b` pair is retired because it is not
 same-version. The exact pair is confirmed after the model inventory in Step
 108; the distillation uses the same tokenizer/family, and teacher traces/uplift
 remain training evidence, never an answer corpus.
+
+**Bake-off (2026-11-13).** Both pairs passed quality 1.0. Qwen3.6: teacher
+18.54/18.08 tok/s, student 4.41/4.54 tok/s, agreement 0.653. Qwen3: teacher
+3.94/3.65 tok/s, student 76.78/57.33 tok/s, agreement 0.608. Operator chose
+**Qwen3.6** for the served engine because its teacher is ~5x faster for
+distillation; the Qwen3 set is in the cold store and can be re-staged.
 
 **Storage contract.** Vaults stay on the data drives (`/mnt/ai/...`); the
 active teacher/student GGUF, tokenizer, precontext and KV cache go on the root

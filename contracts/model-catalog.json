@@ -77,7 +77,7 @@
       "serving_port": 8100,
       "status": "active",
       "why": "Qwen3.6-35B-A3B Q4_K_M; the same-version teacher for the 27B student. The official unsloth GGUF is the benchmark source.",
-      "notes": "Live teacher winner 2026-11-01: Q4_K_M via Ollama, 22.22 tok/s, 21.21 GiB resident, 100% on the fixed suite (thinking off).",
+      "notes": "Operator-selected winner of the Step 109 bake-off: teacher throughput 18.54/18.08 tok/s, student 4.41/4.54 tok/s, quality 1.0.",
       "pair": "qwen3.6"
     },
     {
@@ -262,7 +262,7 @@
       "serving_port": 8101,
       "status": "candidate",
       "why": "Qwen3-0.6B Q8_0; the small Qwen3 student. Compare against the Qwen3.6-27B student.",
-      "notes": "Official unsloth Q8_0 GGUF. Fits the 32 GB peer with the full GPU and leaves room for the rest of the stack.",
+      "notes": "Cold store after the Step 109 bake-off; re-stage with scripts/sparknet-model-stage.py --to-root when needed.",
       "pair": "qwen3"
     },
     {
@@ -286,9 +286,9 @@
       "fast_memory_gb": 17,
       "context_tokens": 32768,
       "serving_port": 8101,
-      "status": "candidate",
+      "status": "active",
       "why": "The smallest available Qwen3.6 model; same version as the 35B-A3B teacher, Q4_K_M for the 32 GB peer.",
-      "notes": "The Qwen3.6 family has no 0.6B/1.7B model; 27B is the smallest same-version student. 16.8 GB GGUF, fits 32 GB with context headroom.",
+      "notes": "Active winner-set student. Full-GPU on agx32 requires --no-mmap --fit off; peak memory ~20.3 GiB.",
       "pair": "qwen3.6"
     },
     {
@@ -315,7 +315,7 @@
       "status": "candidate",
       "pair": "qwen3",
       "why": "Qwen3-32B Q4_K_M; the same-version teacher for the Qwen3-0.6B student. Compare against the Qwen3.6-35B-A3B set.",
-      "notes": "Official unsloth Q4_K_M GGUF. Benchmark with the same 6-prompt suite and the fabric precontext."
+      "notes": "Cold store after the Step 109 bake-off; re-stage with scripts/sparknet-model-stage.py --to-root when needed."
     }
   ]
 }

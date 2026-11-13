@@ -17,15 +17,19 @@ Updated: 2026-11-13
   `network_evals fail:1`, no promotion; abort. Cluster execute, wg observer and
   idle-ignore remain enabled. The model-prompt job is not claimed (Ollama
   upstream down); Step 108's `llama.cpp` path is the replacement.
-- Text engine: **vLLM v0.2.7 today**; ADR 0021 (proposed) replaces it with
-  `jetson-containers` `llama.cpp`/`llama-server` (`sparknet-llm:agx`); Ollama
-  is the fallback and the peer's own AI-stack server; MLC-LLM optional;
-  TensorRT-LLM/ExLlamaV2/vLLM not the path. `vllm:8000`, `vllm-stub` and the
-  aux embed/rerank/audio stay.
+- Text engine: **llama.cpp/llama-server** (`sparknet-llm:agx`) live on
+  `agx64`/`agx32` 2026-11-13; ADR 0021 accepted; vLLM retired. Ollama is the
+  fallback and the peer's own AI-stack server; MLC-LLM optional;
+  TensorRT-LLM/ExLlamaV2 not the path. `vllm:8000`, `vllm-stub` and the aux
+  embed/rerank/audio stay.
 - Teacher/main on `agx64`: Qwen3.6-35B Q4_K_M (largest same-version that fits
   64 GB at the best responsive quantization). Student on `agx32`:
-  Qwen3.6-27B Q4_K_M (smallest same-version; no smaller Qwen3.6 release exists). Fallback
-  Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0. Old `qwen3.5-9b`/`qwen3.8-27b` retired.
+  Qwen3.6-27B Q4_K_M (smallest same-version; no smaller Qwen3.6 release exists).
+  Second pair Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0. Old
+  `qwen3.5-9b`/`qwen3.8-27b` retired.
+- **Bake-off 2026-11-13:** quality 1.0 both; Qwen3.6 teacher 18.54/18.08
+  tok/s, student 4.41/4.54; Qwen3 teacher 3.94/3.65, student 76.78/57.33.
+  Operator chose Qwen3.6 for teacher throughput; Qwen3 set cold.
 - **Storage:** vaults on the data drives (`/mnt/ai/...`); active
   teacher/student GGUF/tokenizer/precontext/KV on the root NVMe
   (`/opt/sparknet/models/...`); cold store/HF cache/uplift/distill/Qdrant

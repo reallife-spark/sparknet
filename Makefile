@@ -42,7 +42,7 @@ SCOPE ?= fabric
         container-test \
         render render-check sbom sbom-check nv-search drift-check context-pack context-check governance-check \
         goagx-publish goagx-drift-check \
-        devtools webui-console model-catalog-check model-pull model-verify model-bench model-set model-bakeoff-report model-runtime-status model-runtime-start model-runtime-stop model-runtime-reap model-survey model-update-status model-set-candidate model-promote model-rollback \
+        devtools webui-console model-catalog-check model-pull model-verify model-bench model-set model-stage model-bakeoff-report model-runtime-status model-runtime-start model-runtime-stop model-runtime-reap model-survey model-update-status model-set-candidate model-promote model-rollback \
         vector-dev vector-init vector-inspect \
         vector-index vector-stamp vector-query vector-parity kv-export reflex-eval reflex-live-check reflex-live-query \
         reflex-plan-eval skill-eval nocturnal-rehearsal verify-plans env-init wiki-sync wiki-verify \
@@ -333,6 +333,10 @@ model-bench: ## Benchmark MODEL_ROLE candidates (BENCH_ARGS="--dry-run" or --can
 
 model-set: ## Switch the AGX text-engine set (MODEL_ROLE, MODEL_SET=qwen3.6|qwen3, PRECONTEXT=on|off)
 	@$(PY) scripts/sparknet-model-set.py --role "$(MODEL_ROLE)" --set "$(MODEL_SET)" --precontext "$(PRECONTEXT)"
+
+model-stage: ## Stage a model between cold store and root (MODEL, STAGE=to-root|to-cold, optional MOVE=1)
+	@test -n "$(MODEL)" -a -n "$(STAGE)" || { echo "MODEL and STAGE required" >&2; exit 2; }
+	@$(PY) scripts/sparknet-model-stage.py --model-id "$(MODEL)" --$(STAGE) $(if $(MOVE),--move) $(if $(FORCE),--force)
 
 model-bakeoff-report: ## Summarize the dual bake-off (TEACHER_NO_PC, TEACHER_PC, STUDENT_NO_PC, STUDENT_PC, optional AGREEMENT)
 	@test -n "$(TEACHER_NO_PC)" -a -n "$(TEACHER_PC)" -a -n "$(STUDENT_NO_PC)" -a -n "$(STUDENT_PC)" || { echo "TEACHER_NO_PC, TEACHER_PC, STUDENT_NO_PC and STUDENT_PC required" >&2; exit 2; }

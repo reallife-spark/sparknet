@@ -467,6 +467,13 @@ Q4_K_M + Qwen3.6-27B Q4_K_M and Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0.
 --precontext on|off` selects the active engine file; both fit on root during
 the comparison, and the winner stays on root afterward.
 
+The 2026-11-13 bake-off (quality floor 1.0) chose `qwen3.6`: teacher
+18.54/18.08 tok/s, student 4.41/4.54 tok/s, agreement 0.653. The Qwen3 set
+measured teacher 3.94/3.65 tok/s, student 76.78/57.33 tok/s, agreement 0.608;
+its student is much faster for chat, but its teacher is ~5x slower for
+distillation. The Qwen3 set is in the cold store and can be re-staged with
+`scripts/sparknet-model-stage.py`.
+
 ### 7.2 The compose graph
 
 `spark.compose.yml` declares the services below. The AGX compose declares the

@@ -18,6 +18,7 @@ BENCH = ROOT / "scripts" / "sparknet-model-bench.py"
 EVAL = ROOT / "scripts" / "sparknet-teacher-student-eval.py"
 REPORT = ROOT / "scripts" / "sparknet-model-bakeoff-report.py"
 MODEL_SET = ROOT / "scripts" / "sparknet-model-set.py"
+MODEL_STAGE = ROOT / "scripts" / "sparknet-model-stage.py"
 
 
 def _answer(prompt: str) -> str:
@@ -272,3 +273,45 @@ def test_model_set_writes_the_peer_state_without_restarting(tmp_path: Path) -> N
     assert "VLLM_MODEL=qwen3-0.6b" in text
     assert "SPARKNET_LLM_MODEL_FILE=/opt/sparknet/models/qwen3-0.6b-q8_0.gguf" in text
     assert "SPARKNET_PRECONTEXT=0" in text
+
+
+def test_model_stage_moves_between_cold_and_root(tmp_path: Path) -> None:
+    module = load_by_path("sparknet_model_stage_test", MODEL_STAGE)
+    cold = tmp_path / "cold" / "qwen3-0.6b-q8" / "qwen3-0.6b-q8_0.gguf"
+    cold.parent.mkdir(parents=True)
+    cold.write_text("cold-model")
+    root = tmp_path / "root"
+    assert (
+        module.main(
+            [
+                "--model-id",
+                "qwen3-0.6b-q8",
+                "--to-root",
+                "--store",
+                str(tmp_path / "cold"),
+                "--root",
+                str(root),
+            ]
+        )
+        == 0
+    )
+    staged = root / "qwen3-0.6b-q8_0.gguf"
+    assert staged.read_text() == "cold-model"
+    assert (
+        module.main(
+            [
+                "--model-id",
+                "qwen3-0.6b-q8",
+                "--to-cold",
+                "--move",
+                "--force",
+                "--store",
+                str(tmp_path / "cold"),
+                "--root",
+                str(root),
+            ]
+        )
+        == 0
+    )
+    assert not staged.exists()
+    assert cold.read_text() == "cold-model"
