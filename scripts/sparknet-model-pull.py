@@ -2,9 +2,9 @@
 """Pull and verify the sparknet model catalog.
 
 The catalog is operator data, not a model tool: an LLM cannot call this. Weights
-are not knowledge and never enter a vault, a bundle or 4223. The Master (agx64)
-pulls teacher candidates; the peer (agx32) pulls student candidates; both may
-pull embedding models. A teacher is never eligible for agx32.
+are not knowledge and never enter a vault, a bundle or 4223. The peer (agx64)
+pulls teacher, coder and vision candidates; the Master (agx32) pulls student
+candidates; both may pull embedding models. A teacher is never eligible for agx32.
 
 Usage::
 
@@ -114,8 +114,8 @@ def validate_catalog(catalog: dict[str, Any]) -> list[str]:
             errors.append(f"{model_id}: a student is eligible only on agx32, not {nodes}")
         if role == "embedding" and not set(nodes).issubset(set(NODES)):
             errors.append(f"{model_id}: embeddings must name only known nodes")
-        if role in ("coder", "vision") and nodes != ["agx32"]:
-            errors.append(f"{model_id}: a {role} model is eligible only on agx32, not {nodes}")
+        if role in ("coder", "vision") and nodes != ["agx64"]:
+            errors.append(f"{model_id}: a {role} model is eligible only on agx64, not {nodes}")
         for key in ("family", "generation", "repo", "revision", "format", "runtime", "license", "license_url", "why"):
             if not str(model.get(key) or "").strip():
                 errors.append(f"{model_id}: missing {key}")

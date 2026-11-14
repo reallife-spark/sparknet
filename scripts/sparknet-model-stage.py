@@ -23,9 +23,9 @@ from pathlib import Path
 MODELS = {
     "qwen3-30b-a3b-2507-q4-k-m": ("Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf", "agx64"),
     "qwen3-4b-2507-q4-k-m": ("Qwen3-4B-Instruct-2507-Q4_K_M.gguf", "agx32"),
-    "qwen3-coder-30b-a3b-q4-k-m": ("Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf", "agx32"),
+    "qwen3-coder-30b-a3b-q4-k-m": ("Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf", "agx64"),
     "qwen3-embedding-0.6b-q8": ("Qwen3-Embedding-0.6B-Q8_0.gguf", "both"),
-    "qwen3-vl-4b-q4-k-m": ("Qwen3VL-4B-Instruct-Q4_K_M.gguf", "agx32"),
+    "qwen3-vl-4b-q4-k-m": ("Qwen3VL-4B-Instruct-Q4_K_M.gguf", "agx64"),
     "qwen3.6-35b-a3b-q4-k-m": ("qwen3.6-35b-a3b-q4_k_m.gguf", "agx64"),
     "qwen3.6-27b-q4-k-m": ("qwen3.6-27b-q4_k_m.gguf", "agx32"),
     "qwen3-32b-q4-k-m": ("qwen3-32b-q4_k_m.gguf", "agx64"),

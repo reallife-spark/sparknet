@@ -132,4 +132,4 @@ def test_coder_and_vision_are_peer_only(catalog: dict) -> None:
         models = [model for model in catalog["models"] if model["role"] == role]
         assert models, f"the catalog has no {role} model"
         for model in models:
-            assert model["nodes"] == ["agx32"], f"{model['id']} must be eligible only on agx32"
+            assert model["nodes"] == ["agx64"], f"{model['id']} must be eligible only on agx64"

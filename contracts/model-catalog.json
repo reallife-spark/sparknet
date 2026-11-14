@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "contract": "model-catalog",
-  "description": "The operator-owned model catalog. It names every model the fabric may pull, which node may serve it, the quant, the runtime, the license and the approximate fit. Weights are not knowledge, not authority and never enter a vault, a bundle or 4223. The Master host (agx64, 64 GB) serves the teacher; the peer host (agx32, 32 GB) serves the student. The teacher is deliberately not eligible for agx32: a 32 GB node cannot serve it, and a cold backup of those weights there is not a deployment.",
+  "description": "The operator-owned model catalog. It names every model the fabric may pull, which node may serve it, the quant, the runtime, the license and the approximate fit. Weights are not knowledge, not authority and never enter a vault, a bundle or 4223. The peer host (agx64, 64 GB) serves the teacher and coder/VL; the Master host (agx32, 32 GB) serves the student and embedding. A teacher is deliberately not eligible for agx32: a 32 GB node cannot serve it, and a cold backup of those weights there is not a deployment.",
   "updated": "2026-11-13",
   "store": {
     "root": "/mnt/ai/models",
@@ -12,22 +12,22 @@
   },
   "role_placement": {
     "master": {
-      "node": "agx64",
-      "roles": [
-        "teacher",
-        "embedding"
-      ],
-      "why": "The 64 GB host runs the 30B-2507 main/teacher at 262k and the distilled 4B candidate."
-    },
-    "peer": {
       "node": "agx32",
       "roles": [
         "student",
+        "embedding"
+      ],
+      "why": "The 32 GB Master host runs the 4B student and the embedding model; it monitors and supports the peer."
+    },
+    "peer": {
+      "node": "agx64",
+      "roles": [
+        "teacher",
         "coder",
         "vision",
         "embedding"
       ],
-      "why": "The 32 GB peer runs the 4B-2507 student, the coder, the vision model and the embedding model on demand."
+      "why": "The 64 GB peer runs the 30B-2507 main/teacher at 262k, plus coder, vision and embedding on demand."
     }
   },
   "models": [
@@ -377,7 +377,7 @@
       "generation": "3-coder",
       "role": "coder",
       "nodes": [
-        "agx32"
+        "agx64"
       ],
       "repo": "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
       "revision": "main",
@@ -430,7 +430,7 @@
       "generation": "3-vl",
       "role": "vision",
       "nodes": [
-        "agx32"
+        "agx64"
       ],
       "repo": "Qwen/Qwen3-VL-4B-Instruct-GGUF",
       "revision": "main",

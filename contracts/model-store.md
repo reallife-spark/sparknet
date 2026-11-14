@@ -18,12 +18,13 @@ vault, a bundle, `MEMORY.md` or a signed envelope.
 
 | Node | Role | May serve | Must not serve |
 |---|---|---|---|
-| `agx64` — Master, 64 GB | teacher | Teacher candidates, embedding models | User chat; student training; peer vault reads |
-| `agx32` — peer, 32 GB | student | Student candidates, embedding models | The teacher; teacher backup weights |
+| `agx32` — Master, 32 GB | student | Student candidates, embedding models | The teacher; coder/VL; user chat |
+| `agx64` — peer, 64 GB | teacher | Teacher, coder, vision and embedding models | Student training; Master state/registry |
 
 The teacher is deliberately **not eligible for `agx32`**. A 32 GB node cannot
 hold the teacher with context headroom, and copying the weights there is a cold
-backup, not a serving path. This contract forbids the backup by default.
+backup, not a serving path. The student and coder/VL are node-bound: the 4B
+student is on `agx32`, the 30B teacher and coder/VL are on `agx64`.
 
 The catalog is the closed list: `contracts/model-catalog.json`. A model not in
 the catalog is not pulled, served or reported as available. Adding a model is a
@@ -49,8 +50,8 @@ on `/mnt/ai/models`; the engine container mounts only the root model
 directory, read-only. Vaults, keys and the state directory are never in that
 mount.
 
-The active AGX pair is Qwen3-30B-A3B-2507 Q4_K_M on `agx64` (main and
-teacher) and Qwen3-4B-2507 Q4_K_M on `agx32` (student), both at 262,144
+The active AGX pair is Qwen3-30B-A3B-2507 Q4_K_M on `agx64` (peer main and
+teacher) and Qwen3-4B-2507 Q4_K_M on `agx32` (Master student), both at 262,144
 context with q8 KV. The retired Qwen3.6 and Qwen3-32B/0.6B sets are in the
 cold store under `/mnt/ai/models/<model-id>/` and can be re-staged with
 `scripts/sparknet-model-stage.py`. The peer also keeps Qwen3-Coder-30B,
@@ -115,8 +116,8 @@ It is an operator deployment action.
 
 ## Runtime leases
 
-The teacher listens on `127.0.0.1:8100` on the `agx64` Master; the student
-listens on `127.0.0.1:8101` on the `agx32` peer. Both are node-local model
+The teacher listens on `127.0.0.1:8100` on the `agx64` peer; the student
+listens on `127.0.0.1:8101` on the `agx32` Master. Both are node-local model
 surfaces, not fabric edges: the local surface reaches them through the host
 network namespace, and the firewall does not publish them.
 
