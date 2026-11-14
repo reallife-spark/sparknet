@@ -514,7 +514,7 @@
       "binds_to": "10.100.0.1",
       "bound_by": "master",
       "implementation_state": "implemented",
-      "note": "The Master uplift intake: peer->Master inventory, Qdrant snapshots, teacher traces and raw-KV manifests. Overlay-only and signed by the peer node key; the source must hold the peer-held model-uplift capability. It stores consented data for the training pipeline and never serves it to a user AI or to 4223.",
+      "note": "The Master uplift intake: peer->Master inventory, Qdrant snapshots, teacher traces, raw-KV manifests and the signed distilled student GGUF. Overlay-only and signed by the peer node key; the source must hold the peer-held model-uplift capability. It stores consented data for the training pipeline and never serves it to a user AI or to 4223.",
       "overlay_only": true,
       "protocol": "tcp/http",
       "runtime": "not-listening",

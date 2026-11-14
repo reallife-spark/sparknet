@@ -1,28 +1,22 @@
 ---
 title: sparknet Plan
 updated: 2026-11-13
-current: done
+current: 111
 ---
-
 # sparknet — Active Plan
-
 > Single source of truth for fabric work. The `current:` cursor names the step
 > being worked. Write this file back **immediately** on every advance and append
 > the matching transition line to `log.md`. Completed steps 1–74 are in
 > `_archives/PLAN_FULL_2026-10-30.md`; their evidence is in `log.md` and
 > `sessions/`. Peer work stays in `peer-node/PLAN.md`; Master work in
 > `master-node/PLAN.md`.
-
 ## Status Legend
-
 - `[ ]` not started / in progress
 - `[x]` complete — DoD verified
 - **DoD** — the check that proves the step is done; `DoD: confirm: user` when a
   human must confirm
 - `current: N` — step being worked; `current: done` — terminal
-
 ## Closed steps
-
 | Range | Scope | Evidence |
 |---|---|---|
 | 1–14 | split, vendoring, bundle, contracts, agents, truth audit, election | archived plan + `log.md` |
@@ -402,9 +396,7 @@ current: done
     format are green; `make drift-check` green after the goagx republish.
   - **Status 2026-11-11 — COMPLETE.** Regression green; goagx `59a83e7`;
     drift-check green. No live claim.
-
 ## Step 102 — Refuse a malformed delegate run record
-
 - [x] **Step 102** — Diagnose and fix `project report` aborting with a raw
   traceback when the run view carries a non-object `result` or `task`.
   - **Symptom.** `project report` exits with
@@ -422,9 +414,7 @@ current: done
     project suite, full suite, lint and format are green; goagx republished.
   - **Status 2026-11-11 — COMPLETE.** Both variants refuse; full suite, lint,
     format green; goagx `62797c6`. No live claim.
-
 ## Step 103 — Nocturnal skill-eval subtasks and network summary
-
 - [x] **Step 103** — Give the nocturnal window a deterministic eval mode
   without breaking model-prompt subtasks.
   - [x] **103A — Cluster contract.** `shared/sparknet-cluster.py` accepts a
@@ -540,7 +530,6 @@ current: done
     hardware truth is 64/32; the wiki cycle and the local gates are green. Step
     108 is next.
 ## Step 108 — Replace the AGX text engine with llama.cpp/llama-server
-
 - [x] **Step 108** — Implement `sparknet-llm:agx`, remove the vLLM build from
   the node image, keep `vllm:8000`/`vllm-stub`/aux, stage the teacher/student
   models, migrate storage, and validate on agx64/agx32.
@@ -558,7 +547,6 @@ current: done
     `/mnt/ai`; `make ci`/`test-all`/`drift-check`/`container-test` and the
     bundle/goagx gates green.
 ## Step 109 — Dual teacher/student bake-off
-
 - [x] **Step 109** — Keep both same-version sets available and benchmark them
   on the real AGX engine: Qwen3.6-35B-A3B Q4_K_M + Qwen3.6-27B Q4_K_M and
   Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0.
@@ -586,8 +574,21 @@ current: done
     cold under `/mnt/ai/models/`; re-stage with
     `scripts/sparknet-model-stage.py`; report/agreement saved; all gates and
     goagx publish/pin green.
+## Step 110 — Qwen3-2507 main/teacher + peer model stack
+- [x] **Step 110** — Make Qwen3-30B-A3B-2507 the agx64 main/teacher and Qwen3-4B-2507 the agx32 student at 262k; add Qwen3-Coder-30B, Qwen3-Embedding-0.6B and Qwen3-VL-4B to the agx32 stack; retire Qwen3.6 and the old Qwen3 pair.
+  - **Status 2026-11-14 — COMPLETE.** Qwen3-30B-A3B-2507 is the agx64
+    main/teacher and Qwen3-4B-2507 the agx32 student at 262k q8 KV; the 4B
+    candidate is on agx64 via the signed 8091 artifact; coder 30B 65k,
+    embedding 0.6B and VL 4B are in Ollama; gates green.
+## Step 111 — Daily auto-distillation
+- [ ] **Step 111** — Distill on agx32 daily or on request from the 30B main/teacher; export the 4B GGUF; sign/upload to agx64; sync the agx64 student copy daily/on request when idle; benchmark and promote/rollback.
+  - **DoD**: consented dataset, 4B LoRA at 16k, merge/GGUF, signed upload, idle-aware copy, candidate benchmark, operator promotion, timer/manual trigger, docs/tests/gates green.
+  - **Status 2026-11-14 — BLOCKED.** The L4T r35 trainer image has Python 3.8
+    and transformers 4.37.2; Qwen3 needs transformers >=4.51 (Python >=3.9), so
+    the 4B training cannot start on agx32. Dataset/collect/doctor/upload/sync
+    are implemented and tested. Need an external Python >=3.10 trainer, a
+    backport/new Python+torch stack, or a Qwen2.5 fallback.
 ## Standing verification rules
-
 - A gate that cannot fail is not a gate. Every claim needs a named test or a
   dated live observation.
 - `make test-all` is the local truth; CI runs the same pre-merge gate.
@@ -596,5 +597,4 @@ current: done
 - `PLAN.md` history is evidence; do not rewrite it to make a status look better.
 - New roadmap work after `current: done` becomes a new step, not a reuse.
 ## Next
-
 `current:` moves one step at a time, and only after the DoD is verified.

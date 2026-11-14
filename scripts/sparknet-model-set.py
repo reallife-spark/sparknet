@@ -37,13 +37,17 @@ DEFAULT_STATE = ROOT / "peer-node" / ".state" / "model-set.env"
 HEALTH_URL = "http://127.0.0.1:8000/health"
 
 SETS = {
+    "qwen3-2507": {
+        "master": ("/opt/sparknet/models/qwen3-30b-a3b-2507-q4_k_m.gguf", "qwen3-30b"),
+        "peer": ("/opt/sparknet/models/qwen3-4b-2507-q4_k_m.gguf", "qwen3-4b"),
+    },
     "qwen3.6": {
         "master": ("/opt/sparknet/models/qwen3.6-35b-a3b-q4_k_m.gguf", "qwen3.6-35b"),
         "peer": ("/opt/sparknet/models/qwen3.6-27b-q4_k_m.gguf", "qwen3.6-27b"),
     },
-    "qwen3": {
-        "master": ("/opt/sparknet/models/qwen3-32b-q4_k_m.gguf", "qwen3-32b"),
-        "peer": ("/opt/sparknet/models/qwen3-0.6b-q8_0.gguf", "qwen3-0.6b"),
+    "qwen3-4b-candidate": {
+        "master": ("/opt/sparknet/models/qwen3-4b-2507-q4_k_m.gguf", "qwen3-4b"),
+        "peer": ("/opt/sparknet/models/qwen3-4b-2507-q4_k_m.gguf", "qwen3-4b"),
     },
 }
 
@@ -80,6 +84,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--compose-file", type=Path, default=DEFAULT_COMPOSE)
     parser.add_argument("--env-file", type=Path, default=DEFAULT_ENV)
     parser.add_argument("--state-file", type=Path, default=DEFAULT_STATE)
+    parser.add_argument("--kv-type", choices=("q8_0", "q4_0"), default="q8_0")
     parser.add_argument("--extra-args", default="--no-mmap --fit off")
     parser.add_argument("--timeout", type=float, default=600.0)
     parser.add_argument("--no-restart", action="store_true")
@@ -89,10 +94,10 @@ def main(argv: list[str] | None = None) -> int:
     values = {
         "SPARKNET_LLM_MODEL_FILE": model_file,
         "VLLM_MODEL": alias,
-        "SPARKNET_LLM_CTX": os.environ.get("SPARKNET_LLM_CTX") or "8192",
+        "SPARKNET_LLM_CTX": os.environ.get("SPARKNET_LLM_CTX") or "262144",
         "SPARKNET_PRECONTEXT": "1" if args.precontext == "on" else "0",
         "SPARKNET_PRECONTEXT_MAX_BYTES": "16000" if args.precontext == "on" else "",
-        "VLLM_EXTRA_ARGS": args.extra_args,
+        "VLLM_EXTRA_ARGS": f"{args.extra_args} --cache-type-k {args.kv_type} --cache-type-v {args.kv_type}",
     }
     write_state(args.state_file, values)
     started = time.monotonic()

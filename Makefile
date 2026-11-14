@@ -42,7 +42,7 @@ SCOPE ?= fabric
         container-test \
         render render-check sbom sbom-check nv-search drift-check context-pack context-check governance-check \
         goagx-publish goagx-drift-check \
-        devtools webui-console model-catalog-check model-pull model-verify model-bench model-set model-stage model-bakeoff-report model-runtime-status model-runtime-start model-runtime-stop model-runtime-reap model-survey model-update-status model-set-candidate model-promote model-rollback \
+        devtools webui-console model-catalog-check model-pull model-verify model-bench model-set model-stage model-bakeoff-report distill-image distill-daily student-sync model-runtime-status model-runtime-start model-runtime-stop model-runtime-reap model-survey model-update-status model-set-candidate model-promote model-rollback \
         vector-dev vector-init vector-inspect \
         vector-index vector-stamp vector-query vector-parity kv-export reflex-eval reflex-live-check reflex-live-query \
         reflex-plan-eval skill-eval nocturnal-rehearsal verify-plans env-init wiki-sync wiki-verify \
@@ -337,6 +337,15 @@ model-set: ## Switch the AGX text-engine set (MODEL_ROLE, MODEL_SET=qwen3.6|qwen
 model-stage: ## Stage a model between cold store and root (MODEL, STAGE=to-root|to-cold, optional MOVE=1)
 	@test -n "$(MODEL)" -a -n "$(STAGE)" || { echo "MODEL and STAGE required" >&2; exit 2; }
 	@$(PY) scripts/sparknet-model-stage.py --model-id "$(MODEL)" --$(STAGE) $(if $(MOVE),--move) $(if $(FORCE),--force)
+
+distill-image: ## Build the L4T PyTorch distillation image (sparknet-distill:dev)
+	@docker build -f master-node/configs/Dockerfile.distill -t sparknet-distill:dev .
+
+distill-daily: ## Run one 4B distillation pass on agx32 (collect, train, export, upload)
+	@peer-node/scripts/sparknet-distill-daily.sh
+
+student-sync: ## Install the latest student GGUF on agx64 when idle (STUDENT_WAIT seconds)
+	@$(PY) scripts/sparknet-student-sync.py --artifact-dir /srv/sparknet/uplift/student/sparknet-node-0002 --dest /opt/sparknet/models/qwen3-4b-2507-q4_k_m.gguf --archive /mnt/ai/models/student-archive --wait "$(or $(STUDENT_WAIT),3600)"
 
 model-bakeoff-report: ## Summarize the dual bake-off (TEACHER_NO_PC, TEACHER_PC, STUDENT_NO_PC, STUDENT_PC, optional AGREEMENT)
 	@test -n "$(TEACHER_NO_PC)" -a -n "$(TEACHER_PC)" -a -n "$(STUDENT_NO_PC)" -a -n "$(STUDENT_PC)" || { echo "TEACHER_NO_PC, TEACHER_PC, STUDENT_NO_PC and STUDENT_PC required" >&2; exit 2; }

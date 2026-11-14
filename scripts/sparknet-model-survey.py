@@ -45,6 +45,11 @@ LIVE_ALIASES = {
     "qwen3-32b-q4-k-m": "qwen3-32b-q4:latest",
     "qwen3-0.6b-q8": "qwen3-0.6b-q8:latest",
     "qwen3-embedding-0.6b": "qwen3-embedding:latest",
+    "qwen3-30b-a3b-2507-q4-k-m": "qwen3-30b-2507:latest",
+    "qwen3-4b-2507-q4-k-m": "qwen3-4b-2507:latest",
+    "qwen3-coder-30b-a3b-q4-k-m": "qwen3-coder-30b-65k:latest",
+    "qwen3-embedding-0.6b-q8": "qwen3-embedding-0.6b:latest",
+    "qwen3-vl-4b-q4-k-m": "qwen3-vl-4b-65k:latest",
 }
 
 

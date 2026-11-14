@@ -556,7 +556,7 @@ def cmd_llama_embed(_args: list[str]) -> NoReturn:
         model,
         "--embedding",
         "--pooling",
-        "mean",
+        os.environ.get("LLAMA_EMBED_POOLING") or "last",
         "--alias",
         os.environ.get("LLAMA_EMBED_ALIAS") or "bge-m3",
         "--ctx-size",

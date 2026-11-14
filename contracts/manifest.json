@@ -41,7 +41,7 @@
       "contract": "distillation-schema",
       "file": "distillation-schema.json",
       "schema_version": 1,
-      "sha256": "0b15bff116dc200e61d2e9dbcde579fc3d699b75e21dfcb7f34e98044c16fbdf"
+      "sha256": "03e66d35c84258e9aafe4381634af621bbc79b4e3f3ad2b66a288e8992b37350"
     },
     {
       "contract": "eval-report",
@@ -107,7 +107,7 @@
       "contract": "model-catalog",
       "file": "model-catalog.json",
       "schema_version": "1.0",
-      "sha256": "bad4bfdbc5efd067d28575f72e17c21839eb9d136f49006cfb38625bf5f630ef"
+      "sha256": "fa590cc62a6f4694f7f91304a9ffeb3017233e29bafd7a1700e2c3f8642e90a5"
     },
     {
       "contract": "nocturnal-artifact-schema",
@@ -137,7 +137,7 @@
       "contract": "ports",
       "file": "ports.json",
       "schema_version": "2.1",
-      "sha256": "5e534f5ec217b8c9881650f1452fd18479e6aa783ee21e58783af57fb054801c"
+      "sha256": "17992043354987d16afbe4d3b3c909fb8c83c95555f5ce521ca2039f1bb37782"
     },
     {
       "contract": "proposal-schema",

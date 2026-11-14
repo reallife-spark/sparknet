@@ -206,7 +206,7 @@ def test_agx_dockerfile_pins_hold():
     assert "import vllm" not in text, "the node image must not import vLLM"
 
     for arg in ("LLAMA_CPP_REF", "WHISPER_CPP_REF"):
-        match = re.search(rf"ARG {arg}=(v[\d.]+)", text)
+        match = re.search(rf"ARG {arg}=(v[\d.]+|b\d+)", text)
         assert match, f"{arg} must be a version-shaped release ref"
 
     urls = re.findall(r"https://huggingface\.co/\S+", text)

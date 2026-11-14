@@ -28,28 +28,14 @@ peer's signed result/manifest under `01_Inbox/nocturnal/`. `abort` closed the
 lease. Issues #8, #9 and #11 are closed; the mirror has no open issues.
 
 **The AGX text engine is llama.cpp/llama-server.** `sparknet-llm:agx` is
-live on `agx64`/`agx32` (2026-11-13); ADR 0021 is accepted and the vLLM source
-build is retired. Ollama is the fallback and the peer's own AI-stack server;
-MLC-LLM is optional; TensorRT-LLM/ExLlamaV2 are not the path. The `vllm`
-service name, port 8000, OpenAI endpoints, `vllm-stub` and the
-embed/rerank/audio aux services stay stable.
+live on `agx64`/`agx32`; ADR 0021 is accepted and vLLM is retired. The active
+pair is Qwen3-30B-A3B-2507 (main/teacher on `agx64`) + Qwen3-4B-2507 (student
+on `agx32`), both 262k with q8 KV. The 4B candidate is synced to `agx64`
+through the signed 8091 artifact route. The peer also has Qwen3-Coder-30B
+(65k), Qwen3-Embedding-0.6B and Qwen3-VL-4B in Ollama. Qwen3.6 and the old
+Qwen3 sets are cold. `vllm:8000`, `vllm-stub`, embed/rerank/audio stay stable.
 
-**Teacher/student are a same-version pair.** Teacher/main on `agx64`:
-Qwen3.6-35B Q4_K_M (the largest same-version model that fits 64 GB at the best
-responsive quantization; Q5_K_M/Q6_K only if measured tokens/s is acceptable).
-Student on `agx32`: Qwen3.6-27B Q4_K_M (the smallest Qwen3.6 release; no
-0.6B/1.7B exists). The second same-version pair is Qwen3-32B Q4_K_M +
-Qwen3-0.6B Q8_0.
-The old `qwen3.5-9b` / `qwen3.8-27b` pair is retired because it is not
-same-version. The exact pair is confirmed after the model inventory in Step
-108; the distillation uses the same tokenizer/family, and teacher traces/uplift
-remain training evidence, never an answer corpus.
-
-**Bake-off (2026-11-13).** Both pairs passed quality 1.0. Qwen3.6: teacher
-18.54/18.08 tok/s, student 4.41/4.54 tok/s, agreement 0.653. Qwen3: teacher
-3.94/3.65 tok/s, student 76.78/57.33 tok/s, agreement 0.608. Operator chose
-**Qwen3.6** for the served engine because its teacher is ~5x faster for
-distillation; the Qwen3 set is in the cold store and can be re-staged.
+**The active pair is Qwen3-2507.** Main/teacher on `agx64`: Qwen3-30B-A3B-2507 Q4_K_M; student on `agx32`: Qwen3-4B-2507 Q4_K_M; both 262k with q8 KV. The previous Qwen3.6 and Qwen3-32B/0.6B pairs are cold. The 4B candidate is synced to `agx64` and can be tried as the future main; the 30B stays the teacher.
 
 **Storage contract.** Vaults stay on the data drives (`/mnt/ai/...`); the
 active teacher/student GGUF, tokenizer, precontext and KV cache go on the root
@@ -67,8 +53,11 @@ Q8_0/Q4_K_M student; `--n-gpu-layers 99`; measured `--ctx-size`/`--parallel`;
 MAXN (`sudo nvpmodel -m 0`, `sudo jetson_clocks`); watch `tegrastats`; the
 136.5 GB/s unified-memory bandwidth is the bottleneck.
 
-**Open.** No engine or bake-off work. The next roadmap step is a new step,
-not a reuse of 108/109. The no-legal-review note and the `jetson-containers`
+**Open.** Step 111 auto-distillation is blocked: the L4T r35 trainer image is
+Python 3.8/transformers 4.37.2 and Qwen3 needs transformers >=4.51 (Python
+>=3.9). Dataset/collect/doctor/signed upload/idle-aware sync are implemented;
+training needs an external Python >=3.10 trainer, a new Python+torch stack, or
+a Qwen2.5 fallback. The no-legal-review note and the `jetson-containers`
 `NOASSERTION`/MIT terms stay recorded.
 
 **Standing truths.** Authority comes from key possession; the vaults and the

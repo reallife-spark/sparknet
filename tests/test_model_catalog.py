@@ -125,3 +125,11 @@ def test_catalog_has_no_secret_like_values(catalog: dict) -> None:
     text = CATALOG.read_text(encoding="utf-8").lower()
     for marker in ("hf_token", "api_key", "secret", "password"):
         assert marker not in text, f"model catalog contains a secret marker: {marker}"
+
+
+def test_coder_and_vision_are_peer_only(catalog: dict) -> None:
+    for role in ("coder", "vision"):
+        models = [model for model in catalog["models"] if model["role"] == role]
+        assert models, f"the catalog has no {role} model"
+        for model in models:
+            assert model["nodes"] == ["agx32"], f"{model['id']} must be eligible only on agx32"

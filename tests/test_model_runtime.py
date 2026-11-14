@@ -42,7 +42,7 @@ def master_config() -> dict:
 
 @pytest.fixture
 def store(tmp_path: Path) -> Path:
-    model_id = "qwen3.6-35b-a3b-q4-k-m"
+    model_id = "qwen3-30b-a3b-2507-q4-k-m"
     model_dir = tmp_path / model_id
     model_dir.mkdir()
     (model_dir / "model.gguf").write_bytes(b"model")
@@ -109,7 +109,7 @@ def test_start_dry_run_uses_the_manifest_model_file(
         operator="test",
     )
     assert result["state"] == "dry-run"
-    assert result["model_file"] == "/models/qwen3.6-35b-a3b-q4-k-m/model.gguf"
+    assert result["model_file"] == "/models/qwen3-30b-a3b-2507-q4-k-m/model.gguf"
     out = capsys.readouterr().out
     assert "docker compose" in out
     assert "up -d teacher" in out

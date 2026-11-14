@@ -151,3 +151,16 @@ def test_prune_keeps_newest_snapshot_per_collection(push, monkeypatch) -> None:
 
     assert push.prune_qdrant_snapshots(1) == 2
     assert sorted(deleted) == [("a", "a-old"), ("b", "b-old")]
+
+
+def test_student_artifact_uses_the_signed_8091_route(push, monkeypatch) -> None:
+    seen: dict = {}
+
+    def fake_post(route, body, **kwargs):
+        seen.update({"route": route, "body": body, **kwargs})
+        return 200, {"ok": True}
+
+    monkeypatch.setattr(push, "post", fake_post)
+    assert push.send("student", b"gguf", {"sha256": "x", "size": 4}) is True
+    assert seen["route"] == "/api/v1/student-artifact"
+    assert "X-Sparknet-Manifest" in seen["extra"]

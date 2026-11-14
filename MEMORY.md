@@ -3,8 +3,9 @@
 > History belongs in `log.md` and `sessions/YYYY-MM-DD.md`.
 Updated: 2026-11-13
 ## Plan cursor
-- `PLAN.md` — `current: done` (Step 108 engine + Step 109 dual bake-off
-  complete 2026-11-13). `master-node/PLAN.md` — `current: done`.
+- `PLAN.md` — `current: 111` (Step 108 engine + Step 109 bake-off done;
+  Step 110 Qwen3-2507 stack done; Step 111 auto-distill blocked on
+  Qwen3/Python 3.8 trainer). `master-node/PLAN.md` — `current: done`.
 - #8/#9/#11 closed with dated agx32/agx64 evidence (0 open).
 ## Live fabric
 - `agx64` = Master = `sparknet-node-0001` (`10.100.0.1/32`, `red-team`),
@@ -18,12 +19,13 @@ Updated: 2026-11-13
   `agx64`/`agx32` 2026-11-13; ADR 0021 accepted; vLLM retired. Ollama is the
   fallback and peer AI-stack server; MLC-LLM optional; TensorRT-LLM/ExLlamaV2
   not the path. `vllm:8000`, `vllm-stub`, aux embed/rerank/audio stay.
-- Teacher `agx64`: Qwen3.6-35B-A3B Q4_K_M. Student `agx32`: Qwen3.6-27B
-  Q4_K_M. Second pair Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0. Old
-  `qwen3.5-9b`/`qwen3.8-27b` retired.
-- **Bake-off 2026-11-13:** quality 1.0 both; Qwen3.6 teacher 18.54/18.08
-  tok/s, student 4.41/4.54; Qwen3 teacher 3.94/3.65, student 76.78/57.33.
-  Operator chose Qwen3.6 for teacher throughput; Qwen3 set cold.
+- Main/teacher `agx64`: Qwen3-30B-A3B-2507 Q4_K_M. Student `agx32`:
+  Qwen3-4B-2507 Q4_K_M; both 262k q8 KV. 4B candidate synced to agx64.
+  Qwen3.6 and old Qwen3 sets cold. Peer: Qwen3-Coder-30B 65k,
+  Qwen3-Embedding-0.6B, Qwen3-VL-4B in Ollama.
+- **Auto-distill 2026-11-14:** dataset/collect/doctor/8091 upload/sync work;
+  training is blocked because the L4T r35 image is Python 3.8 /
+  transformers 4.37.2 and Qwen3 needs >=4.51 (Python >=3.9).
 - **Storage:** vaults on `/mnt/ai/...`; active GGUF/tokenizer/precontext/KV
   on root `/opt/sparknet/models/...`; cold store/HF cache/uplift/distill/
   Qdrant snapshots/backups on data; keys/state on root. `agx64` root 114 GB,

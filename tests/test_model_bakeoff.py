@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import ClassVar
@@ -19,6 +22,7 @@ EVAL = ROOT / "scripts" / "sparknet-teacher-student-eval.py"
 REPORT = ROOT / "scripts" / "sparknet-model-bakeoff-report.py"
 MODEL_SET = ROOT / "scripts" / "sparknet-model-set.py"
 MODEL_STAGE = ROOT / "scripts" / "sparknet-model-stage.py"
+STUDENT_SYNC = ROOT / "scripts" / "sparknet-student-sync.py"
 
 
 def _answer(prompt: str) -> str:
@@ -259,7 +263,7 @@ def test_model_set_writes_the_peer_state_without_restarting(tmp_path: Path) -> N
                 "--role",
                 "peer",
                 "--set",
-                "qwen3",
+                "qwen3-2507",
                 "--precontext",
                 "off",
                 "--state-file",
@@ -270,8 +274,8 @@ def test_model_set_writes_the_peer_state_without_restarting(tmp_path: Path) -> N
         == 0
     )
     text = state.read_text()
-    assert "VLLM_MODEL=qwen3-0.6b" in text
-    assert "SPARKNET_LLM_MODEL_FILE=/opt/sparknet/models/qwen3-0.6b-q8_0.gguf" in text
+    assert "VLLM_MODEL=qwen3-4b" in text
+    assert "SPARKNET_LLM_MODEL_FILE=/opt/sparknet/models/qwen3-4b-2507-q4_k_m.gguf" in text
     assert "SPARKNET_PRECONTEXT=0" in text
 
 
@@ -315,3 +319,48 @@ def test_model_stage_moves_between_cold_and_root(tmp_path: Path) -> None:
     )
     assert not staged.exists()
     assert cold.read_text() == "cold-model"
+
+
+def test_student_sync_installs_and_archives_the_old_copy(tmp_path: Path) -> None:
+    module = load_by_path("sparknet_student_sync_test", STUDENT_SYNC)
+    artifact = tmp_path / "new.gguf"
+    artifact.write_bytes(b"new-student")
+    dest = tmp_path / "active.gguf"
+    dest.write_bytes(b"old-student")
+    archive = tmp_path / "archive"
+    result = module.sync(
+        artifact=artifact,
+        dest=dest,
+        archive=archive,
+        signature=None,
+        pubkey=None,
+        check_only=False,
+        wait=0,
+        interval=0.1,
+    )
+    assert result["status"] == "installed"
+    assert dest.read_bytes() == b"new-student"
+    assert any(archive.iterdir())
+
+
+def test_student_sync_defers_while_the_copy_is_open(tmp_path: Path) -> None:
+    module = load_by_path("sparknet_student_sync_busy_test", STUDENT_SYNC)
+    dest = tmp_path / "active.gguf"
+    dest.write_bytes(b"student")
+    holder = subprocess.Popen([sys.executable, "-c", f"f=open({str(dest)!r}, 'rb'); import time; time.sleep(10)"])
+    try:
+        time.sleep(0.5)
+        result = module.sync(
+            artifact=dest,
+            dest=dest,
+            archive=tmp_path / "archive",
+            signature=None,
+            pubkey=None,
+            check_only=True,
+            wait=0,
+            interval=0.1,
+        )
+        assert result["status"] == "busy"
+    finally:
+        holder.kill()
+        holder.wait()

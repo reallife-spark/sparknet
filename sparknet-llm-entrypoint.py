@@ -278,9 +278,44 @@ def cmd_vllm_stub(_args: list[str]) -> NoReturn:
     die("vllm-stub is not in sparknet-llm; run --engine stub so compose uses the node image")
 
 
+def cmd_llama_embed(_args: list[str]) -> NoReturn:
+    binary = shutil.which("llama-server")
+    if binary is None:
+        die("llama-server not found in this image")
+    model = os.environ.get("LLAMA_EMBED_MODEL") or os.environ.get("SPARKNET_LLM_MODEL_FILE") or ""
+    if not model:
+        die("LLAMA_EMBED_MODEL is not set")
+    if not Path(model).is_file() or not Path(model).stat().st_size:
+        die(f"embed model missing: {model}")
+    port = os.environ.get("VLLM_PORT") or "8001"
+    args = [
+        "--host",
+        ALL_INTERFACES,
+        "--port",
+        port,
+        "--model",
+        model,
+        "--embedding",
+        "--pooling",
+        os.environ.get("LLAMA_EMBED_POOLING") or "last",
+        "--alias",
+        os.environ.get("LLAMA_EMBED_ALIAS") or Path(model).stem,
+        "--ctx-size",
+        os.environ.get("LLAMA_EMBED_CTX") or "32768",
+        "--n-gpu-layers",
+        os.environ.get("LLAMA_EMBED_NGL") or "0",
+    ]
+    extra = os.environ.get("LLAMA_EMBED_EXTRA_ARGS") or ""
+    if extra:
+        args.extend(shlex.split(extra))
+    log(f"llama-embed {model} on 0.0.0.0:{port}")
+    _exec(binary, args)
+
+
 COMMANDS = {
     "vllm": cmd_vllm,
     "vllm-stub": cmd_vllm_stub,
+    "llama-embed": cmd_llama_embed,
 }
 
 

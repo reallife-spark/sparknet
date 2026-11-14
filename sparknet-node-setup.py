@@ -29,7 +29,7 @@ ROLE = os.environ.get("SPARKNET_ROLE") or "peer"
 PROFILES = os.environ.get("SPARK_PROFILES") or ""
 ENGINE = os.environ.get("SPARK_ENGINE") or "vllm"
 PLATFORM = os.environ.get("SPARKNET_PLATFORM") or "spark"
-MODEL_SET = os.environ.get("SPARKNET_MODEL_SET") or "qwen3.6"
+MODEL_SET = os.environ.get("SPARKNET_MODEL_SET") or "qwen3-2507"
 MASTER_PUB = os.environ.get("SPARKNET_MASTER_PUB") or ""
 REGISTRY = os.environ.get("SPARKNET_REGISTRY_FILE") or ""
 DO_BUILD = True
@@ -43,16 +43,20 @@ AGX_L4T_BASE = (
     "nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3"
     "@sha256:545a0f62fb4a5fd2d8c511134f6c55d451ae1565075dcc67123b0c422a469472"
 )
-AGX_TEACHER_FILE = "/opt/sparknet/models/qwen3.6-35b-a3b-q4_k_m.gguf"
-AGX_STUDENT_FILE = "/opt/sparknet/models/qwen3.6-27b-q4_k_m.gguf"
+AGX_TEACHER_FILE = "/opt/sparknet/models/qwen3-30b-a3b-2507-q4_k_m.gguf"
+AGX_STUDENT_FILE = "/opt/sparknet/models/qwen3-4b-2507-q4_k_m.gguf"
 AGX_MODEL_SETS = {
-    "qwen3.6": {
-        "master": (AGX_TEACHER_FILE, "qwen3.6-35b"),
-        "peer": (AGX_STUDENT_FILE, "qwen3.6-27b"),
+    "qwen3-2507": {
+        "master": (AGX_TEACHER_FILE, "qwen3-30b"),
+        "peer": (AGX_STUDENT_FILE, "qwen3-4b"),
     },
-    "qwen3": {
-        "master": ("/opt/sparknet/models/qwen3-32b-q4_k_m.gguf", "qwen3-32b"),
-        "peer": ("/opt/sparknet/models/qwen3-0.6b-q8_0.gguf", "qwen3-0.6b"),
+    "qwen3.6": {
+        "master": ("/opt/sparknet/models/qwen3.6-35b-a3b-q4_k_m.gguf", "qwen3.6-35b"),
+        "peer": ("/opt/sparknet/models/qwen3.6-27b-q4_k_m.gguf", "qwen3.6-27b"),
+    },
+    "qwen3-4b-candidate": {
+        "master": ("/opt/sparknet/models/qwen3-4b-2507-q4_k_m.gguf", "qwen3-4b"),
+        "peer": ("/opt/sparknet/models/qwen3-4b-2507-q4_k_m.gguf", "qwen3-4b"),
     },
 }
 
@@ -224,16 +228,17 @@ def render_env_file() -> None:
         model = os.environ.get("VLLM_MODEL") or set_alias
         model_file = os.environ.get("SPARKNET_LLM_MODEL_FILE") or set_file
         base_line = "L4T_BASE=" + (os.environ.get("L4T_BASE") or AGX_L4T_BASE)
-        max_len = "VLLM_MAX_MODEL_LEN=" + (os.environ.get("VLLM_MAX_MODEL_LEN") or "8192")
+        max_len = "VLLM_MAX_MODEL_LEN=" + (os.environ.get("VLLM_MAX_MODEL_LEN") or "262144")
         llm_line = "\n".join(
             [
                 "SPARKNET_LLM_BASE=" + (os.environ.get("SPARKNET_LLM_BASE") or AGX_LLM_BASE),
                 "SPARKNET_LLM_TAG=" + (os.environ.get("SPARKNET_LLM_TAG") or "agx"),
                 "SPARKNET_LLM_MODEL_FILE=" + model_file,
-                "SPARKNET_LLM_CTX=" + (os.environ.get("SPARKNET_LLM_CTX") or "8192"),
+                "SPARKNET_LLM_CTX=" + (os.environ.get("SPARKNET_LLM_CTX") or "262144"),
                 "SPARKNET_MODELS_HOST=" + (os.environ.get("SPARKNET_MODELS_HOST") or "/opt/sparknet/models"),
                 "SPARKNET_MODEL_SET=" + MODEL_SET,
-                "VLLM_EXTRA_ARGS=" + (os.environ.get("VLLM_EXTRA_ARGS") or "--no-mmap --fit off"),
+                "VLLM_EXTRA_ARGS="
+                + (os.environ.get("VLLM_EXTRA_ARGS") or "--no-mmap --fit off --cache-type-k q8_0 --cache-type-v q8_0"),
             ]
         )
         node_line = "\n".join(
@@ -333,8 +338,8 @@ SPARKNET_REFLEX_TIMEOUT={os.environ.get("SPARKNET_REFLEX_TIMEOUT") or "2.0"}
     ENV_FILE.chmod(0o600)
 
     engine_env = NODE_STATE / "opencode-engine.env"
-    engine_model = "qwen3.6-35b-262k-q8:latest"
-    engine_small = "gemma4-4b-131k:latest"
+    engine_model = "qwen3-coder-30b-65k:latest"
+    engine_small = "qwen3-4b-2507:latest"
     engine_single = ""
     if ROLE == "master":
         engine_model = os.environ.get("SPARKNET_OPENCODE_MODEL") or "qwen3.5-9b-q8:latest"

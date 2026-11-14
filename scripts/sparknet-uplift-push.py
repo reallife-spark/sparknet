@@ -13,6 +13,8 @@ Usage::
     scripts/sparknet-uplift-push.py snapshot --collection sparknet-peer
     scripts/sparknet-uplift-push.py snapshot --file local.snapshot --collection sparknet-peer
     scripts/sparknet-uplift-push.py kv --file kv.safetensors.zst --model Qwen/Qwen2.5-32B-Instruct
+    scripts/sparknet-uplift-push.py student --file student.gguf \
+        --model qwen3-4b-2507 --base Qwen/Qwen3-4B-Instruct-2507 --run RUN_ID
     scripts/sparknet-uplift-push.py drain
 """
 
@@ -333,8 +335,9 @@ def send(
         "trace": "/api/v1/trace-batch",
         "snapshot": "/api/v1/vector-snapshot",
         "kv": "/api/v1/kv-artifact",
+        "student": "/api/v1/student-artifact",
     }[kind]
-    extra = {"X-Sparknet-Manifest": _manifest(manifest)} if kind in ("snapshot", "kv") else {}
+    extra = {"X-Sparknet-Manifest": _manifest(manifest)} if kind in ("snapshot", "kv", "student") else {}
     status, result = post(route, body, endpoint=endpoint, extra=extra)
     if 200 <= status < 300:
         return True
@@ -425,12 +428,14 @@ def _read_traces(path: Path) -> list[dict[str, Any]]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Push consented uplift data to the Master (8091)")
-    parser.add_argument("kind", choices=("inventory", "trace", "snapshot", "kv", "drain"))
+    parser.add_argument("kind", choices=("inventory", "trace", "snapshot", "kv", "student", "drain"))
     parser.add_argument("--file", type=Path)
     parser.add_argument("--collection", default="sparknet-peer")
     parser.add_argument("--all", action="store_true", help="snapshot every non-meta Qdrant collection")
     parser.add_argument("--model", default="")
     parser.add_argument("--architecture", default="")
+    parser.add_argument("--base", default="")
+    parser.add_argument("--run", default="")
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
     parser.add_argument("--qdrant", default=DEFAULT_QDRANT)
     parser.add_argument(
@@ -502,6 +507,20 @@ def main(argv: list[str] | None = None) -> int:
                 payload = {"schema": "sparknet-uplift/1", "node_id": node_id(), "inventory": payload}
             body = json.dumps(payload, sort_keys=True).encode()
             manifest = {"rows": len(payload.get("inventory") or []), "sha256": _sha256(body)}
+        elif args.kind == "student":
+            if not args.file:
+                raise SystemExit("student needs --file")
+            body = args.file.read_bytes()
+            manifest = {
+                "artifact_id": _sha256(body)[:16],
+                "model_id": args.model or "qwen3-4b-2507",
+                "base_model": args.base or "Qwen/Qwen3-4B-Instruct-2507",
+                "run_id": args.run,
+                "sha256": _sha256(body),
+                "size": len(body),
+                "quant": "Q4_K_M",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
         else:
             if not args.file:
                 raise SystemExit("kv needs --file")

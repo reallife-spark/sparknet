@@ -32,7 +32,7 @@
   },
   "model_card": {
     "fields": ["model_id", "family", "base_model", "teacher_model", "run_id", "artifact_uri", "artifact_sha256", "eval_metrics", "license", "notes"],
-    "publication": "optional, through the signed 4221 file share after operator approval; a peer deploys it only as a distinct model, never by overwriting its base"
+    "publication": "The peer→Master artifact upload is the signed 8091 /api/v1/student-artifact route; optional Master→peer publication is the signed 4221 file share after operator approval. A peer deploys it only as a distinct model, never by overwriting its base."
   },
   "status_snapshot": {
     "schema": "sparknet-distill-status/1",

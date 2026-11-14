@@ -461,18 +461,16 @@ and OpenAI endpoints remain. The node image keeps goSpark, compute, the aux
 engines, the bundle and the stub; the engine image carries `llama-server` and
 the precontext proxy.
 
-Two same-version pairs are staged for the AGX bake-off: Qwen3.6-35B-A3B
-Q4_K_M + Qwen3.6-27B Q4_K_M and Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0.
-`scripts/sparknet-model-set.py --role master|peer --set qwen3.6|qwen3
---precontext on|off` selects the active engine file; both fit on root during
-the comparison, and the winner stays on root afterward.
+The active AGX pair is Qwen3-30B-A3B-2507 Q4_K_M on `agx64` (main and
+teacher) and Qwen3-4B-2507 Q4_K_M on `agx32` (student), both at 262,144
+context with q8 KV. `scripts/sparknet-model-set.py --role master|peer --set
+qwen3-2507|qwen3.6 --precontext on|off` selects the engine file; the
+`qwen3-4b-candidate` set points at the distilled student copy on `agx64`.
+The peer stack also carries Qwen3-Coder-30B (65k), Qwen3-Embedding-0.6B
+(RAG/reindex) and Qwen3-VL-4B (Ollama/Open WebUI, 65k).
 
-The 2026-11-13 bake-off (quality floor 1.0) chose `qwen3.6`: teacher
-18.54/18.08 tok/s, student 4.41/4.54 tok/s, agreement 0.653. The Qwen3 set
-measured teacher 3.94/3.65 tok/s, student 76.78/57.33 tok/s, agreement 0.608;
-its student is much faster for chat, but its teacher is ~5x slower for
-distillation. The Qwen3 set is in the cold store and can be re-staged with
-`scripts/sparknet-model-stage.py`.
+The previous Qwen3.6/Qwen3-32B bake-off numbers are historical; Step 110
+re-runs the measurements with the new pair.
 
 ### 7.2 The compose graph
 

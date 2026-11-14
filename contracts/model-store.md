@@ -49,12 +49,13 @@ on `/mnt/ai/models`; the engine container mounts only the root model
 directory, read-only. Vaults, keys and the state directory are never in that
 mount.
 
-Two same-version pairs are kept for the AGX bake-off: Qwen3.6-35B-A3B
-Q4_K_M + Qwen3.6-27B Q4_K_M and Qwen3-32B Q4_K_M + Qwen3-0.6B Q8_0. Both fit
-on the root during the comparison. The winner stays on root; the other set
-moves to the cold store under `/mnt/ai/models/<model-id>/` and remains
-available for a later re-stage. The `scripts/sparknet-model-set.py` helper
-selects the active file; the catalog records the pair.
+The active AGX pair is Qwen3-30B-A3B-2507 Q4_K_M on `agx64` (main and
+teacher) and Qwen3-4B-2507 Q4_K_M on `agx32` (student), both at 262,144
+context with q8 KV. The retired Qwen3.6 and Qwen3-32B/0.6B sets are in the
+cold store under `/mnt/ai/models/<model-id>/` and can be re-staged with
+`scripts/sparknet-model-stage.py`. The peer also keeps Qwen3-Coder-30B,
+Qwen3-Embedding-0.6B and Qwen3-VL-4B in the Ollama store; they are peer
+models, not the fabric text-engine pair.
 
 A pull manifest records:
 

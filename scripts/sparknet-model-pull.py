@@ -36,7 +36,7 @@ DEFAULT_STORE = Path(os.environ.get("SPARKNET_MODEL_STORE", "/mnt/ai/models"))
 DEFAULT_API_BASE = "https://huggingface.co/api/models"
 DEFAULT_RESOLVE_BASE = "https://huggingface.co"
 NODES = ("agx64", "agx32")
-ROLES = ("teacher", "student", "embedding")
+ROLES = ("teacher", "student", "embedding", "coder", "vision")
 CHUNK = 1024 * 1024
 
 
@@ -114,6 +114,8 @@ def validate_catalog(catalog: dict[str, Any]) -> list[str]:
             errors.append(f"{model_id}: a student is eligible only on agx32, not {nodes}")
         if role == "embedding" and not set(nodes).issubset(set(NODES)):
             errors.append(f"{model_id}: embeddings must name only known nodes")
+        if role in ("coder", "vision") and nodes != ["agx32"]:
+            errors.append(f"{model_id}: a {role} model is eligible only on agx32, not {nodes}")
         for key in ("family", "generation", "repo", "revision", "format", "runtime", "license", "license_url", "why"):
             if not str(model.get(key) or "").strip():
                 errors.append(f"{model_id}: missing {key}")
