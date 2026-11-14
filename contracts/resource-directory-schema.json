@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "contract": "resource-directory-schema",
+  "description": "The Master-signed model/memory endpoint directory. It is metadata, never knowledge or authority.",
+  "document": {
+    "schema": "sparknet-resource-directory/1",
+    "fields": ["directory_id", "issued_at", "expires_at", "nodes", "signature_b64"],
+    "nodes": {
+      "node_id": "registered node id",
+      "overlay_ipv4": "overlay address",
+      "models": "logical aliases and local endpoint kinds",
+      "memory": "local router endpoint and owner scopes",
+      "health": "last observed status"
+    }
+  },
+  "rules": [
+    "No secrets, prompts, vault pages, memory records or authority material.",
+    "Routers treat a missing/stale directory as unavailable and fall back to their static local map.",
+    "The directory cannot widen a capability or a vault scope."
+  ]
+}

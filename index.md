@@ -112,6 +112,8 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/uplift-schema.json` | peer→Master consented inventory, snapshots, traces, raw-KV manifests (8091) |
 | `contracts/inventory-schema.json` | the Qdrant user/model/usage mirror |
 | `contracts/distillation-schema.json` | same-family teacher→student dataset, run record, evaluation, model card |
+| `contracts/model-route-schema.json` | signed peer/Master model routing: aliases, data classes, local-only user content, provenance and no authority |
+| `contracts/resource-directory-schema.json` | the Master-signed model/memory endpoint directory: metadata only, no knowledge, no secrets, local fallback |
 | `contracts/model-catalog.json` | role-placement model catalog: teacher only on the 64 GB Master host, student only on the 32 GB peer host, embeddings on both |
 | `contracts/model-store.md` | model store, pull/verify, on-demand runtime leases, memory guard and the no-teacher-backup rule |
 | `contracts/webui-surface.md` | peer/master WebUI menus, read-only console scope and the 3D data-cloud surface |

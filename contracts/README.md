@@ -43,6 +43,8 @@ the tests then prove both roles still agree.
 | `uplift-schema.json` | peer→Master consented opener: inventory, Qdrant snapshots, teacher traces, raw-KV manifests, 8091 transport and retention |
 | `inventory-schema.json` | the user/model/usage mirror Qdrant keeps, with Open WebUI as the authoritative source |
 | `distillation-schema.json` | same-family teacher→student dataset, run record, evaluation and model card |
+| `model-route-schema.json` | signed peer/Master model routing: logical alias, data class, local-only user content, provenance and no authority |
+| `resource-directory-schema.json` | the Master-signed model/memory endpoint directory: metadata only, no knowledge, no secrets, local fallback |
 | `model-catalog.json` | the operator-owned model catalog: role placement (teacher on the 64 GB Master host, student on the 32 GB peer host), repo/revision, quant, runtime, license and fit |
 | `model-store.md` | the model store, pull/verify rule, runtime leases, idle stop, memory guard, role-specific weights and the prohibition on teacher backup on agx32 |
 | `webui-surface.md` | the peer/master Open WebUI menus, console scope, session/token rule, read-only boundary and the 3D-map pilot |

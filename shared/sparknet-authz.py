@@ -74,6 +74,8 @@ KNOWN_CAPABILITIES = frozenset(
         "model-uplift",
         "memory-supervise",
         "issue-report",
+        "model-route",
+        "memory-federate",
     }
 )
 

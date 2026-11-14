@@ -462,7 +462,7 @@
       "runtime": "not-listening",
       "runtime_why": "master-node/services/sparknet-container-registry.py implements the read-only Registry v2 subset and master-node/systemd/sparknet-container-registry.service stages it. The unit is not enabled by `make units`; bringing it up is an operator decision and requires the token file at ${SPARKNET_STATE_DIR}/registry-token.",
       "service": "container-registry",
-      "status": "LIVE LOOPBACK 2026-11-08 — agx64 served /v2/ 401 without a token, 200 with the token, and returned a manifest digest plus its blob over 127.0.0.1:15000. The persistent unit remains staged."
+      "status": "LIVE LOOPBACK 2026-11-08 \u2014 agx64 served /v2/ 401 without a token, 200 with the token, and returned a manifest digest plus its blob over 127.0.0.1:15000. The persistent unit remains staged."
     },
     "51820": {
       "bound_by": "both",
@@ -553,6 +553,39 @@
       "runtime": "not-listening",
       "runtime_why": "The package user service binds 127.0.0.1:17670 when installed and running; it is stopped on this measurement host.",
       "service": "openshell-gateway"
+    },
+    "8101": {
+      "binds_to": "127.0.0.1 + wg1",
+      "bound_by": "both",
+      "implementation_state": "implemented",
+      "note": "Signed local-first model router: loopback plain routes for local apps, overlay signed routes for explicit support/fabric inference. Raw model ports stay loopback-only.",
+      "overlay_only": true,
+      "protocol": "tcp/http",
+      "runtime": "not-listening",
+      "runtime_why": "The live endpoint is deployed only after the router tests and the operator cutover; the declaration is the bind path.",
+      "service": "model-router"
+    },
+    "4094": {
+      "binds_to": "127.0.0.1 + wg1",
+      "bound_by": "both",
+      "implementation_state": "implemented",
+      "note": "Signed read-through router over the local memory gateway. Owner/provenance; no mirror, no writes, no user-vault content remotely.",
+      "overlay_only": true,
+      "protocol": "tcp/http",
+      "runtime": "not-listening",
+      "runtime_why": "The live endpoint is deployed only after the router tests and the operator cutover; the declaration is the bind path.",
+      "service": "memory-router"
+    },
+    "8089": {
+      "binds_to": "wg1",
+      "bound_by": "master",
+      "implementation_state": "implemented",
+      "note": "Master-signed endpoint/health directory for model and memory routers. Metadata only; no knowledge or authority.",
+      "overlay_only": true,
+      "protocol": "tcp/http",
+      "runtime": "not-listening",
+      "runtime_why": "The live endpoint is deployed only after the router tests and the operator cutover; the declaration is the bind path.",
+      "service": "resource-directory"
     }
   },
   "schema_version": "2.1",

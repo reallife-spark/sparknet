@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "contract": "model-route-schema",
+  "description": "Signed model routing between the peer and the Master. The request is data-plane only; it grants no authority and no local knowledge read.",
+  "request": {
+    "schema": "sparknet-model-route/1",
+    "fields": ["model", "data_class", "payload", "source_node"],
+    "data_classes": ["support", "fabric", "contract"],
+    "never_remote": ["user"],
+    "model": "a logical alias registered in the resource directory",
+    "payload": "an OpenAI-compatible chat/completions or embeddings body"
+  },
+  "response": {
+    "schema": "sparknet-model-route-response/1",
+    "fields": ["ok", "source_node", "model", "result", "latency_ms"],
+    "result": "the upstream OpenAI-compatible response, never merged with local knowledge"
+  },
+  "rules": [
+    "A user-class request never crosses the bridge.",
+    "The caller is verified by the shared signed transport and model-route/Master authority.",
+    "Remote results carry source_node and model provenance.",
+    "No model route writes a vault, ledger, registry or memory record."
+  ]
+}

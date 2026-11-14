@@ -17,7 +17,7 @@
       "contract": "capabilities",
       "file": "capabilities.json",
       "schema_version": "1.1",
-      "sha256": "12058a22d42a0883bc079ae2c9a6e57ba4ab6e9a998606b61f338a0f3a170e71"
+      "sha256": "ff482911150f9c08f90aab833c647ee88528a734db639d92ee2a5d5343b7f148"
     },
     {
       "contract": "collab-schema",
@@ -110,6 +110,12 @@
       "sha256": "32bb82eaef89dd3aaa0d2ad8dadaab22998c4bcdd1ed7915ad0a6c1724c9d85a"
     },
     {
+      "contract": "model-route-schema",
+      "file": "model-route-schema.json",
+      "schema_version": "1.0",
+      "sha256": "24c1b694ca2ff480d71f94c1d5c138e7c4660a170a8e808cdac4561dbba78ec5"
+    },
+    {
       "contract": "nocturnal-artifact-schema",
       "file": "nocturnal-artifact-schema.json",
       "schema_version": "1.0",
@@ -137,7 +143,7 @@
       "contract": "ports",
       "file": "ports.json",
       "schema_version": "2.1",
-      "sha256": "17992043354987d16afbe4d3b3c909fb8c83c95555f5ce521ca2039f1bb37782"
+      "sha256": "f4988e4ecf0fb8e14ef26c5680e9f9112c7086c3e6a91f2d5403c004bddb08c1"
     },
     {
       "contract": "proposal-schema",
@@ -168,6 +174,12 @@
       "file": "release-schema.json",
       "schema_version": "1.0",
       "sha256": "5fd048cd6167ef3cca098de901efdda975b25765a68a17a1cfb5e1646a9f28f8"
+    },
+    {
+      "contract": "resource-directory-schema",
+      "file": "resource-directory-schema.json",
+      "schema_version": "1.0",
+      "sha256": "d4983fa58d39746f6f2680e01407fe381a6e8a380d061f90193b856b230bf6c9"
     },
     {
       "contract": "rfi-schema",
@@ -252,7 +264,9 @@
     "cross-department-share",
     "guard-apply",
     "issue-report",
+    "memory-federate",
     "memory-supervise",
+    "model-route",
     "model-uplift",
     "p2p-sync",
     "push-receive",
@@ -407,6 +421,12 @@
       "runtime": "not-listening",
       "service": "openshell-gateway"
     },
+    "4094": {
+      "bound_by": "both",
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "memory-router"
+    },
     "4096": {
       "bound_by": "peer",
       "implementation_state": "implemented",
@@ -515,6 +535,12 @@
       "runtime": "not-verifiable-here",
       "service": "admin-surface"
     },
+    "8089": {
+      "bound_by": "master",
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "resource-directory"
+    },
     "8090": {
       "bound_by": "master",
       "implementation_state": "implemented",
@@ -526,6 +552,12 @@
       "implementation_state": "implemented",
       "runtime": "not-listening",
       "service": "uplift-intake"
+    },
+    "8101": {
+      "bound_by": "both",
+      "implementation_state": "implemented",
+      "runtime": "not-listening",
+      "service": "model-router"
     },
     "9090": {
       "bound_by": "peer",
