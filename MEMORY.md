@@ -1,32 +1,34 @@
 # sparknet — Session Memory
 > Standing state only. Read at session start; **replace, never append**.
 > History belongs in `log.md` and `sessions/YYYY-MM-DD.md`.
-Updated: 2026-11-13
+Updated: 2026-11-14
 ## Plan cursor
 - `PLAN.md` — `current: 111` (Step 108 engine + Step 109 bake-off done;
   Step 110 Qwen3-2507 stack done; Step 111 auto-distill blocked on
   Qwen3/Python 3.8 trainer). `master-node/PLAN.md` — `current: done`.
 - #8/#9/#11 closed with dated agx32/agx64 evidence (0 open).
 ## Live fabric
-- `agx64` = Master = `sparknet-node-0001` (`10.100.0.1/32`, `red-team`),
-  **AGX Xavier 64 GB**, `sm_72`, L4T r35, MAXN; `agx32` = peer =
-  `sparknet-node-0002` (`10.100.0.2/32`, `blue-team`), **AGX Xavier 32 GB**,
-  `sm_72`, L4T r35, MAXN. Peer egress only to Master; overlay `wg1`.
-- 9G window 2026-11-13 02:00–02:10: plan/arm/lease, signed eval job,
-  `network_evals fail:1`, no promotion; abort. Cluster execute, wg observer and
-  idle-ignore remain enabled. Model-prompt job not claimed (Ollama upstream).
+- **`agx32` = Master = `sparknet-node-0001` (`10.100.0.1/32`, `blue-team`),
+  AGX Xavier 32 GB, `sm_72`, L4T r35, MAXN; `agx64` = peer =
+  `sparknet-node-0002` (`10.100.0.2/32`, `red-team`), AGX Xavier 64 GB,
+  `sm_72`, L4T r35, MAXN.** Direct `eth0` `10.99.0.0/30` carries `wg1`;
+  peer egress only to Master.
+- **Role cutover 2026-11-14:** Master services/admin/4B moved to `agx32`;
+  user WebUI/vaults/Qdrant/memory/30B/embedding/coder/VL moved to `agx64`.
+  New root `91ffb29e…` (epoch 2, master `sparknet-node-0001`); peer registry
+  fingerprint `8f98723c…`; old root kept offline for rollback.
 - Text engine: **llama.cpp/llama-server** (`sparknet-llm:agx`) live on
   `agx64`/`agx32` 2026-11-13; ADR 0021 accepted; vLLM retired. Ollama is the
   fallback and peer AI-stack server; MLC-LLM optional; TensorRT-LLM/ExLlamaV2
   not the path. `vllm:8000`, `vllm-stub`, aux embed/rerank/audio stay.
-- Main/teacher `agx64`: Qwen3-30B-A3B-2507 Q4_K_M. Student `agx32`:
-  Qwen3-4B-2507 Q4_K_M; both 262k q8 KV. 4B candidate synced to agx64.
-  Qwen3.6 and old Qwen3 sets cold. Peer: Qwen3-Coder-30B 65k,
-  Qwen3-Embedding-0.6B, Qwen3-VL-4B in Ollama.
+- Peer `agx64`: Qwen3-30B-A3B-2507 Q4_K_M; Master `agx32`: Qwen3-4B-2507
+  Q4_K_M; both 262k q8 KV. Peer Ollama has coder/VL tags; embedding is CPU
+  `:8001` on both. Qwen3.6 and old Qwen3 sets cold.
 - **Auto-distill 2026-11-14:** external GPU bundle, signed 8091 upload and
-  idle sync work; training waits for the external GPU host. agx32: Qdrant
-  reindexed to 1024, CPU embedding on :8001, daily bundle cron 03:15,
-  Qwen3.6 cold. The L4T r35 trainer remains Python 3.8/transformers 4.37.2.
+  idle sync work; training waits for the external GPU host. Peer Qdrant has
+  1247 points at 1024 dims; CPU embedding is `:8001`; the old agx32 daily cron
+  is disabled pending the peer-side scheduling update. Trainer remains Python
+  3.8/transformers 4.37.2.
 - **Storage:** vaults on `/mnt/ai/...`; active GGUF/tokenizer/precontext/KV
   on root `/opt/sparknet/models/...`; cold store/HF cache/uplift/distill/
   Qdrant snapshots/backups on data; keys/state on root. `agx64` root 114 GB,
@@ -34,7 +36,7 @@ Updated: 2026-11-13
   the root model dir.
 - **Tuning:** `sm_72`; Q4_K_M teacher, Q4_K_M/Q8_0 student; `--n-gpu-layers
   99`; `--no-mmap --fit off` for the 27B; MAXN; `tegrastats`; 136.5 GB/s.
-  goagx pinned `07e9dda`.
+  goagx pinned `bd8728e`.
 ## Durable facts
 - Memory plane: Go `sparknet-memory` 4110 behind Python gateway 4093; one store, per-vault scope; Qdrant 6333/6334; 4223 the only signed surface.
 - `model-uplift` carries consented training/backup evidence only, never answers; teacher traces/uplift are not an answer corpus.
