@@ -29,14 +29,13 @@ Updated: 2026-11-14
   1247 points at 1024 dims; CPU embedding is `:8001`; the peer daily bundle
   cron is installed at 03:15. Control now loads the new registry fail-closed;
   coder/VL use true 65k tags. Trainer remains Python 3.8/transformers 4.37.2.
-- **Storage:** vaults on `/mnt/ai/...`; active GGUF/tokenizer/precontext/KV
-  on root `/opt/sparknet/models/...`; cold store/HF cache/uplift/distill/
-  Qdrant snapshots/backups on data; keys/state on root. `agx64` root 114 GB,
-  data 1.4 TB; `agx32` root 790 GB, data 130 GB. Model container mounts only
-  the root model dir.
+- **Storage:** vaults/data on `/mnt/ai`; active GGUF/KV on `/opt/sparknet/models`;
+  keys/state on root; model containers mount only the root model dir.
 - **Tuning:** `sm_72`; Q4_K_M teacher, Q4_K_M/Q8_0 student; `--n-gpu-layers
   99`; `--no-mmap --fit off` for the 27B; MAXN; `tegrastats`; 136.5 GB/s.
-  goagx pinned `bd8728e`.
+- **Router 2026-11-14:** model router `8101` (local + signed support),
+  resource directory `8089`, memory router `4094`; user data is refused remotely.
+  goagx pinned `9864173`.
 ## Durable facts
 - Memory plane: Go `sparknet-memory` 4110 behind Python gateway 4093; one store, per-vault scope; Qdrant 6333/6334; 4223 the only signed surface.
 - `model-uplift` carries consented training/backup evidence only, never answers; teacher traces/uplift are not an answer corpus.
