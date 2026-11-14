@@ -70,10 +70,10 @@ def test_master_config_is_valid(master_config: dict) -> None:
     assert runtime.validate_config(master_config, "master", MODELS) == []
 
 
-def test_peer_cannot_define_a_teacher_profile(peer_config: dict) -> None:
-    peer_config["profiles"]["teacher"] = dict(peer_config["profiles"]["student"])
-    peer_config["profiles"]["teacher"]["model_id"] = "qwen3.6-35b-a3b-q4-k-m"
-    errors = runtime.validate_config(peer_config, "peer", MODELS)
+def test_master_cannot_define_a_teacher_profile(master_config: dict) -> None:
+    master_config["profiles"]["teacher"] = dict(master_config["profiles"]["student"])
+    master_config["profiles"]["teacher"]["model_id"] = "qwen3.6-35b-a3b-q4-k-m"
+    errors = runtime.validate_config(master_config, "master", MODELS)
     assert any("not eligible for agx32" in error for error in errors)
 
 
@@ -83,22 +83,22 @@ def test_mem_available_reads_meminfo(tmp_path: Path) -> None:
     assert runtime.mem_available_gb(path) == 0.5
 
 
-def test_compose_command_is_a_fixed_argv(master_config: dict) -> None:
-    cmd = runtime.compose_command(master_config, "teacher", "up")
+def test_compose_command_is_a_fixed_argv(peer_config: dict) -> None:
+    cmd = runtime.compose_command(peer_config, "teacher", "up")
     assert cmd[:2] == ["docker", "compose"]
     assert "-f" in cmd and "-p" in cmd
     assert cmd[-3:] == ["up", "-d", "teacher"]
 
 
 def test_start_dry_run_uses_the_manifest_model_file(
-    master_config: dict, store: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    peer_config: dict, store: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
 ) -> None:
     monkeypatch.setenv("SPARKNET_MODEL_RUNTIME_STATE", str(tmp_path / "state"))
     meminfo = tmp_path / "meminfo"
     meminfo.write_text("MemAvailable: 67108864 kB\n")
     result = runtime.start(
-        config=master_config,
-        role="master",
+        config=peer_config,
+        role="peer",
         name="teacher",
         store=store,
         meminfo=meminfo,
@@ -115,14 +115,14 @@ def test_start_dry_run_uses_the_manifest_model_file(
     assert "up -d teacher" in out
 
 
-def test_memory_guard_refuses_without_force(master_config: dict, store: Path, tmp_path: Path, monkeypatch) -> None:
+def test_memory_guard_refuses_without_force(peer_config: dict, store: Path, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("SPARKNET_MODEL_RUNTIME_STATE", str(tmp_path / "state"))
     meminfo = tmp_path / "meminfo"
     meminfo.write_text("MemAvailable: 1024 kB\n")
     with pytest.raises(runtime.Refusal):
         runtime.start(
-            config=master_config,
-            role="master",
+            config=peer_config,
+            role="peer",
             name="teacher",
             store=store,
             meminfo=meminfo,
@@ -134,13 +134,11 @@ def test_memory_guard_refuses_without_force(master_config: dict, store: Path, tm
         )
 
 
-def test_conflicting_lease_refuses_without_replace(
-    master_config: dict, store: Path, tmp_path: Path, monkeypatch
-) -> None:
+def test_conflicting_lease_refuses_without_replace(peer_config: dict, store: Path, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("SPARKNET_MODEL_RUNTIME_STATE", str(tmp_path / "state"))
     lease = {
         "schema": "sparknet-model-lease/1",
-        "role": "master",
+        "role": "peer",
         "node": "agx64",
         "profile": "teacher-reference",
         "model_id": "qwen3.6-35b-a3b-q4-k-m",
@@ -148,13 +146,13 @@ def test_conflicting_lease_refuses_without_replace(
         "idle_stop_minutes": 30,
         "pinned": False,
     }
-    runtime.write_lease("master", "teacher-reference", lease)
+    runtime.write_lease("peer", "teacher-reference", lease)
     meminfo = tmp_path / "meminfo"
     meminfo.write_text("MemAvailable: 67108864 kB\n")
     with pytest.raises(runtime.Refusal, match="conflicts"):
         runtime.start(
-            config=master_config,
-            role="master",
+            config=peer_config,
+            role="peer",
             name="teacher",
             store=store,
             meminfo=meminfo,
@@ -166,15 +164,15 @@ def test_conflicting_lease_refuses_without_replace(
         )
 
 
-def test_reap_stops_an_expired_lease(master_config: dict, tmp_path: Path, monkeypatch) -> None:
+def test_reap_stops_an_expired_lease(peer_config: dict, tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("SPARKNET_MODEL_RUNTIME_STATE", str(tmp_path / "state"))
     old = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat().replace("+00:00", "Z")
     runtime.write_lease(
-        "master",
+        "peer",
         "teacher",
         {
             "schema": "sparknet-model-lease/1",
-            "role": "master",
+            "role": "peer",
             "node": "agx64",
             "profile": "teacher",
             "model_id": "qwen3.6-35b-a3b-q4-k-m",
@@ -183,5 +181,5 @@ def test_reap_stops_an_expired_lease(master_config: dict, tmp_path: Path, monkey
             "pinned": False,
         },
     )
-    stopped = runtime.reap(master_config, "master", tmp_path, "test", dry_run=True)
+    stopped = runtime.reap(peer_config, "peer", tmp_path, "test", dry_run=True)
     assert stopped and stopped[0]["profile"] == "teacher"

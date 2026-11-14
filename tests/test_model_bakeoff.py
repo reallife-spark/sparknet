@@ -274,8 +274,8 @@ def test_model_set_writes_the_peer_state_without_restarting(tmp_path: Path) -> N
         == 0
     )
     text = state.read_text()
-    assert "VLLM_MODEL=qwen3-4b" in text
-    assert "SPARKNET_LLM_MODEL_FILE=/opt/sparknet/models/qwen3-4b-2507-q4_k_m.gguf" in text
+    assert "VLLM_MODEL=qwen3-30b" in text
+    assert "SPARKNET_LLM_MODEL_FILE=/opt/sparknet/models/qwen3-30b-a3b-2507-q4_k_m.gguf" in text
     assert "SPARKNET_PRECONTEXT=0" in text
 
 

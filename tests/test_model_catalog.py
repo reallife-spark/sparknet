@@ -88,8 +88,8 @@ def test_master_runtime_config_matches_the_catalog(catalog: dict) -> None:
     assert runtime.validate_config(config, "master", models) == []
 
 
-def test_peer_runtime_rejects_a_teacher_profile(catalog: dict) -> None:
-    config = json.loads((ROOT / "peer-node" / "configs" / "model-runtime" / "runtime.json").read_text())
+def test_master_runtime_rejects_a_teacher_profile(catalog: dict) -> None:
+    config = json.loads((ROOT / "master-node" / "configs" / "model-runtime" / "runtime.json").read_text())
     config["profiles"]["teacher"] = {
         "model_id": "qwen3.8-flash-next-3.84bpw",
         "compose_file": "master-node/configs/model-runtime/docker-compose.teacher.yml",
@@ -102,15 +102,15 @@ def test_peer_runtime_rejects_a_teacher_profile(catalog: dict) -> None:
         "conflicts": [],
     }
     models = {model["id"]: model for model in catalog["models"]}
-    errors = runtime.validate_config(config, "peer", models)
+    errors = runtime.validate_config(config, "master", models)
     assert any("not eligible for agx32" in error for error in errors)
 
 
 def test_compose_profiles_are_on_demand_and_loopback() -> None:
     yaml = pytest.importorskip("yaml")
     for path in (
-        ROOT / "master-node" / "configs" / "model-runtime" / "docker-compose.teacher.yml",
-        ROOT / "peer-node" / "configs" / "model-runtime" / "docker-compose.student.yml",
+        ROOT / "peer-node" / "configs" / "model-runtime" / "docker-compose.teacher.yml",
+        ROOT / "master-node" / "configs" / "model-runtime" / "docker-compose.student.yml",
     ):
         data = yaml.safe_load(path.read_text())
         assert data["services"]

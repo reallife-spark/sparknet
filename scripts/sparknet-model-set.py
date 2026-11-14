@@ -38,12 +38,12 @@ HEALTH_URL = "http://127.0.0.1:8000/health"
 
 SETS = {
     "qwen3-2507": {
-        "master": ("/opt/sparknet/models/qwen3-30b-a3b-2507-q4_k_m.gguf", "qwen3-30b"),
-        "peer": ("/opt/sparknet/models/qwen3-4b-2507-q4_k_m.gguf", "qwen3-4b"),
+        "master": ("/opt/sparknet/models/qwen3-4b-2507-q4_k_m.gguf", "qwen3-4b"),
+        "peer": ("/opt/sparknet/models/qwen3-30b-a3b-2507-q4_k_m.gguf", "qwen3-30b"),
     },
     "qwen3.6": {
-        "master": ("/opt/sparknet/models/qwen3.6-35b-a3b-q4_k_m.gguf", "qwen3.6-35b"),
-        "peer": ("/opt/sparknet/models/qwen3.6-27b-q4_k_m.gguf", "qwen3.6-27b"),
+        "master": ("/opt/sparknet/models/qwen3.6-27b-q4_k_m.gguf", "qwen3.6-27b"),
+        "peer": ("/opt/sparknet/models/qwen3.6-35b-a3b-q4_k_m.gguf", "qwen3.6-35b"),
     },
     "qwen3-4b-candidate": {
         "master": ("/opt/sparknet/models/qwen3-4b-2507-q4_k_m.gguf", "qwen3-4b"),

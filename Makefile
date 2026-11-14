@@ -42,7 +42,7 @@ SCOPE ?= fabric
         container-test \
         render render-check sbom sbom-check nv-search drift-check context-pack context-check governance-check \
         goagx-publish goagx-drift-check \
-        devtools webui-console model-catalog-check model-pull model-verify model-bench model-set model-stage model-bakeoff-report distill-image distill-daily distill-bundle distill-import student-sync model-runtime-status model-runtime-start model-runtime-stop model-runtime-reap model-survey model-update-status model-set-candidate model-promote model-rollback \
+        devtools webui-console model-catalog-check model-pull model-verify model-bench model-set model-stage model-bakeoff-report distill-image distill-daily distill-bundle distill-import model-mode student-sync model-runtime-status model-runtime-start model-runtime-stop model-runtime-reap model-survey model-update-status model-set-candidate model-promote model-rollback \
         vector-dev vector-init vector-inspect \
         vector-index vector-stamp vector-query vector-parity kv-export reflex-eval reflex-live-check reflex-live-query \
         reflex-plan-eval skill-eval nocturnal-rehearsal verify-plans env-init wiki-sync wiki-verify \
@@ -351,6 +351,10 @@ distill-bundle: ## Package an existing dataset for the external GPU trainer (DAT
 distill-import: ## Verify, sign and upload a returned external-trainer GGUF (ARTIFACT=... RUN=...)
 	@test -n "$(ARTIFACT)" -a -n "$(RUN)" || { echo "ARTIFACT and RUN required" >&2; exit 2; }
 	@python3 scripts/sparknet-distill-import.py --artifact "$(ARTIFACT)" --run "$(RUN)" $(if $(EXPORT_JSON),--export-json "$(EXPORT_JSON)") $(if $(SHA256),--sha256 "$(SHA256)")
+
+model-mode: ## Switch the peer between text, coding and vision GPU modes (MODE=text|coding|vision)
+	@test -n "$(MODE)" || { echo "MODE required" >&2; exit 2; }
+	@$(PY) scripts/sparknet-model-mode.py --mode "$(MODE)"
 
 student-sync: ## Install the latest student GGUF on agx64 when idle (STUDENT_WAIT seconds)
 	@$(PY) scripts/sparknet-student-sync.py --artifact-dir /srv/sparknet/uplift/student/sparknet-node-0002 --dest /opt/sparknet/models/qwen3-4b-2507-q4_k_m.gguf --archive /mnt/ai/models/student-archive --wait "$(or $(STUDENT_WAIT),3600)"

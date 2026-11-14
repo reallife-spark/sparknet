@@ -4,9 +4,9 @@
 Open WebUI, Qdrant and the fabric services stay resident. A large model runtime
 is a warm lease: it is started explicitly, health-checked, and stopped when its
 idle window expires. A model cannot call this; only an operator or the local UI
-may. The teacher is eligible only on the Master host (agx64); the student only
-on the peer host (agx32). The role is an authority role, not a hardware label:
-the 64 GB host is the Master and holds the teacher.
+may. The teacher is eligible only on the peer host (agx64); the student only
+on the Master host (agx32). The role is an authority role, not a hardware label:
+the 64 GB host is the peer and holds the teacher; the 32 GB Master holds the student.
 
 Usage::
 
@@ -38,7 +38,7 @@ ROLE_CONFIG = {
     "peer": ROOT / "peer-node" / "configs" / "model-runtime" / "runtime.json",
     "master": ROOT / "master-node" / "configs" / "model-runtime" / "runtime.json",
 }
-NODES = {"master": "agx64", "peer": "agx32"}
+NODES = {"master": "agx32", "peer": "agx64"}
 SCHEMA = "sparknet-model-runtime/1"
 
 
@@ -120,7 +120,7 @@ def validate_config(config: dict[str, Any], role: str, catalog: dict[str, dict[s
         else:
             if node not in model.get("nodes", []):
                 errors.append(f"{label}: model {model_id} is not eligible for {node}")
-            expected_role = "teacher" if role == "master" else "student"
+            expected_role = "student" if role == "master" else "teacher"
             if model.get("role") != expected_role:
                 errors.append(f"{label}: model {model_id} is {model.get('role')}, not {expected_role}")
         for key in ("compose_file", "project", "profile", "model_env", "health_url"):
