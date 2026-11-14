@@ -27,7 +27,8 @@ Updated: 2026-11-14
 - **Auto-distill 2026-11-14:** external GPU bundle, signed 8091 upload and
   idle sync work; training waits for the external GPU host. Peer Qdrant has
   1247 points at 1024 dims; CPU embedding is `:8001`; the peer daily bundle
-  cron is installed at 03:15. Trainer remains Python 3.8/transformers 4.37.2.
+  cron is installed at 03:15. Control now loads the new registry fail-closed;
+  coder/VL use true 65k tags. Trainer remains Python 3.8/transformers 4.37.2.
 - **Storage:** vaults on `/mnt/ai/...`; active GGUF/tokenizer/precontext/KV
   on root `/opt/sparknet/models/...`; cold store/HF cache/uplift/distill/
   Qdrant snapshots/backups on data; keys/state on root. `agx64` root 114 GB,
