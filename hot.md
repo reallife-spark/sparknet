@@ -53,12 +53,12 @@ Q8_0/Q4_K_M student; `--n-gpu-layers 99`; measured `--ctx-size`/`--parallel`;
 MAXN (`sudo nvpmodel -m 0`, `sudo jetson_clocks`); watch `tegrastats`; the
 136.5 GB/s unified-memory bandwidth is the bottleneck.
 
-**Open.** Step 111 auto-distillation is blocked: the L4T r35 trainer image is
-Python 3.8/transformers 4.37.2 and Qwen3 needs transformers >=4.51 (Python
->=3.9). Dataset/collect/doctor/signed upload/idle-aware sync are implemented;
-training needs an external Python >=3.10 trainer, a new Python+torch stack, or
-a Qwen2.5 fallback. The no-legal-review note and the `jetson-containers`
-`NOASSERTION`/MIT terms stay recorded.
+**Open.** Step 111 auto-distillation is blocked on the external GPU host: the
+L4T r35 trainer is Python 3.8/transformers 4.37.2 and cannot load Qwen3.
+Dataset/collect/doctor, the keyless bundle, external Dockerfile,
+sign/8091 upload and idle-aware sync are implemented; training runs only on the
+approved external Python >=3.10 GPU host. The no-legal-review note and the
+`jetson-containers` `NOASSERTION`/MIT terms stay recorded.
 
 **Standing truths.** Authority comes from key possession; the vaults and the
 model store are not authority. `CONTEXT.md` is generated; `MEMORY.md` and

@@ -583,11 +583,11 @@ current: 111
 ## Step 111 — Daily auto-distillation
 - [ ] **Step 111** — Distill on agx32 daily or on request from the 30B main/teacher; export the 4B GGUF; sign/upload to agx64; sync the agx64 student copy daily/on request when idle; benchmark and promote/rollback.
   - **DoD**: consented dataset, 4B LoRA at 16k, merge/GGUF, signed upload, idle-aware copy, candidate benchmark, operator promotion, timer/manual trigger, docs/tests/gates green.
-  - **Status 2026-11-14 — BLOCKED.** The L4T r35 trainer image has Python 3.8
-    and transformers 4.37.2; Qwen3 needs transformers >=4.51 (Python >=3.9), so
-    the 4B training cannot start on agx32. Dataset/collect/doctor/upload/sync
-    are implemented and tested. Need an external Python >=3.10 trainer, a
-    backport/new Python+torch stack, or a Qwen2.5 fallback.
+  - **Status 2026-11-14 — BLOCKED (external path prepared).** The L4T r35
+    trainer is Python 3.8 / transformers 4.37.2 and cannot load Qwen3; training
+    stays off agx32. Dataset/collect/doctor, the keyless bundle, the external
+    Dockerfile, sign/8091 upload and idle sync are implemented and tested; the
+    run waits for the approved external GPU host.
 ## Standing verification rules
 - A gate that cannot fail is not a gate. Every claim needs a named test or a
   dated live observation.

@@ -42,7 +42,7 @@ SCOPE ?= fabric
         container-test \
         render render-check sbom sbom-check nv-search drift-check context-pack context-check governance-check \
         goagx-publish goagx-drift-check \
-        devtools webui-console model-catalog-check model-pull model-verify model-bench model-set model-stage model-bakeoff-report distill-image distill-daily student-sync model-runtime-status model-runtime-start model-runtime-stop model-runtime-reap model-survey model-update-status model-set-candidate model-promote model-rollback \
+        devtools webui-console model-catalog-check model-pull model-verify model-bench model-set model-stage model-bakeoff-report distill-image distill-daily distill-bundle distill-import student-sync model-runtime-status model-runtime-start model-runtime-stop model-runtime-reap model-survey model-update-status model-set-candidate model-promote model-rollback \
         vector-dev vector-init vector-inspect \
         vector-index vector-stamp vector-query vector-parity kv-export reflex-eval reflex-live-check reflex-live-query \
         reflex-plan-eval skill-eval nocturnal-rehearsal verify-plans env-init wiki-sync wiki-verify \
@@ -341,8 +341,16 @@ model-stage: ## Stage a model between cold store and root (MODEL, STAGE=to-root|
 distill-image: ## Build the L4T PyTorch distillation image (sparknet-distill:dev)
 	@docker build -f master-node/configs/Dockerfile.distill -t sparknet-distill:dev .
 
-distill-daily: ## Run one 4B distillation pass on agx32 (collect, train, export, upload)
+distill-daily: ## Collect and bundle a 4B distillation run for the external GPU trainer
 	@peer-node/scripts/sparknet-distill-daily.sh
+
+distill-bundle: ## Package an existing dataset for the external GPU trainer (DATASET=...)
+	@test -n "$(DATASET)" || { echo "DATASET required" >&2; exit 2; }
+	@python3 scripts/sparknet-distill-bundle.py --dataset "$(DATASET)" --out-dir "$(or $(BUNDLE_DIR),/mnt/ai/distill/bundles)"
+
+distill-import: ## Verify, sign and upload a returned external-trainer GGUF (ARTIFACT=... RUN=...)
+	@test -n "$(ARTIFACT)" -a -n "$(RUN)" || { echo "ARTIFACT and RUN required" >&2; exit 2; }
+	@python3 scripts/sparknet-distill-import.py --artifact "$(ARTIFACT)" --run "$(RUN)" $(if $(EXPORT_JSON),--export-json "$(EXPORT_JSON)") $(if $(SHA256),--sha256 "$(SHA256)")
 
 student-sync: ## Install the latest student GGUF on agx64 when idle (STUDENT_WAIT seconds)
 	@$(PY) scripts/sparknet-student-sync.py --artifact-dir /srv/sparknet/uplift/student/sparknet-node-0002 --dest /opt/sparknet/models/qwen3-4b-2507-q4_k_m.gguf --archive /mnt/ai/models/student-archive --wait "$(or $(STUDENT_WAIT),3600)"

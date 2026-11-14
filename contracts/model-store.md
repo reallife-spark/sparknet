@@ -57,6 +57,31 @@ cold store under `/mnt/ai/models/<model-id>/` and can be re-staged with
 Qwen3-Embedding-0.6B and Qwen3-VL-4B in the Ollama store; they are peer
 models, not the fabric text-engine pair.
 
+## External GPU distillation
+
+The active Qwen3-4B-2507 student is trained on an approved external GPU host,
+not on `agx32`: the L4T r35 trainer image is Python 3.8 / transformers 4.37.2
+and Qwen3 needs transformers >=4.51 (Python >=3.9). `agx32` remains the
+collection, serving and export-control node.
+
+1. `make distill-daily` collects the consented teacher traces from `agx64`,
+   builds the dataset and writes
+   `/mnt/ai/distill/bundles/sparknet-distill-<dataset>-<utc>.tar.gz`. The bundle
+   contains the dataset, `Dockerfile.distill-external`, `train_lora.py`,
+   `sparknet-distill-export.py` and a manifest; it contains no key, signer
+   socket or vault.
+2. The operator copies the bundle to the external GPU host and runs the
+   `sparknet-distill-external` image. The host writes
+   `out/student-q4_k_m.gguf` and `out/export.json`.
+3. The operator returns both files to `agx32`. `make distill-import
+   ARTIFACT=... RUN=... EXPORT_JSON=...` verifies the SHA-256, signs with the
+   peer node key and uploads through the Master's 8091 student-artifact intake.
+4. `make student-sync` installs the uploaded artifact on `agx64` when idle.
+   Promotion stays candidate + operator approval; the 30B remains the teacher.
+
+The external host never receives the peer key. A bundle or GGUF is training /
+serving data, never knowledge and never an answer corpus.
+
 A pull manifest records:
 
 - catalog id, repo, requested revision and resolved commit;

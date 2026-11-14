@@ -23,9 +23,9 @@ Updated: 2026-11-13
   Qwen3-4B-2507 Q4_K_M; both 262k q8 KV. 4B candidate synced to agx64.
   Qwen3.6 and old Qwen3 sets cold. Peer: Qwen3-Coder-30B 65k,
   Qwen3-Embedding-0.6B, Qwen3-VL-4B in Ollama.
-- **Auto-distill 2026-11-14:** dataset/collect/doctor/8091 upload/sync work;
-  training is blocked because the L4T r35 image is Python 3.8 /
-  transformers 4.37.2 and Qwen3 needs >=4.51 (Python >=3.9).
+- **Auto-distill 2026-11-14:** dataset/collect/doctor, external GPU bundle,
+  signed 8091 upload and idle sync work; training waits for the approved
+  external GPU host (agx32 is Python 3.8 / transformers 4.37.2).
 - **Storage:** vaults on `/mnt/ai/...`; active GGUF/tokenizer/precontext/KV
   on root `/opt/sparknet/models/...`; cold store/HF cache/uplift/distill/
   Qdrant snapshots/backups on data; keys/state on root. `agx64` root 114 GB,
