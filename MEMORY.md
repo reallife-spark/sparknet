@@ -1,7 +1,7 @@
 # sparknet — Session Memory
 > Standing state only. Read at session start; **replace, never append**.
 > History belongs in `log.md` and `sessions/YYYY-MM-DD.md`.
-Updated: 2026-11-14
+Updated: 2026-11-15
 ## Plan cursor
 - `PLAN.md` — `current: 111` (Step 108 engine + Step 109 bake-off done;
   Step 110 Qwen3-2507 stack done; Step 111 auto-distill blocked on
@@ -16,7 +16,8 @@ Updated: 2026-11-14
 - **Role cutover 2026-11-14:** Master services/admin/4B moved to `agx32`;
   user WebUI/vaults/Qdrant/memory/30B/embedding/coder/VL moved to `agx64`.
   New root `91ffb29e…` (epoch 2, master `sparknet-node-0001`); peer registry
-  fingerprint `8f98723c…`; old root kept offline for rollback.
+  fingerprint `6360ca0689666f92…`; old local root/keys/state deleted 2026-11-15;
+  encrypted off-host backup retained on megasrv.
 - Text engine: **llama.cpp/llama-server** (`sparknet-llm:agx`) live on
   `agx64`/`agx32` 2026-11-13; ADR 0021 accepted; vLLM retired. Ollama is the
   fallback and peer AI-stack server; MLC-LLM optional; TensorRT-LLM/ExLlamaV2
@@ -24,18 +25,22 @@ Updated: 2026-11-14
 - Peer `agx64`: Qwen3-30B-A3B-2507 Q4_K_M; Master `agx32`: Qwen3-4B-2507
   Q4_K_M; both 262k q8 KV. Peer Ollama has coder/VL tags; embedding is CPU
   `:8001` on both. Qwen3.6 and old Qwen3 sets cold.
-- **Auto-distill 2026-11-14:** external GPU bundle, signed 8091 upload and
-  idle sync work; training waits for the external GPU host. Peer Qdrant has
-  1247 points at 1024 dims; CPU embedding is `:8001`; the peer daily bundle
-  cron is installed at 03:15. Control now loads the new registry fail-closed;
-  coder/VL use true 65k tags. Trainer remains Python 3.8/transformers 4.37.2.
+- **Auto-distill 2026-11-15:** 16k keyless bundle
+  `sparknet-distill-e69b5e6f6247110d-20261115T024212Z.tar.gz`
+  (sha256 `9d28d5de8647e136937dec3fd09a594a415ea2933755fb2d99a8896c55ffcbdf`)
+  built from the current 24-trace dataset. External GPU training still waits
+  for a host; `raxxaramd` is offline and has no recorded CUDA GPU. agx64's
+  current `llama.cpp` trainer is full-finetune, not LoRA, so it is not a
+  16k QLoRA substitute. Peer Qdrant has 1247 points at 1024 dims; CPU
+  embedding is `:8001`; daily bundle cron 03:15; trainer remains Python
+  3.8/transformers 4.37.2.
 - **Storage:** vaults/data on `/mnt/ai`; active GGUF/KV on `/opt/sparknet/models`;
   keys/state on root; model containers mount only the root model dir.
 - **Tuning:** `sm_72`; Q4_K_M teacher, Q4_K_M/Q8_0 student; `--n-gpu-layers
   99`; `--no-mmap --fit off` for the 27B; MAXN; `tegrastats`; 136.5 GB/s.
 - **Router 2026-11-14:** model router `8101` (local + signed support),
   resource directory `8089`, memory router `4094`; user data is refused remotely.
-  goagx pinned `9864173`.
+  goagx pinned `329ec6d`; signed resource directory refreshes on demand.
 ## Durable facts
 - Memory plane: Go `sparknet-memory` 4110 behind Python gateway 4093; one store, per-vault scope; Qdrant 6333/6334; 4223 the only signed surface.
 - `model-uplift` carries consented training/backup evidence only, never answers; teacher traces/uplift are not an answer corpus.
