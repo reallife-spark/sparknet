@@ -32,7 +32,7 @@ Updated: 2026-11-15
   99`; `--no-mmap --fit off` for the 27B; MAXN; `tegrastats`; 136.5 GB/s.
 - **Router 2026-11-14:** model router `8101` (local + signed support),
   resource directory `8089`, memory router `4094`; user data is refused remotely.
-  goagx pinned `329ec6d`; signed resource directory refreshes on demand.
+  goagx pinned `dd64bfd`; goSpark spec `85815b3`; signed resource directory refreshes on demand.
 ## Durable facts
 - Memory plane: Go `sparknet-memory` 4110 behind Python gateway 4093; one store, per-vault scope; Qdrant 6333/6334; 4223 the only signed surface.
 - `model-uplift` carries consented training/backup evidence only, never answers; teacher traces/uplift are not an answer corpus.
