@@ -25,15 +25,7 @@ Updated: 2026-11-15
 - Peer `agx64`: Qwen3-30B-A3B-2507 Q4_K_M; Master `agx32`: Qwen3-4B-2507
   Q4_K_M; both 262k q8 KV. Peer Ollama has coder/VL tags; embedding is CPU
   `:8001` on both. Qwen3.6 and old Qwen3 sets cold.
-- **Auto-distill 2026-11-15:** 16k keyless bundle
-  `sparknet-distill-e69b5e6f6247110d-20261115T024212Z.tar.gz`
-  (sha256 `9d28d5de8647e136937dec3fd09a594a415ea2933755fb2d99a8896c55ffcbdf`)
-  built from the current 24-trace dataset. External GPU training still waits
-  for a host; `raxxaramd` is offline and has no recorded CUDA GPU. agx64's
-  current `llama.cpp` trainer is full-finetune, not LoRA, so it is not a
-  16k QLoRA substitute. Peer Qdrant has 1247 points at 1024 dims; CPU
-  embedding is `:8001`; daily bundle cron 03:15; trainer remains Python
-  3.8/transformers 4.37.2.
+- **Auto-distill 2026-11-15:** 16k bundle `sparknet-distill-e69b5e6f6247110d-20261115T024212Z.tar.gz` (sha256 `9d28…`) from the current 24-trace dataset; external GPU still missing (`raxxaramd` offline/no CUDA). agx64 llama.cpp is full-finetune, not 16k QLoRA. Peer Qdrant 1247/1024; embedding `:8001`; cron 03:15; trainer Python 3.8.
 - **Storage:** vaults/data on `/mnt/ai`; active GGUF/KV on `/opt/sparknet/models`;
   keys/state on root; model containers mount only the root model dir.
 - **Tuning:** `sm_72`; Q4_K_M teacher, Q4_K_M/Q8_0 student; `--n-gpu-layers

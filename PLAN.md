@@ -583,18 +583,11 @@ current: 111
 ## Step 111 — Daily auto-distillation
 - [ ] **Step 111** — Distill on agx32 daily or on request from the 30B main/teacher; export the 4B GGUF; sign/upload to agx64; sync the agx64 student copy daily/on request when idle; benchmark and promote/rollback.
   - **DoD**: consented dataset, 4B LoRA at 16k, merge/GGUF, signed upload, idle-aware copy, candidate benchmark, operator promotion, timer/manual trigger, docs/tests/gates green.
-  - **Status 2026-11-14 — BLOCKED (external GPU host).** Dataset/collect/doctor,
-    the keyless bundle, external Dockerfile, sign/8091 and idle sync are
-    implemented. agx32 is live: Qdrant reindexed to 1024, Qwen3-4B plus CPU
-    embedding healthy, daily bundle cron 03:15, and Qwen3.6 moved cold. Only
-    the external GPU training host is missing.
-  - **Status 2026-11-15 — 16k bundle prepared; external host still offline.**
-    Built `sparknet-distill-e69b5e6f6247110d-20261115T024212Z.tar.gz`
-    (sha256 `9d28d5de8647e136937dec3fd09a594a415ea2933755fb2d99a8896c55ffcbdf`)
-    from the current 24-trace dataset at `sequence_length=16384`.
-    `raxxaramd` did not wake (WoL sent) and has no recorded CUDA GPU; agx64's
-    current llama.cpp trainer is full-finetune, not LoRA. No 16k training was
-    claimed. The external x86 GPU host remains the blocker.
+  - **Status 2026-11-14/15 — BLOCKED (external GPU).** Keyless 16k bundle
+    `sparknet-distill-e69b5e6f6247110d-20261115T024212Z.tar.gz` (sha256
+    `9d28…`) built from the current 24 traces; external Dockerfile, sign/8091
+    and idle sync implemented; agx32 live (Qdrant 1024, 4B/CPU embedding,
+    cron 03:15). `raxxaramd` offline/no CUDA; agx64 llama.cpp is full-finetune, not QLoRA; no 16k training claimed.
 ## Standing verification rules
 - A gate that cannot fail is not a gate. Every claim needs a named test or a
   dated live observation.
