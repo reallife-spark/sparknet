@@ -289,9 +289,9 @@ def test_no_tracked_compose_deploys_a_rolling_image_tag() -> None:
             seen.append(f"{rel}: {image}")
 
     # The sweep must actually sweep: a glob that silently matched nothing would
-    # pass forever. Four composes carry the webui image alone.
+    # pass forever. Five composes carry the webui image alone.
     assert len(seen) >= 10, f"the compose sweep found only {len(seen)} images; the glob is broken"
     assert any("open-webui" in entry for entry in seen), "the sweep no longer sees the webui image"
-    assert sum("open-webui" in entry for entry in seen) == 4, (
-        "expected the four composes that deploy Open WebUI; a new one needs the same pin"
+    assert sum("open-webui" in entry for entry in seen) == 5, (
+        "expected the five composes that deploy Open WebUI; a new one needs the same pin"
     )

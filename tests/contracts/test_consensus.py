@@ -92,6 +92,27 @@ def test_reformation_is_not_a_bypass(ports: dict):
     )
 
 
+def test_admission_is_contracted_as_a_bounded_join(ports: dict):
+    """A 2 -> 3 admission is not a free superset and not a master change.
+
+    The contract must state the narrow rule the implementation enforces: one new
+    member, no drop, the same Master and operational key, byte-identical existing
+    records, distinct new keys, no removal proof, schema 1.3+, all three
+    signatures.
+    """
+    schema = load("identity-schema.json")["cluster_trust_root"]
+    admission = schema["reformation"]["on_admission"]
+    for phrase in ("2-member", "one new member", "Master", "master_pubkey", "signed fields", "all three"):
+        assert phrase in admission, f"on_admission never states {phrase!r}"
+    rules = " ".join(schema["acceptance_rules"]).lower()
+    assert "strict superset" in rules and "2 → 3" in rules
+    assert "admission_master_change" in rules
+    text = (CONTRACTS / "consensus-protocol.md").read_text().lower()
+    assert "admission (join ceremony)" in text
+    assert "a join is not a key rotation" in text
+    assert "ordinary election loser still" in text
+
+
 def test_election_vote_is_a_say_not_a_grant(ports: dict):
     caps = share_policy()
     assert "cluster-vote" in caps["known_capabilities"]

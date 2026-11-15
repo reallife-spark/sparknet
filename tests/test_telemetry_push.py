@@ -192,8 +192,10 @@ def test_a_flagged_peer_surfaces_trust_in_status_and_mutates_nothing(tmp_path: P
     row = _rows(spool)[0]
     trust = row["payload"]["trust"]
     assert trust["level"] == "flagged"
-    assert [share["share_id"] for share in trust["flagged_shares"]] == ["share-1"]
-    assert trust["flagged_shares"][0]["counterpart"] == "sparknet-node-0008"
+    flagged = trust["flagged_shares"]
+    assert len(flagged) == 1
+    assert flagged[0]["share_id"].startswith("share-1-")
+    assert flagged[0]["counterpart"] == "sparknet-node-0008"
     assert registry.read_bytes() == registry_before, "telemetry must not rewrite the signed registry"
     assert sessions.read_bytes() == sessions_before, "telemetry must not rewrite share trust state"
 

@@ -46,7 +46,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from sparknet_loader import load_shared
 
-SCHEMA_VERSION = "1.2"
+SCHEMA_VERSION = "1.3"
 
 #: A cluster is two (a pair) or three (the full cluster) members. This is a
 #: protocol decision, not a tunable: a fourth member changes the agreement
@@ -110,6 +110,14 @@ REASON_MEMBER_ALREADY_VOTED = "member_already_voted"
 REASON_MISSING_REMOVAL_PROOF = "missing_removal_proof"
 REASON_BAD_REMOVAL_PROOF = "bad_removal_proof"
 REASON_UNEXPECTED_REMOVAL_PROOF = "unexpected_removal_proof"
+# Admission (join ceremony): a 2-member root may add one new member under
+# schema 1.3. These are stable strings like the rest.
+REASON_ADMISSION_NOT_ALLOWED = "admission_not_allowed"
+REASON_ADMISSION_MEMBER_CHANGED = "admission_member_changed"
+REASON_ADMISSION_DUPLICATE_KEY = "admission_duplicate_key"
+REASON_ADMISSION_MASTER_CHANGE = "admission_master_change"
+REASON_DUPLICATE_MEMBER_KEY = "duplicate_member_key"
+REASON_ADMISSION_OPERATIONAL_KEY = "admission_operational_key"
 
 #: Member fields covered by a member's signature over the root.
 ROOT_MEMBER_FIELDS = ("node_id", "fingerprint", "wireguard_pubkey", "cluster_pubkey")
@@ -155,6 +163,10 @@ ROOT_SIGNED_FIELDS_V1 = (
 #: force on the live pair keeps its original bytes and id across the 1.2 bump —
 #: the same migration discipline that carried 1.0 into 1.1.
 CHAINED_SCHEMA_VERSION = "1.1"
+
+#: The schema that permits a 2 -> 3 admission. It adds no signed fields; it
+#: changes the trust-path rule only, so a 1.3 root keeps the 1.2 byte shape.
+ADMISSION_SCHEMA_VERSION = "1.3"
 ROOT_SIGNED_FIELDS_V11 = (
     "version",
     "nonce",
@@ -686,6 +698,20 @@ def _removal_proofs_by_member(root: dict[str, Any]) -> dict[str, dict[str, Any]]
     return by_member
 
 
+def _version_at_least(version: Any, minimum: str) -> bool:
+    """Whether a root's schema version is at least `minimum`.
+
+    Versions are dotted integers. A malformed version is not promoted: it
+    simply fails the comparison, and the caller reports the stable reason.
+    """
+    try:
+        left = tuple(int(part) for part in str(version).split("."))
+        right = tuple(int(part) for part in minimum.split("."))
+    except (TypeError, ValueError):
+        return False
+    return left >= right
+
+
 def verify_root(
     root: dict[str, Any],
     trust: dict[str, Any] | None = None,
@@ -738,27 +764,72 @@ def verify_root(
                 )
         held_ids = {m["node_id"] for m in previous["members"]}
         new_ids = {m["node_id"] for m in projected["members"]}
-        if not new_ids.issubset(held_ids):
-            return False, (
-                f"{REASON_UNCHAINED}: re-formation may only replace the master "
-                f"or shrink membership (evidence for the drop lives in the "
-                f"registry); a chained root that ADDS a member is the join "
-                f"ceremony, which is a different contract"
-            )
-        if len(new_ids) < MIN_CLUSTER_SIZE:
-            return False, (
-                f"{REASON_UNCHAINED}: a chained root may not fall below "
-                f"{MIN_CLUSTER_SIZE} members; a lone survivor holds a removal "
-                f"proof, not a cluster"
-            )
-        # A reduction must be *evidenced*. The dropped set is held minus new; the
-        # proofs must cover exactly that set — no missing proof (a silent
-        # eviction) and no proof for a member that stays (a forged drop record).
+        added = new_ids - held_ids
         dropped = held_ids - new_ids
-        try:
-            proofs = _removal_proofs_by_member(root)
-        except ConsensusError as exc:
-            return False, f"{REASON_BAD_REMOVAL_PROOF}: {exc}"
+        if added:
+            if dropped:
+                return False, (
+                    f"{REASON_ADMISSION_NOT_ALLOWED}: a chained root may not add "
+                    f"and drop members in the same step; admission is one new "
+                    f"member onto an unchanged pair"
+                )
+            if not _version_at_least(projected.get("version", ""), ADMISSION_SCHEMA_VERSION):
+                return False, (
+                    f"{REASON_ADMISSION_NOT_ALLOWED}: a root that adds a member "
+                    f"must use schema {ADMISSION_SCHEMA_VERSION} or newer"
+                )
+            if len(held_ids) != 2 or len(new_ids) != 3 or len(added) != 1:
+                return False, (
+                    f"{REASON_ADMISSION_NOT_ALLOWED}: admission is exactly 2 -> 3 "
+                    f"with one new member; held {len(held_ids)}, new {len(new_ids)}"
+                )
+            if (
+                projected["master_node_id"] != previous["master_node_id"]
+                or projected["master_pubkey"] != previous["master_pubkey"]
+            ):
+                return False, (
+                    f"{REASON_ADMISSION_MASTER_CHANGE}: admission may not change "
+                    f"the elected master or its operational key; re-form the "
+                    f"master in a separate step"
+                )
+            held_by_id = {m["node_id"]: m for m in previous["members"]}
+            new_by_id = {m["node_id"]: m for m in projected["members"]}
+            for node_id in sorted(held_ids):
+                if new_by_id[node_id] != held_by_id[node_id]:
+                    return False, (
+                        f"{REASON_ADMISSION_MEMBER_CHANGED}: existing member "
+                        f"{node_id} changed its identity fields; admission may "
+                        f"not also rotate an existing member"
+                    )
+            try:
+                proofs = _removal_proofs_by_member(root)
+            except ConsensusError as exc:
+                return False, f"{REASON_BAD_REMOVAL_PROOF}: {exc}"
+            if proofs:
+                return False, (
+                    f"{REASON_UNEXPECTED_REMOVAL_PROOF}: admission drops no member and must not carry removal proofs"
+                )
+            for field in ("fingerprint", "wireguard_pubkey", "cluster_pubkey"):
+                values = [m[field] for m in projected["members"]]
+                if len(set(values)) != len(values):
+                    return False, (
+                        f"{REASON_ADMISSION_DUPLICATE_KEY}: admission requires "
+                        f"distinct {field} values across all members"
+                    )
+        else:
+            if len(new_ids) < MIN_CLUSTER_SIZE:
+                return False, (
+                    f"{REASON_UNCHAINED}: a chained root may not fall below "
+                    f"{MIN_CLUSTER_SIZE} members; a lone survivor holds a removal "
+                    f"proof, not a cluster"
+                )
+            # A reduction must be *evidenced*. The dropped set is held minus new; the
+            # proofs must cover exactly that set — no missing proof (a silent
+            # eviction) and no proof for a member that stays (a forged drop record).
+            try:
+                proofs = _removal_proofs_by_member(root)
+            except ConsensusError as exc:
+                return False, f"{REASON_BAD_REMOVAL_PROOF}: {exc}"
         unexpected = set(proofs) - dropped
         if unexpected:
             return False, (
@@ -795,6 +866,31 @@ def verify_root(
     ids = [m["node_id"] for m in members]
     if len(set(ids)) != len(ids):
         return False, f"{REASON_DUPLICATE_MEMBER}: {ids}"
+
+    # Distinctness is a property of every root, not only a join. Two member
+    # records sharing a fingerprint, WireGuard key or cluster key are one
+    # principal wearing two seats; the signatures would then count one key
+    # twice. The admission branch checks it before the seal, and this check
+    # keeps genesis/replacement/reduction roots honest too.
+    for field in ("fingerprint", "wireguard_pubkey", "cluster_pubkey"):
+        values = [member[field] for member in projected["members"]]
+        if len(set(values)) != len(values):
+            return False, (
+                f"{REASON_DUPLICATE_MEMBER_KEY}: more than one member shares a {field}; "
+                f"distinct members require distinct identity material"
+            )
+
+    # The operational key and the cluster keys are deliberately separate. A
+    # root whose master_pubkey is also a member's cluster_pubkey would let the
+    # Master's operational key sign a member's seat. This is enforced for 1.3+
+    # roots; older roots predate the admission rule and keep verifying.
+    if _version_at_least(projected.get("version", ""), ADMISSION_SCHEMA_VERSION):
+        cluster_keys = {member["cluster_pubkey"] for member in projected["members"]}
+        if projected["master_pubkey"] in cluster_keys:
+            return False, (
+                f"{REASON_ADMISSION_OPERATIONAL_KEY}: master_pubkey is also a member's "
+                f"cluster_pubkey; the operational and cluster keys must be separate"
+            )
 
     signatures = root.get("signatures")
     if not isinstance(signatures, dict) or not signatures:
@@ -839,8 +935,9 @@ def verify_chain(roots: list[dict[str, Any]]) -> tuple[bool, str]:
 
     Each step uses `verify_root` with `trust` set to the next-older root, which
     carries the whole re-formation discipline forward: a step that breaks the
-    chain, adds a member, or drops below the minimum is refused with the same
-    reasons as an exchange against a single held root.
+    chain, changes membership outside the admitted 2 -> 3 join or an evidenced
+    reduction, or drops below the minimum is refused with the same reasons as an
+    exchange against a single held root.
     """
     if not roots:
         return False, f"{REASON_UNCHAINED}: an empty chain verifies nothing"

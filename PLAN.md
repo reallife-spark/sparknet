@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
 updated: 2026-11-13
-current: 111
+current: done
 ---
 # sparknet — Active Plan
 > Single source of truth for fabric work. The `current:` cursor names the step
@@ -24,8 +24,6 @@ current: 111
 | 42–63 | adoption, role swap, AGX image, overlay, consistency, cluster jobs, vector substrate | archived plan + `log.md` |
 | 64–74 | reflex, naming, departments, intake/RFI, observability, roadmap, materials, skills, SBOM | archived plan + `log.md` |
 | 75–89 | user-node context, governance, share/model plane, role inversion, Step 89 | `_archives/PLAN_FULL_2026-11-08.md` |
-
-
 ## Step 90 — Phase 8 file-level remediation
 
 - [x] **Step 90** — Review every one of the 416 files in the Phase 8
@@ -56,7 +54,6 @@ current: 111
     `make test-all`, `make ci`, signed bundle verification, signed goagx
     verification and `make drift-check` are green.
 
-## Step 91 — Understand-Anything + Matt Pocock integration
 
 - [x] **Step 91** — Port Understand-Anything to Python/Go, add its skills and
   console surface, and integrate the Matt Pocock engineering skills with a
@@ -110,10 +107,8 @@ current: 111
     bug (`.panel[hidden]` not hiding panels) and swapped node labels were fixed
     and deployed. Peer and master bundles were rebuilt and verified. No live
     claim is made for any surface outside these dated checks.
-
 ## Step 92 — Four-candidate architecture exploration
 
-- [x] **Step 92** — Explore the four `improve-codebase-architecture` candidates
   in report order, one candidate at a time. This is design-only: no production
   code, contracts, manifests or submodule pins change. Operator approved:
   design-only decision packs, report order, explicit per-candidate gate,
@@ -164,10 +159,8 @@ current: 111
   - **Status 2026-11-10 — COMPLETE.** All four candidates adopted, the roadmap
     approved, and the design-only records written. Step 91 stays open on its
     live-only confirmations; this step does not claim them.
-
 ## Step 93 — Implement the architecture roadmap
 
-- [x] **Step 93** — Implement the approved 92E roadmap in order. The graph
   producer and core split both touch `shared/sparknet_understand/`; never run
   them in parallel.
   - [x] **93A — Graph producer.** Python owns `scan`/`diff`; Go `scan`/`diff`
@@ -212,10 +205,8 @@ current: 111
     goSpark `970d714`; Step 93 code root `c5602cc`; the live-fix follow-up
     is peer `a5f80e7`, master `ea4822a`, root `7b7ae6b`, goagx `c3efd98`. Step 91 and the role live-leg
     confirmations remain open and are not claimed here.
-
 ## Step 94 — Sandbox domain vocabulary and policy authority
 
-- [x] **Step 94** — Settle the execution-sandbox vocabulary and the
   policy-authority boundary. Documentation only: no contracts, code, manifests,
   submodule pins or live claims change.
   - [x] **94A — Glossary.** Reformat `GLOSSARY.md` into the domain-modeling
@@ -259,10 +250,8 @@ current: 111
   - **Status 2026-11-10 — COMPLETE.** The glossary, ADR-0012 and ADR-0013 are
     the settled model; `current: done`. No contract, code, manifest, submodule,
     goagx or live change.
-
 ## Step 95 — Deep-module audit remediation
 
-- [x] **Step 95** — Close the seven findings from the 2026-11-10 deep-module
   audit and record the one design decision that should not be rushed.
   - [x] **95A — Go capability catalog.** Add `issue-report` and
     `sandbox-supervise` to the Go vocabulary and sensitive set; pin the Go
@@ -292,10 +281,8 @@ current: 111
     `503a2f7`; goagx republished as `dcb84b4` and pinned. All four remotes are
     pushed; the release-pin commit is `ff2cd12`. GitHub issue mirroring remains
     blocked by the current PAT's missing Issues write. No live claim.
-
 ## Step 96 — Skill-based feedback loops and evaluations
 
-- [x] **Step 96** — Turn the installed Matt Pocock skills into recorded,
   gating evaluations of AI work products and of the skills themselves; file the
   work local-first in all five repositories (96A–96F). Detail:
   `sessions/2026-11-11.md` and `log.md`.
@@ -306,10 +293,8 @@ current: 111
     fabric `8f9bb08`, goagx `c77170b`; `make drift-check` green. The GitHub
     mirror remains blocked by the PAT; local `.scratch/issues/` canonical. No
     live claim.
-
 ## Step 97 — Restore the fabric dependency guard
 
-- [x] **Step 97** — Restore `tests/test_services.py` at the fabric root, the
   path both `pyproject.toml` and `requirements.txt` cite, with the allow-list
   and mirror guards; prove each can fail.
   - **DoD**: the guard fails when a stray dependency is added to either file
@@ -320,10 +305,8 @@ current: 111
     guards; mutation 2 (`httpx>=0.27` in `requirements.txt`) failed only the
     mirror guard; each reverted green. Full fabric suite, lint and format
     green. No live claim.
-
 ## Step 98 — Make the pytest tier vocabulary selectable
 
-- [x] **Step 98** — Apply the registered tiers to every fabric test module and
   add the selection path, so `-m unit` is a real fast loop.
   - [x] **98A — Marks.** Module-level `pytestmark` in all 128 fabric test
     modules: 47 `unit`, 44 `integration`, 21 `contract`, 11 `layout`, plus the
@@ -341,10 +324,8 @@ current: 111
     tests) and `make test-integration` in 2 m 07 s; the full fabric suite and
     the quick pre-merge gate are green. No test behavior changed; the change is
     additive marks plus the meta-guard.
-
 ## Step 99 — Pin the memory-filter dependency boundary
 
-- [x] **Step 99** — Decide and enforce the boundary around the WebUI-only
   adapter instead of letting a legitimate exception look like runtime drift.
   - [x] **99A — Decision.** ADR-0015 records the filter as an adapter executed
     by Open WebUI, the one-physical-file rule, and the lazy optional-extra
@@ -358,10 +339,8 @@ current: 111
     reverting; the symlink resolves; the full suite, lint and format are green.
   - **Status 2026-11-11 — COMPLETE.** Mutation reverted green; symlink
     resolves; full suite, lint and format green. No live claim.
-
 ## Step 100 — Read-only eval audit surface
 
-- [x] **Step 100** — Surface skill-eval verdicts in the read-only console.
   - [x] **100A — API.** `/api/evals` reads this node's delegate runs through
     the loopback gateway, validates every record with the shared module, counts
     invalid/tampered records without showing them, and projects
@@ -375,7 +354,6 @@ current: 111
     projection; the full suite, lint, format and app.js syntax are green.
   - **Status 2026-11-11 — COMPLETE.** Valid/tampered projection test green;
     full suite, lint, format and drift-check green. No live claim.
-
 ## Step 101 — Console degrades on a malformed gateway payload
 
 - [x] **Step 101** — Diagnose and fix the console endpoints that drop the
@@ -441,7 +419,6 @@ current: 111
   - **Status 2026-11-11 — COMPLETE (code and rehearsal).** Suites and
     `make nocturnal-rehearsal` green; peer `89afef4`, master `b93f077`, fabric
     `ab9be7a`, goagx `2b4de0f`. Live window is issue #8.
-
 ## Step 104 — Migrate the two large node scripts to Python
 
 - [x] **Step 104** — Replace the logic in `spark-entrypoint.sh` and
@@ -475,7 +452,6 @@ current: 111
     real vLLM model was not started (upstream down), and the from-source image
     rebuild remains a release task (thin `:py104` used). goagx `c07e40d`;
     detail in the session.
-
 ## Step 105 — Skill catalog access across OpenCode and Open WebUI
 
 - [x] **Step 105** — Give the fabric, peer and Master one deterministic skill
@@ -504,7 +480,6 @@ current: 111
     check clean, both `/api/skills` routes return data. Commits: peer
     `16b4c66`, master `abbc8db`, fabric `21edb5e`; goagx `9e80adf`. The model
     upstream is down, so end-to-end chat is not claimed.
-
 ## Step 106 — Live-verify the peer eval audit transport
 
 - [x] **Step 106** — Close issue #9 by proving the signed peer→Master eval
@@ -517,7 +492,6 @@ current: 111
   - **Status 2026-11-12 — COMPLETE (live pair).** `agx32` pushed the signed
     `defect-shell-true` report; accepted, duplicate no-op, tampered counted
     `invalid`. `/api/evals`: `fail: 1`, `invalid: 1`, `total: 1`, `read_only`.
-
 ## Step 107 — Capture the AGX LLM engine research and improve the vault
 
 - [x] **Step 107** — Capture the dusty-nv review, the runtime/model decision,
@@ -584,10 +558,36 @@ current: 111
 - [ ] **Step 111** — Distill on agx32 daily or on request from the 30B main/teacher; export the 4B GGUF; sign/upload to agx64; sync the agx64 student copy daily/on request when idle; benchmark and promote/rollback.
   - **DoD**: consented dataset, 4B LoRA at 16k, merge/GGUF, signed upload, idle-aware copy, candidate benchmark, operator promotion, timer/manual trigger, docs/tests/gates green.
   - **Status 2026-11-14/15 — BLOCKED (external GPU).** Keyless 16k bundle
-    `sparknet-distill-e69b5e6f6247110d-20261115T024212Z.tar.gz` (sha256
-    `9d28…`) built from the current 24 traces; external Dockerfile, sign/8091
-    and idle sync implemented; agx32 live (Qdrant 1024, 4B/CPU embedding,
-    cron 03:15). `raxxaramd` offline/no CUDA; agx64 llama.cpp is full-finetune, not QLoRA; no 16k training claimed.
+    `sparknet-distill-e69b5e6f6247110d-20261115T024212Z.tar.gz` built; external
+    Dockerfile, sign/8091 and idle sync implemented; agx32 live (Qdrant 1024, cron 03:15).
+    `raxxaramd` is online as a general x86 VM/build node (`.107` WiFi, Tailscale boot verified,
+    trainer key), but its GTX 1650M 4 GB/no CUDA cannot run 16k; agx64 llama.cpp is full-finetune, not QLoRA.
+## Step 112 — Third-member admission / join ceremony
+
+- [x] **Step 112** — Add the schema 1.3 2 -> 3 admission path so a third peer can
+  join the live pair without re-electing the Master, then deploy it on `vmx`.
+  - [x] **112A — Consensus rule.** `verify_root` accepts one strict superset:
+    parent exactly two, child exactly three, Master and `master_pubkey`
+    unchanged, existing member records byte-identical, new keys distinct, no
+    removal proof, schema 1.3+, `admission_*` refusals.
+  - [x] **112B — Exchange and adoption.** `serve --admission` verifies the child
+    at the seal; `member --trust/--as-member`, `accept --as-member`, and a
+    non-master member writes only `trust_root`; ordinary election losers still
+    write nothing.
+  - [x] **112C — Scripts, tests, contracts.** Peer script/Makefile flags,
+    admission unit/cross-process tests, consensus/identity contracts and the
+    role-transition/deployment runbooks.
+  - [x] **112D — Live join.** VM, node `0003` keys, 2 -> 3 admission, 3 -> 3
+    key-rotation re-formation, registry sequence 12, overlay/guard/share and a
+    CPU llama.cpp + Open WebUI stack are live; `make ci` green.
+  - **DoD**: `make ci`, `make contract-test`, `make test-all`, `make validate`
+    and `make context-check` green; the admission code path is covered by
+    tests that fail on a Master change, existing-member rewrite, duplicate key,
+    removal proof or schema 1.2 child. Live join is separately confirmed.
+  - **Status 2026-11-15 — COMPLETE.** Schema 1.3 admission, general member
+    adoption, 3 -> 3 WG rotation, root `9157113f…` epoch 4, registry sequence
+    12, guard/share/overlay and a CPU llama.cpp + Open WebUI stack on 0003 are
+    live; `make ci` green and the old WG keys are no longer active.
 ## Standing verification rules
 - A gate that cannot fail is not a gate. Every claim needs a named test or a
   dated live observation.

@@ -83,7 +83,7 @@
       "contract": "identity-schema",
       "file": "identity-schema.json",
       "schema_version": "1.0",
-      "sha256": "57160afc335d0b5c26ee35928626392ec7d84c19dc216d7ff4624f8ccc70aaf5"
+      "sha256": "679cf036fbce90c50a41b6206f43b483e20091790b8c3af5fd727d2bb7e026e6"
     },
     {
       "contract": "inventory-schema",

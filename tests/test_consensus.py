@@ -56,6 +56,8 @@ def cluster():
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
     private: dict[str, str] = {}
+    operational_private: dict[str, str] = {}
+    operational: dict[str, str] = {}
     members = []
     for name in ("alpha", "beta", "gamma"):
         raw = hashlib.sha256(f"sparknet-test-cluster-{name}".encode()).digest()
@@ -66,6 +68,18 @@ def cluster():
                 serialization.PrivateFormat.Raw,
                 serialization.NoEncryption(),
             )
+        ).decode()
+        op_raw = hashlib.sha256(f"sparknet-test-operational-{name}".encode()).digest()
+        op_key = Ed25519PrivateKey.from_private_bytes(op_raw)
+        operational_private[name] = base64.b64encode(
+            op_key.private_bytes(
+                serialization.Encoding.Raw,
+                serialization.PrivateFormat.Raw,
+                serialization.NoEncryption(),
+            )
+        ).decode()
+        operational[name] = base64.b64encode(
+            op_key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
         ).decode()
         members.append(
             {
@@ -79,7 +93,12 @@ def cluster():
                 ).decode(),
             }
         )
-    return {"members": members, "private": private}
+    return {
+        "members": members,
+        "private": private,
+        "operational_private": operational_private,
+        "operational": operational,
+    }
 
 
 def _root(
@@ -580,49 +599,151 @@ def test_a_1_1_root_chains_to_a_1_0_parent_by_its_legacy_id(consensus, cluster):
     assert consensus.REASON_UNCHAINED in reason
 
 
-def test_a_chained_root_may_not_add_a_member(consensus, cluster):
-    """Re-formation may replace the master or shrink membership; a chained root
-    that ADDS a member is the join ceremony, which is a different contract."""
-
-    def _new_member(name: str) -> tuple[dict, str]:
-        from cryptography.hazmat.primitives import serialization
-        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-
-        raw = hashlib.sha256(f"sparknet-test-cluster-{name}".encode()).digest()
-        key = Ed25519PrivateKey.from_private_bytes(raw)
-        private_b64 = base64.b64encode(
-            key.private_bytes(
-                serialization.Encoding.Raw,
-                serialization.PrivateFormat.Raw,
-                serialization.NoEncryption(),
-            )
-        ).decode()
-        public = key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
-        return (
-            {
-                "node_id": name,
-                "fingerprint": hashlib.sha256(f"fp-{name}".encode()).hexdigest(),
-                "wireguard_pubkey": base64.b64encode(public).decode(),
-                "cluster_pubkey": base64.b64encode(public).decode(),
-            },
-            private_b64,
-        )
-
-    first = consensus.attach_root_signatures(_root(cluster["members"], "beta", nonce="first"), cluster["private"])
-    delta, delta_priv = _new_member("delta")
-    joined = consensus.attach_root_signatures(
-        _root(
-            [*cluster["members"], delta],
-            "gamma",
-            nonce="second",
-            previous_root_id=consensus.root_id(first),
-        ),
-        {**cluster["private"], "delta": delta_priv},
+def _pair_root(consensus, cluster, master: str = "beta"):
+    members = cluster["members"][:2]
+    root = _root(members, master, nonce="pair-parent", version="1.2", epoch=0)
+    root["master_pubkey"] = cluster["operational"][master]
+    return consensus.attach_root_signatures(
+        root,
+        {member["node_id"]: cluster["private"][member["node_id"]] for member in members},
     )
-    ok, reason = consensus.verify_root(joined, trust=first)
+
+
+def _admission_child(
+    consensus,
+    cluster,
+    parent,
+    master: str = "beta",
+    members=None,
+    version: str = "1.3",
+    removal_proofs=None,
+    keys=None,
+):
+    roster = members if members is not None else cluster["members"]
+    child = _root(
+        roster,
+        master,
+        nonce="admission",
+        previous_root_id=consensus.root_id(parent),
+        version=version,
+        epoch=1,
+    )
+    if removal_proofs is not None:
+        child["removal_proofs"] = removal_proofs
+    child["master_pubkey"] = cluster["operational"][master]
+    signing_keys = (
+        keys if keys is not None else {member["node_id"]: cluster["private"][member["node_id"]] for member in roster}
+    )
+    return consensus.attach_root_signatures(child, signing_keys)
+
+
+def test_a_1_3_root_may_admit_a_third_member(consensus, cluster):
+    """A 2-member pair may admit one new member with schema 1.3.
+
+    This is the join ceremony: the parent keeps its Master and its member
+    records, the child names all three, and every member co-signs. The new
+    member's cluster key is the one in its signed member record.
+    """
+    parent = _pair_root(consensus, cluster)
+    child = _admission_child(consensus, cluster, parent)
+    assert consensus.verify_root(child, trust=parent) == (True, consensus.REASON_OK)
+
+
+def test_admission_may_not_change_the_master(consensus, cluster):
+    """Admission adds a member; replacing the Master is a separate re-formation.
+
+    Combining them would let a join hand authority to a new node under cover of
+    a membership change. The parent's Master and operational key must survive.
+    """
+    parent = _pair_root(consensus, cluster)
+    child = _admission_child(consensus, cluster, parent, master="gamma")
+    ok, reason = consensus.verify_root(child, trust=parent)
     assert ok is False
-    assert consensus.REASON_UNCHAINED in reason
-    assert "ADDS a member" in reason, reason
+    assert consensus.REASON_ADMISSION_MASTER_CHANGE in reason, reason
+
+
+def test_admission_may_not_rewrite_an_existing_members_identity(consensus, cluster):
+    """A join is not a key rotation. Existing member records stay byte-identical."""
+    parent = _pair_root(consensus, cluster)
+    members = [dict(member) for member in cluster["members"]]
+    members[0]["fingerprint"] = hashlib.sha256(b"rewritten-alpha").hexdigest()
+    child = _admission_child(consensus, cluster, parent, members=members)
+    ok, reason = consensus.verify_root(child, trust=parent)
+    assert ok is False
+    assert consensus.REASON_ADMISSION_MEMBER_CHANGED in reason, reason
+
+
+def test_admission_requires_distinct_identity_material(consensus, cluster):
+    """One key may not stand behind two members.
+
+    Without this check, a single cluster key could sign two member records and
+    make a 2 -> 3 admission look like three independent signatures.
+    """
+    parent = _pair_root(consensus, cluster)
+    members = [dict(member) for member in cluster["members"]]
+    members[2]["cluster_pubkey"] = members[1]["cluster_pubkey"]
+    keys = {name: cluster["private"][name] for name in ("alpha", "beta", "gamma")}
+    keys["gamma"] = cluster["private"]["beta"]
+    child = _admission_child(consensus, cluster, parent, members=members, keys=keys)
+    ok, reason = consensus.verify_root(child, trust=parent)
+    assert ok is False
+    assert consensus.REASON_ADMISSION_DUPLICATE_KEY in reason, reason
+
+
+def test_a_root_with_duplicate_member_keys_is_rejected_at_any_generation(consensus, cluster):
+    """Distinctness is a root invariant, not only an admission check.
+
+    A genesis or 3 -> 3 replacement root with one cluster key in two seats would
+    let one principal cast two of three votes. The same key must not pass just
+    because no membership delta was declared.
+    """
+    members = [dict(member) for member in cluster["members"]]
+    members[2]["cluster_pubkey"] = members[1]["cluster_pubkey"]
+    keys = {name: cluster["private"][name] for name in ("alpha", "beta", "gamma")}
+    keys["gamma"] = cluster["private"]["beta"]
+    for version in ("1.2", "1.3"):
+        root = _root(members, "beta", nonce=f"duplicate-{version}", version=version, epoch=0)
+        root["master_pubkey"] = cluster["operational"]["beta"]
+        signed = consensus.attach_root_signatures(root, keys)
+        ok, reason = consensus.verify_root(signed)
+        assert ok is False, version
+        assert consensus.REASON_DUPLICATE_MEMBER_KEY in reason, reason
+
+
+def test_admission_may_not_reuse_the_master_operational_key(consensus, cluster):
+    """The Master's operational key may not also be the new member's cluster key.
+
+    Otherwise the Master could forge the new seat's bid, vote and root signature,
+    and later control two of three seats while claiming a normal admission.
+    """
+    parent = _pair_root(consensus, cluster)
+    members = [dict(member) for member in cluster["members"]]
+    members[2]["cluster_pubkey"] = cluster["operational"]["beta"]
+    keys = {name: cluster["private"][name] for name in ("alpha", "beta", "gamma")}
+    keys["gamma"] = cluster["operational_private"]["beta"]
+    child = _admission_child(consensus, cluster, parent, members=members, keys=keys)
+    ok, reason = consensus.verify_root(child, trust=parent)
+    assert ok is False
+    assert consensus.REASON_ADMISSION_OPERATIONAL_KEY in reason, reason
+
+
+def test_admission_rejects_removal_proofs(consensus, cluster):
+    """An admission drops nobody, so evidence of a drop is a contradiction."""
+    parent = _pair_root(consensus, cluster)
+    proof = _attested_proof(consensus, cluster, "gamma", consensus.root_id(parent), ["alpha", "beta"])
+    child = _admission_child(consensus, cluster, parent, removal_proofs=[proof])
+    ok, reason = consensus.verify_root(child, trust=parent)
+    assert ok is False
+    assert consensus.REASON_UNEXPECTED_REMOVAL_PROOF in reason, reason
+
+
+def test_admission_requires_schema_1_3(consensus, cluster):
+    """A 1.2 root that adds a member is still refused: old verifiers cannot read it."""
+    parent = _pair_root(consensus, cluster)
+    child = _admission_child(consensus, cluster, parent, version="1.2")
+    ok, reason = consensus.verify_root(child, trust=parent)
+    assert ok is False
+    assert consensus.REASON_ADMISSION_NOT_ALLOWED in reason, reason
 
 
 def test_a_chained_root_may_not_shrink_below_the_minimum(consensus, cluster):

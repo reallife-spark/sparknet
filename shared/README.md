@@ -61,8 +61,9 @@ build if a second copy of the field list appears in either role.
 
 How the cluster agrees on who holds the signing key: master election, the
 n-of-n unanimity rule (2 of 2 in a pair, 3 of 3 in the full cluster), canonical
-cluster trust roots, and re-formation when the Master changes. The narrative
-contract is `contracts/consensus-protocol.md`.
+cluster trust roots, re-formation when the Master changes, and the 2 -> 3
+admission (join) ceremony. The narrative contract is
+`contracts/consensus-protocol.md`.
 
 **Why it is here and not in the Master.** Every member runs this, including
 those that are only peers. The Master does not decide who the Master is — the

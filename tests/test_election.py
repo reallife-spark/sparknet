@@ -209,6 +209,15 @@ def _identity(node_id: str, path: Path) -> Path:
     return path
 
 
+def _cluster_key_dir(tmp_path: Path, name: str, cluster) -> Path:
+    key_dir = tmp_path / f"adopt-keys-{name}"
+    key_dir.mkdir(exist_ok=True)
+    private = key_dir / "cluster.ed25519"
+    private.write_text(cluster["private"][name] + "\n")
+    private.chmod(0o600)
+    return key_dir
+
+
 def _free_port() -> int:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
@@ -332,6 +341,71 @@ def test_a_root_forms_only_at_three_signatures(exchange, election, consensus, cl
             assert status["state"] == "awaiting_signatures", f"{count} signatures must not form a root"
         else:
             assert status["state"] == "formed" and status["root"]["formed_at"]
+
+
+def test_the_exchange_forms_a_schema_1_3_admission_root(election, consensus, cluster):
+    """The exchange can form a 2 -> 3 admission when it is given the parent.
+
+    Without the held root it is just a three-member election that happens to
+    name a new member; with it, the seal checks the admission rule before the
+    root is reported formed.
+    """
+    _, parent = _formed(
+        election,
+        consensus,
+        cluster,
+        candidate="beta",
+        members=cluster["members"][:2],
+    )
+    exchange = election.ElectionExchange(
+        cluster["members"],
+        clock=_clock,
+        previous_root_id=consensus.root_id(parent),
+        epoch=1,
+        held_root=parent,
+        admission=True,
+    )
+    _all_bids(exchange, election, cluster)
+    _all_votes(exchange, consensus, cluster, candidate="beta")
+    root = exchange.status()["root"]
+    for name in MEMBERS:
+        exchange.submit_signature(name, consensus.sign_root(root, name, cluster["private"][name])[name])
+    status = exchange.status()
+    assert status["state"] == "formed"
+    assert status["root"]["version"] == "1.3"
+    assert consensus.verify_root(status["root"], trust=parent) == (True, consensus.REASON_OK)
+
+
+def test_the_exchange_refuses_an_admission_that_changes_the_master(election, consensus, cluster):
+    """The seal, not only the later accept, refuses a combined join + takeover."""
+    _, parent = _formed(
+        election,
+        consensus,
+        cluster,
+        candidate="beta",
+        members=cluster["members"][:2],
+    )
+    exchange = election.ElectionExchange(
+        cluster["members"],
+        clock=_clock,
+        previous_root_id=consensus.root_id(parent),
+        epoch=1,
+        held_root=parent,
+        admission=True,
+    )
+    _all_bids(exchange, election, cluster)
+    _all_votes(exchange, consensus, cluster, candidate="gamma")
+    root = exchange.status()["root"]
+    signatures = {name: consensus.sign_root(root, name, cluster["private"][name])[name] for name in ("alpha", "beta")}
+    for name, signature in signatures.items():
+        exchange.submit_signature(name, signature)
+    with pytest.raises(election.ElectionError) as exc:
+        exchange.submit_signature(
+            "gamma",
+            consensus.sign_root(root, "gamma", cluster["private"]["gamma"])["gamma"],
+        )
+    assert exc.value.reason == election.REASON_ROOT_UNUSABLE
+    assert consensus.REASON_ADMISSION_MASTER_CHANGE in exc.value.detail
 
 
 def test_a_bad_c_signature_is_refused_immediately_not_at_three(exchange, election, consensus, cluster):
@@ -635,6 +709,433 @@ def test_the_two_members_that_stay_peers_have_their_files_left_alone(election, c
         assert out["accepted"] is False and out["reason"] == "not_elected"
         assert out["role"] == "peer"
         assert identity_path.read_bytes() == before, f"{name} did not win; accept must not have touched its identity"
+
+
+def test_a_new_member_adopts_the_admission_root_without_becoming_master(election, consensus, cluster, tmp_path):
+    """A peer named by an admission root must persist it, but stay a peer.
+
+    The election-loser path deliberately writes nothing. Admission is different:
+    the new member has no older root to hold, and the existing peer must move
+    from the pair root to the trio root or it cannot verify what the cluster
+    signs next. This is the member-adoption half of the join ceremony.
+    """
+    parent_members = cluster["members"][:2]
+    _, parent = _formed(election, consensus, cluster, candidate="beta", members=parent_members)
+    _, child = _formed(
+        election,
+        consensus,
+        cluster,
+        candidate="beta",
+        previous_root_id=consensus.root_id(parent),
+        epoch=1,
+    )
+    identity_path = _identity("gamma", tmp_path / "identity.json")
+    before = json.loads(identity_path.read_text())
+    root_out = tmp_path / "trust-root.json"
+
+    out = election.accept_root(
+        child,
+        identity_path,
+        trust_root=parent,
+        root_out=root_out,
+        install_as_member=True,
+        expected_members=cluster["members"],
+        key_dir=_cluster_key_dir(tmp_path, "gamma", cluster),
+    )
+    assert out["accepted"] is True
+    assert out["adopted_as_member"] is True
+    after = json.loads(identity_path.read_text())
+    assert after["role"] == "peer", "admission must not hand the new member the operational role"
+    assert after.get("operational_key") == before.get("operational_key")
+    assert after["trust_root"]["root_id"] == consensus.root_id(child)
+    assert json.loads(root_out.read_text())["root_id"] == consensus.root_id(child)
+
+
+def _pair_and_admission(election, consensus, cluster):
+    _, parent = _formed(
+        election,
+        consensus,
+        cluster,
+        candidate="beta",
+        members=cluster["members"][:2],
+    )
+    _, child = _formed(
+        election,
+        consensus,
+        cluster,
+        candidate="beta",
+        previous_root_id=consensus.root_id(parent),
+        epoch=1,
+    )
+    return parent, child
+
+
+def test_member_adoption_refuses_a_substituted_new_member(election, consensus, cluster, authz, tmp_path):
+    """The out-of-band roster must bind the new member, not just the parent.
+
+    A lying exchange can keep the same parent and Master while swapping the new
+    member for a fresh-key phantom. The expected roster is the only source that
+    says which new member the pair actually admitted.
+    """
+    _, parent = _formed(
+        election,
+        consensus,
+        cluster,
+        candidate="beta",
+        members=cluster["members"][:2],
+    )
+    delta_private, delta_public = authz.generate_keypair()
+    delta = {
+        "node_id": "delta",
+        "fingerprint": hashlib.sha256(b"delta-fingerprint").hexdigest(),
+        "wireguard_pubkey": base64.b64encode(hashlib.sha256(b"delta-wg").digest()).decode(),
+        "cluster_pubkey": delta_public,
+    }
+    child = {
+        "version": "1.3",
+        "nonce": "phantom-child",
+        "formed_at": "2026-10-06T12:00:00+00:00",
+        "members": [*cluster["members"][:2], delta],
+        "master_node_id": "beta",
+        "master_pubkey": cluster["operational"]["beta"],
+        "previous_root_id": consensus.root_id(parent),
+        "epoch": 1,
+    }
+    child = consensus.attach_root_signatures(
+        child,
+        {
+            "alpha": cluster["private"]["alpha"],
+            "beta": cluster["private"]["beta"],
+            "delta": delta_private,
+        },
+    )
+    identity_path = _identity("delta", tmp_path / "identity.json")
+    delta_dir = tmp_path / "keys-delta"
+    delta_dir.mkdir()
+    (delta_dir / "cluster.ed25519").write_text(delta_private + "\n")
+    with pytest.raises(election.ElectionError) as exc:
+        election.accept_root(
+            child,
+            identity_path,
+            trust_root=parent,
+            install_as_member=True,
+            expected_members=cluster["members"],
+            key_dir=delta_dir,
+        )
+    _raise_reason(pytest, exc, "root_unusable")
+    assert "out-of-band roster" in exc.value.detail
+
+    # The Master path is not exempt: a child chained to the parent with an
+    # unbound new member is refused before an identity flips.
+    master_identity = _identity("beta", tmp_path / "beta-identity.json")
+    with pytest.raises(election.ElectionError) as master_exc:
+        election.accept_root(
+            child,
+            master_identity,
+            trust_root=parent,
+            key_dir=_cluster_key_dir(tmp_path, "beta", cluster),
+        )
+    _raise_reason(pytest, master_exc, "root_unusable")
+    assert "out-of-band roster" in master_exc.value.detail
+
+
+def test_the_member_client_checks_the_roster_before_signing(election, consensus, cluster, authz, keydirs, tmp_path):
+    """The member process refuses a substituted roster before it co-signs.
+
+    This is the exchange-substitution attack at the client seam: the exchange
+    roster says delta, the out-of-band roster says gamma. Alpha must not add its
+    signature to the phantom root.
+    """
+    beta_private, beta_public = authz.generate_keypair()
+    (keydirs["beta"] / "operational.ed25519").write_text(beta_private + "\n")
+    (keydirs["beta"] / "operational.pub.b64").write_text(beta_public + "\n")
+    delta_private, delta_public = authz.generate_keypair()
+    delta_dir = tmp_path / "keys-delta"
+    delta_dir.mkdir()
+    (delta_dir / "cluster.ed25519").write_text(delta_private + "\n")
+    (delta_dir / "cluster.ed25519").chmod(0o600)
+
+    parent_members = cluster["members"][:2]
+    parent = consensus.attach_root_signatures(
+        {
+            "version": "1.2",
+            "nonce": "pair-parent",
+            "formed_at": "2026-10-06T12:00:00+00:00",
+            "members": parent_members,
+            "master_node_id": "beta",
+            "master_pubkey": beta_public,
+            "previous_root_id": "",
+            "epoch": 0,
+        },
+        {"alpha": cluster["private"]["alpha"], "beta": cluster["private"]["beta"]},
+    )
+    parent_doc = _write_root_doc(tmp_path / "parent.json", parent)
+    delta = {
+        "node_id": "delta",
+        "fingerprint": hashlib.sha256(b"delta-fingerprint").hexdigest(),
+        "wireguard_pubkey": base64.b64encode(hashlib.sha256(b"delta-wg").digest()).decode(),
+        "cluster_pubkey": delta_public,
+    }
+    malicious_members = [*parent_members, delta]
+    malicious_path = tmp_path / "malicious-members.json"
+    malicious_path.write_text(json.dumps({"schema_version": "1.0", "members": malicious_members}, indent=2))
+
+    port = _free_port()
+    base = f"http://127.0.0.1:{port}"
+    ready = threading.Event()
+    threading.Thread(
+        target=election.serve,
+        kwargs={
+            "members_path": malicious_path,
+            "bind": "127.0.0.1",
+            "port": port,
+            "trust_root": parent_doc,
+            "admission": True,
+            "ready": ready.set,
+        },
+        daemon=True,
+    ).start()
+    assert ready.wait(5), "the exchange never came up"
+
+    election.cast_request(base, "beta", keydirs["beta"])
+    election.cast_vote(base, "beta", "beta", election.DEFAULT_ELECTION_ID, keydirs["beta"])
+    election.cast_request(base, "delta", delta_dir)
+    election.cast_vote(base, "delta", "beta", election.DEFAULT_ELECTION_ID, delta_dir)
+
+    identity_path = _identity("alpha", tmp_path / "alpha-identity.json")
+    with pytest.raises(election.ElectionError) as exc:
+        election.run_member(
+            base,
+            "alpha",
+            "beta",
+            keydirs["alpha"],
+            identity_path=identity_path,
+            trust_root=parent,
+            install_as_member=True,
+            expected_members=cluster["members"],
+            admission=True,
+            root_out=tmp_path / "alpha-root.json",
+        )
+    _raise_reason(pytest, exc, "root_unusable")
+    assert "out-of-band roster" in exc.value.detail
+    assert election.status_of(base)["signatures"] == [], "alpha signed a root with an unbound roster"
+
+    # Omitting --admission/--members must not bypass the root-shape check.
+    with pytest.raises(election.ElectionError) as unflagged:
+        election.run_member(
+            base,
+            "alpha",
+            "beta",
+            keydirs["alpha"],
+            identity_path=identity_path,
+            trust_root=parent,
+            install_as_member=True,
+        )
+    _raise_reason(pytest, unflagged, "malformed")
+    assert "out-of-band roster" in unflagged.value.detail
+    assert election.status_of(base)["signatures"] == [], "unflagged client signed a substituted root"
+
+
+def test_member_adoption_requires_a_verified_parent(election, consensus, cluster, tmp_path):
+    """A new member must not adopt a 1.3 root without the parent that authorises the join."""
+    _, child = _pair_and_admission(election, consensus, cluster)
+    identity_path = _identity("gamma", tmp_path / "identity.json")
+    with pytest.raises(election.ElectionError) as exc:
+        election.accept_root(
+            child,
+            identity_path,
+            install_as_member=True,
+            expected_members=cluster["members"],
+            key_dir=_cluster_key_dir(tmp_path, "gamma", cluster),
+        )
+    _raise_reason(pytest, exc, "root_unusable")
+    assert "parent root" in exc.value.detail
+
+
+def test_member_adoption_refuses_a_forged_parent(election, consensus, cluster, tmp_path):
+    """A parent with no valid signatures is not evidence of a prior root."""
+    parent, child = _pair_and_admission(election, consensus, cluster)
+    forged = {key: value for key, value in parent.items() if key != "signatures"}
+    identity_path = _identity("gamma", tmp_path / "identity.json")
+    with pytest.raises(election.ElectionError) as exc:
+        election.accept_root(
+            child,
+            identity_path,
+            trust_root=forged,
+            install_as_member=True,
+            expected_members=cluster["members"],
+            key_dir=_cluster_key_dir(tmp_path, "gamma", cluster),
+        )
+    _raise_reason(pytest, exc, "root_unusable")
+    assert "parent root" in exc.value.detail
+
+
+def test_member_adoption_refuses_a_sibling_parent(election, consensus, cluster, tmp_path):
+    """An identity already holding T may not adopt a child chained to a different P."""
+    parent, child = _pair_and_admission(election, consensus, cluster)
+    other = _formed(
+        election,
+        consensus,
+        cluster,
+        candidate="beta",
+        members=cluster["members"][:2],
+    )[1]
+    assert consensus.root_id(other) != consensus.root_id(parent)
+    identity_path = _identity("alpha", tmp_path / "identity.json")
+    identity = json.loads(identity_path.read_text())
+    identity["trust_root"] = {"root_id": consensus.root_id(other)}
+    identity_path.write_text(json.dumps(identity, indent=2) + "\n")
+    with pytest.raises(election.ElectionError) as exc:
+        election.accept_root(
+            child,
+            identity_path,
+            trust_root=parent,
+            install_as_member=True,
+            expected_members=cluster["members"],
+            key_dir=_cluster_key_dir(tmp_path, "alpha", cluster),
+        )
+    _raise_reason(pytest, exc, "unchained_root")
+
+
+def test_member_adoption_checks_the_local_cluster_key(election, consensus, cluster, tmp_path):
+    """A node may not adopt a seat whose cluster key it does not hold."""
+    parent, child = _pair_and_admission(election, consensus, cluster)
+    identity_path = _identity("gamma", tmp_path / "identity.json")
+    key_dir = tmp_path / "keys-gamma"
+    key_dir.mkdir()
+    (key_dir / "cluster.ed25519").write_text(cluster["private"]["alpha"] + "\n")
+    with pytest.raises(election.ElectionError) as exc:
+        election.accept_root(
+            child,
+            identity_path,
+            trust_root=parent,
+            key_dir=key_dir,
+            install_as_member=True,
+            expected_members=cluster["members"],
+        )
+    _raise_reason(pytest, exc, "root_unusable")
+    assert "different cluster key" in exc.value.detail
+
+
+def test_member_adoption_accepts_a_chained_3_to_3_reformation(election, consensus, cluster, tmp_path):
+    """A peer can adopt a lawful 3 -> 3 re-formation, not only a 2 -> 3 join.
+
+    The chained-root verifier decides whether the membership change is lawful;
+    `--as-member` only decides that this non-master node persists `trust_root`
+    instead of taking the operational role.
+    """
+    _, parent = _formed(election, consensus, cluster, candidate="alpha")
+    _, child = _formed(
+        election,
+        consensus,
+        cluster,
+        candidate="alpha",
+        previous_root_id=consensus.root_id(parent),
+        epoch=1,
+    )
+    identity_path = _identity("beta", tmp_path / "identity.json")
+    out = election.accept_root(
+        child,
+        identity_path,
+        trust_root=parent,
+        install_as_member=True,
+        expected_members=cluster["members"],
+        key_dir=_cluster_key_dir(tmp_path, "beta", cluster),
+    )
+    assert out["accepted"] is True and out["adopted_as_member"] is True
+    after = json.loads(identity_path.read_text())
+    assert after["role"] == "peer"
+    assert after["trust_root"]["root_id"] == consensus.root_id(child)
+
+
+def test_member_adoption_accepts_changed_identity_fields_in_a_3_to_3(election, consensus, cluster, tmp_path):
+    """The live key-rotation shape: same nodes, new WG/fingerprint fields."""
+    _, parent = _formed(election, consensus, cluster, candidate="alpha")
+    reformed = [dict(member) for member in cluster["members"]]
+    for member in reformed:
+        member["fingerprint"] = hashlib.sha256(f"rotated-fp-{member['node_id']}".encode()).hexdigest()
+        member["wireguard_pubkey"] = base64.b64encode(
+            hashlib.sha256(f"rotated-wg-{member['node_id']}".encode()).digest()
+        ).decode()
+    _, child = _formed(
+        election,
+        consensus,
+        cluster,
+        candidate="alpha",
+        previous_root_id=consensus.root_id(parent),
+        epoch=1,
+        members=reformed,
+    )
+    identity_path = _identity("beta", tmp_path / "identity.json")
+    out = election.accept_root(
+        child,
+        identity_path,
+        trust_root=parent,
+        install_as_member=True,
+        expected_members=reformed,
+        key_dir=_cluster_key_dir(tmp_path, "beta", cluster),
+    )
+    assert out["accepted"] is True
+    assert json.loads(identity_path.read_text())["trust_root"]["root_id"] == consensus.root_id(child)
+
+
+def test_member_adoption_refuses_a_master_identity(election, consensus, cluster, tmp_path):
+    """A member adoption must not leave a master role or held key behind."""
+    parent, child = _pair_and_admission(election, consensus, cluster)
+    identity_path = _identity("gamma", tmp_path / "identity.json")
+    identity = json.loads(identity_path.read_text())
+    identity["role"] = "master"
+    identity["operational_key"] = {"held": True}
+    identity_path.write_text(json.dumps(identity, indent=2) + "\n")
+    with pytest.raises(election.ElectionError) as exc:
+        election.accept_root(
+            child,
+            identity_path,
+            trust_root=parent,
+            install_as_member=True,
+            expected_members=cluster["members"],
+        )
+    _raise_reason(pytest, exc, "root_unusable")
+
+
+def test_the_exchange_refuses_an_unverified_parent(election, consensus, cluster):
+    """The exchange does not build on a signature-less parent."""
+    _, parent = _formed(
+        election,
+        consensus,
+        cluster,
+        candidate="beta",
+        members=cluster["members"][:2],
+    )
+    forged = {key: value for key, value in parent.items() if key != "signatures"}
+    with pytest.raises(election.ElectionError) as exc:
+        election.ElectionExchange(
+            cluster["members"],
+            clock=_clock,
+            held_root=forged,
+            admission=True,
+        )
+    _raise_reason(pytest, exc, "root_unusable")
+
+
+def test_the_exchange_requires_the_admission_flag(election, consensus, cluster):
+    """A 2 -> 3 roster without --admission is an accidental join, not a re-formation."""
+    _, parent = _formed(
+        election,
+        consensus,
+        cluster,
+        candidate="beta",
+        members=cluster["members"][:2],
+    )
+    with pytest.raises(election.ElectionError) as exc:
+        election.ElectionExchange(
+            cluster["members"],
+            clock=_clock,
+            held_root=parent,
+            previous_root_id=consensus.root_id(parent),
+            epoch=1,
+        )
+    _raise_reason(pytest, exc, "admission_not_allowed")
 
 
 def test_accept_refuses_a_root_that_does_not_verify(election, consensus, cluster, tmp_path):
@@ -993,7 +1494,7 @@ def _wait_for_port(port: int, timeout: float = 10.0) -> None:
     raise AssertionError(f"nothing listened on 127.0.0.1:{port} within {timeout}s")
 
 
-def _serve_process(members_path: Path, port: int) -> subprocess.Popen:
+def _serve_process(members_path: Path, port: int, extra: list[str] | None = None) -> subprocess.Popen:
     return subprocess.Popen(
         [
             str(PY),
@@ -1007,6 +1508,7 @@ def _serve_process(members_path: Path, port: int) -> subprocess.Popen:
             "127.0.0.1",
             "--port",
             str(port),
+            *(extra or []),
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
@@ -1024,8 +1526,19 @@ def _stop(process: subprocess.Popen) -> None:
             process.wait(timeout=5)
 
 
-def _member_cmd(base: str, candidate: str, identity: Path, key_dir: Path) -> list[str]:
-    return [
+def _member_cmd(
+    base: str,
+    candidate: str,
+    identity: Path,
+    key_dir: Path,
+    *,
+    trust: Path | None = None,
+    as_member: bool = False,
+    root_out: Path | None = None,
+    root_doc: Path | None = None,
+    members: Path | None = None,
+) -> list[str]:
+    command = [
         str(PY),
         str(ELECTION_SCRIPT),
         "--shared-dir",
@@ -1042,6 +1555,17 @@ def _member_cmd(base: str, candidate: str, identity: Path, key_dir: Path) -> lis
         "--wait-seconds",
         "20",
     ]
+    if trust is not None:
+        command += ["--trust", str(trust)]
+    if as_member:
+        command += ["--as-member"]
+    if root_out is not None:
+        command += ["--root-out", str(root_out)]
+    if root_doc is not None:
+        command += ["--root-doc", str(root_doc)]
+    if members is not None:
+        command += ["--members", str(members)]
+    return command
 
 
 def test_three_real_member_processes_form_the_root_and_flip_one_identity(tmp_path, consensus, election):
@@ -1208,6 +1732,126 @@ def test_two_real_member_processes_form_a_pair_root_and_flip_one_identity(tmp_pa
     assert not (tmp_path / "pair-beta" / "trust-root.json").exists()
 
 
+def test_three_real_member_processes_form_an_admission_root(tmp_path, consensus, election):
+    """The full join ceremony across process boundaries.
+
+    A pair root is formed, then a third member joins without changing the
+    Master. The existing peer and the new member must both persist the trio
+    root as members — only the elected Master may flip to role master.
+    """
+    key_dirs = _keygen_dirs(tmp_path)
+    # The parent's master_pubkey must be the operational key the child's
+    # candidate process will use. Mint it first; cast_request reuses it.
+    operational = _cli(["keygen", "--key-dir", str(key_dirs["beta"]), "--name", "operational"])
+    assert operational.returncode == 0, operational.stderr
+    beta_operational = (key_dirs["beta"] / "operational.pub.b64").read_text().strip()
+
+    members_path = _members_doc(key_dirs, tmp_path / "cluster-members.json")
+    member_document = json.loads(members_path.read_text())
+    parent_members = [m for m in member_document["members"] if m["node_id"] in ("alpha", "beta")]
+    parent = consensus.attach_root_signatures(
+        {
+            "version": "1.2",
+            "nonce": "pair-parent",
+            "formed_at": "2026-10-06T12:00:00+00:00",
+            "members": parent_members,
+            "master_node_id": "beta",
+            "master_pubkey": beta_operational,
+            "previous_root_id": "",
+            "epoch": 0,
+        },
+        {name: (key_dirs[name] / "cluster.ed25519").read_text().strip() for name in ("alpha", "beta")},
+    )
+    parent_doc = tmp_path / "parent.json"
+    parent_doc.write_text(json.dumps({"root": parent, "root_id": consensus.root_id(parent)}, indent=2))
+    alpha_root = tmp_path / "alpha-root.json"
+    beta_root = tmp_path / "beta-root.json"
+    gamma_root = tmp_path / "gamma-root.json"
+    alpha_root.write_bytes(parent_doc.read_bytes())
+    beta_root.write_bytes(parent_doc.read_bytes())
+
+    identities = {}
+    for name in MEMBERS:
+        node_dir = tmp_path / name
+        node_dir.mkdir()
+        identities[name] = _identity(name, node_dir / "identity.json")
+
+    port = _free_port()
+    base = f"http://127.0.0.1:{port}"
+    server = _serve_process(members_path, port, ["--trust", str(parent_doc), "--admission"])
+    try:
+        _wait_for_port(port)
+        commands = {
+            "alpha": _member_cmd(
+                base,
+                "beta",
+                identities["alpha"],
+                key_dirs["alpha"],
+                root_doc=alpha_root,
+                as_member=True,
+                members=members_path,
+            ),
+            "beta": _member_cmd(
+                base,
+                "beta",
+                identities["beta"],
+                key_dirs["beta"],
+                root_doc=beta_root,
+                members=members_path,
+            ),
+            "gamma": _member_cmd(
+                base,
+                "beta",
+                identities["gamma"],
+                key_dirs["gamma"],
+                trust=parent_doc,
+                as_member=True,
+                root_out=gamma_root,
+                members=members_path,
+            ),
+        }
+        outputs = {}
+        processes = {
+            name: subprocess.Popen(
+                commands[name],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            for name in MEMBERS
+        }
+        for name, process in processes.items():
+            stdout, stderr = process.communicate(timeout=60)
+            assert process.returncode == 0, f"{name} failed: {stdout}\n{stderr}"
+            outputs[name] = json.loads(stdout)
+        status = election.status_of(base)
+        assert status["state"] == "formed"
+    finally:
+        _stop(server)
+
+    child_documents = [json.loads(path.read_text()) for path in (alpha_root, beta_root, gamma_root)]
+    child_ids = {document["root_id"] for document in child_documents}
+    assert len(child_ids) == 1, "every member must hold the same child root"
+    child = child_documents[0]["root"]
+    assert child["version"] == "1.3"
+    assert child["master_node_id"] == "beta"
+    assert set(child["signatures"]) == set(MEMBERS)
+    assert consensus.verify_root(child, trust=parent) == (True, consensus.REASON_OK)
+    assert consensus.verify_chain([child, parent]) == (True, consensus.REASON_OK)
+
+    alpha_doc = json.loads(identities["alpha"].read_text())
+    beta_doc = json.loads(identities["beta"].read_text())
+    gamma_doc = json.loads(identities["gamma"].read_text())
+    assert alpha_doc["role"] == "peer"
+    assert beta_doc["role"] == "master"
+    assert gamma_doc["role"] == "peer"
+    assert alpha_doc["trust_root"]["root_id"] == child_documents[0]["root_id"]
+    assert gamma_doc["trust_root"]["root_id"] == child_documents[0]["root_id"]
+    assert outputs["alpha"]["accept"]["adopted_as_member"] is True
+    assert outputs["beta"]["accept"]["adopted_as_member"] is False
+    assert outputs["gamma"]["accept"]["adopted_as_member"] is True
+
+
 def test_the_role_scripts_run_the_ceremony_and_refuse_a_wrong_expectation(tmp_path, consensus):
     """The scripts are how a human runs the election; they are the artifact.
 
@@ -1247,6 +1891,8 @@ def test_the_role_scripts_run_the_ceremony_and_refuse_a_wrong_expectation(tmp_pa
         str(master_identity),
         "--root-doc",
         str(root_doc),
+        "--members",
+        str(members_path),
         "--key-dir",
         str(key_dirs[WINNER]),
         "--wait-seconds",
@@ -1279,6 +1925,8 @@ def test_the_role_scripts_run_the_ceremony_and_refuse_a_wrong_expectation(tmp_pa
                 "20",
                 "--url",
                 base,
+                "--members",
+                str(members_path),
                 *extra,
             ]
 

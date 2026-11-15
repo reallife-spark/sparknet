@@ -201,9 +201,11 @@ are unchanged.
 - The sender includes only episodic summaries, shared blackboard entries and
   project notes the user explicitly selected. Short-term/cache, secrets, another
   user's records and authority data are excluded.
-- The receiver stages the bundle under `01_Inbox/share-<id>/`. It is not ingested
-  into memory until the inbox item is accepted; an unaccepted bundle is data in
-  staging, not knowledge.
+- The receiver stages the bundle under `01_Inbox/<share_id>/`. `share_id`
+  already carries the `share-` prefix and is unique across nodes (node sequence
+  plus a random suffix); a node-local counter alone would collide with another
+  node's `share-1`. It is not ingested into memory until the inbox item is
+  accepted; an unaccepted bundle is data in staging, not knowledge.
 - Import deduplicates by content hash and reports differing records as conflicts.
   A conflict is held for a human; nothing is overwritten.
 - A memory bundle never widens scope. The receiver's vault, user and project

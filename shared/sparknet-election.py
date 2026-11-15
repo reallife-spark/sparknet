@@ -95,6 +95,7 @@ REASON_ROOT_UNUSABLE = "root_unusable"
 REASON_KEY_MISSING = "cluster_key_missing"
 REASON_UNREACHABLE = "exchange_unreachable"
 REASON_TIMEOUT = "election_timeout"
+REASON_ADMISSION_NOT_ALLOWED = "admission_not_allowed"
 
 HTTP_BAD_REQUEST = 400
 HTTP_FORBIDDEN = 403
@@ -433,6 +434,8 @@ class ElectionExchange:
         previous_root_id: str = "",
         epoch: int = 0,
         removal_proofs: list[dict[str, Any]] | None = None,
+        held_root: dict[str, Any] | None = None,
+        admission: bool = False,
     ) -> None:
         self.shared_dir = Path(shared_dir) if shared_dir else DEFAULT_SHARED_DIR
         self.consensus = load_consensus(self.shared_dir)
@@ -440,6 +443,42 @@ class ElectionExchange:
         self.member_ids = {member["node_id"] for member in members}
         self.members_by_id = {member["node_id"]: member for member in members}
         self.election_id = election_id
+        self.held_root = held_root
+        self.admission = admission
+        if admission and held_root is None:
+            raise ElectionError(REASON_MALFORMED, "admission requires the root in force as held_root")
+        if held_root is not None:
+            held_ok, held_detail = self.consensus.verify_root(held_root)
+            if not held_ok:
+                raise ElectionError(REASON_ROOT_UNUSABLE, f"held root does not verify: {held_detail}")
+            held_members = held_root.get("members")
+            if not isinstance(held_members, list) or not all(
+                isinstance(member, dict) and member.get("node_id") for member in held_members
+            ):
+                raise ElectionError(REASON_MALFORMED, "held root has no usable membership")
+            held_ids = {member["node_id"] for member in held_members}
+            new_ids = set(self.member_ids)
+            added = new_ids - held_ids
+            dropped = held_ids - new_ids
+            if added and dropped:
+                raise ElectionError(
+                    REASON_ADMISSION_NOT_ALLOWED,
+                    "a chained root may not add and drop members in one step",
+                )
+            is_admission = bool(added)
+            if is_admission and not admission:
+                raise ElectionError(
+                    REASON_ADMISSION_NOT_ALLOWED,
+                    "a 2 -> 3 join requires --admission; it is not a normal re-formation",
+                )
+            if admission and not is_admission:
+                raise ElectionError(
+                    REASON_ADMISSION_NOT_ALLOWED,
+                    "--admission requires one new member and no drops",
+                )
+            previous_root_id = previous_root_id or self.consensus.root_id(held_root)
+            if epoch == 0:
+                epoch = int(held_root.get("epoch", 0)) + 1
         self.previous_root_id = previous_root_id
         self.epoch = epoch
         self.removal_proofs = [dict(proof) for proof in (removal_proofs or [])]
@@ -603,8 +642,12 @@ class ElectionExchange:
             self.signatures[node_id] = signature_b64
             if len(self.signatures) >= len(self.members):
                 # Belt and braces: everything checked individually, now check
-                # the whole — the seal the members' client also runs.
-                ok, detail = self.consensus.verify_root({**self.root, "signatures": dict(self.signatures)})
+                # the whole — the seal the members' client also runs. When the
+                # exchange was given the root in force, the seal also checks
+                # the chain and (for a join) the admission rule, so a bad
+                # roster is refused before it can be reported formed.
+                signed_root = {**self.root, "signatures": dict(self.signatures)}
+                ok, detail = self.consensus.verify_root(signed_root, trust=self.held_root)
                 if not ok:
                     del self.signatures[node_id]
                     raise ElectionError(REASON_ROOT_UNUSABLE, detail)
@@ -774,6 +817,7 @@ def serve(
     election_id: str = DEFAULT_ELECTION_ID,
     trust_root: Path | None = None,
     removal_proofs: Path | None = None,
+    admission: bool = False,
     ready: Callable[[], None] | None = None,
 ) -> None:
     """Run the exchange until interrupted.
@@ -786,18 +830,35 @@ def serve(
     survivors are the `members_path` roster; the dropped member is simply not in
     it). The consensus module checks that the dropped set equals the evidenced
     set exactly, so proofs for a member who is not dropped are refused.
+    `admission=True` is required when the roster adds one member to the pair; it
+    is not implied by supplying `--trust`, so an accidental join cannot masquerade
+    as a re-formation.
 
     `ready` is called once the socket is listening, so a test can know when to
     start its members without sleeping on a guess.
     """
     previous_root_id = ""
     epoch = 0
+    held: dict[str, Any] | None = None
     proofs: list[dict[str, Any]] | None = None
+    members = load_members(members_path)
     if trust_root is not None:
         held = _load_held_root(trust_root)
         consensus = load_consensus(shared_dir)
         previous_root_id = consensus.root_id(held)
         epoch = int(held.get("epoch", 0)) + 1
+    if admission:
+        if held is None:
+            raise ElectionError(REASON_MALFORMED, "admission requires --trust with the root in force")
+        if removal_proofs is not None:
+            raise ElectionError(REASON_MALFORMED, "admission drops nobody; removal proofs are not allowed")
+        held_ids = {member["node_id"] for member in held["members"]}
+        new_ids = {member["node_id"] for member in members}
+        if len(held_ids) != 2 or len(new_ids) != 3 or len(new_ids - held_ids) != 1 or held_ids - new_ids:
+            raise ElectionError(
+                REASON_MALFORMED,
+                "admission is exactly 2 -> 3 with one new member and no drops",
+            )
     if removal_proofs is not None:
         try:
             proofs = json.loads(Path(removal_proofs).read_text())
@@ -806,13 +867,15 @@ def serve(
         if not isinstance(proofs, list):
             raise ElectionError(REASON_MALFORMED, "removal proofs must be a JSON list")
     exchange = ElectionExchange(
-        load_members(members_path),
+        members,
         shared_dir=shared_dir,
         clock=clock,
         election_id=election_id,
         previous_root_id=previous_root_id,
         epoch=epoch,
         removal_proofs=proofs,
+        held_root=held,
+        admission=admission,
     )
     server = ThreadingHTTPServer((bind, port), _Handler)
     server.exchange = exchange  # type: ignore[attr-defined]
@@ -1017,6 +1080,64 @@ def sign_root(
     )
 
 
+def _write_root_document(root_out: Path | None, root: dict[str, Any], root_id: str) -> None:
+    """Write the held-root document, preserving any operator metadata already there."""
+    if root_out is None:
+        return
+    document = json.loads(root_out.read_text()) if root_out.is_file() else {}
+    document["root"] = root
+    document["root_id"] = root_id
+    tmp_doc = root_out.with_name(root_out.name + ".tmp")
+    tmp_doc.write_text(json.dumps(document, indent=2, sort_keys=False) + "\n")
+    tmp_doc.replace(root_out)
+
+
+def _member_roster(members: list[dict[str, Any]], consensus: Any) -> dict[str, dict[str, Any]]:
+    """Project a roster to the four signed member fields, keyed by node id."""
+    return {member["node_id"]: {field: member[field] for field in consensus.ROOT_MEMBER_FIELDS} for member in members}
+
+
+def _assert_expected_roster(
+    root: dict[str, Any],
+    expected_members: list[dict[str, Any]],
+    consensus: Any,
+) -> None:
+    """Refuse a formed root whose roster differs from the out-of-band roster.
+
+    The exchange is one member's process, not a trusted membership source. Every
+    member must compare the root it is asked to co-sign against the roster it
+    exchanged out of band, or a lying exchange can substitute a fresh-key phantom
+    for the new member and collect the honest peer's signature.
+    """
+    actual = _member_roster(root["members"], consensus)
+    expected = _member_roster(expected_members, consensus)
+    if actual != expected:
+        missing = sorted(set(expected) - set(actual))
+        extra = sorted(set(actual) - set(expected))
+        raise ElectionError(
+            REASON_ROOT_UNUSABLE,
+            f"formed root membership differs from the out-of-band roster (missing {missing}, extra {extra})",
+        )
+
+
+def _guard_identity_update(
+    identity: dict[str, Any],
+    updated: dict[str, Any],
+    allowed_top: set[str],
+) -> None:
+    """Refuse an identity write that would move anything outside the permit list."""
+    for key, value in identity.items():
+        if key in allowed_top:
+            continue
+        if updated.get(key) != value:
+            raise ElectionError(
+                REASON_ROOT_UNUSABLE,
+                f"refusing to write: field {key!r} would change under accept",
+            )
+    if set(updated) - set(identity) - allowed_top:
+        raise ElectionError(REASON_ROOT_UNUSABLE, "refusing to write: accept would invent fields")
+
+
 def accept_root(
     root: dict[str, Any],
     identity_path: Path,
@@ -1025,14 +1146,19 @@ def accept_root(
     root_out: Path | None = None,
     root_doc: Path | None = None,
     key_dir: Path | None = None,
+    install_as_member: bool = False,
+    expected_members: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Install an elected root on this node — or leave the node a peer.
 
-    The flip is guarded, not spelled out: exactly four fields may change
-    (`role`, `role_note`, `operational_key.held`/`root_id`, and the new
-    `trust_root` block), and the write is refused outright if anything else
-    would move. The no-loss property is not a test someone has to remember to
-    run; it is the last thing that happens before the file is replaced.
+    The Master flip changes exactly four fields (`role`, `role_note`,
+    `operational_key.held`/`root_id`, and `trust_root`). A non-Master member
+    that is admitted by a join ceremony changes only `trust_root`: it must hold
+    the new root to verify the cluster's next signatures, but it must not gain
+    the operational role. An ordinary election loser still changes nothing,
+    which is why member adoption is explicit rather than inferred. A chained
+    member adoption requires `expected_members`; the trust path validates the
+    membership change and the out-of-band roster binds the exact new member set.
     """
     consensus = load_consensus(shared_dir)
     authz = load_authz(shared_dir)
@@ -1064,9 +1190,49 @@ def accept_root(
         raise ElectionError(REASON_ROOT_UNUSABLE, f"root's master_pubkey does not parse: {exc}") from exc
 
     node_id = identity.get("node_id")
-    members = {m["node_id"] for m in root["members"]}
-    if node_id not in members:
+    by_id = {m["node_id"]: m for m in root["members"]}
+    if node_id not in by_id:
         raise ElectionError(REASON_NOT_A_MEMBER, f"{node_id} is not named by this root")
+
+    if install_as_member and expected_members is None:
+        raise ElectionError(
+            REASON_ROOT_UNUSABLE,
+            "member adoption requires the out-of-band roster (--members)",
+        )
+    if expected_members is not None:
+        _assert_expected_roster(root, expected_members, consensus)
+    elif install_as_member:
+        raise ElectionError(
+            REASON_ROOT_UNUSABLE,
+            "member adoption requires the out-of-band roster (--members)",
+        )
+    elif trust_root is not None:
+        parent_ids = {member["node_id"] for member in trust_root["members"]}
+        child_ids = set(by_id)
+        if child_ids - parent_ids:
+            raise ElectionError(
+                REASON_ROOT_UNUSABLE,
+                "a chained root that adds a member requires the out-of-band roster (--members)",
+            )
+
+    if install_as_member and node_id == root["master_node_id"]:
+        raise ElectionError(
+            REASON_ROOT_UNUSABLE,
+            "the elected master installs normally; --as-member is for a non-master member",
+        )
+    if install_as_member and key_dir is None:
+        raise ElectionError(
+            REASON_ROOT_UNUSABLE,
+            "member adoption requires --key-dir so the local cluster key can be checked",
+        )
+
+    if key_dir is not None:
+        _, cluster_public = read_keypair(key_dir, "cluster", authz)
+        if by_id[node_id]["cluster_pubkey"] != cluster_public:
+            raise ElectionError(
+                REASON_ROOT_UNUSABLE,
+                "root names a different cluster key for this node; refusing to adopt a seat this key cannot sign",
+            )
 
     if node_id == root["master_node_id"] and key_dir is not None:
         _, operational_public = read_keypair(key_dir, "operational", authz)
@@ -1078,15 +1244,70 @@ def accept_root(
             )
 
     root_id = incoming_root_id
+    trust_entry = {
+        "root_id": root_id,
+        "master_node_id": root["master_node_id"],
+        "master_pubkey": root["master_pubkey"],
+        "formed_at": root.get("formed_at"),
+    }
+    if trust_root is not None:
+        # A supplied parent is evidence, not a convenience. Verify it on its own
+        # and require it to be the root this identity already holds, if any. This
+        # applies to a member adoption and to a Master installing a re-formation.
+        parent_ok, parent_detail = consensus.verify_root(trust_root)
+        if not parent_ok:
+            raise ElectionError(REASON_ROOT_UNUSABLE, f"parent root does not verify: {parent_detail}")
+        parent_id = consensus.root_id(trust_root)
+        held_id = (
+            str(held_projection["root_id"])
+            if isinstance(held_projection, dict) and held_projection.get("root_id")
+            else None
+        )
+        if held_id is not None and held_id != parent_id:
+            raise ElectionError(
+                getattr(consensus, "REASON_UNCHAINED", "unchained"),
+                "the supplied parent must be the root this identity already holds",
+            )
+
+    if install_as_member:
+        # A member adoption is an admission, not a free root install: the parent
+        # is required, and the child must be exactly 2 -> 3.
+        if trust_root is None:
+            raise ElectionError(
+                REASON_ROOT_UNUSABLE,
+                "member adoption requires the parent root as trust evidence",
+            )
+        if identity.get("role") == "master" or (identity.get("operational_key") or {}).get("held") is True:
+            raise ElectionError(
+                REASON_ROOT_UNUSABLE,
+                "a member adoption may not leave a master role or held operational key in place",
+            )
+
     if node_id != root["master_node_id"]:
-        # Correct outcome for the two members that stayed peers: verify and
-        # report, change nothing, do not fail the ceremony.
+        if not install_as_member:
+            # Ordinary election loser: verify and report, change nothing.
+            return {
+                "accepted": False,
+                "reason": "not_elected",
+                "detail": f"{node_id} is a member, not the elected master",
+                "root_id": root_id,
+                "role": identity.get("role"),
+            }
+        updated = json.loads(json.dumps(identity))  # deep copy, JSON-typed
+        updated["trust_root"] = trust_entry
+        _guard_identity_update(identity, updated, {"trust_root"})
+        tmp = identity_path.with_name(identity_path.name + ".tmp")
+        tmp.write_text(json.dumps(updated, indent=2, sort_keys=False) + "\n")
+        tmp.replace(identity_path)
+        _write_root_document(root_out, root, root_id)
         return {
-            "accepted": False,
-            "reason": "not_elected",
-            "detail": f"{node_id} is a member, not the elected master",
+            "accepted": True,
+            "adopted_as_member": True,
             "root_id": root_id,
-            "role": identity.get("role"),
+            "role": updated.get("role"),
+            "master_node_id": root["master_node_id"],
+            "identity_path": str(identity_path),
+            "root_doc": str(root_out) if root_out else None,
         }
 
     updated = json.loads(json.dumps(identity))  # deep copy, JSON-typed
@@ -1094,7 +1315,7 @@ def accept_root(
         updated["role"] = "master"
         updated["role_note"] = (
             f"role became 'master' when {node_id} was elected: all "
-            f"{len(members)} members co-signed cluster trust root {root_id} "
+            f"{len(by_id)} members co-signed cluster trust root {root_id} "
             f"(formed {root.get('formed_at')}), naming this node's operational "
             f"key. See contracts/consensus-protocol.md."
         )
@@ -1102,47 +1323,27 @@ def accept_root(
     operational_key["held"] = True
     operational_key["root_id"] = root_id
     updated["operational_key"] = operational_key
-    updated["trust_root"] = {
-        "root_id": root_id,
-        "master_node_id": root["master_node_id"],
-        "master_pubkey": root["master_pubkey"],
-        "formed_at": root.get("formed_at"),
-    }
+    updated["trust_root"] = trust_entry
 
-    # The no-loss guard: nothing outside the four permitted fields may move.
-    # Comparing before writing is the only moment this is provable — once the
-    # file is replaced, nobody can tell what was lost.
-    allowed_top = {"role", "role_note", "operational_key", "trust_root"}
-    for key, value in identity.items():
-        if key in allowed_top:
-            continue
-        if updated.get(key) != value:
-            raise ElectionError(
-                REASON_ROOT_UNUSABLE,
-                f"refusing to write: field {key!r} would change under accept",
-            )
-    if set(updated) - set(identity) - allowed_top:
-        raise ElectionError(REASON_ROOT_UNUSABLE, "refusing to write: accept would invent fields")
+    _guard_identity_update(
+        identity,
+        updated,
+        {"role", "role_note", "operational_key", "trust_root"},
+    )
 
     tmp = identity_path.with_name(identity_path.name + ".tmp")
     tmp.write_text(json.dumps(updated, indent=2, sort_keys=False) + "\n")
     tmp.replace(identity_path)
-
-    if root_out is not None:
-        document = json.loads(root_out.read_text()) if root_out.is_file() else {}
-        document["root"] = root
-        document["root_id"] = root_id
-        tmp_doc = root_out.with_name(root_out.name + ".tmp")
-        tmp_doc.write_text(json.dumps(document, indent=2, sort_keys=False) + "\n")
-        tmp_doc.replace(root_out)
+    _write_root_document(root_out, root, root_id)
 
     return {
         "accepted": True,
+        "adopted_as_member": False,
         "root_id": root_id,
         "role": updated["role"],
         "master_node_id": root["master_node_id"],
         "identity_path": str(identity_path),
-        "root_doc": str(root_doc) if root_doc else None,
+        "root_doc": str(root_out) if root_out else None,
     }
 
 
@@ -1157,15 +1358,25 @@ def run_member(
     shared_dir: Path | None = None,
     root_out: Path | None = None,
     root_doc: Path | None = None,
+    trust_root: dict[str, Any] | None = None,
+    install_as_member: bool = False,
+    expected_members: list[dict[str, Any]] | None = None,
+    admission: bool = False,
 ) -> dict[str, Any]:
     """The full ceremony from one member's seat: bid, vote, wait, co-sign, accept.
 
     One process per member, deliberately. Votes must come from separate seats at
     the table, and a function that collected them from one process
     would prove nothing about whether a real cluster can actually do this.
+    A chained root requires `expected_members`; if the root adds a member, the
+    roster is compared before co-signing, and a 3 -> 3 re-formation is accepted
+    by a member with `--as-member` without the admission flag.
     """
     authz = load_authz(shared_dir)
+    consensus = load_consensus(shared_dir)
     read_keypair(key_dir, "cluster", authz)  # fail before the exchange sees us
+    if (admission or install_as_member) and expected_members is None:
+        raise ElectionError(REASON_MALFORMED, "member adoption requires --members with the out-of-band roster")
     out: dict[str, Any] = {"node_id": node_id, "candidate": candidate}
     # Resume, don't restart: a second run of the same ceremony finds its bid
     # and ballot already in and leaves them alone. Nonces are fresh per call,
@@ -1183,6 +1394,19 @@ def run_member(
         else {"already_cast": True}
     )
     out["root"] = wait_for(base, lambda s: isinstance(s.get("root"), dict), wait_seconds)
+    formed_root = out["root"]["root"]
+    parent_root = trust_root
+    if parent_root is None and root_doc is not None and root_doc.is_file():
+        held = json.loads(root_doc.read_text()).get("root")
+        if isinstance(held, dict):
+            parent_root = held
+    if parent_root is not None and expected_members is None:
+        raise ElectionError(
+            REASON_ROOT_UNUSABLE,
+            "a chained root requires the out-of-band roster (--members) before any signature",
+        )
+    if expected_members is not None:
+        _assert_expected_roster(formed_root, expected_members, consensus)
     if out["root"].get("state") != "formed":
         out["co_sign"] = sign_root(base, node_id, candidate, election_id, key_dir, shared_dir)
         out["formed"] = wait_for(base, lambda s: s.get("state") == "formed", wait_seconds)
@@ -1206,12 +1430,18 @@ def run_member(
         raise ElectionError(REASON_MALFORMED, "--identity is required to accept a root")
     if root_out is None and root_doc is None:
         root_out = identity_path.with_name("trust-root.json")
-    trust = None
-    if root_doc is not None and root_doc.is_file():
-        held = json.loads(root_doc.read_text()).get("root")
-        if isinstance(held, dict) and held.get("nonce") != root.get("nonce"):
-            trust = held  # a held root of a different nonce: supersession rules
-    out["accept"] = accept_root(root, identity_path, shared_dir, trust, root_out, root_doc, key_dir)
+    trust = parent_root if parent_root is not None and parent_root.get("nonce") != root.get("nonce") else None
+    out["accept"] = accept_root(
+        root,
+        identity_path,
+        shared_dir,
+        trust,
+        root_out,
+        root_doc,
+        key_dir,
+        install_as_member=install_as_member,
+        expected_members=expected_members,
+    )
     return out
 
 
@@ -1267,6 +1497,11 @@ def _main(argv: list[str] | None = None) -> int:
         default=None,
         help="JSON list of removal proofs for a reduced-membership re-formation",
     )
+    p.add_argument(
+        "--admission",
+        action="store_true",
+        help="form a 2 -> 3 join ceremony; requires --trust with the root in force",
+    )
 
     def member_args(p: argparse.ArgumentParser, with_identity: bool = False) -> None:
         p.add_argument("--url", default=f"http://{DEFAULT_BIND}:{DEFAULT_PORT}")
@@ -1297,6 +1532,12 @@ def _main(argv: list[str] | None = None) -> int:
     p.add_argument("--trust", type=Path, default=None)
     p.add_argument("--root-out", type=Path, default=None)
     p.add_argument("--root-doc", type=Path, default=None)
+    p.add_argument("--members", type=Path, default=None, help="out-of-band roster to bind the root to")
+    p.add_argument(
+        "--as-member",
+        action="store_true",
+        help="adopted by a join ceremony: persist trust_root without taking the master role",
+    )
 
     p = sub.add_parser("member", help="the whole ceremony, one process")
     member_args(p)
@@ -1306,6 +1547,14 @@ def _main(argv: list[str] | None = None) -> int:
     p.add_argument("--wait-seconds", type=float, default=30.0)
     p.add_argument("--root-out", type=Path, default=None)
     p.add_argument("--root-doc", type=Path, default=None)
+    p.add_argument("--trust", type=Path, default=None, help="parent root for an admission")
+    p.add_argument("--members", type=Path, default=None, help="out-of-band roster to bind the root to")
+    p.add_argument("--admission", action="store_true", help="run a 2 -> 3 join; requires --members")
+    p.add_argument(
+        "--as-member",
+        action="store_true",
+        help="persist the root as a member without taking the master role",
+    )
 
     args = parser.parse_args(argv)
     shared_dir = args.shared_dir
@@ -1330,6 +1579,7 @@ def _main(argv: list[str] | None = None) -> int:
                 election_id=args.election_id,
                 trust_root=args.trust,
                 removal_proofs=args.removal_proofs,
+                admission=args.admission,
             )
             payload = {"stopped": True}
         elif args.command == "request":
@@ -1353,6 +1603,7 @@ def _main(argv: list[str] | None = None) -> int:
                 shared_dir,
             )
         elif args.command == "accept":
+            expected_members = load_members(args.members) if args.members else None
             root_document = json.loads(args.root.read_text())
             if isinstance(root_document.get("root"), dict):
                 root_document = root_document["root"]
@@ -1368,8 +1619,16 @@ def _main(argv: list[str] | None = None) -> int:
                 args.root_out,
                 args.root_doc,
                 args.key_dir,
+                install_as_member=args.as_member,
+                expected_members=expected_members,
             )
         else:  # member
+            expected_members = load_members(args.members) if args.members else None
+            trust_document = None
+            if args.trust is not None:
+                trust_document = json.loads(args.trust.read_text())
+                if isinstance(trust_document.get("root"), dict):
+                    trust_document = trust_document["root"]
             payload = run_member(
                 args.url,
                 _resolve_node_id(args),
@@ -1381,6 +1640,10 @@ def _main(argv: list[str] | None = None) -> int:
                 shared_dir=shared_dir,
                 root_out=args.root_out,
                 root_doc=args.root_doc,
+                trust_root=trust_document,
+                install_as_member=args.as_member,
+                expected_members=expected_members,
+                admission=args.admission,
             )
     except ElectionError as exc:
         print(json.dumps(exc.payload(), indent=2, sort_keys=True))

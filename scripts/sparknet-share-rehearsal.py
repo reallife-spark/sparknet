@@ -199,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
             {"share_id": offer["share_id"], "files": {"notes/rehearsal.md": "# rehearsal\n"}},
             keys["alice"],
         )
-        staged = work / "bob" / "01_Inbox" / f"share-{offer['share_id']}" / "notes" / "rehearsal.md"
+        staged = work / "bob" / "01_Inbox" / offer["share_id"] / "notes" / "rehearsal.md"
         check(
             "payload staged in bob's review inbox", status == 200 and staged.read_text() == "# rehearsal\n", str(body)
         )

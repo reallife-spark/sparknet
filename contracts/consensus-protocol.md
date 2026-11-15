@@ -10,6 +10,7 @@ of working code will be wrong about a security boundary:
 | Key separation (cluster / operational / identity) | built, unit-tested |
 | **The election itself** — who votes, and how a result becomes a root | **built** (fabric `PLAN.md` Step 11). `shared/sparknet-election.py` is the exchange: `serve` collects bids, ballots and root co-signatures on port 4210 and holds no private key — every signature is made by a member process holding its own cluster key. `peer-node/scripts/sparknet-election-request.sh` and `master-node/scripts/sparknet-election-approve.sh` run the member ceremony for each role. The listener is code, not a deployment: `contracts/ports.json` records 4210 `implemented` with runtime `not-listening` until a host actually runs it. See **Exchange** below. |
 | Re-formation when a member is dropped | **built** (fabric `PLAN.md` Step 21, schema 1.2) — policy B adopted: a chained root with a strict-subset membership, evidenced by a removal proof per dropped member — see below |
+| Joining a member (2 -> 3) | **built** (fabric `PLAN.md` Step 112, schema 1.3) — a chained root that admits exactly one new member to a pair, keeps the Master and existing member records unchanged, requires all three co-signatures, and is adopted by every member — see **Admission** below |
 
 The signer that consumes a root is built (`master-node/services/sparknet-signer.py`),
 but it deliberately has no way to make one. A signer pointed at a root that is not
@@ -154,6 +155,9 @@ EXPECT=<node>` (master) runs the same ceremony and additionally writes the
 formed root into `master-node/manifests/cluster-trust-root.json`. Both are
 wrappers around the shared `member` command, because both roles run the same
 conversation — the roles differ in what they hold, not in how they agree.
+For an admission, the exchange adds `--trust <parent>` and `--admission`; the
+member command adds `--admission --members <roster>` and `--as-member`, and a
+new member also passes `--trust <parent>` instead of a held `--root-doc`.
 
 ## The cluster trust root
 
@@ -179,6 +183,11 @@ cannot claim a height it did not earn (a stale root replayed as fresh, or a forg
 forward jump). Because a *reduced* root and its parent share a lineage but not a
 membership, epoch—not `previous_root_id` alone—is what makes "the same lockstep
 again" distinguishable from a genuine next generation.
+
+Schema **1.3** adds admission without adding a signed field: the root keeps the
+1.2 byte shape, but a verifier that knows 1.3 accepts one specific superset.
+A 1.2 verifier still refuses that superset, so all members must run the 1.3
+implementation before the join exchange.
 
 **The signed-field set is version-aware.** `previous_root_id` entered the signed
 fields in schema 1.1 and `epoch` in schema 1.2. A **1.0** root (the schema before
@@ -213,6 +222,16 @@ and, on the trust path (a peer that already holds a root), additionally:
    independently signed (see Re-formation), so it authenticates itself and is
    carried alongside the root, **not** among the signed fields — the signed root
    stays small and its co-signatures are unaffected by the evidence.
+8. if its membership is a **strict superset** of the held root's — the admission
+   case — the parent must have exactly two members, the child exactly three, the
+   added set exactly one, the dropped set empty, the elected Master and
+   `master_pubkey` unchanged, every existing member's four signed fields
+   unchanged, the new member's fingerprint/WireGuard/cluster key distinct from
+   every existing member's, `master_pubkey` distinct from every member's cluster
+   key, and no removal proof attached. The child must use schema 1.3 or newer. A
+   change that tries to add
+   and drop, add two, rotate an existing member, or change the Master in the same
+   step is refused with an `admission_*` reason.
 
 Points 3 and 4 matter more than they look. Without 3, a root could name members
 and be signed by strangers. Without 4, a root could bind a master public key
@@ -221,7 +240,8 @@ replaced by a rival well-signed root that claims no descent, and the ordering
 of two roots would depend entirely on where history happens to live. Without 6,
 a stale root could be replayed as a fresh generation. Without 7, a colluding
 survivor majority could silently vanish an honest node and a pure verifier could
-not tell a lawful reduction from a forgery.
+not tell a lawful reduction from a forgery. Without 8, a join could smuggle a
+takeover or an existing-member key rotation into a membership change.
 
 The root is self-describing: it carries its own membership, so a peer joining
 later reads the membership from the root rather than from configuration that could
@@ -257,9 +277,9 @@ whose epoch is not the held root's plus one, as `unchained_root`, however well i
 is signed. This closes the old gap in which a pure verifier could not order two
 different roots: ordering is now signed into the root itself, so it survives
 offline and does not depend on where history lives. Membership under the chain may
-only replace the master or *shrink* — a chained root that adds a member is the join
-ceremony, which is a different contract — and may not fall below the cluster
-minimum of two.
+replace the master, *shrink*, or admit one member to a pair by the **Admission**
+ceremony below; it may not combine those changes, and it may not fall below the
+cluster minimum of two.
 
 **Supersession is still enforced where history lives, as the last line of
 defence.** The ledger records the `root_id` each signature was issued under.
@@ -314,6 +334,75 @@ Master without unanimity among the members of the *new* root, and a node removed
 by re-formation cannot re-form its way back in on its own — its cluster key is
 not in the reduced root, and its removal is a signed fact in the chain.
 
+## Admission (join ceremony)
+
+A pair becomes the full three-member cluster by forming a **chained child root**
+that adds one member. It does not hold a fresh election: the Master stays the
+Master, and the two existing members' four signed fields stay unchanged. The new
+member is the only membership change.
+
+The rule is deliberately narrow:
+
+- parent has exactly two members, child exactly three;
+- exactly one member is added, none is dropped;
+- `master_node_id` and `master_pubkey` are unchanged;
+- existing members' `node_id`, fingerprint, WireGuard key and cluster key do not
+  change — a join is not a key rotation;
+- the new member's fingerprint, WireGuard key and cluster key are distinct from
+  every existing member's;
+- `master_pubkey` is distinct from every member's `cluster_pubkey`; the
+  operational key may not also be a member seat;
+- no removal proof is attached, because nothing is removed;
+- the child uses schema 1.3 or newer;
+- all three members co-sign the child. The parent members' signatures are their
+  consent to the admission; the new member's signature is its own consent to the
+  member record that names it.
+
+`verify_root(child, trust=parent)` is the whole check. `verify_chain` carries it
+through a lineage, and a member that missed the join verifies the parent and
+child links in order. The same explicit `--as-member --members` adoption path
+also applies to a lawful 3 -> 3 re-formation: the chained verifier decides
+whether the identity-field change is allowed; `--as-member` only tells a
+non-Master member to persist `trust_root` instead of taking the operational
+role. The admission-specific 2 -> 3 rule remains the only case that adds a
+member.
+
+The ceremony:
+
+1. The new node creates its identity, cluster and WireGuard keys. Its cluster
+   key signs bids, votes and the child root; it does **not** hold an operational
+   key, because it is not the candidate.
+2. The pair exchanges the new member record out of band and writes a
+   three-member `cluster-members.json`. The parent root stays the held root.
+3. One member runs the exchange:
+   `shared/sparknet-election.py serve --members cluster-members.json --trust
+   cluster-trust-root.json --admission`.
+   The exchange refuses anything except a 2 -> 3 roster with one addition and
+   no drops, and it holds no private key.
+4. All three run the member ceremony with `--admission --members
+   cluster-members.json`. The candidate is the existing Master, not the new
+   node:
+   - new member: `--trust <parent-root> --as-member --root-out <new-root>`;
+   - existing peer: `--root-doc <held-root> --as-member`;
+   - elected Master: `--root-doc <held-root>`.
+   Each compares the formed root's four signed member fields to that
+   out-of-band roster **before** co-signing; a lying exchange cannot substitute
+   a fresh-key phantom for the new member.
+5. Each member verifies `verify_root(child, trust=parent)`, and the adopting
+   node checks that its local cluster key matches the member record the child
+   names for it. The Master flips only its role/operational fields; the peer and
+   the new member persist only `trust_root` and the child root document. An
+   ordinary election loser still changes nothing — member adoption is explicit,
+   never inferred from losing.
+6. The Master signs the new node's **registry entry** in a separate step, under
+   the operational key the child root names, and publishes a higher sequence.
+   Cluster membership says who votes; the registry says who may be addressed and
+   what capabilities the node holds. The two are not the same document.
+
+The third node makes the cluster full. Three-node share ratification on `4203`
+is still **not deployed**; a share that was created for the pair is re-evaluated
+rather than silently reinterpreted under the new membership.
+
 ## Isolation of the operational key
 
 The elected Master is also a peer, and peers run Open WebUI, a dispatch bridge and
@@ -331,8 +420,8 @@ own — it is one of the required signatures.
 
 ## What is not contracted here
 
-- **Membership changes beyond re-formation.** Adding a fourth node is out of
-  scope here and would need its own threshold; a 4-member cluster's unanimity
+- **Membership changes beyond admission and re-formation.** A fourth node is out
+  of scope here and would need its own threshold; a 4-member cluster's unanimity
   requirement is a different protocol, not a parameter.
 - **What a vote is worth economically.** Votes are signed and distinct, not
   stake-weighted and not Sybil-resistant. A cluster is two or three known nodes.

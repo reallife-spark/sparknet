@@ -168,6 +168,35 @@ Assert (scriptable on the exchange host, via `GET /election/status` until
   **no** root document — same byte-level no-loss assertion as the rehearsal's
   before/after snapshot (DoD 5) applied over `wg1` delivery.
 
+## Phase 5b — admitting a third member (2 -> 3)
+
+A pair that is already running can become the full cluster without re-electing
+the Master. This is schema 1.3 admission, not a fresh election.
+
+1. The new node creates its identity, cluster and WireGuard keys. Its cluster
+   key signs the child root; it does not hold an operational key.
+2. The pair exchanges the new member's `node_id`, fingerprint, WireGuard public
+   key and cluster public key out of band, then writes a three-member
+   `cluster-members.json`.
+3. One member runs the exchange with the root in force:
+   `shared/sparknet-election.py serve --members cluster-members.json
+   --trust cluster-trust-root.json --admission --bind <reachable-ip>`.
+4. All three run the member ceremony with `--admission --members
+   cluster-members.json` and the existing Master as candidate:
+   - new member: `--trust <parent-root> --as-member --root-out <new-root>`;
+   - existing peer: `--root-doc <held-root> --as-member`;
+   - Master: `--root-doc <held-root>`.
+5. Assert: child is schema 1.3, names all three, has three signatures, names
+   the same Master and `master_pubkey` as the parent, and
+   `verify_root(child, trust=parent)` plus `verify_chain([child, parent])` pass.
+   The Master flips role; the existing peer and new member persist `trust_root`
+   only, and each checks its local cluster key against the member record.
+6. Sign the new node's registry entry separately under the Master's operational
+   key and publish a higher sequence. Cluster membership is not a registry entry.
+
+Do not start `4203`; three-node share ratification is not deployed. Re-evaluate
+any share created for the pair rather than assuming it still has two members.
+
 ## Phase 6 — the signer, via the unit, not a shell
 
 On the winner: place the *formed* root where the unit looks for it. The unit
