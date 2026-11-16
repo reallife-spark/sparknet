@@ -170,6 +170,12 @@ def test_staged_layout_is_complete(staged: Path) -> None:
     assert (staged / "goagx" / "sparknet-llm.docker").is_file()
     assert (staged / "sparknet-llm-entrypoint.py").is_file()
     assert (staged / "sparknet-llm-proxy.py").is_file()
+    assert (staged / "sparknet-llm-proxy.py").read_bytes() == (REPO_ROOT / "sparknet-llm-proxy.py").read_bytes(), (
+        "the published root proxy must be the fabric root file, not the goagx submodule's stale copy"
+    )
+    assert not (staged / "goagx" / "sparknet-llm-proxy.py").exists(), (
+        "the goagx submodule's root copy must not be staged under goagx/"
+    )
     assert (staged / "goagx" / "bootstrap-agx.sh").is_file()
     assert (staged / "bootstrap-agx.sh").is_symlink(), "the root entry is a shim symlink"
 

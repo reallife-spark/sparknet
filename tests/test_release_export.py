@@ -126,6 +126,9 @@ def _repo(tmp_path: Path) -> Path:
             "goagx/GOSPARK_PIN": "GOSPARK_SHA=" + "a" * 40 + "\n",
             "goagx/README.md": "# goagx\n",
             "goagx/USER_MANUAL.md": "# manual\n",
+            # A stale root copy in the generated submodule must never win over
+            # the fabric root file the image build COPYs.
+            "sparknet-llm-proxy.py": "# stale goagx copy\n",
         },
     )
     _commit(root, "submodules")
@@ -188,6 +191,10 @@ def test_goagx_worktree_stages_the_distribution_surface(tmp_path: Path) -> None:
     assert (dest / ".opencode/skills/base/SKILL.md").is_file()
     assert not (dest / "scripts/sparknet").exists()
     assert not (dest / "scripts/sparknet-sbom.py").exists()
+    assert (dest / "sparknet-llm-proxy.py").read_text() == "# sparknet-llm-proxy.py\n"
+    assert not (dest / "goagx" / "sparknet-llm-proxy.py").exists(), (
+        "the goagx submodule's root copy is stale generated output and must not be staged"
+    )
 
 
 def test_bundle_from_git_matches_the_worktree(tmp_path: Path) -> None:
@@ -208,6 +215,8 @@ def test_goagx_from_git_matches_the_worktree(tmp_path: Path) -> None:
     export.stage("goagx", source="HEAD", dest=committed, root=repo)
 
     assert _tree(worktree) == _tree(committed)
+    assert (committed / "sparknet-llm-proxy.py").read_text() == "# sparknet-llm-proxy.py\n"
+    assert not (committed / "goagx" / "sparknet-llm-proxy.py").exists()
 
 
 def test_bundle_needs_a_role(tmp_path: Path) -> None:

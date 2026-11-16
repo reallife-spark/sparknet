@@ -23,11 +23,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-import httpx
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, StreamingResponse
-from starlette.background import BackgroundTask
-
 UPSTREAM = os.environ.get("SPARKNET_LLM_UPSTREAM") or "http://127.0.0.1:8004"
 PRECONTEXT_FILE = os.environ.get("SPARKNET_LLM_PRECONTEXT_FILE") or ""
 
@@ -42,14 +37,6 @@ def _load_precontext() -> str:
 
 
 PRECONTEXT = _load_precontext()
-
-app = FastAPI(title="sparknet-llm-proxy", docs_url=None, redoc_url=None, openapi_url=None)
-client = httpx.AsyncClient(timeout=httpx.Timeout(30.0, read=None), follow_redirects=False)
-
-
-@app.on_event("shutdown")
-async def _shutdown() -> None:
-    await client.aclose()
 
 
 def inject_precontext(payload: dict[str, Any], precontext: str) -> dict[str, Any]:
@@ -74,56 +61,83 @@ def inject_precontext(payload: dict[str, Any], precontext: str) -> dict[str, Any
     return payload
 
 
-def _forward_headers(request: Request) -> dict[str, str]:
+def _forward_headers(request: Any) -> dict[str, str]:
     drop = {"host", "content-length", "connection", "transfer-encoding"}
     return {key: value for key, value in request.headers.items() if key.lower() not in drop}
 
 
-async def _forward(request: Request, body: bytes, path: str) -> StreamingResponse | JSONResponse:
-    url = f"{UPSTREAM.rstrip('/')}/{path.lstrip('/')}"
-    upstream_request = client.build_request(
-        request.method,
-        url,
-        content=body,
-        headers=_forward_headers(request),
-        params=request.query_params,
-    )
-    try:
-        response = await client.send(upstream_request, stream=True)
-    except httpx.HTTPError as exc:
-        return JSONResponse(
-            {"error": {"message": f"llama-server unavailable: {exc}", "type": "upstream_unavailable"}},
-            status_code=503,
+_APP: Any = None
+
+
+def create_app() -> Any:
+    global _APP
+    if _APP is not None:
+        return _APP
+
+    import httpx
+    from fastapi import FastAPI, Request
+    from fastapi.responses import JSONResponse, StreamingResponse
+    from starlette.background import BackgroundTask
+
+    app = FastAPI(title="sparknet-llm-proxy", docs_url=None, redoc_url=None, openapi_url=None)
+    client = httpx.AsyncClient(timeout=httpx.Timeout(30.0, read=None), follow_redirects=False)
+
+    @app.on_event("shutdown")
+    async def _shutdown() -> None:
+        await client.aclose()
+
+    async def _forward(request: Request, body: bytes, path: str):
+        url = f"{UPSTREAM.rstrip('/')}/{path.lstrip('/')}"
+        upstream_request = client.build_request(
+            request.method,
+            url,
+            content=body,
+            headers=_forward_headers(request),
+            params=request.query_params,
         )
-    headers = {
-        key: value
-        for key, value in response.headers.items()
-        if key.lower() not in {"content-length", "transfer-encoding", "connection"}
-    }
-    return StreamingResponse(
-        response.aiter_raw(),
-        status_code=response.status_code,
-        headers=headers,
-        background=BackgroundTask(response.aclose),
-    )
-
-
-@app.post("/v1/chat/completions")
-async def chat_completions(request: Request) -> Any:
-    body = await request.body()
-    if PRECONTEXT:
         try:
-            payload = json.loads(body)
-        except (TypeError, ValueError):
-            payload = None
-        if isinstance(payload, dict):
-            body = json.dumps(inject_precontext(payload, PRECONTEXT), ensure_ascii=False).encode("utf-8")
-    return await _forward(request, body, "v1/chat/completions")
+            response = await client.send(upstream_request, stream=True)
+        except httpx.HTTPError as exc:
+            return JSONResponse(
+                {"error": {"message": f"llama-server unavailable: {exc}", "type": "upstream_unavailable"}},
+                status_code=503,
+            )
+        headers = {
+            key: value
+            for key, value in response.headers.items()
+            if key.lower() not in {"content-length", "transfer-encoding", "connection"}
+        }
+        return StreamingResponse(
+            response.aiter_raw(),
+            status_code=response.status_code,
+            headers=headers,
+            background=BackgroundTask(response.aclose),
+        )
+
+    @app.post("/v1/chat/completions")
+    async def chat_completions(request: Request) -> Any:
+        body = await request.body()
+        if PRECONTEXT:
+            try:
+                payload = json.loads(body)
+            except (TypeError, ValueError):
+                payload = None
+            if isinstance(payload, dict):
+                body = json.dumps(inject_precontext(payload, PRECONTEXT), ensure_ascii=False).encode("utf-8")
+        return await _forward(request, body, "v1/chat/completions")
+
+    @app.api_route(
+        "/{path:path}",
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    )
+    async def proxy(path: str, request: Request) -> Any:
+        return await _forward(request, await request.body(), path)
+
+    _APP = app
+    return _APP
 
 
-@app.api_route(
-    "/{path:path}",
-    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
-)
-async def proxy(path: str, request: Request) -> Any:
-    return await _forward(request, await request.body(), path)
+def __getattr__(name: str) -> Any:
+    if name == "app":
+        return create_app()
+    raise AttributeError(name)
