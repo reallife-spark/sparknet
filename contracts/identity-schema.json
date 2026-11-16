@@ -15,6 +15,25 @@
     "peer"
   ],
   "role_note": "'peer' is the working-node role. Both roles use the same identity schema; only the Master holds the signing key.",
+  "human_identity": {
+    "purpose": "How a human administrator is identified for node administration. A human is not a node: this section names the authentication principal and its role mapping, and deliberately does not add a role to `roles` or a field to `identity_fields`.",
+    "holder": "the Master-hosted OIDC provider (contracts/sso-identity.md)",
+    "separate_from_node_identity": true,
+    "never": "A human principal never becomes a node identity, a registry entry, a signed envelope, a capability holder or a signer. Authority still comes from the node's registry grant and the Master's operational key.",
+    "claims": {
+      "sub": "stable human subject; the identifier a node stores with its local Open WebUI account",
+      "email": "the login and audit label",
+      "groups": "the role source: sparknet-admins or sparknet-users"
+    },
+    "groups": {
+      "sparknet-admins": "Open WebUI admin on every node; node administration only, never a fabric capability",
+      "sparknet-users": "Open WebUI user on every node"
+    },
+    "offline": "An isolated node accepts the admin through a short-lived client certificate verified locally by the node auth gateway. Regular users use a per-node local credential; those accounts are not synchronized.",
+    "role_precedence": "IdP group is the baseline; a signed admin-supervise set_user_role override wins on one node; a disagreement is recorded and held for a human.",
+    "contract": "contracts/sso-identity.md",
+    "adr": "docs/adr/0022-federated-admin-identity-offline-break-glass.md"
+  },
   "canonicalisation": {
     "projection": "Keep only identity_fields, sorted by key.",
     "serialisation": "JSON, sort_keys=true, separators=(',', ':'), UTF-8.",

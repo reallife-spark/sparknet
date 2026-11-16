@@ -83,7 +83,7 @@
       "contract": "identity-schema",
       "file": "identity-schema.json",
       "schema_version": "1.0",
-      "sha256": "679cf036fbce90c50a41b6206f43b483e20091790b8c3af5fd727d2bb7e026e6"
+      "sha256": "a009f08b1f3137a2ff94d1ecd6d270cdf33116d5b8dcf9d3a36b6fc5eeacf260"
     },
     {
       "contract": "inventory-schema",
@@ -143,7 +143,7 @@
       "contract": "ports",
       "file": "ports.json",
       "schema_version": "2.1",
-      "sha256": "f4988e4ecf0fb8e14ef26c5680e9f9112c7086c3e6a91f2d5403c004bddb08c1"
+      "sha256": "740131b12ab3a4dcc6b3c91119f6b1ecf3747a350be07b101ecd56843a879224"
     },
     {
       "contract": "proposal-schema",
@@ -553,17 +553,41 @@
       "runtime": "not-listening",
       "service": "uplift-intake"
     },
+    "8092": {
+      "bound_by": "master",
+      "implementation_state": "implemented",
+      "runtime": "not-verifiable-here",
+      "service": "master-admin-sso"
+    },
     "8101": {
       "bound_by": "both",
       "implementation_state": "implemented",
       "runtime": "not-listening",
       "service": "model-router"
     },
+    "8181": {
+      "bound_by": "both",
+      "implementation_state": "implemented",
+      "runtime": "not-verifiable-here",
+      "service": "node-webui-ingress"
+    },
+    "8182": {
+      "bound_by": "both",
+      "implementation_state": "implemented",
+      "runtime": "not-verifiable-here",
+      "service": "node-admin-gateway"
+    },
     "9090": {
       "bound_by": "peer",
       "implementation_state": "implemented",
       "runtime": "not-listening",
       "service": "guard"
+    },
+    "9443": {
+      "bound_by": "master",
+      "implementation_state": "implemented",
+      "runtime": "not-verifiable-here",
+      "service": "identity-provider"
     }
   },
   "schema_version": "1.0"

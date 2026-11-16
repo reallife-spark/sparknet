@@ -57,6 +57,21 @@ The contract is `contracts/guard-approval.json` (machine-readable) and
 `contracts/guard-protocol.md` (narrative). `tests/test_contracts.py` fails the
 build if a second copy of the field list appears in either role.
 
+## `sparknet-sso.py`
+
+The policy half of `contracts/sso-identity.md`: IdP group → Open WebUI role
+mapping, caller-supplied `X-User-*` header stripping, per-node role override
+validation and precedence, Master→node assertion verification, and
+node-signed offline-repair verification. It does not run an OIDC provider and
+does not proxy HTTP; the gateway does that.
+
+It **does not reimplement Ed25519** or a second canonical JSON rule. The two
+signed artifacts (`sso-assertion` and `offline-repair`) are enrolled in the one
+envelope catalog in `sparknet-authz.py` and loaded by path from this directory.
+The builder refuses an offline-repair record that carries a capability,
+registry, trust root, grant, key or approval anywhere in its nested payload: an
+isolated node may report a local repair, never widen authority.
+
 ## `sparknet-consensus.py`
 
 How the cluster agrees on who holds the signing key: master election, the

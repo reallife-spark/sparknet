@@ -117,6 +117,7 @@ change**: edit the contract and both roles in one commit, then `make contract-te
 | `contracts/model-catalog.json` | role-placement model catalog: teacher only on the 64 GB Master host, student only on the 32 GB peer host, embeddings on both |
 | `contracts/model-store.md` | model store, pull/verify, on-demand runtime leases, memory guard and the no-teacher-backup rule |
 | `contracts/webui-surface.md` | peer/master WebUI menus, read-only console scope and the 3D data-cloud surface |
+| `contracts/sso-identity.md` | federated human identity: Master-hosted OIDC, the node auth gateway, trusted-header rules, offline client-certificate break-glass, role precedence and offline-repair. Authentication, never authority or knowledge (ADR 0022) |
 | `contracts/knowledge-flow.md` | the map of every Master→peer, peer→Master and peer↔peer channel: payload, authentication, refusals, and the rule that authority and knowledge never share a channel |
 | `contracts/memory-schema.json` | per-vault typed memory, retention, the Go store/Python gateway boundary, delegate runs and the memory-bundle payload profile |
 | `contracts/abac-schema.json` | attribute-based narrowing for knowledge resources: verified subjects, resource classes, classifications and refusal codes; never a capability grant |

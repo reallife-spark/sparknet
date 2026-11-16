@@ -48,6 +48,7 @@ the tests then prove both roles still agree.
 | `model-catalog.json` | the operator-owned model catalog: role placement (teacher on the 64 GB Master host, student on the 32 GB peer host), repo/revision, quant, runtime, license and fit |
 | `model-store.md` | the model store, pull/verify rule, runtime leases, idle stop, memory guard, role-specific weights and the prohibition on teacher backup on agx32 |
 | `webui-surface.md` | the peer/master Open WebUI menus, console scope, session/token rule, read-only boundary and the 3D-map pilot |
+| `sso-identity.md` | federated human identity: the Master-hosted OIDC provider, the node auth gateway, trusted-header rules, the offline client-certificate break-glass, role precedence and offline-repair rules. Authentication, never authority or knowledge (ADR 0022) |
 | `knowledge-flow.md` | the map of every Master→peer, peer→Master and peer↔peer channel: what it may carry, what it must never carry, how it is authenticated, and why authority and knowledge never share a channel |
 | `memory-schema.json` | per-vault typed memory, retention, the Go store/Python gateway boundary, delegate runs and the memory-bundle payload profile |
 | `abac-schema.json` | attribute-based narrowing for knowledge resources: verified subject sources, resource classes, classifications, refusal codes, and the rule that ABAC never grants a capability or widens a scope |

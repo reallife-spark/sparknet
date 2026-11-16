@@ -1,7 +1,7 @@
 ---
 title: sparknet Plan
-updated: 2026-11-13
-current: done
+updated: 2026-11-16
+current: 113
 ---
 # sparknet — Active Plan
 > Single source of truth for fabric work. The `current:` cursor names the step
@@ -588,6 +588,91 @@ current: done
     adoption, 3 -> 3 WG rotation, root `9157113f…` epoch 4, registry sequence
     12, guard/share/overlay and a CPU llama.cpp + Open WebUI stack on 0003 are
     live; `make ci` green and the old WG keys are no longer active.
+## Step 113 — Federated admin identity and offline break-glass
+
+- [ ] **Step 113** — Make one admin identity work on every node, online from the
+  Master and offline on an isolated node, with full Open WebUI administration
+  and no shared password or shared user database. Decision and normative rules:
+  `docs/adr/0022-federated-admin-identity-offline-break-glass.md` and
+  `contracts/sso-identity.md`.
+  - [x] **113A — Contract and decision.** ADR 0022; `contracts/sso-identity.md`;
+    amend `webui-surface.md`, `ADMIN_FEDERATION_DESIGN.md`, `INTENT.md` invariant
+    10 + 15, `identity-schema.json` human identity, `ports.json` (8181, 9443),
+    `knowledge-flow.md` rows and `contracts/README.md`.
+    - **DoD**: `make context-check`, `make validate`, `make contract-test`,
+      `make render-check` green with contract/doc changes only. — **met
+      2026-11-16.**
+  - [x] **113B — Master IdP and per-node clients.** A Master-hosted OIDC
+    provider on 9443 with `sparknet-admins` / `sparknet-users`; one confidential
+    client secret per node, issued through the signed deployment path and stored
+    0600. Resource measurement on `agx32` before pinning the product.
+    - **DoD**: OIDC discovery over the overlay; `make keys-check`; no secret in
+      the tree; memory measured and recorded. — **met 2026-11-16.** Dex
+      `v2.41.1` + lldap `v0.6.3` live on agx32; discovery verified; Dex
+      10.8 MiB, lldap 9.6 MiB; clients for 0001/0002/0003; redirect URIs
+      8092/8182.
+  - [ ] **113C — Node auth gateway (online).** OIDC at the node gateway; strip
+    caller `X-User-*`; inject verified `X-User-Email` / `X-User-Role`; Open
+    WebUI loopback-only; trusted-header auth in the compose config.
+    - **DoD**: SSO admin login on a node; direct Open WebUI refused; forged
+      header stripped; local login still works; tests.
+  - [x] **113D — Offline break-glass.** Admin CA and short-lived client
+    certificate; the gateway verifies chain, expiry and revocation, then injects
+    `admin`; no IdP or Master needed.
+    - **DoD**: with the Master unreachable, a client-cert login gets full local
+      admin; no cert, bad cert, expired and revoked are refused; tests. —
+      **met 2026-11-16.** With Dex and the Master SSO ingress stopped, direct
+      mTLS to 0002 and 0003 returned 200; no certificate returns 401; the
+      refusal tests cover bad/expired/revoked.
+  - [ ] **113E — Role truth and overrides.** IdP group baseline; per-node
+    `.state/admin-role-overrides.json` written only by signed `set_user_role`;
+    effective-role precedence; `role-override-conflict` recorded and held.
+    - **DoD**: IdP change propagates; signed override applies; conflict is
+      recorded and surfaced, never silently overwritten; tests.
+  - [x] **113F — Master admin proxy.** One origin at 8092 (the existing 8088
+    surface stays as rollback), registry-derived target allow-list, short-lived
+    mTLS assertion to the node gateway, audit.
+    - **DoD**: the admin reaches every node from the Master; arbitrary target
+      URLs refused; assertion replay/expiry refused; tests. — **met 2026-11-16.**
+      `/nodes/sparknet-node-0002/` and `/nodes/sparknet-node-0003/` return 200
+      with the admin certificate; without it they return 401.
+  - [x] **113G — Offline-repair reconciliation.** Node-signed `offline-repair`
+    records; reconnect verification; local state preserved and flagged; no
+    authority propagation.
+    - **DoD**: simulated isolated repair signs, reconnects, is flagged; a record
+      carrying a grant/key/registry change is refused; tests. — **met
+      2026-11-16.** A 0002 record signed with the registry-attested node key was
+      accepted by the Master reviewer (`accepted 1, applied false`); a record
+      carrying `capabilities` was refused.
+  - [ ] **113H — Gates and live rollout.** Deploy to `agx32` Master,
+    `agx64` and `sparknet-node-0003`; verify online login from the Master, offline
+    login with the Master unreachable, and repair/reconnect.
+    - **DoD**: `make ci`, `make test-all`, `make contract-test`, `make lint`,
+      `make validate`, `make keys-check`, `make shims-check`,
+      `make bundle-verify` green; live legs `DoD: confirm: user`. — **live
+      rollout met; bundle signature verification open.** `test-all` 683/1
+      skipped, lint/format/validate/contract/render/context/keys/shims/shellcheck
+      green. `bundle-verify` still needs the release public key.
+  - **Status 2026-11-16 — LIVE on agx32/agx64/sparknet-node-0003; OIDC
+    browser login and bundle signature verification remain.** Dex `v2.41.1`
+    and lldap `v0.6.3` are live on agx32; `sparknet-admins` / `sparknet-users`
+    and `sparknet-admin` exist; per-node clients and redirect URIs are
+    8092/8182. The admin client certificate (`sparknet-admin@sparknet.local`)
+    logs into the Master SSO ingress 8092 and into the peer admin ingress 8182
+    on 0002/0003; the Master `/nodes/` proxy returns 200 for both peers; without
+    the certificate the same endpoints return 401. The existing user ingresses
+    on 8181 are unchanged and return 200. The peer admin ingress binds the
+    overlay and the node LAN address, never a wildcard. The auth gateway,
+    Master proxy, Dex/lldap and the three ingress containers are persistent
+    (user systemd units / compose restart policy). The 0003 CPU stack uses the
+    CPU SSO overlay. A test offline-repair record from 0002 was accepted by the
+    Master reviewer with `applied: false`; an authority-bearing record was
+    refused. Still open: OIDC browser login through oauth2-proxy (not deployed;
+    the admin path is client-certificate/assertion), live IdP role propagation
+    (no oauth2-proxy), and signed `bundle-verify` (release public key absent).
+    The signed `admin-supervise` console is retained for automated/bulk/audited
+    actions.
+
 ## Standing verification rules
 - A gate that cannot fail is not a gate. Every claim needs a named test or a
   dated live observation.

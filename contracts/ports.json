@@ -3,7 +3,7 @@
   "description": "Every port either role listens on or dials. Overlay-only ports are unreachable from the WAN by design. `ports` is the fabric namespace (peer/master listeners); `node_ports` is the spark-node compose stack (docker host-publishes and in-stack listeners), recorded separately because the two namespaces share numbers without sharing sockets.",
   "invariants": [
     "No role binds a wildcard address for an overlay-only port.",
-    "Peer-side listeners that inject local identity or accept mutations stay off the overlay.",
+    "Peer-side listeners that inject local identity or accept mutations stay off the overlay, except the declared node auth gateway (8181): it may face the overlay and the node LAN because it is the authentication boundary, it injects identity only after OIDC or mTLS verification, and it strips caller-supplied identity headers before injecting its own.",
     "The Master binds 9090 nowhere; it dials peers on 9090.",
     "implementation_state never claims implemented without a bind path in the named service.",
     "A port may be implemented and simultaneously not-listening. That combination is the normal case for an overlay service on a host whose overlay is down, and it must not be collapsed into a single boolean.",
@@ -480,7 +480,7 @@
       "bound_by": "master",
       "host_port_note": "Relocated 8080 \u2192 8088 on deployment (fabric Step 55, 2026-10-19): on the Master host an unrelated container held 0.0.0.0:8080, and the overlay bind 10.100.0.1:8080 failed EADDRINUSE. The service is unchanged; only the overlay host port moved. 8080 is left to the node-agent-gateway namespace.",
       "implementation_state": "provisioned",
-      "note": "The Master's administrative page: Open WebUI plus an opencode terminal into this role's vault and plan. Reachable only from inside the overlay. This is the surface most worth attacking and the one with the most to lose, so it binds the overlay address and never a wildcard.",
+      "note": "The Master's administrative page: Open WebUI plus an opencode terminal into this role's vault and plan. Reachable only from inside the overlay. This is the surface most worth attacking and the one with the most to lose, so it binds the overlay address and never a wildcard. From the admin-identity step it also acts as the one-origin proxy to every node auth gateway; the target allow-list is the signed registry, never a caller-supplied URL.",
       "overlay_only": true,
       "protocol": "tcp/http",
       "runtime": "not-verifiable-here",
@@ -586,6 +586,53 @@
       "runtime": "not-listening",
       "runtime_why": "The live endpoint is deployed only after the router tests and the operator cutover; the declaration is the bind path.",
       "service": "resource-directory"
+    },
+    "8181": {
+      "binds_to": "the node's LAN/overlay address (existing user ingress)",
+      "bound_by": "both",
+      "implementation_state": "implemented",
+      "note": "The existing user-facing Open WebUI ingress. It is not the admin identity path; it keeps the normal login/signup surface. The federated admin ingress is 8182.",
+      "overlay_only": false,
+      "protocol": "tcp/http",
+      "runtime": "not-verifiable-here",
+      "runtime_why": "Live on agx64 as 0.0.0.0:8181 (sparknet-webui-proxy); this development host runs no node stack.",
+      "service": "node-webui-ingress"
+    },
+    "8182": {
+      "binds_to": "the node's overlay address and, for isolated repair, its LAN address; never a wildcard",
+      "bound_by": "both",
+      "implementation_state": "implemented",
+      "note": "The admin-only ingress: TLS plus auth_request, OIDC/assertion online and the admin client certificate offline. Open WebUI stays loopback. The existing user ingress on 8181 is untouched, so a user login never depends on this path. Live on agx64 and sparknet-node-0003 2026-11-16.",
+      "overlay_only": false,
+      "protocol": "tcp/https",
+      "runtime": "not-verifiable-here",
+      "runtime_why": "Live on agx64 (10.100.0.2/192.168.178.21:8182) and sparknet-node-0003 (10.100.0.3/192.168.30.140:8182) since 2026-11-16; this host runs no node stack.",
+      "service": "node-admin-gateway",
+      "status": "IMPLEMENTED and live on agx64 and sparknet-node-0003 since 2026-11-16; see fabric PLAN Step 113."
+    },
+    "8092": {
+      "binds_to": "10.100.0.1",
+      "bound_by": "master",
+      "implementation_state": "implemented",
+      "note": "The Master's admin-only SSO ingress (TLS plus auth_request plus the /nodes/ proxy). The existing 8088 admin surface remains as the rollback path until the SSO ingress is proven. Live on agx32 2026-11-16; admin client-certificate login and /nodes/ to 0002/0003 return 200.",
+      "overlay_only": true,
+      "protocol": "tcp/https",
+      "runtime": "not-verifiable-here",
+      "runtime_why": "Live on agx32 (10.100.0.1:8092 and 127.0.0.1:8092) since 2026-11-16; this host has no overlay.",
+      "service": "master-admin-sso",
+      "status": "IMPLEMENTED and live on agx32 since 2026-11-16; see fabric PLAN Step 113."
+    },
+    "9443": {
+      "binds_to": "10.100.0.1",
+      "bound_by": "master",
+      "implementation_state": "implemented",
+      "note": "The Master-hosted OIDC identity provider. Overlay-only; it is the human identity root, not a knowledge channel and not a signer. A node that cannot reach it uses the offline client-certificate path (contracts/sso-identity.md). Live on agx32 (Dex v2.41.1) 2026-11-16; discovery verified over the overlay.",
+      "overlay_only": true,
+      "protocol": "tcp/https",
+      "runtime": "not-verifiable-here",
+      "runtime_why": "Live on agx32 (Dex v2.41.1, 10.100.0.1:9443) since 2026-11-16; this development host has no overlay and does not run it.",
+      "service": "identity-provider",
+      "status": "PROVISIONED as a contract. The build is fabric PLAN Step 113; role work is pointed to from peer-node/PLAN.md and master-node/PLAN.md."
     }
   },
   "schema_version": "2.1",

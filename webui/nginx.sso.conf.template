@@ -1,0 +1,115 @@
+# Federated node ingress (contracts/sso-identity.md, ADR 0022).
+#
+# This template replaces nginx.conf.template only when the SSO overlay is
+# enabled. It is the single ingress in front of a loopback-only Open WebUI:
+#
+#   - TLS is required, because the admin client certificate is the offline path;
+#   - nginx verifies the client certificate against the fabric admin CA but
+#     leaves it optional, so an online browser with no certificate can use OIDC;
+#   - every request is decided by the local auth gateway (`auth_request`);
+#   - caller-supplied identity headers are stripped and replaced with the
+#     headers the gateway returned. Open WebUI must never be reached directly.
+#
+# Required environment:
+#   SPARKNET_BIND, SPARKNET_WEBUI_PORT, SPARKNET_CONSOLE_UPSTREAM,
+#   SPARKNET_TLS_CERT, SPARKNET_TLS_KEY, SPARKNET_ADMIN_CA
+#
+map $http_upgrade $connection_upgrade {
+	default upgrade;
+	'' close;
+}
+
+server {
+	listen ${SPARKNET_BIND} ssl;
+	listen ${SPARKNET_ADMIN_ALT_BIND} ssl;
+	server_name _;
+	client_max_body_size 100m;
+
+	ssl_certificate ${SPARKNET_TLS_CERT};
+	ssl_certificate_key ${SPARKNET_TLS_KEY};
+	ssl_client_certificate ${SPARKNET_ADMIN_CA};
+	ssl_verify_client optional;
+	ssl_protocols TLSv1.2 TLSv1.3;
+
+	# The launcher is static and same-origin; it carries no identity.
+	location = /sparknet-menu.js {
+		alias /etc/nginx/sparknet-menu.js;
+		add_header Cache-Control "no-store";
+	}
+
+	# The local auth gateway. Only these inputs are forwarded: the certificate
+	# result, the DN, and the browser cookie that the gateway will verify with
+	# the local OIDC proxy. A client-supplied X-Auth-Request-* header is
+	# explicitly emptied so it can never be mistaken for a verified identity.
+	location = /_auth {
+		internal;
+		proxy_pass http://127.0.0.1:8190/auth/verify;
+		proxy_pass_request_body off;
+		proxy_set_header Content-Length "";
+		proxy_set_header Host $host;
+		proxy_set_header X-Original-URI $request_uri;
+		proxy_set_header X-Client-Verify $ssl_client_verify;
+		proxy_set_header X-Client-DN $ssl_client_s_dn;
+		proxy_set_header Cookie $http_cookie;
+		proxy_set_header X-Auth-Request-Email "";
+		proxy_set_header X-Auth-Request-Groups "";
+	}
+
+	# The console is same-origin and validates the Open WebUI session itself.
+	location /sparknet-console/ {
+		proxy_pass http://${SPARKNET_CONSOLE_UPSTREAM}/;
+		proxy_http_version 1.1;
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto https;
+	}
+
+	# The Master's one-origin route to another node. nginx authenticates the
+	# admin locally, then the Master admin proxy resolves the node from the
+	# signed registry and signs a short-lived assertion. A peer has no proxy on
+	# 8191, so this route answers 502 there rather than forwarding anywhere.
+	location /nodes/ {
+		auth_request /_auth;
+		auth_request_set $sparknet_user_email $upstream_http_x_user_email;
+		auth_request_set $sparknet_user_role $upstream_http_x_user_role;
+		auth_request_set $sparknet_user_groups $upstream_http_x_user_groups;
+		proxy_pass http://127.0.0.1:8191;
+		proxy_http_version 1.1;
+		proxy_set_header Host $host;
+		proxy_set_header X-User-Email $sparknet_user_email;
+		proxy_set_header X-User-Role $sparknet_user_role;
+		proxy_set_header X-User-Groups $sparknet_user_groups;
+		proxy_set_header X-Forwarded-Proto https;
+		proxy_read_timeout 3600s;
+	}
+
+	# Open WebUI. The three X-User-* headers are always overwritten from the
+	# auth_request result, so a forged client header cannot survive the hop.
+	location / {
+		auth_request /_auth;
+		auth_request_set $sparknet_user_email $upstream_http_x_user_email;
+		auth_request_set $sparknet_user_role $upstream_http_x_user_role;
+		auth_request_set $sparknet_user_groups $upstream_http_x_user_groups;
+		auth_request_set $sparknet_auth_source $upstream_http_x_auth_source;
+
+		proxy_pass http://127.0.0.1:${SPARKNET_WEBUI_PORT};
+		proxy_http_version 1.1;
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection $connection_upgrade;
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto https;
+		proxy_set_header X-User-Email $sparknet_user_email;
+		proxy_set_header X-User-Role $sparknet_user_role;
+		proxy_set_header X-User-Groups $sparknet_user_groups;
+		proxy_set_header X-Auth-Source $sparknet_auth_source;
+		proxy_set_header Accept-Encoding "";
+		proxy_read_timeout 3600s;
+		proxy_send_timeout 3600s;
+		sub_filter_types text/html;
+		sub_filter '</body>' '<script src="/sparknet-menu.js" defer></script></body>';
+		sub_filter_once on;
+	}
+}

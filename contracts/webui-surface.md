@@ -27,12 +27,27 @@ refused rather than silently ignored.
 
 ## User policy
 
-- **Peer** is the only user surface: every human account lives there; signup is
-  enabled with `DEFAULT_USER_ROLE=pending` and a new account reaches nothing
-  until approved.
-- **Master** is admin-only: the human administrator is the only WebUI account.
-  Users are supervised through the peer's own signed `admin-supervise` channel,
-  never by a second account or a shared password.
+- **Peer** is the user surface: local signup stays enabled with
+  `DEFAULT_USER_ROLE=pending` for the offline fallback, and a new local account
+  reaches nothing until approved.
+- **Online human identity is federated.** A Master-hosted OIDC provider holds
+  the human identities; every node's auth gateway maps the IdP groups
+  `sparknet-admins` / `sparknet-users` to Open WebUI roles. The admin identity
+  therefore works on every node, and the Master admin proxy reaches every node
+  from one origin. The normative detail is `contracts/sso-identity.md`.
+- **Offline is local-first.** An isolated node that cannot reach the Master
+  accepts the admin through a client certificate (mTLS) at the node auth
+  gateway; regular users use the local login form. Neither path needs the
+  Master. Per-node local user accounts are not synchronized.
+- **Open WebUI is loopback-only** behind the auth gateway. The gateway strips
+  every caller-supplied `X-User-*` header before injecting the verified
+  identity; direct access to the Open WebUI listener is a defect.
+- **The deploy-time admin account is automation-only.** On every role it is a
+  locked service account for the admin agent, bridge and provisioner. No human
+  logs in as it and no shared WebUI password exists across nodes.
+- **Two admin paths, one authority.** Direct login is the interactive node-admin
+  path; the signed `admin-supervise` console remains for automated, bulk and
+  audited actions. Neither path grants a fabric capability or a signing key.
 - The old cluster2 Master WebUI (a second user database on `8181`) was retired
   on 2026-11-05 after its one user chat was migrated to the peer.
 
@@ -72,8 +87,14 @@ remains the grant-checked vault/authority tool surface.
 
 ## Identity and authority
 
-- A WebUI login is **not** fabric authority. The console displays what the
-  signed registry, telemetry, ledger and peer APIs already recorded.
+- A WebUI login is **not** fabric authority. An `admin` role is node
+  administration on that node: users, roles, Knowledge/KB, chats, models,
+  prompts, settings and files. It is not a capability grant, a registry edit or
+  a signature. The console displays what the signed registry, telemetry, ledger
+  and peer APIs already recorded.
+- Human identity is federated (`contracts/sso-identity.md`); node identity is
+  not. A human principal never enters a registry entry or a signed envelope as a
+  node.
 - The peer console is owner-only. The Master console is read-only for
   authenticated `user` and `admin`; Learning is sanitized and read-only.
 - The console validates the caller's Open WebUI session token against this

@@ -1,11 +1,15 @@
 # sparknet — Session Memory
 > Standing state only. Read at session start; **replace, never append**.
 > History belongs in `log.md` and `sessions/YYYY-MM-DD.md`.
-Updated: 2026-11-15
+Updated: 2026-11-16
 ## Plan cursor
-- `PLAN.md` — `current: done` (Step 111 auto-distill blocked on external CUDA;
-  Step 112 admission, 3->3 rotation, overlay, registry and AI stack complete on
-  `sparknet-node-0003`). `master-node/PLAN.md` — `current: done`.
+- `PLAN.md` — `current: 113` (federated admin identity + offline break-glass;
+  **live 2026-11-16** on agx32/agx64/0003 for the admin client-certificate and
+  signed-assertion paths: Dex 9443 + lldap, Master SSO 8092, peer admin 8182,
+  `/nodes/` 200 for 0002/0003, user 8181 unchanged, offline-repair simulation
+  accepted with `applied: false`. OIDC browser login via oauth2-proxy, live IdP
+  role propagation and signed `bundle-verify` remain).
+  `master-node/PLAN.md` — `current: done` with a Step 113 pointer.
 - #8/#9/#11 closed with dated agx32/agx64 evidence (0 open).
 ## Live fabric
 - **`agx32` = Master = `sparknet-node-0001` (`10.100.0.1/32`, `blue-team`),
@@ -34,6 +38,15 @@ Updated: 2026-11-15
   resource directory `8089`, memory router `4094`; user data is refused remotely.
   goagx pinned `dd64bfd`; goSpark spec `85815b3`; signed resource directory refreshes on demand.
 ## Durable facts
+- Human identity is federated: Master-hosted IdP (`sparknet-admins` /
+  `sparknet-users`), node auth gateway trusted headers, offline admin mTLS
+  break-glass, per-node signed role overrides. Authentication, never a fabric
+  capability; the signed admin console is retained for audited actions.
+- Live admin identity 2026-11-16: Dex `10.100.0.1:9443`, Master SSO
+  `10.100.0.1:8092`, peer admin `10.100.0.2:8182` and `10.100.0.3:8182`
+  (overlay + LAN); user ingresses remain 8181. Admin cert/key and the lldap
+  human password live under `~/.local/state/sparknet/master-node/identity/`
+  on agx32 (0600); never copy them into the tree.
 - Memory plane: Go `sparknet-memory` 4110 behind Python gateway 4093; one store, per-vault scope; Qdrant 6333/6334; 4223 the only signed surface.
 - `model-uplift` carries consented training/backup evidence only, never answers; teacher traces/uplift are not an answer corpus.
 - One `shared/sparknet-authz.py`; a role subvault is not a deployment (`make bundle` + `bundle-verify`); keys live in `$SPARKNET_STATE_DIR` at 0700/0600.

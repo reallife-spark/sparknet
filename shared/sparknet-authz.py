@@ -2413,6 +2413,149 @@ def verify_telemetry_report(
     return True, ""
 
 
+# --- federated human identity (contracts/sso-identity.md) --------------------
+
+
+#: The Master→node assertion that carries a verified human identity to a node
+#: auth gateway. It is authentication, not a capability grant: the node still
+#: has its own registry grant and its own local admin policy.
+SSO_ASSERTION_SCHEMA = "sparknet-sso-assertion/1"
+SSO_ASSERTION_ROLES = ("admin", "user")
+
+SSO_ASSERTION_FIELDS = (
+    "schema",
+    "assertion_id",
+    "master_node_id",
+    "target_node_id",
+    "target_fingerprint",
+    "subject",
+    "email",
+    "role",
+    "groups",
+    "issued_at",
+    "expires_at",
+    "nonce",
+)
+SSO_ASSERTION_REQUIRED = SSO_ASSERTION_FIELDS
+
+
+def _build_sso_assertion(assertion: dict[str, Any]) -> dict[str, Any]:
+    """Canonical projection of one Master→node human-identity assertion."""
+    if not isinstance(assertion, dict):
+        raise AuthzError("sso assertion must be an object")
+    missing = [field for field in SSO_ASSERTION_REQUIRED if assertion.get(field) in (None, "")]
+    if missing:
+        raise AuthzError(f"sso assertion missing required field(s): {', '.join(missing)}")
+    if assertion["schema"] != SSO_ASSERTION_SCHEMA:
+        raise AuthzError(f"sso assertion schema must be {SSO_ASSERTION_SCHEMA!r}")
+    role = assertion["role"]
+    if role not in SSO_ASSERTION_ROLES:
+        raise AuthzError(f"unknown sso role {role!r}; expected one of {', '.join(SSO_ASSERTION_ROLES)}")
+    email = assertion["email"]
+    if not isinstance(email, str) or "@" not in email:
+        raise AuthzError("sso assertion email must be a non-empty address")
+    groups = assertion["groups"]
+    if not isinstance(groups, list) or not groups or any(not isinstance(group, str) or not group for group in groups):
+        raise AuthzError("sso assertion groups must be a non-empty list of names")
+    for stamp in ("issued_at", "expires_at"):
+        value = assertion[stamp]
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise AuthzError(f"sso assertion {stamp} must be an integer epoch second")
+    if assertion["expires_at"] <= assertion["issued_at"]:
+        raise AuthzError("sso assertion expires_at must be after issued_at")
+    return {field: assertion.get(field) for field in sorted(SSO_ASSERTION_FIELDS)}
+
+
+#: The node→Master record an isolated node signs after a local repair. It is
+#: evidence for reconciliation, never authority: the builder refuses any field
+#: that could carry a capability, registry, trust root, grant, key or approval.
+OFFLINE_REPAIR_SCHEMA = "sparknet-offline-repair/1"
+OFFLINE_REPAIR_ACTIONS = (
+    "user-role",
+    "user-approve",
+    "kb-change",
+    "chat-change",
+    "setting-change",
+    "local-repair",
+)
+OFFLINE_REPAIR_FIELDS = (
+    "schema",
+    "repair_id",
+    "node_id",
+    "node_fingerprint",
+    "created_at",
+    "action",
+    "target",
+    "change",
+    "authority_effect",
+)
+OFFLINE_REPAIR_REQUIRED = OFFLINE_REPAIR_FIELDS
+
+#: Keys that would turn a repair record into an authority artifact. The scan is
+#: recursive because a nested `grant` is just as forbidden as a top-level one.
+OFFLINE_REPAIR_FORBIDDEN_KEYS = frozenset(
+    {
+        "capability",
+        "capabilities",
+        "registry",
+        "trust_root",
+        "grant",
+        "grants",
+        "private_key",
+        "secret",
+        "signature",
+        "signature_b64",
+        "vault_scope",
+        "approval",
+        "policy",
+        "node_pubkey_b64",
+        "master_pubkey",
+    }
+)
+
+
+def _forbidden_authority_path(value: Any, path: str = "") -> str | None:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            name = str(key).lower()
+            child_path = f"{path}.{key}".lstrip(".")
+            if name in OFFLINE_REPAIR_FORBIDDEN_KEYS:
+                return child_path
+            found = _forbidden_authority_path(child, child_path)
+            if found is not None:
+                return found
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            found = _forbidden_authority_path(child, f"{path}[{index}]")
+            if found is not None:
+                return found
+    return None
+
+
+def _build_offline_repair(record: dict[str, Any]) -> dict[str, Any]:
+    """Canonical projection of one offline-repair record, refusal-first."""
+    if not isinstance(record, dict):
+        raise AuthzError("offline repair must be an object")
+    missing = [field for field in OFFLINE_REPAIR_REQUIRED if record.get(field) in (None, "")]
+    if missing:
+        raise AuthzError(f"offline repair missing required field(s): {', '.join(missing)}")
+    if record["schema"] != OFFLINE_REPAIR_SCHEMA:
+        raise AuthzError(f"offline repair schema must be {OFFLINE_REPAIR_SCHEMA!r}")
+    if record["action"] not in OFFLINE_REPAIR_ACTIONS:
+        raise AuthzError(
+            f"unknown offline repair action {record['action']!r}; expected one of {', '.join(OFFLINE_REPAIR_ACTIONS)}"
+        )
+    if record["authority_effect"] != "none":
+        raise AuthzError("offline repair authority_effect must be 'none'")
+    for part in ("target", "change"):
+        if not isinstance(record[part], dict):
+            raise AuthzError(f"offline repair {part} must be an object")
+    forbidden = _forbidden_authority_path({"target": record["target"], "change": record["change"]})
+    if forbidden is not None:
+        raise AuthzError(f"offline repair may not carry authority field {forbidden!r}")
+    return {field: record.get(field) for field in sorted(OFFLINE_REPAIR_FIELDS)}
+
+
 # --- the one envelope catalog -------------------------------------------------
 
 
@@ -2476,6 +2619,18 @@ SPECS: dict[str, EnvelopeSpec] = {
         required=SANDBOX_REQUEST_REQUIRED,
         signed_fields=SANDBOX_REQUEST_FIELDS,
         project=_build_sandbox_request,
+    ),
+    "sso-assertion": EnvelopeSpec(
+        fields=SSO_ASSERTION_FIELDS,
+        required=SSO_ASSERTION_REQUIRED,
+        signed_fields=SSO_ASSERTION_FIELDS,
+        project=_build_sso_assertion,
+    ),
+    "offline-repair": EnvelopeSpec(
+        fields=OFFLINE_REPAIR_FIELDS,
+        required=OFFLINE_REPAIR_REQUIRED,
+        signed_fields=OFFLINE_REPAIR_FIELDS,
+        project=_build_offline_repair,
     ),
     "distillation-run": EnvelopeSpec(
         fields=DISTILLATION_RUN_FIELDS,
@@ -2564,6 +2719,14 @@ def admin_request_message(request: dict[str, Any]) -> bytes:
 
 def sandbox_request_message(request: dict[str, Any]) -> bytes:
     return envelope_message("sandbox-request", request)
+
+
+def sso_assertion_message(assertion: dict[str, Any]) -> bytes:
+    return envelope_message("sso-assertion", assertion)
+
+
+def offline_repair_message(record: dict[str, Any]) -> bytes:
+    return envelope_message("offline-repair", record)
 
 
 def distillation_run_message(run: dict[str, Any]) -> bytes:

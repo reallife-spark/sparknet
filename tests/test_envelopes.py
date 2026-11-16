@@ -241,6 +241,31 @@ FIXTURES = {
         "expires_at": "2026-11-09T12:05:00Z",
         "updated_at": "2026-11-09T12:00:00Z",
     },
+    "sso-assertion": {
+        "schema": "sparknet-sso-assertion/1",
+        "assertion_id": "assertion-1",
+        "master_node_id": "master-1",
+        "target_node_id": "peer-fixture-01",
+        "target_fingerprint": "140e0dc554e18b883922bd5164f576eee0c1d6d08ebf5f7d3c052948257c36c7",
+        "subject": "human-1",
+        "email": "admin@example.test",
+        "role": "admin",
+        "groups": ["sparknet-admins"],
+        "issued_at": 1760000000,
+        "expires_at": 1760000600,
+        "nonce": "n1",
+    },
+    "offline-repair": {
+        "schema": "sparknet-offline-repair/1",
+        "repair_id": "repair-1",
+        "node_id": "peer-fixture-01",
+        "node_fingerprint": "140e0dc554e18b883922bd5164f576eee0c1d6d08ebf5f7d3c052948257c36c7",
+        "created_at": "2026-11-09T12:00:00Z",
+        "action": "user-role",
+        "target": {"user": "u1"},
+        "change": {"role": "user"},
+        "authority_effect": "none",
+    },
 }
 
 EXPECTED = {
@@ -260,6 +285,8 @@ EXPECTED = {
     "share-ratification": "eyJhY2NlcHRlZF9hdCI6IjIwMjYtMTEtMDlUMTI6MDA6MDBaIiwiZGVhZGxpbmUiOiIyMDI2LTExLTA5VDEzOjAwOjAwWiIsImRlY2lzaW9uIjoicmF0aWZpZWQiLCJmbGFnX3JldGFpbmVkIjp0cnVlLCJncmFudF9pZCI6ImcxIiwibm9kZV9maW5nZXJwcmludCI6IjE0MGUwZGM1NTRlMThiODgzOTIyYmQ1MTY0ZjU3NmVlZTBjMWQ2ZDA4ZWJmNWY3ZDNjMDUyOTQ4MjU3YzM2YzciLCJub2RlX2lkIjoicGVlci1maXh0dXJlLTAxIiwicmF0aWZpZWRfYXQiOiIyMDI2LTExLTA5VDEyOjAxOjAwWiIsInJlYXNvbiI6Im9rIiwic2NoZW1hX3ZlcnNpb24iOiIxLjAiLCJzaGFyZV9pZCI6InMxIn0=",
     "telemetry-report": "eyJleHBpcmVzX2F0IjoiMjAyNi0xMS0wOVQxMjowMjowMFoiLCJpc3N1ZWRfYXQiOiIyMDI2LTExLTA5VDEyOjAwOjAwWiIsImtpbmQiOiJzdGF0dXMiLCJub25jZSI6Im4xIiwicGF5bG9hZCI6eyJub2RlX2lkIjoieCJ9LCJwZWVyX2ZpbmdlcnByaW50IjoiMTQwZTBkYzU1NGUxOGI4ODM5MjJiZDUxNjRmNTc2ZWVlMGMxZDZkMDhlYmY1ZjdkM2MwNTI5NDgyNTdjMzZjNyJ9",
     "trust-transition": "eyJkZWNpZGVkX2F0IjoiMjAyNi0xMS0wOVQxMjowMDowMFoiLCJmbGFnX3ByZXNlcnZlZCI6dHJ1ZSwibGV2ZWwiOiJmbGFnZ2VkIiwibm9kZV9pZCI6InBlZXItZml4dHVyZS0wMSIsInByZXZpb3VzX2xldmVsIjoiYXV0aGVudGljYXRlZCIsInJlYXNvbiI6ImV2aWRlbmNlIiwicmV2ZXJzaWJsZSI6dHJ1ZSwic2NoZW1hX3ZlcnNpb24iOiIxLjAifQ==",
+    "sso-assertion": "eyJhc3NlcnRpb25faWQiOiJhc3NlcnRpb24tMSIsImVtYWlsIjoiYWRtaW5AZXhhbXBsZS50ZXN0IiwiZXhwaXJlc19hdCI6MTc2MDAwMDYwMCwiZ3JvdXBzIjpbInNwYXJrbmV0LWFkbWlucyJdLCJpc3N1ZWRfYXQiOjE3NjAwMDAwMDAsIm1hc3Rlcl9ub2RlX2lkIjoibWFzdGVyLTEiLCJub25jZSI6Im4xIiwicm9sZSI6ImFkbWluIiwic2NoZW1hIjoic3BhcmtuZXQtc3NvLWFzc2VydGlvbi8xIiwic3ViamVjdCI6Imh1bWFuLTEiLCJ0YXJnZXRfZmluZ2VycHJpbnQiOiIxNDBlMGRjNTU0ZTE4Yjg4MzkyMmJkNTE2NGY1NzZlZWUwYzFkNmQwOGViZjVmN2QzYzA1Mjk0ODI1N2MzNmM3IiwidGFyZ2V0X25vZGVfaWQiOiJwZWVyLWZpeHR1cmUtMDEifQ==",
+    "offline-repair": "eyJhY3Rpb24iOiJ1c2VyLXJvbGUiLCJhdXRob3JpdHlfZWZmZWN0Ijoibm9uZSIsImNoYW5nZSI6eyJyb2xlIjoidXNlciJ9LCJjcmVhdGVkX2F0IjoiMjAyNi0xMS0wOVQxMjowMDowMFoiLCJub2RlX2ZpbmdlcnByaW50IjoiMTQwZTBkYzU1NGUxOGI4ODM5MjJiZDUxNjRmNTc2ZWVlMGMxZDZkMDhlYmY1ZjdkM2MwNTI5NDgyNTdjMzZjNyIsIm5vZGVfaWQiOiJwZWVyLWZpeHR1cmUtMDEiLCJyZXBhaXJfaWQiOiJyZXBhaXItMSIsInNjaGVtYSI6InNwYXJrbmV0LW9mZmxpbmUtcmVwYWlyLzEiLCJ0YXJnZXQiOnsidXNlciI6InUxIn19",
 }
 
 
@@ -271,6 +298,8 @@ WRAPPERS = {
     "cluster-job": authz.cluster_job_message,
     "admin-request": authz.admin_request_message,
     "sandbox-request": authz.sandbox_request_message,
+    "sso-assertion": authz.sso_assertion_message,
+    "offline-repair": authz.offline_repair_message,
     "distillation-run": authz.distillation_run_message,
     "grant": authz.grant_message,
     "share-ratification": authz.share_ratification_message,
@@ -286,6 +315,8 @@ SIGNED = {
     "cluster-job",
     "admin-request",
     "sandbox-request",
+    "sso-assertion",
+    "offline-repair",
     "distillation-run",
     "grant",
     "share-ratification",

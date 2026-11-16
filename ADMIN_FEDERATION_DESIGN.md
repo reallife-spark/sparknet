@@ -1,7 +1,7 @@
 ---
 title: Sparknet admin federation — cross-node administration design
 updated: 2026-10-26
-status: design (adopted as code; live on the current pair 2026-11-03; KDE push operator-confirmed)
+status: design (partly superseded 2026-11-16 by ADR 0022 and contracts/sso-identity.md; the signed admin-supervise channel remains implemented)
 ---
 
 # Sparknet admin federation
@@ -28,6 +28,40 @@ Related, already-proposed surface: the per-user vaults design in
 [`PER_USER_VAULTS_DESIGN.md`](PER_USER_VAULTS_DESIGN.md) already names the
 bridge admin channel and the missing capability. This page is the
 administration half of that work.
+
+## Superseding decision — 2026-11-16
+
+The operator now requires a property this page's "Admin-only-on-master
+enforcement" section deliberately denied: the admin account must work on
+**every** node, reachable from the Master, and must still work on a node that is
+**isolated** from the Master and the rest of the fabric. The admin needs full
+Open WebUI administration on that node, not only the signed verbs below.
+
+That decision is recorded in
+[`docs/adr/0022-federated-admin-identity-offline-break-glass.md`](docs/adr/0022-federated-admin-identity-offline-break-glass.md)
+and normatively in [`contracts/sso-identity.md`](contracts/sso-identity.md).
+In summary:
+
+- a **Master-hosted OIDC provider** holds human identities; the admin principal
+  is the IdP group `sparknet-admins`;
+- a **node auth gateway** fronts every loopback-only Open WebUI, performs OIDC
+  online and **client-certificate mTLS** offline, and injects verified trusted
+  headers;
+- the **Master admin proxy** reaches every node from one origin;
+- the signed `admin-supervise` channel and the console below remain, as the
+  automated/bulk/audited path;
+- role truth is the IdP group baseline plus a per-node signed override; a
+  disagreement is flagged and held, never silently overwritten;
+- an isolated node's `offline-repair` changes win for that node but never
+  propagate authority.
+
+What this supersedes, precisely: "Admin-only-on-master enforcement" below, the
+"no human logs in as administrator on a peer" rule, and the claim that a peer
+has no human administrator. The service account remains, but only for
+automation. Everything else on this page — the signed request shape, the
+registry-gated `admin-supervise` capability, the loopback route class, the
+per-node spools and the console verbs — is still the implemented signed path.
+
 
 ## The problem
 
@@ -196,6 +230,12 @@ approval still originates at the guard ports and is signed in the isolated
 signer. The console only composes signed `admin-request`s and displays results.
 
 ## Admin-only-on-master enforcement
+
+> **Superseded 2026-11-16.** The human admin now exists on every node through
+> federated identity and the offline client certificate; the service account is
+> automation-only. See "Superseding decision" above, ADR 0022 and
+> `contracts/sso-identity.md`. The text below records the earlier enforcement
+> and is kept as design history.
 
 The peer's administrator stops being a human:
 

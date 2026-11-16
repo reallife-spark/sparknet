@@ -55,6 +55,9 @@ escalate. The Master supplies authority and knowledge, not control.
    by OpenCode, Open WebUI, per-user models and the vLLM/MASTERSPIKE precontext.
 10. **Local-first is the default.** With no Master, chat, planning, building,
     vault reads and self-healing still work; the node loses authority, not use.
+    The admin still gets in through the node's offline break-glass path, and a
+    user with a local credential can still use the node. Federated identity is
+    lost, not access.
 11. **Uplift is consented training data, not an answer corpus.** Snapshots,
     traces and KV artifacts feed distillation only; they are never served.
 12. **Memory is an index, not a second vault.** The five types are per-vault
@@ -64,6 +67,12 @@ escalate. The Master supplies authority and knowledge, not control.
     `memory-supervise` is on-demand and transient; no mirror, no answer corpus.
 14. **Submodule pins are explicit.** `gospark`, `peer-node`, `master-node`,
     `goagx` are independent repositories pinned and updated deliberately.
+15. **Human identity is federated; node identity is not.** A human principal is
+    held by the Master-hosted identity provider and never becomes a node
+    identity, a registry entry or a signer. Online login is OIDC; an isolated
+    node accepts the admin through a short-lived client certificate. A WebUI
+    login grants node administration, never a fabric capability
+    (`contracts/sso-identity.md`).
 ## First deployment
 
 1. `make submodules` initializes the pinned repositories; `make env-init` writes the vault `.env` and category skeleton.
