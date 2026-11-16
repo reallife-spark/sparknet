@@ -19,8 +19,8 @@ Updated: 2026-11-16
   retired. agx64 30B Q4_K_M, agx32 4B Q4_K_M, 262k q8 KV.
 - Storage: vaults/data `/mnt/ai`; active GGUF/KV `/opt/sparknet/models`;
   keys/state on root.
-- Router 8101, resource directory 8089, memory router 4094; goagx `ef9468a`;
-  goSpark `85815b3`.
+- Router 8101, resource directory 8089, memory router 4094; goagx `041a8d3`;
+  goSpark `85815b3`; GitHub gate green 2026-11-16 on `5ebe0bf`.
 - Auto-distill blocked on external CUDA; 16k bundle
   `sparknet-distill-e69b5e6f6247110d-20261115T024212Z.tar.gz`.
 ## Durable facts

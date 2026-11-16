@@ -131,7 +131,9 @@ current: 113
       rollout and OIDC login met; signed bundle verification and a reboot
       check open.** `test-all` 683/1 skipped,
       lint/format/validate/contract/render/context/keys/shims/shellcheck green.
-      `bundle-verify` still needs the release public key.
+      CI gate green on `5ebe0bf` (run `43878222504`); the runner-only UID
+      failure is fixed in 113J. `bundle-verify` still needs the release public
+      key.
   - [x] **113I — Gate-safe LLM proxy import.** The gate venv carries only
     `cryptography`, `pytest`, `ruff` and `PyYAML`; the proxy must stay
     importable without the web stack while the container entry point still
@@ -145,6 +147,17 @@ current: 113
       reject the submodule-root copy; goagx release `ef9468a` carries the
       fixed root proxy and `make goagx-drift-check` reports no drift;
       `make ci` green.
+  - [x] **113J — CI-portable sandbox lifecycle test.** `test_engine_openshell_lifecycle_with_fake_cli`
+    pinned owner `1000:1000`; the GitHub runner is UID 1001, so the
+    fail-closed ownership migration refused the test before the lifecycle ran.
+    The test now uses `os.getuid()`/`os.getegid()` for the owner env,
+    `owner.json` and the fake `WorkloadIdentity`.
+    - **DoD**: the lifecycle test passes as a non-1000 non-root user; `make ci`
+      is green on GitHub. — **met 2026-11-16.** Failing run `43875091355` on
+      `7f06440`; peer `032799d` (suite 684 passed/1 skipped, lifecycle also
+      passed as UID 2001); superproject pin `6450e84`; goagx `041a8d3` verify
+      run `43876796025` success; superproject pin `5ebe0bf` gate run
+      `43878222504` success (secret-scan and codeql also green).
   - **Status 2026-11-16 — LIVE on agx32/agx64/sparknet-node-0003; signed
     bundle verification and a reboot-persistence check remain.** Dex `v2.41.1`
     and lldap `v0.6.3` are live on agx32; `sparknet-admins` / `sparknet-users`
