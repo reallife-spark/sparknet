@@ -610,6 +610,17 @@
       "service": "node-admin-gateway",
       "status": "IMPLEMENTED and live on agx64 and sparknet-node-0003 since 2026-11-16; see fabric PLAN Step 113."
     },
+    "4180": {
+      "binds_to": "127.0.0.1",
+      "bound_by": "both",
+      "implementation_state": "implemented",
+      "note": "The per-node oauth2-proxy loopback listener. The admin ingress calls /oauth2/auth for an OIDC session and proxies the browser through /oauth2/start and /oauth2/callback. It is loopback-only, holds the node OIDC client secret at 0600, and grants no fabric capability.",
+      "overlay_only": false,
+      "protocol": "tcp/https",
+      "runtime": "not-verifiable-here",
+      "runtime_why": "Live on agx32/agx64/sparknet-node-0003 loopback 4180 since 2026-11-16; this development host runs no node stack.",
+      "service": "oauth2-proxy"
+    },
     "8092": {
       "binds_to": "10.100.0.1",
       "bound_by": "master",

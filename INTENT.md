@@ -55,9 +55,8 @@ escalate. The Master supplies authority and knowledge, not control.
    by OpenCode, Open WebUI, per-user models and the vLLM/MASTERSPIKE precontext.
 10. **Local-first is the default.** With no Master, chat, planning, building,
     vault reads and self-healing still work; the node loses authority, not use.
-    The admin still gets in through the node's offline break-glass path, and a
-    user with a local credential can still use the node. Federated identity is
-    lost, not access.
+    The admin still gets in offline, and a user with a local credential can use
+    the node. Federated identity is lost, not access.
 11. **Uplift is consented training data, not an answer corpus.** Snapshots,
     traces and KV artifacts feed distillation only; they are never served.
 12. **Memory is an index, not a second vault.** The five types are per-vault
@@ -68,32 +67,24 @@ escalate. The Master supplies authority and knowledge, not control.
 14. **Submodule pins are explicit.** `gospark`, `peer-node`, `master-node`,
     `goagx` are independent repositories pinned and updated deliberately.
 15. **Human identity is federated; node identity is not.** A human principal is
-    held by the Master-hosted identity provider and never becomes a node
-    identity, a registry entry or a signer. Online login is OIDC; an isolated
-    node accepts the admin through a short-lived client certificate. A WebUI
-    login grants node administration, never a fabric capability
-    (`contracts/sso-identity.md`).
+    held by the Master-hosted IdP and never becomes a node identity, registry
+    entry or signer. Online login is OIDC; an isolated node accepts the admin's
+    short-lived client certificate. A WebUI login grants node administration,
+    never a fabric capability (`contracts/sso-identity.md`).
 ## First deployment
 
-1. `make submodules` initializes the pinned repositories; `make env-init` writes the vault `.env` and category skeleton.
-2. `make user-init` creates the user key and fills `00_System/user.md` once.
-3. `make validate` proves the role's files, environment and manifests.
-4. `make wiki-preflight` proves the vendored skills resolve this vault.
-5. An AI session reads `CONTEXT.md`, `AGENTS.md`, `MISSION.md`, `INTENT.md`,
-   `MEMORY.md` and today's session file before acting.
+1. `make submodules` + `make env-init` initialize the pins, `.env` and categories; `make user-init` creates the user key and `00_System/user.md` once.
+2. `make validate` + `make wiki-preflight` prove the role files, environment, manifests and vendored skills.
+3. An AI session reads `CONTEXT.md`, `AGENTS.md`, `MISSION.md`, `INTENT.md`, `MEMORY.md` and today's session file.
 Nothing deployment-specific is hand-edited here; a new node inherits the role's intent, not its history.
 ## AI operating model
 
-- `AGENTS.md` defines the rules and wins on conflict.
-- `MISSION.md` defines purpose and success.
-- `INTENT.md` defines invariants and expected behaviour.
+- `AGENTS.md` wins on conflict; `MISSION.md` defines purpose; `INTENT.md` defines invariants.
 - `MEMORY.md` is tiny standing state; `log.md` is the append-only audit trail.
 - Plans hold the work order; identity pages do not track live progress.
-- Agents must not claim live verification of network, kernel, signer or systemd
-  behaviour from a development host.
+- Agents must not claim live verification of network, kernel, signer or systemd behaviour from a development host.
 ## Change intent
 
 New work gets a plan step, not a rewrite. Change `INTENT.md` only when the
-design contract changes; a cross-role change is one commit. It is not a
-runbook, deployment record or status page. If it contradicts `AGENTS.md` or
-`contracts/`, those win and this page is wrong.
+design contract changes; a cross-role change is one commit. If it contradicts
+`AGENTS.md` or `contracts/`, those win and this page is wrong.

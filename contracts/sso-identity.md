@@ -14,9 +14,11 @@ companion to `ADMIN_FEDERATION_DESIGN.md` and is decided by
 
 **Status: contract and live on the current fleet (2026-11-16).** Dex 9443,
 lldap, the admin CA, the Master SSO ingress 8092, the peer admin ingress 8182
-and the Master `/nodes/` proxy are live on `agx32`/`agx64`/`sparknet-node-0003`
-for the admin client-certificate and signed-assertion paths. OIDC browser login
-through oauth2-proxy and the offline-repair reconnect test are still
+and the Master `/nodes/` proxy are live on `agx32`/`agx64`/`sparknet-node-0003`.
+OIDC browser login via a per-node oauth2-proxy on loopback 4180 is live: the
+`sparknet-admin` identity reaches 200 on 8092/8182, a user-only identity is
+refused with `admin-required`, and the client-certificate path still returns
+200. The offline-repair reconnect test and signed bundle verification remain
 `DoD: confirm: user`.
 
 ## The two identities
@@ -145,8 +147,9 @@ A change the admin makes on an isolated node is tagged `offline-repair`:
 |---|---|---|---|
 | Master IdP | 9443 | Master overlay address | overlay only |
 | Master admin SSO ingress / proxy | 8092 | Master overlay address | overlay only |
-| Existing Master admin surface (rollback) | 8088 | Master overlay address | overlay only |
+| Existing Master admin surface (retired 2026-11-16) | 8088 | Master overlay address | stopped; restart only for local rollback |
 | Node admin ingress | 8182 | node overlay address and, for isolated repair, the node LAN address | fabric + LAN; never a wildcard |
+| Node OIDC proxy | 4180 | loopback | local only |
 | Node user ingress | 8181 | node LAN/overlay address | user login surface, unchanged |
 | Open WebUI | 8180 (peer) / 8080 (Master) | loopback | local only |
 

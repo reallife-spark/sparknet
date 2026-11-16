@@ -337,6 +337,10 @@ def test_sso_overlays_enable_tls_trusted_headers_and_a_loopback_upstream() -> No
         "location /nodes/",
         "proxy_pass http://127.0.0.1:8191",
         "auth_request_set $sparknet_user_role $upstream_http_x_user_role",
+        "error_page 401 = @sparknet_sso_signin",
+        "return 302 /oauth2/start?rd=$scheme://$http_host$request_uri;",
+        "location /oauth2/",
+        "proxy_pass http://127.0.0.1:4180",
     ):
         assert phrase in template, phrase
 

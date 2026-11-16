@@ -143,7 +143,7 @@
       "contract": "ports",
       "file": "ports.json",
       "schema_version": "2.1",
-      "sha256": "740131b12ab3a4dcc6b3c91119f6b1ecf3747a350be07b101ecd56843a879224"
+      "sha256": "94878421d2db99354f5b68e9431c43dc0a286e4fba73f858d633298afddf74a6"
     },
     {
       "contract": "proposal-schema",
@@ -450,6 +450,12 @@
       "implementation_state": "provisioned",
       "runtime": "not-listening",
       "service": "agent-vault-curator"
+    },
+    "4180": {
+      "bound_by": "both",
+      "implementation_state": "implemented",
+      "runtime": "not-verifiable-here",
+      "service": "oauth2-proxy"
     },
     "4200": {
       "bound_by": "peer",
