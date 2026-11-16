@@ -157,7 +157,9 @@ current: 113
       `7f06440`; peer `032799d` (suite 684 passed/1 skipped, lifecycle also
       passed as UID 2001); superproject pin `6450e84`; goagx `041a8d3` verify
       run `43876796025` success; superproject pin `5ebe0bf` gate run
-      `43878222504` success (secret-scan and codeql also green).
+      `43878222504` success; docs pin `0176a86` gate run `43880465816`
+      attempt 2 success after an unrelated `gospark` timing flake
+      (secret-scan and codeql also green).
   - **Status 2026-11-16 — LIVE on agx32/agx64/sparknet-node-0003; signed
     bundle verification and a reboot-persistence check remain.** Dex `v2.41.1`
     and lldap `v0.6.3` are live on agx32; `sparknet-admins` / `sparknet-users`
