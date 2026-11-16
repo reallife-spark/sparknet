@@ -132,14 +132,19 @@ current: 113
       check open.** `test-all` 683/1 skipped,
       lint/format/validate/contract/render/context/keys/shims/shellcheck green.
       `bundle-verify` still needs the release public key.
-  - [ ] **113I — Gate-safe LLM proxy import.** The gate venv carries only
+  - [x] **113I — Gate-safe LLM proxy import.** The gate venv carries only
     `cryptography`, `pytest`, `ruff` and `PyYAML`; the proxy must stay
     importable without the web stack while the container entry point still
     builds the FastAPI app.
     - **DoD**: `tests/test_llm_engine.py` passes in a venv built from
       `requirements.txt` + `requirements-dev.txt`; `create_app()` and the
       `app` entry point still build the FastAPI app; `make ci` green; the
-      published goagx root proxy matches the fabric root.
+      published goagx root proxy matches the fabric root. — **met
+      2026-11-16.** Clean gate-like venv passes 7/7 without `httpx`/`fastapi`;
+      the runtime app builds and `app` caches; the export regression tests
+      reject the submodule-root copy; goagx release `ef9468a` carries the
+      fixed root proxy and `make goagx-drift-check` reports no drift;
+      `make ci` green.
   - **Status 2026-11-16 — LIVE on agx32/agx64/sparknet-node-0003; signed
     bundle verification and a reboot-persistence check remain.** Dex `v2.41.1`
     and lldap `v0.6.3` are live on agx32; `sparknet-admins` / `sparknet-users`
